@@ -758,13 +758,8 @@ class PlaybackService : MediaLibraryService() {
                 if (mediaKeys() == pendingRestoreKeys) {
                     pendingRestore = null
                     pendingRestoreKeys = null
-                    suppressShuffleReorder = true
-                    try {
-                        player.shuffleModeEnabled = snap.shuffle
-                        if (snap.shuffle) PlayOrder.validOrNull(snap.order, snap.ids.size)?.let(::setShuffleOrder)
-                    } finally {
-                        suppressShuffleReorder = false
-                    }
+                    // The shuffle mode was set before the queue landed; only the saved order is left.
+                    if (player.shuffleModeEnabled) PlayOrder.validOrNull(snap.order, snap.ids.size)?.let(::setShuffleOrder)
                 }
             }
             if (reorderOnNextTimeline) {
@@ -933,14 +928,25 @@ class PlaybackService : MediaLibraryService() {
                         }
                         return@launch
                     }
-                    source = snap.source?.toPlaySource()
-                    smart = snap.smart
-                    extendedAtCount = -1
-                    player.repeatMode = snap.repeat.toPlayer()
                     val items = tracks.map(::mediaItemOf)
-                    pendingRestore = snap
-                    pendingRestoreKeys = items.map { it.mediaId }
-                    publishExtras()
+                    // Only a play press replaces the queue; the system's resume card just shows the item.
+                    if (isForPlayback) {
+                        source = snap.source?.toPlaySource()
+                        smart = snap.smart
+                        extendedAtCount = -1
+                        player.repeatMode = snap.repeat.toPlayer()
+                        // The shuffle mode goes now, outside any player callback: set from onTimelineChanged,
+                        // ExoPlayer would deliver the change after it and the saved order would be reshuffled.
+                        suppressShuffleReorder = true
+                        try {
+                            player.shuffleModeEnabled = snap.shuffle
+                        } finally {
+                            suppressShuffleReorder = false
+                        }
+                        pendingRestore = snap.takeIf { it.shuffle }
+                        pendingRestoreKeys = items.map { it.mediaId }
+                        publishExtras()
+                    }
                     result.set(MediaSession.MediaItemsWithStartPosition(items, snap.index, snap.positionMs))
                 } catch (c: CancellationException) {
                     result.cancel(false)

@@ -2,6 +2,7 @@ package com.villamediana.surco.playback
 
 import android.os.Bundle
 import android.os.Looper
+import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaController
 import androidx.media3.session.MediaLibraryService.MediaLibrarySession
@@ -11,7 +12,9 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.villamediana.surco.SurcoApplication
 import com.villamediana.surco.data.db.Track
 import com.villamediana.surco.playback.stream.wav
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -75,7 +78,12 @@ class PlaybackServiceTest {
 
     @After fun tearDown() {
         if (::controller.isInitialized) controller.release()
-        if (::service.isInitialized) service.destroy()
+        if (::service.isInitialized) {
+            service.destroy()
+            // The queue saved on the way out must land now, not in the next test's settings.
+            val persist = PlaybackService::class.java.getDeclaredField("persistJob").apply { isAccessible = true }
+            (persist.get(service.get()) as Job?)?.let { runBlocking { withTimeout(5_000) { it.join() } } }
+        }
         idle(50)
     }
 
@@ -144,6 +152,47 @@ class PlaybackServiceTest {
             assertEquals(tracks[0].id, currentId())
             assertEquals(tracks[0].id, playOrderIds().first())
         }
+    }
+
+    // ------------------------------------------------------------------ resuming the saved queue
+
+    /** What Media3 does with a resumption result for a play press. */
+    private fun resumeLikeMedia3(): MediaSession.MediaItemsWithStartPosition {
+        val result = await(callback.onPlaybackResumption(session, appController, true))
+        player.setMediaItems(result.mediaItems, result.startIndex, result.startPositionMs)
+        player.prepare()
+        player.play()
+        idle(300) // room for a (wrong) reshuffle to land
+        return result
+    }
+
+    @Test fun headsetResumeKeepsTheSavedShuffleOrder() {
+        val ids = tracks.map { it.id }
+        val order = listOf(3, 0, 5, 1, 4, 2)
+        runBlocking {
+            graph.settings.setLastQueueJson(
+                QueueSnapshot(ids = ids, index = 3, positionMs = 1_000, shuffle = true, order = order, repeat = RepeatMode.ALL).encode(),
+            )
+        }
+        start()
+        resumeLikeMedia3()
+        assertTrue(player.shuffleModeEnabled)
+        assertEquals(Player.REPEAT_MODE_ALL, player.repeatMode)
+        assertEquals(ids[3], currentId())
+        assertEquals(order.map { ids[it] }, playOrderIds())
+    }
+
+    @Test fun theSystemResumeCardDoesNotTouchThePlayer() {
+        runBlocking {
+            graph.settings.setLastQueueJson(
+                QueueSnapshot(ids = tracks.map { it.id }, index = 2, shuffle = true, order = listOf(2, 0, 1, 3, 4, 5), repeat = RepeatMode.ONE).encode(),
+            )
+        }
+        start()
+        val result = await(callback.onPlaybackResumption(session, appController, false))
+        assertEquals(tracks[2].id.toString(), result.mediaItems[result.startIndex].mediaId)
+        assertFalse(player.shuffleModeEnabled)
+        assertEquals(Player.REPEAT_MODE_OFF, player.repeatMode)
     }
 
     // ------------------------------------------------------------------ resuming with nothing saved
