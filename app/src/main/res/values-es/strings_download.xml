@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Notificación de progreso -->
+    <string name="download_notif_preparing">Preparando descargas</string>
+    <string name="download_notif_single">Descargando canción</string>
+    <string name="download_notif_progress_title">Descargando %1$d de %2$d</string>
+    <string name="download_notif_track">%1$s · %2$s</string>
+    <string name="download_notif_more">%1$s y %2$d más</string>
+    <string name="download_notif_cancel">Cancelar</string>
+    <string name="download_separator">" · "</string>
+
+    <!-- Resumen al final -->
+    <plurals name="download_summary_done">
+        <item quantity="one">%d canción descargada</item>
+        <item quantity="many">%d canciones descargadas</item>
+        <item quantity="other">%d canciones descargadas</item>
+    </plurals>
+    <plurals name="download_summary_failed">
+        <item quantity="one">%d falló</item>
+        <item quantity="many">%d fallaron</item>
+        <item quantity="other">%d fallaron</item>
+    </plurals>
+    <plurals name="download_summary_failed_title">
+        <item quantity="one">%d descarga falló</item>
+        <item quantity="many">%d descargas fallaron</item>
+        <item quantity="other">%d descargas fallaron</item>
+    </plurals>
+
+    <!-- Errores (cortos, aparecen en la pantalla de descargas) -->
+    <string name="download_error_network">Sin conexión a internet</string>
+    <string name="download_error_timeout">La conexión tardó demasiado</string>
+    <string name="download_error_http">El servidor respondió con error %d</string>
+    <string name="download_error_forbidden">YouTube rechazó la descarga</string>
+    <string name="download_error_unavailable">Video no disponible</string>
+    <string name="download_error_age">Restringido por edad</string>
+    <string name="download_error_geo">No disponible en tu país</string>
+    <string name="download_error_rate_limited">YouTube pidió una pausa. Inténtalo más tarde</string>
+    <string name="download_error_storage">Sin espacio en el dispositivo</string>
+    <string name="download_error_incomplete">El archivo llegó incompleto</string>
+    <string name="download_error_unknown">No se pudo descargar</string>
+</resources>
