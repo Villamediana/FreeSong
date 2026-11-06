@@ -15,5 +15,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Surco"
+rootProject.name = "Sound"
 include(":app")

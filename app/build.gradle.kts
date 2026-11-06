@@ -12,7 +12,7 @@ plugins {
 val signingProps = Properties().apply {
     val candidates = listOf(
         rootProject.file("keystore.properties"),
-        File(System.getProperty("user.home"), "keystores/surco-keystore.properties"),
+        File(System.getProperty("user.home"), "keystores/sound-keystore.properties"),
     )
     candidates.firstOrNull { it.exists() }?.inputStream()?.use { load(it) }
 }
@@ -22,7 +22,7 @@ kotlin {
 }
 
 android {
-    namespace = "com.villamediana.surco"
+    namespace = "com.villamediana.sound"
     compileSdk {
         version = release(37) {
             minorApiLevel = 0
@@ -30,7 +30,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.villamediana.surco"
+        applicationId = "com.villamediana.sound"
         minSdk = 26
         targetSdk = 36
         versionCode = 1
@@ -99,7 +99,7 @@ android {
             isIncludeAndroidResources = true
             isReturnDefaultValues = true
             all {
-                it.systemProperty("surco.live", System.getenv("SURCO_LIVE") ?: "")
+                it.systemProperty("sound.live", System.getenv("SOUND_LIVE") ?: "")
                 // Robolectric 4.17 on JDK 21 at API 36 needs these to touch FileDescriptor internals.
                 it.jvmArgs(
                     "--add-opens=java.base/java.io=ALL-UNNAMED",
@@ -113,11 +113,11 @@ android {
     }
 }
 
-// Fail fast when a release is requested without the keystore (~/keystores/surco-keystore.properties).
+// Fail fast when a release is requested without the keystore (~/keystores/sound-keystore.properties).
 gradle.taskGraph.whenReady {
     val wantsRelease = allTasks.any { it.project == project && it.name.contains("Release") && (it.name.startsWith("assemble") || it.name.startsWith("package") || it.name.startsWith("bundle")) }
     if (wantsRelease && signingProps.getProperty("storeFile") == null) {
-        throw GradleException("Release signing keystore not found: expected ~/keystores/surco-keystore.properties or ./keystore.properties")
+        throw GradleException("Release signing keystore not found: expected ~/keystores/sound-keystore.properties or ./keystore.properties")
     }
 }
 

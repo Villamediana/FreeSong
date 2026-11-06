@@ -1,4 +1,4 @@
-# Surco is open about what it ships; obfuscation buys nothing and breaks stack traces.
+# Sound is open about what it ships; obfuscation buys nothing and breaks stack traces.
 -dontobfuscate
 
 # NewPipeExtractor (YouTube): Rhino runs the deobfuscation JS through reflection.
@@ -41,10 +41,10 @@
 -keepclasseswithmembers class kotlinx.serialization.json.** {
     kotlinx.serialization.KSerializer serializer(...);
 }
--keep,includedescriptorclasses class com.villamediana.surco.**$$serializer { *; }
--keepclassmembers class com.villamediana.surco.** {
+-keep,includedescriptorclasses class com.villamediana.sound.**$$serializer { *; }
+-keepclassmembers class com.villamediana.sound.** {
     *** Companion;
 }
--keepclasseswithmembers class com.villamediana.surco.** {
+-keepclasseswithmembers class com.villamediana.sound.** {
     kotlinx.serialization.KSerializer serializer(...);
 }
