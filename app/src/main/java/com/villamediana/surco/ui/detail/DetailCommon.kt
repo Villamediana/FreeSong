@@ -200,23 +200,7 @@ internal suspend fun buildTaste(now: Long = System.currentTimeMillis()): Taste {
 }
 
 /** Localized mix titles (same ids as the Home cards). */
-internal fun mixLabels(res: Resources) = MixLabels(
-    genreMix = { g -> res.getString(R.string.detail_mix_genre, g) },
-    genreMixSubtitle = { a -> res.getString(R.string.detail_mix_genre_subtitle, a) },
-    liked = res.getString(R.string.detail_mix_liked),
-    likedSubtitle = res.getString(R.string.detail_mix_liked_subtitle),
-    onRepeat = res.getString(R.string.detail_mix_on_repeat),
-    onRepeatSubtitle = res.getString(R.string.detail_mix_on_repeat_subtitle),
-    rediscover = res.getString(R.string.detail_mix_rediscover),
-    rediscoverSubtitle = res.getString(R.string.detail_mix_rediscover_subtitle),
-    fresh = res.getString(R.string.detail_mix_fresh),
-    freshSubtitle = res.getString(R.string.detail_mix_fresh_subtitle),
-    decade = { d -> res.getString(R.string.detail_mix_decade, MetaFormat.decade(d)) },
-    decadeSubtitle = res.getString(R.string.detail_mix_decade_subtitle),
-    artistMix = { a -> res.getString(R.string.detail_mix_artist, a) },
-    daily = res.getString(R.string.detail_mix_daily),
-    dailySubtitle = res.getString(R.string.detail_mix_daily_subtitle),
-)
+internal fun mixLabels(res: Resources) = com.villamediana.surco.smart.surcoMixLabels(res)
 
 /** For confirmations of actions that close the screen (its snackbar leaves with it). */
 internal fun toast(context: Context, message: String) {

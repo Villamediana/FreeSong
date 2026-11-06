@@ -39,26 +39,7 @@ internal class PlaybackStrings(
  * [MixLabels] from Surco's resources (pt-BR / es). Any screen that builds mixes with
  * [SmartMixes] can use it so titles match what the player shows in "Tocando de …".
  */
-fun mixLabels(context: Context): MixLabels {
-    val res = context.resources
-    return MixLabels(
-        genreMix = { res.getString(R.string.playback_mix_genre, it) },
-        genreMixSubtitle = { res.getString(R.string.playback_mix_genre_subtitle, it) },
-        liked = res.getString(R.string.playback_mix_liked),
-        likedSubtitle = res.getString(R.string.playback_mix_liked_subtitle),
-        onRepeat = res.getString(R.string.playback_mix_on_repeat),
-        onRepeatSubtitle = res.getString(R.string.playback_mix_on_repeat_subtitle),
-        rediscover = res.getString(R.string.playback_mix_rediscover),
-        rediscoverSubtitle = res.getString(R.string.playback_mix_rediscover_subtitle),
-        fresh = res.getString(R.string.playback_mix_fresh),
-        freshSubtitle = res.getString(R.string.playback_mix_fresh_subtitle),
-        decade = { res.getString(R.string.playback_mix_decade, decadeLabel(it)) },
-        decadeSubtitle = res.getString(R.string.playback_mix_decade_subtitle),
-        artistMix = { res.getString(R.string.playback_mix_artist, it) },
-        daily = res.getString(R.string.playback_mix_daily),
-        dailySubtitle = res.getString(R.string.playback_mix_daily_subtitle),
-    )
-}
+fun mixLabels(context: Context): MixLabels = com.villamediana.surco.smart.surcoMixLabels(context.resources)
 
 /** 1990 → "90", 2010 → "2010" (how decades are said in pt/es: "anos 90", "años 2010"). */
 internal fun decadeLabel(decade: Int): String = if (decade in 1900..1999) "%02d".format(decade % 100) else decade.toString()

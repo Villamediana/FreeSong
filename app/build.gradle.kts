@@ -97,6 +97,13 @@ android {
             isReturnDefaultValues = true
             all {
                 it.systemProperty("surco.live", System.getenv("SURCO_LIVE") ?: "")
+                // Robolectric 4.17 on JDK 21 at API 36 needs these to touch FileDescriptor internals.
+                it.jvmArgs(
+                    "--add-opens=java.base/java.io=ALL-UNNAMED",
+                    "--add-opens=java.base/java.lang=ALL-UNNAMED",
+                    "--add-opens=java.base/jdk.internal.access=ALL-UNNAMED",
+                )
+                it.maxHeapSize = "3g"
                 it.testLogging { events("failed", "skipped"); showStandardStreams = true }
             }
         }

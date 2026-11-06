@@ -53,6 +53,9 @@ import java.io.File
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], qualifiers = "w400dp-h860dp-xxhdpi")
 class HomeScreensSmokeTest {
+
+    @org.junit.Before
+    fun blockPlaybackBinding() = com.villamediana.surco.testing.blockMediaSessionBinding()
     @get:Rule val compose = createComposeRule()
 
     private val shots = System.getenv("SURCO_SHOTS") == "1"
