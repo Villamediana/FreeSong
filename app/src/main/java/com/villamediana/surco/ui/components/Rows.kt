@@ -121,11 +121,24 @@ fun TrackRow(
 /** Three little bars bouncing — "this one is playing". Frozen when paused. */
 @Composable
 fun PlayingBars(playing: Boolean, modifier: Modifier = Modifier, color: Color = SurcoColors.Accent, barWidth: Dp = 3.dp) {
+    // The infinite transition only exists while playing: it asks for a frame on every vsync for as
+    // long as it lives, even when nobody reads its values.
+    if (playing) BouncingBars(modifier, color, barWidth) else Bars(PausedBars, modifier, color, barWidth)
+}
+
+private val PausedBars = listOf(0.45f, 0.7f, 0.35f)
+
+@Composable
+private fun BouncingBars(modifier: Modifier, color: Color, barWidth: Dp) {
     val transition = rememberInfiniteTransition(label = "bars")
     val a by transition.animateFloat(0.3f, 1f, infiniteRepeatable(tween(420), RepeatMode.Reverse), label = "a")
     val b by transition.animateFloat(1f, 0.25f, infiniteRepeatable(tween(560), RepeatMode.Reverse), label = "b")
     val c by transition.animateFloat(0.5f, 0.9f, infiniteRepeatable(tween(350), RepeatMode.Reverse), label = "c")
-    val heights = if (playing) listOf(a, b, c) else listOf(0.45f, 0.7f, 0.35f)
+    Bars(listOf(a, b, c), modifier, color, barWidth)
+}
+
+@Composable
+private fun Bars(heights: List<Float>, modifier: Modifier, color: Color, barWidth: Dp) {
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(barWidth / 1.5f), verticalAlignment = Alignment.Bottom) {
         heights.forEach { h ->
             Box(Modifier.width(barWidth).fillMaxHeight(h).clip(RoundedCornerShape(1.dp)).background(color))
