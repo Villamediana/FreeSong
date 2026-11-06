@@ -22,8 +22,11 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.villamediana.surco.data.db.AlbumKey
+import com.villamediana.surco.online.CollectionKind
+import com.villamediana.surco.online.RemoteCollection
 import com.villamediana.surco.ui.theme.SurcoTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -157,4 +160,32 @@ class NavigatorTest {
         compose.onNodeWithText("home").assertExists()
         assertTab("Início")
     }
+
+    private fun remote(title: String) = RemoteCollection(CollectionKind.ALBUM, "https://music.youtube.com/browse/$title", title, "Soda Stereo")
+
+    @Test
+    fun aSharedLinkLandsOnTheSearchScreenEvenWhenSearchHadAPageOpen() {
+        setUp()
+        // First link: Search resolves it into album A's page.
+        nav { openSearchScreen() }
+        nav { openRemote(remote("A")) }
+        compose.onNodeWithText("remote A").assertExists()
+
+        // Later, from Biblioteca: the next link must reach the Search screen, not album A again.
+        nav { switchTab(LibraryRoute) }
+        nav { openSearchScreen() }
+        compose.onNodeWithText("search").assertExists()
+        assertTrue(controller.currentBackStackEntry!!.destination.hasRoute(SearchRoute::class))
+        assertEquals(listOf("HomeRoute", "SearchRoute"), routesOnStack())
+
+        // Same while standing on a page opened from Search (Downloads).
+        nav { openDownloads() }
+        nav { openSearchScreen() }
+        compose.onNodeWithText("search").assertExists()
+        assertEquals(listOf("HomeRoute", "SearchRoute"), routesOnStack())
+    }
+
+    private fun routesOnStack(): List<String> = controller.currentBackStack.value
+        .mapNotNull { e -> e.destination.route?.takeIf { e.destination !is androidx.navigation.NavGraph } }
+        .map { it.substringAfterLast('.').substringBefore('/').substringBefore('?') }
 }

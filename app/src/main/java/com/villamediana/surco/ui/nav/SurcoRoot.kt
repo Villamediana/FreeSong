@@ -102,7 +102,7 @@ fun SurcoRoot(incomingLink: StateFlow<String?>) {
         val l = link ?: return@LaunchedEffect
         LinkInbox.post(l)
         (incomingLink as? kotlinx.coroutines.flow.MutableStateFlow<String?>)?.value = null
-        navigator.switchTab(SearchRoute)
+        navigator.openSearchScreen()
     }
 
     val navBarInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()

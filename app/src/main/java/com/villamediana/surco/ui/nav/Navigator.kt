@@ -55,6 +55,16 @@ class Navigator(val controller: NavHostController) {
     }
 
     /**
+     * The Search screen itself, on top of its tab: what [LinkInbox] holds (a shared link) is taken
+     * there. Restoring the tab alone could bring back a page opened from Search earlier (an album,
+     * Downloads) with the Search screen hidden under it, and the link would wait unseen.
+     */
+    fun openSearchScreen() {
+        switchTab(SearchRoute)
+        controller.popBackStack<SearchRoute>(inclusive = false)
+    }
+
+    /**
      * The bottom-bar tab whose stack is on screen. switchTab keeps the stack as
      * [Home, <tab root>, pages…], so the tab root under the current page tells (Home when none).
      */
