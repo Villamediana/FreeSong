@@ -62,7 +62,9 @@ import androidx.compose.ui.zIndex
 import com.villamediana.surco.R
 import com.villamediana.surco.playback.PlaybackState
 import com.villamediana.surco.playback.SleepTimer
+import com.villamediana.surco.data.db.Track
 import com.villamediana.surco.ui.components.TrackRow
+import com.villamediana.surco.ui.sheets.TrackActionsSheet
 import com.villamediana.surco.ui.theme.Dimens
 import com.villamediana.surco.ui.theme.SurcoColors
 import kotlinx.coroutines.delay
@@ -124,6 +126,11 @@ internal fun QueueContent(
         with(density) { ReorderState(listState, scope, edgePx = 64.dp.toPx(), maxStepPx = 18.dp.toPx()) }
     }
     var dragBase by remember { mutableStateOf(-1 to -1) } // (queueIndex, start position) of the drag in progress
+    var actionsFor by remember { mutableStateOf<Track?>(null) }
+    val openActions: (Track) -> Unit = { t ->
+        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        actionsFor = t
+    }
 
     LaunchedEffect(upstream) { if (!reorder.active) entries = upstream }
 
@@ -167,7 +174,13 @@ internal fun QueueContent(
         state.current?.let { current ->
             item(key = "now-label") { Overline(stringResource(R.string.player_queue_now), Modifier.padding(horizontal = Dimens.Gutter).padding(bottom = 2.dp)) }
             item(key = "now") {
-                TrackRow(track = current, onClick = { }, isCurrent = true, isPlaying = state.isPlaying || state.isBuffering)
+                TrackRow(
+                    track = current,
+                    onClick = { },
+                    onLongClick = { openActions(current) },
+                    isCurrent = true,
+                    isPlaying = state.isPlaying || state.isBuffering,
+                )
             }
         }
         item(key = "next-label") {
@@ -228,6 +241,7 @@ internal fun QueueContent(
                             val i = entries.indexOfFirst { it.key == entry.key }
                             if (i >= 0) onSkipTo(PlayerMath.upNextToQueueIndex(latest.queueIndex, i))
                         },
+                        onLongClick = { openActions(entry.track) },
                         contentPadding = PaddingValues(start = Dimens.Gutter, end = 4.dp),
                         trailing = {
                             Box(
@@ -244,6 +258,7 @@ internal fun QueueContent(
             }
         }
     }
+    actionsFor?.let { t -> TrackActionsSheet(track = t, onDismiss = { actionsFor = null }) }
 }
 
 @Composable

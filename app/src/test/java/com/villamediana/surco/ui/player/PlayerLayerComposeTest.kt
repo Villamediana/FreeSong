@@ -12,6 +12,10 @@ import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeDown
+import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.rememberNavController
 import com.villamediana.surco.data.db.Track
@@ -52,6 +56,7 @@ class PlayerLayerComposeTest {
         override val positionMs = MutableStateFlow(30_000L)
         override val sleepTimer = MutableStateFlow<SleepTimer>(SleepTimer.Off)
         var toggles = 0
+        var nexts = 0
         var skippedTo = -1
         var timer: SleepTimer? = null
         override fun play(tracks: List<Track>, startIndex: Int, source: PlaySource, shuffle: Boolean) = Unit
@@ -61,7 +66,9 @@ class PlayerLayerComposeTest {
             state.update { it.copy(isPlaying = !it.isPlaying) }
         }
         override fun pause() = Unit
-        override fun next() = Unit
+        override fun next() {
+            nexts++
+        }
         override fun previous() = Unit
         override fun seekTo(positionMs: Long) = Unit
         override fun skipTo(queueIndex: Int) {
@@ -86,6 +93,8 @@ class PlayerLayerComposeTest {
         compose.waitForIdle()
     }
 
+    private val likes = mutableListOf<Pair<Long, Boolean>>()
+
     private fun setUp(): FakePlayer {
         val player = FakePlayer(
             PlaybackState(
@@ -98,7 +107,7 @@ class PlayerLayerComposeTest {
                 source = PlaySource(PlaySource.Type.ALBUM, "Disco"),
             ),
         )
-        val deps = PlayerDeps(player, { id -> flowOf(tracks.firstOrNull { it.id == id }) }, { _, _ -> })
+        val deps = PlayerDeps(player, { id -> flowOf(tracks.firstOrNull { it.id == id }) }, { id, liked -> likes += id to liked })
         compose.setContent {
             SurcoTheme {
                 val nav = rememberNavController()
@@ -158,5 +167,35 @@ class PlayerLayerComposeTest {
         val t = player.timer
         assertTrue(t is SleepTimer.At && t.totalMs == 15 * 60_000L)
         compose.onNodeWithText("15 min").assertIsDisplayed()
+    }
+
+    @Test
+    fun dragUpOnTheMiniExpandsAndPullingDownCollapses() {
+        setUp()
+        compose.onNode(expandMini).performTouchInput { swipeUp(startY = centerY, endY = centerY - 260f, durationMillis = 250) }
+        compose.waitForIdle()
+        compose.onNodeWithText("TOCANDO DE").assertIsDisplayed()
+        compose.onNodeWithText("TOCANDO DE").performTouchInput { swipeDown(startY = centerY, endY = centerY + 260f, durationMillis = 250) }
+        compose.waitForIdle()
+        compose.onNodeWithText("TOCANDO DE").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Pausar").assertIsDisplayed()
+    }
+
+    @Test
+    fun swipingTheMiniLeftGoesToTheNextSong() {
+        val player = setUp()
+        compose.onNode(expandMini).performTouchInput { swipeLeft(startX = right - 10f, endX = left + 10f, durationMillis = 200) }
+        compose.waitForIdle()
+        assertEquals(1, player.nexts)
+        compose.onNodeWithText("TOCANDO DE").assertDoesNotExist()
+    }
+
+    @Test
+    fun theHeartLikesAtOnce() {
+        setUp()
+        compose.onNodeWithContentDescription("Curtir").performClick()
+        compose.waitForIdle()
+        assertEquals(listOf(1L to true), likes)
+        compose.onNodeWithContentDescription("Remover das curtidas").assertIsDisplayed()
     }
 }

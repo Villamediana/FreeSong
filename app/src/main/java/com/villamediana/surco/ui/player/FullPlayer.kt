@@ -451,9 +451,16 @@ private fun Transport(state: PlaybackState, playing: Boolean, actions: PlayerAct
 
 @Composable
 private fun BottomRow(outputName: String?, output: OutputRoute, sleep: SleepTimer, lyrics: LyricsState, actions: PlayerActions) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        OutputChip(outputName, output, actions.openOutput, Modifier.weight(1f, fill = false))
-        Spacer(Modifier.weight(1f))
+    // The chip takes what it needs (up to all the free space); the buttons stay pinned to the end.
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        OutputChip(outputName, output, actions.openOutput, Modifier.weight(1f, fill = false).padding(end = 12.dp))
+        BottomButtons(sleep, lyrics, actions)
+    }
+}
+
+@Composable
+private fun BottomButtons(sleep: SleepTimer, lyrics: LyricsState, actions: PlayerActions) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
         SleepButton(sleep, actions.openSleep)
         PlayerIconButton(Icons.AutoMirrored.Rounded.QueueMusic, stringResource(R.string.player_queue), actions.openQueue, size = 44.dp, iconSize = 24.dp, tint = SurcoColors.Text.copy(alpha = 0.85f))
         PlayerIconButton(
