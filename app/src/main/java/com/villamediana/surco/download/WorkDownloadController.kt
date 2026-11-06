@@ -1,10 +1,10 @@
 package com.villamediana.surco.download
 
 import android.content.Context
-import android.net.ConnectivityManager
 import android.util.Log
 import com.villamediana.surco.SurcoApplication
 import com.villamediana.surco.data.LibraryRepository
+import com.villamediana.surco.data.Settings
 import com.villamediana.surco.data.SettingsStore
 import com.villamediana.surco.data.Storage
 import com.villamediana.surco.data.db.DownloadState
@@ -17,7 +17,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
@@ -42,6 +44,8 @@ class WorkDownloadController(
         SupervisorJob() + Dispatchers.IO + CoroutineExceptionHandler { _, t -> Log.e(TAG, "download controller", t) },
     )
 
+    private val liveProgress = MutableStateFlow<Map<Long, TaskProgress>>(emptyMap())
+
     /** Built on first use: the online services come from the app graph. */
     internal val engine: DownloadEngine by lazy {
         val graph = SurcoApplication.graph
@@ -56,6 +60,7 @@ class WorkDownloadController(
             http = graph.http,
             messages = AndroidDownloadMessages(appContext),
             isOnline = { isOnline(appContext) },
+            liveProgress = liveProgress,
         )
     }
 
@@ -72,7 +77,8 @@ class WorkDownloadController(
         )
     }
 
-    private val allTasks: Flow<List<DownloadTask>> = dao.observeAll()
+    private val allTasks: Flow<List<DownloadTask>> = combine(dao.observeAll(), liveProgress, ::withLiveProgress)
+        .distinctUntilChanged()
         .shareIn(scope, SharingStarted.WhileSubscribed(5_000), replay = 1)
 
     override val tasks: Flow<List<DownloadTask>> = allTasks
@@ -84,18 +90,7 @@ class WorkDownloadController(
         .distinctUntilChanged()
 
     init {
-        // "Only on Wi-Fi" changed: re-create the work so its network constraint follows the setting.
-        scope.launch {
-            settings.settings.map { it.wifiOnly }.distinctUntilChanged().drop(1).collect { wifiOnly ->
-                if (dao.pending().isEmpty()) return@collect
-                val restart = when {
-                    engine.phase != DownloadEngine.Phase.RUNNING -> true
-                    wifiOnly -> appContext.getSystemService(ConnectivityManager::class.java)?.isActiveNetworkMetered ?: true
-                    else -> false
-                }
-                if (restart) scheduler.schedule(SchedulePolicy.REPLACE)
-            }
-        }
+        scope.launch { followWifiOnly(settings.settings, hasPending = { dao.pending().isNotEmpty() }, scheduler) }
     }
 
     override suspend fun download(tracks: List<RemoteTrack>) {
@@ -126,6 +121,29 @@ class WorkDownloadController(
 
     private companion object {
         const val TAG = "SurcoDownload"
+    }
+}
+
+/**
+ * "Only on Wi-Fi" changed: re-creates the work so its network constraint follows the setting —
+ * also while a worker is downloading. WorkManager never re-reads the constraints of a request, so
+ * a running worker would keep downloading on mobile data (setting turned on) or stay stuck waiting
+ * for Wi-Fi (turned off). The replaced worker puts its tasks back in the queue with their .part
+ * files and the new one resumes them.
+ */
+internal suspend fun followWifiOnly(settings: Flow<Settings>, hasPending: suspend () -> Boolean, scheduler: DownloadScheduler) {
+    settings.map { it.wifiOnly }.distinctUntilChanged().drop(1).collect {
+        if (hasPending()) scheduler.schedule(SchedulePolicy.REPLACE)
+    }
+}
+
+/** [rows] with the byte progress the engine keeps in memory for the running ones (the table lags a few seconds). */
+internal fun withLiveProgress(rows: List<DownloadTask>, live: Map<Long, TaskProgress>): List<DownloadTask> {
+    if (live.isEmpty()) return rows
+    return rows.map { row ->
+        val p = live[row.id]
+        if (p == null || row.state != DownloadState.RUNNING) row
+        else row.copy(progress = p.fraction, bytesDone = p.bytesDone, bytesTotal = p.bytesTotal)
     }
 }
 

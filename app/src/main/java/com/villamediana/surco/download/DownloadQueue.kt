@@ -2,6 +2,7 @@ package com.villamediana.surco.download
 
 import com.villamediana.surco.data.LibraryRepository
 import com.villamediana.surco.data.Storage
+import com.villamediana.surco.data.db.AlbumKey
 import com.villamediana.surco.data.db.DownloadDao
 import com.villamediana.surco.data.db.DownloadState
 import com.villamediana.surco.data.db.DownloadTask
@@ -12,7 +13,7 @@ import kotlinx.coroutines.flow.first
 
 /** How to (re)start the background worker. */
 internal enum class SchedulePolicy {
-    /** Fresh work with the current constraints (no worker is downloading right now). */
+    /** Fresh work with the current constraints; a worker that is downloading is stopped and replaced. */
     REPLACE,
 
     /** A worker is finishing: run another one right after it. */
@@ -22,6 +23,13 @@ internal enum class SchedulePolicy {
 internal fun interface DownloadScheduler {
     suspend fun schedule(policy: SchedulePolicy)
 }
+
+private const val ALBUM_BATCH = "album:"
+
+/** Batch of an album download; its tasks carry what the album page says (album, album artist, track number, year, cover). */
+internal fun albumBatchId(url: String): String = ALBUM_BATCH + url
+
+internal val DownloadTask.isFromAlbumPage: Boolean get() = batchId?.startsWith(ALBUM_BATCH) == true
 
 /**
  * Turns "download this" requests into rows of the `downloads` table and makes sure a worker picks
@@ -66,22 +74,32 @@ internal class DownloadQueue(
     private suspend fun album(detail: CollectionDetail) {
         val c = detail.collection
         val now = clock()
-        val active = activeVideoIds()
-        val tasks = detail.tracks.withIndex()
-            .distinctBy { it.value.videoId }
-            .filter { (_, t) -> t.videoId !in active && library.trackByVideoId(t.videoId) == null }
-            .map { (index, t) ->
-                t.toTask(now).copy(
-                    album = c.title,
-                    albumArtist = c.author.clean() ?: t.artist,
-                    trackNumber = index + 1,
-                    year = c.year,
-                    albumCoverUrl = c.thumbnailUrl,
-                    batchId = "album:${c.url}",
-                    batchTitle = c.title,
-                )
+        val batchId = albumBatchId(c.url)
+        val queuedHere = dao.pending().filter { it.batchId == batchId }.mapTo(HashSet()) { it.videoId }
+        val owned = LinkedHashMap<AlbumKey, MutableList<Long>>()
+        val tasks = ArrayList<DownloadTask>()
+        for ((index, t) in detail.tracks.withIndex().distinctBy { it.value.videoId }) {
+            val task = t.toTask(now).copy(
+                album = c.title,
+                albumArtist = c.author.clean() ?: t.artist,
+                trackNumber = index + 1,
+                year = c.year,
+                albumCoverUrl = c.thumbnailUrl,
+                batchId = batchId,
+                batchTitle = c.title,
+            )
+            val have = library.trackByVideoId(t.videoId)
+            when {
+                // Downloaded loose before: it joins the album now (its cover follows in the background).
+                have != null -> engine.joinAlbum(have, task)?.albumKey?.let { owned.getOrPut(it) { ArrayList() } += have.id }
+                t.videoId in queuedHere -> Unit
+                // Also when the song is being downloaded for something else: the engine runs one task per
+                // video at a time, so this one finishes instantly with that track and gives it the album.
+                else -> tasks += task
             }
+        }
         insert(tasks)
+        owned.forEach { (key, ids) -> background { engine.useAlbumCover(ids, key, c.thumbnailUrl) } }
     }
 
     private suspend fun playlist(detail: CollectionDetail): Long {

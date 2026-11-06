@@ -4,20 +4,26 @@ import android.content.Context
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.Rect
+import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import com.villamediana.surco.data.LibraryRepository
 import com.villamediana.surco.data.Settings
 import com.villamediana.surco.data.db.AlbumKey
 import com.villamediana.surco.data.db.DownloadState
+import com.villamediana.surco.data.db.SurcoDatabase
 import com.villamediana.surco.data.db.Track
 import com.villamediana.surco.online.CollectionDetail
 import com.villamediana.surco.online.CollectionKind
 import com.villamediana.surco.online.Lyrics
 import com.villamediana.surco.online.OnlineException
 import com.villamediana.surco.online.RemoteCollection
+import com.villamediana.surco.online.RemoteTrack
 import com.villamediana.surco.online.TrackMeta
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.After
@@ -35,6 +41,10 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.io.File
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [ROBOLECTRIC_SDK])
@@ -206,6 +216,72 @@ class DownloadEngineTest {
         assertEquals("Soda Stereo", h.task("n1").albumArtist)
     }
 
+    private fun yhlqmdlg(vararg tracks: RemoteTrack) = CollectionDetail(
+        collection = RemoteCollection(
+            kind = CollectionKind.ALBUM,
+            url = "https://music.youtube.com/browse/MPREb_yhlqmdlg",
+            title = "YHLQMDLG",
+            author = "Bad Bunny",
+            thumbnailUrl = h.server.url("/img/album"),
+            year = 2020,
+        ),
+        tracks = tracks.toList(),
+    )
+
+    @Test fun anAlbumGathersTheSongAlreadyOnThePhone() = runBlocking {
+        h.server.put("/img/album", png(600, 600, Color.RED))
+        // Downloaded loose first: the catalog gave no album artist nor track number.
+        val loose = h.song("s2", artist = "Bad Bunny, Jhay Cortez").copy(album = "YHLQMDLG")
+        h.queue.download(listOf(loose))
+        h.engine.runQueue()
+        val before = h.library.trackByVideoId("s2")!!
+        assertNull(before.trackNumber)
+
+        h.queue.downloadCollection(yhlqmdlg(h.song("s1", artist = "Bad Bunny"), loose, h.song("s3", artist = "Bad Bunny")))
+        // Not downloaded again, but in the album right away.
+        assertEquals(setOf("s1", "s3"), h.allTasks().filter { it.state == DownloadState.QUEUED }.map { it.videoId }.toSet())
+        val joined = h.library.trackByVideoId("s2")!!
+        assertEquals("YHLQMDLG", joined.album)
+        assertEquals("Bad Bunny", joined.albumArtist)
+        assertEquals(2, joined.trackNumber)
+        assertEquals(2020, joined.year)
+        assertEquals(before.filePath, joined.filePath)
+
+        h.engine.runQueue()
+        h.background.forEach { it() }
+
+        val key = AlbumKey("Bad Bunny", "YHLQMDLG")
+        assertEquals(listOf(key to 3), LibraryRepository.groupAlbums(h.library.allTracks()).map { it.key to it.trackCount })
+        assertEquals(listOf("s1", "s2", "s3"), h.library.album(key).first()!!.tracks.map { it.videoId })
+        // One cover for the whole album, the song that was loose included.
+        val cover = h.storage.coverFile(CoverArt.albumCoverName(key)).path
+        val s2 = h.library.trackByVideoId("s2")!!
+        assertTrue(listOf("s1", "s2", "s3").all { h.library.trackByVideoId(it)!!.coverPath == cover })
+        assertEquals(Harness.ACCENT, s2.accentColor)
+    }
+
+    @Test fun aSongQueuedElsewhereJoinsTheAlbumWhenItLands() = runBlocking {
+        h.server.put("/img/album", png(600, 600, Color.RED))
+        val loose = h.song("q2", artist = "Bad Bunny, Jhay Cortez").copy(album = "YHLQMDLG")
+        h.queue.download(listOf(loose))
+        val album = yhlqmdlg(h.song("q1", artist = "Bad Bunny"), loose)
+        h.queue.downloadCollection(album)
+        // The album keeps its own task for the song; asking for the album again adds nothing.
+        h.queue.downloadCollection(album)
+        assertEquals(listOf("q1", "q2", "q2"), h.allTasks().map { it.videoId }.sorted())
+
+        h.engine.runQueue()
+
+        assertTrue(h.allTasks().all { it.state == DownloadState.DONE })
+        // 200 KB in 64 KB chunks = 4 requests: downloaded once.
+        assertEquals(4, audioHits("q2").size)
+        val q2 = h.library.trackByVideoId("q2")!!
+        assertEquals("Bad Bunny", q2.albumArtist)
+        assertEquals(2, q2.trackNumber)
+        assertEquals(h.storage.coverFile(CoverArt.albumCoverName(AlbumKey("Bad Bunny", "YHLQMDLG"))).path, q2.coverPath)
+        assertEquals(1, LibraryRepository.groupAlbums(h.library.allTracks()).size)
+    }
+
     // ------------------------------------------------------------------ playlists
 
     private fun playlistDetail(url: String, title: String, vararg ids: String) = CollectionDetail(
@@ -355,7 +431,7 @@ class DownloadEngineTest {
         h.audio("dead").writeDelayMs = 30
         val run = async(Dispatchers.IO) { h.engine.runQueue() }
         val id = h.task("dead").id
-        h.awaitState(id, { it.bytesDone >= 70_000 })
+        h.awaitBytes(id, 70_000)
         run.cancel() // the worker is stopped (constraints lost, process going away)
         runCatching { run.await() }
         assertEquals(DownloadState.QUEUED, h.task("dead").state)
@@ -376,6 +452,49 @@ class DownloadEngineTest {
         val resumed = audioHits("dead").map { it.range!! }.firstOrNull { it.startsWith("bytes=$kept-") }
         assertNotNull("expected a range starting at $kept", resumed)
         assertArrayEquals(h.audio("dead").bytes, File(h.library.trackByVideoId("dead")!!.filePath).readBytes())
+    }
+
+    @Test fun aStopWhileTheTrackIsBeingSavedKeepsItPlayable() = runBlocking {
+        // The worker is stopped (network constraint, REPLACE, timeout) right while the Track row is inserted.
+        val inserting = CountDownLatch(1)
+        val armed = AtomicBoolean(true)
+        val db = Room.inMemoryDatabaseBuilder(context, SurcoDatabase::class.java)
+            .setQueryCallback(Dispatchers.Unconfined) { sql, _ ->
+                if (sql.contains("INSERT", ignoreCase = true) && sql.contains("`tracks`") && armed.getAndSet(false)) {
+                    inserting.countDown()
+                    Thread.sleep(500)
+                }
+            }
+            .build()
+        h.close()
+        h = Harness(context, db)
+        h.queue.download(listOf(h.song("cut")))
+        val run = async(Dispatchers.IO) { h.engine.runQueue() }
+        assertTrue(inserting.await(10, TimeUnit.SECONDS))
+        run.cancel()
+        runCatching { run.await() }
+
+        val track = h.library.trackByVideoId("cut")!!
+        assertEquals(DownloadState.DONE, h.task("cut").state)
+        assertArrayEquals(h.audio("cut").bytes, File(track.filePath).readBytes())
+        assertFalse(part("cut").exists())
+        assertFalse(DownloadEngine.signatureFile(part("cut")).exists())
+        // The next worker has nothing left to do and leaves the file alone.
+        h.engine.runQueue()
+        assertTrue(File(track.filePath).exists())
+        assertFalse(part("cut").exists())
+    }
+
+    @Test fun aSongFinishedElsewhereCleansTheLeftoverPart() = runBlocking {
+        // An earlier attempt left a .part; meanwhile the song reached the library some other way.
+        h.queue.download(listOf(h.song("left")))
+        part("left").apply { parentFile?.mkdirs() }.writeBytes(ByteArray(1_000))
+        DownloadEngine.signatureFile(part("left")).writeText("sig")
+        h.library.insertTrack(Track(videoId = "left", title = "Left", artist = "A", filePath = "/left.m4a"))
+        h.engine.runQueue()
+        assertEquals(DownloadState.DONE, h.task("left").state)
+        assertFalse(part("left").exists())
+        assertFalse(DownloadEngine.signatureFile(part("left")).exists())
     }
 
     // ------------------------------------------------------------------ cancel / retry
@@ -459,6 +578,24 @@ class DownloadEngineTest {
         assertEquals(listOf(SchedulePolicy.APPEND), h.scheduled)
     }
 
+    @Test fun aReplacedWorkerEndingLateDoesNotIdleTheNewRun() = runBlocking {
+        h.queue.download(listOf(h.song("new", size = 300_000)))
+        h.audio("new").writeDelayMs = 20
+        val run = async(Dispatchers.IO) { h.engine.runQueue() }
+        h.awaitState(h.task("new").id, { it.state == DownloadState.RUNNING })
+        // The worker replaced by REPLACE ("only on Wi-Fi" changed) runs its finally after the new run started.
+        h.engine.idle()
+        assertEquals(DownloadEngine.Phase.RUNNING, h.engine.phase)
+        h.scheduled.clear()
+        h.queue.download(listOf(h.song("more")))
+        // Still picked up by the running loop: no worker scheduled on top of it.
+        assertTrue(h.scheduled.isEmpty())
+        val report = withTimeout(10_000) { run.await() }
+        assertEquals(setOf("new", "more"), report.done.map { it.videoId }.toSet())
+        h.engine.idle()
+        assertEquals(DownloadEngine.Phase.IDLE, h.engine.phase)
+    }
+
     @Test fun respectsParallelDownloads() = runBlocking {
         h.settings = Settings(parallelDownloads = 1)
         h.queue.download(listOf(h.song("one"), h.song("two")))
@@ -487,6 +624,32 @@ class DownloadEngineTest {
         val end = h.engine.snapshot()
         assertEquals(3, end.finished)
         assertFalse(end.hasWork)
+    }
+
+    @Test fun byteProgressLivesInMemoryAndReachesTheTableRarely() = runBlocking {
+        val db = SurcoDatabase.inMemory(context)
+        val dao = CountingDownloadDao(db.downloads())
+        h.close()
+        h = Harness(context, db, dao)
+        h.queue.download(listOf(h.song("slow", size = 1_000_000)))
+        h.audio("slow").writeDelayMs = 25 // 16 KB every 25 ms: about 1.6 s
+        val id = h.task("slow").id
+        val seen = CopyOnWriteArrayList<Float>()
+        val watcher = launch(Dispatchers.IO) { h.engine.progress.collect { live -> live[id]?.let { seen += it.fraction } } }
+        val started = System.currentTimeMillis()
+        h.engine.runQueue()
+        val elapsed = System.currentTimeMillis() - started
+        watcher.cancel()
+
+        // The progress bar moved all along...
+        assertTrue("live progress: $seen", seen.distinct().count { it in 0.01f..0.99f } >= 3)
+        // ...while the table (and everyone observing it) got the bytes when the download began, when it
+        // ended and at most once a second in between — not four times a second.
+        val writes = dao.progressWrites.get()
+        assertTrue("$writes progress writes in $elapsed ms", writes <= 2 + elapsed / 1_000)
+        assertEquals(DownloadState.DONE, h.task("slow").state)
+        // Nothing left in memory once the run is over.
+        assertTrue(h.engine.progress.value.isEmpty())
     }
 
     @Test fun cancellingTheRunItselfIsACancellation() = runBlocking {

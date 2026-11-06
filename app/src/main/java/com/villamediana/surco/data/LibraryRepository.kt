@@ -277,6 +277,13 @@ class LibraryRepository(
     suspend fun setLyrics(trackId: Long, path: String?, synced: Boolean) = trackDao.setLyrics(trackId, path, synced)
     suspend fun setCover(trackId: Long, path: String?) = trackDao.setCover(trackId, path)
 
+    /** One cover (with its accent color) for several tracks — the songs of an album. */
+    suspend fun setCovers(trackIds: List<Long>, path: String?, accentColor: Int?) = trackDao.setCovers(trackIds, path, accentColor)
+
+    /** Puts a track in an album without touching the rest of its row (play counts, likes…). */
+    suspend fun setAlbumInfo(trackId: Long, album: String?, albumArtist: String?, trackNumber: Int?, year: Int?) =
+        trackDao.setAlbumInfo(trackId, album, albumArtist, trackNumber, year)
+
     suspend fun editMetadata(
         trackId: Long,
         title: String,

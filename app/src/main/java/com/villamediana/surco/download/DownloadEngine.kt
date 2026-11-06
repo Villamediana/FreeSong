@@ -29,7 +29,10 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -68,6 +71,8 @@ internal class DownloadEngine(
     private val probeDuration: (File) -> Long? = ::probeDurationMs,
     chunkSize: Long = CHUNK_SIZE,
     private val retryDelayMs: (attempt: Int) -> Long = { 2_000L shl (it - 1) },
+    /** Where [progress] lives; the controller hands in its own to merge it into the task list. */
+    private val liveProgress: MutableStateFlow<Map<Long, TaskProgress>> = MutableStateFlow(emptyMap()),
 ) {
     enum class Phase {
         /** No run in this process. */
@@ -91,6 +96,11 @@ internal class DownloadEngine(
         @Volatile var finalFile: File? = null
 
         val fraction: Float get() = if (bytesTotal > 0) (bytesDone.toFloat() / bytesTotal).coerceIn(0f, 1f) else 0f
+
+        /** Nothing reported yet (just claimed): the row keeps the progress of the previous attempt. */
+        val started: Boolean get() = bytesDone > 0 || bytesTotal > 0
+
+        fun progress() = TaskProgress(fraction, bytesDone, bytesTotal)
     }
 
     private sealed interface Outcome {
@@ -112,6 +122,15 @@ internal class DownloadEngine(
 
     @Volatile var phase: Phase = Phase.IDLE
         private set
+
+    /**
+     * Byte progress of the running tasks, by task id. It lives in memory: the table gets it only every
+     * [PROGRESS_WRITE_INTERVAL_MS] and on state changes, so the downloads list (with all the history)
+     * is not reloaded by every observer several times a second. Only meaningful for RUNNING rows.
+     */
+    val progress: StateFlow<Map<Long, TaskProgress>> get() = liveProgress
+
+    @Volatile private var lastPublish = 0L
 
     @Volatile private var current: RunReport? = null
 
@@ -146,13 +165,18 @@ internal class DownloadEngine(
             withContext(NonCancellable) {
                 phaseLock.withLock { if (phase == Phase.RUNNING) phase = Phase.EXITING }
             }
+            liveProgress.value = emptyMap()
         }
         report
     }
 
-    /** Marks the end of a run started with [runQueue] (after its summary was shown). */
+    /**
+     * Marks the end of a run started with [runQueue] (after its summary was shown). Ignored while
+     * another run holds the loop: a replaced worker ends after the one that replaced it started.
+     */
     suspend fun idle() = withContext(NonCancellable) {
-        phaseLock.withLock { phase = Phase.IDLE }
+        // runQueue sets RUNNING under phaseLock while it holds runLock, so this check cannot race it.
+        phaseLock.withLock { if (!runLock.isLocked) phase = Phase.IDLE }
     }
 
     /**
@@ -198,6 +222,7 @@ internal class DownloadEngine(
         val now = clock()
         val running = cur.copy(state = DownloadState.RUNNING, error = null, updatedAt = now)
         val entry = Running(running, now)
+        liveProgress.update { it - id } // left by an earlier attempt in this run
         inflight[id] = entry
         dao.update(running)
         entry
@@ -238,8 +263,13 @@ internal class DownloadEngine(
 
         while (true) {
             // Already on the phone (another task of the same video, or a commit that failed late):
-            // just finish this task with that track.
-            library.trackByVideoId(task.videoId)?.let { return commit(entry, existingId = it.id, newTrack = null) }
+            // just finish this task with that track — which joins the album when this is an album download.
+            library.trackByVideoId(task.videoId)?.let { have ->
+                val outcome = commit(entry, existingId = have.id, newTrack = null)
+                val album = have.inAlbumOf(task)?.albumKey
+                if (outcome is Outcome.Done && album != null) guarded { useAlbumCover(listOf(have.id), album, task.albumCoverUrl) }
+                return outcome
+            }
             val failure: Failure = try {
                 return downloadAndSave(entry, task)
             } catch (ce: CancellationException) {
@@ -379,14 +409,24 @@ internal class DownloadEngine(
         return file to found.synced
     }
 
-    /** Inserts the track (or reuses the row of the same video), places it in its playlist, marks DONE. */
-    private suspend fun commit(entry: Running, existingId: Long?, newTrack: Track?): Outcome = stateLock.withLock {
+    /**
+     * Inserts the track (or reuses the row of the same video), places it in its playlist, marks DONE.
+     * Never cut halfway by a stop: a track inserted but not marked DONE would make [interrupted] move
+     * its audio file back to tmp/ and leave the library pointing at nothing.
+     */
+    private suspend fun commit(entry: Running, existingId: Long?, newTrack: Track?): Outcome = withContext(NonCancellable) {
+        stateLock.withLock { commitLocked(entry, existingId, newTrack) }
+    }
+
+    /** Must hold [stateLock]. */
+    private suspend fun commitLocked(entry: Running, existingId: Long?, newTrack: Track?): Outcome {
         val cur = dao.get(entry.task.id)
-        if (cur == null || cur.state != DownloadState.RUNNING || entry.cancelRequested) return@withLock Outcome.Canceled
+        if (cur == null || cur.state != DownloadState.RUNNING || entry.cancelRequested) return Outcome.Canceled
         val existing = existingId?.let { library.getTrack(it) } ?: library.trackByVideoId(cur.videoId)
         val trackId = when {
             existing != null -> {
                 if (newTrack != null && existing.filePath != newTrack.filePath) File(newTrack.filePath).delete()
+                joinAlbum(existing, cur)
                 existing.id
             }
             newTrack != null -> try {
@@ -394,10 +434,9 @@ internal class DownloadEngine(
             } catch (e: SQLiteConstraintException) {
                 library.trackByVideoId(cur.videoId)?.id ?: throw e
             }
-            else -> return@withLock Outcome.Canceled
+            else -> return Outcome.Canceled
         }
         entry.finalFile = null
-        signatureFile(storage.tempFile(cur.videoId)).delete()
         place(cur, trackId)
         val size = (existing ?: newTrack)?.fileSize ?: cur.bytesTotal
         val done = cur.copy(
@@ -410,7 +449,27 @@ internal class DownloadEngine(
             updatedAt = clock(),
         )
         dao.update(done)
-        Outcome.Done(done)
+        // The .sig, and a .part left by an earlier attempt when the song came from elsewhere.
+        deletePartIfUnused(cur.videoId)
+        return Outcome.Done(done)
+    }
+
+    /**
+     * A song already on the phone, asked for again from an album page, joins that album: it takes
+     * the page's album, album artist, track number and year, like a fresh download would. Returns
+     * the track as it is now; null (nothing changes) when [task] is not an album download.
+     */
+    suspend fun joinAlbum(track: Track, task: DownloadTask): Track? {
+        val joined = track.inAlbumOf(task) ?: return null
+        if (joined != track) library.setAlbumInfo(joined.id, joined.album, joined.albumArtist, joined.trackNumber, joined.year)
+        return joined
+    }
+
+    /** Gives [trackIds] the cover shared by the songs of [album], fetched from [coverUrl] when it is not on the phone yet. */
+    suspend fun useAlbumCover(trackIds: List<Long>, album: AlbumKey, coverUrl: String?) {
+        val cover = covers.obtain(CoverArt.albumCoverName(album), listOfNotNull(coverUrl)) ?: return
+        val accent = guarded { accentOf(cover.path) }
+        library.setCovers(trackIds, cover.path, accent)
     }
 
     private suspend fun place(task: DownloadTask, trackId: Long) {
@@ -444,13 +503,19 @@ internal class DownloadEngine(
         entry.bytesTotal = total ?: 0L
         if (entry.cancelRequested) throw TaskCanceled()
         val now = clock()
-        if (now - entry.lastWrite >= PROGRESS_INTERVAL_MS) {
+        if (now - lastPublish >= PROGRESS_INTERVAL_MS) {
+            lastPublish = now
+            liveProgress.update { live -> live + inflight.values.filter { it.started }.associate { it.task.id to it.progress() } }
+        }
+        if (now - entry.lastWrite >= PROGRESS_WRITE_INTERVAL_MS) {
             entry.lastWrite = now
             writeProgress(entry)
         }
     }
 
+    /** Progress into the table (and the live map, so both agree): on state changes and every few seconds. */
     private suspend fun writeProgress(entry: Running) {
+        liveProgress.update { it + (entry.task.id to entry.progress()) }
         dao.setProgress(entry.task.id, entry.fraction, entry.bytesDone, entry.bytesTotal, clock())
     }
 
@@ -473,11 +538,14 @@ internal class DownloadEngine(
             }
             cur
         }
-        if (cur == null || cur.state == DownloadState.CANCELED || entry.cancelRequested) {
-            discard(entry)
-        } else {
-            restorePart(entry)
-            writeProgress(entry)
+        when {
+            cur == null || cur.state == DownloadState.CANCELED || entry.cancelRequested -> discard(entry)
+            // Finished (committed or failed) before the stop reached it: nothing to put back.
+            cur.state == DownloadState.DONE || cur.state == DownloadState.FAILED -> Unit
+            else -> {
+                restorePart(entry)
+                writeProgress(entry)
+            }
         }
     }
 
@@ -491,9 +559,12 @@ internal class DownloadEngine(
     }
 
     /** Puts an uncommitted final file back as the .part so the next attempt resumes instantly. */
-    private fun restorePart(entry: Running) {
+    private suspend fun restorePart(entry: Running) {
         val file = entry.finalFile ?: return
-        if (file.exists()) move(file, storage.tempFile(entry.task.videoId))
+        // Never take the file of a track that made it into the library.
+        if (file.exists() && library.trackByVideoId(entry.task.videoId)?.filePath != file.path) {
+            move(file, storage.tempFile(entry.task.videoId))
+        }
         entry.finalFile = null
     }
 
@@ -556,7 +627,11 @@ internal class DownloadEngine(
         const val CHUNK_SIZE = 8L * 1024 * 1024
         const val MAX_ATTEMPTS = 3
         const val MAX_URL_REFRESHES = 3
+        /** How often the live [progress] of the running tasks is published. */
         const val PROGRESS_INTERVAL_MS = 250L
+
+        /** How often a running task's progress is written to the table (it only matters after a restart). */
+        const val PROGRESS_WRITE_INTERVAL_MS = 5_000L
         private const val TAG = "SurcoDownload"
 
         internal fun signatureFile(part: File): File = File(part.path + ".sig")
@@ -578,6 +653,18 @@ internal class DownloadEngine(
     }
 }
 
+/** [this] track with the album metadata an album-page [task] carries; null for any other task. */
+internal fun Track.inAlbumOf(task: DownloadTask): Track? {
+    if (!task.isFromAlbumPage) return null
+    val album = task.album?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    return copy(
+        album = album,
+        albumArtist = task.albumArtist?.trim()?.takeIf { it.isNotEmpty() } ?: albumArtist,
+        trackNumber = task.trackNumber ?: trackNumber,
+        year = task.year ?: year,
+    )
+}
+
 /** What one [DownloadEngine.runQueue] did. */
 internal class RunReport {
     val done: MutableList<DownloadTask> = CopyOnWriteArrayList()
@@ -588,6 +675,9 @@ internal class RunReport {
 }
 
 internal data class RunningItem(val title: String, val artist: String, val fraction: Float)
+
+/** Live progress of one running task. */
+internal data class TaskProgress(val fraction: Float, val bytesDone: Long, val bytesTotal: Long)
 
 /** The current run as the notification sees it. */
 internal data class RunSnapshot(val finished: Int, val queued: Int, val running: List<RunningItem>) {

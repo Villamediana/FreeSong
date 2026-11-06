@@ -11,6 +11,7 @@ import com.villamediana.surco.data.AudioQuality
 import com.villamediana.surco.data.LibraryRepository
 import com.villamediana.surco.data.Settings
 import com.villamediana.surco.data.Storage
+import com.villamediana.surco.data.db.DownloadDao
 import com.villamediana.surco.data.db.DownloadState
 import com.villamediana.surco.data.db.DownloadTask
 import com.villamediana.surco.data.db.SurcoDatabase
@@ -229,9 +230,11 @@ internal class FakeLyrics(@Volatile var result: Lyrics? = null) : LyricsSource {
 }
 
 /** Engine + queue over an in-memory database, the [TestServer] and fakes. */
-internal class Harness(context: Context) : AutoCloseable {
-    val db = SurcoDatabase.inMemory(context)
-    val dao = db.downloads()
+internal class Harness(
+    context: Context,
+    val db: SurcoDatabase = SurcoDatabase.inMemory(context),
+    val dao: DownloadDao = db.downloads(),
+) : AutoCloseable {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     val library = LibraryRepository(db, scope)
     val storage = Storage(context).also { it.audioDir.parentFile?.deleteRecursively() }
@@ -303,6 +306,11 @@ internal class Harness(context: Context) : AutoCloseable {
             error("unreachable")
         }
 
+    /** Waits until the engine reports at least [bytes] on disk for [taskId] (live progress, not the table). */
+    suspend fun awaitBytes(taskId: Long, bytes: Long, timeoutMs: Long = 10_000) {
+        withTimeout(timeoutMs) { engine.progress.first { (it[taskId]?.bytesDone ?: 0L) >= bytes } }
+    }
+
     override fun close() {
         server.close()
         scope.cancel()
@@ -317,3 +325,13 @@ internal class Harness(context: Context) : AutoCloseable {
 }
 
 internal val DownloadTask.isDone get() = state == DownloadState.DONE
+
+/** Counts the byte-progress writes that reach the table. */
+internal class CountingDownloadDao(private val inner: DownloadDao) : DownloadDao by inner {
+    val progressWrites = AtomicInteger()
+
+    override suspend fun setProgress(id: Long, progress: Float, done: Long, total: Long, at: Long) {
+        progressWrites.incrementAndGet()
+        inner.setProgress(id, progress, done, total, at)
+    }
+}
