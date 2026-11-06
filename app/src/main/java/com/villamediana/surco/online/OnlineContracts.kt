@@ -123,6 +123,12 @@ interface YouTubeSource {
      * audio stream, or a muxed stream). For YouTube Music songs ("Topic" art tracks) this may be
      * the static-art video; implementations may look up the official music video instead.
      */
+    /**
+     * "Up next" for a song (YouTube Music radio / related videos), used to keep an ONLINE queue
+     * going when it ends. Never throws (empty on failure).
+     */
+    suspend fun related(videoId: String, limit: Int = 25): List<RemoteTrack> = emptyList()
+
     suspend fun videoStream(videoId: String, maxHeight: Int = 720): VideoStream =
         throw OnlineException("Video not supported", kind = OnlineException.Kind.UNAVAILABLE)
 }
