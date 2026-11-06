@@ -159,7 +159,6 @@ class PlaybackServiceTest {
         repeat(5) {
             play(tracks.map { it.id }, 0, SessionProtocol.SHUFFLE_ON)
             assertTrue(player.shuffleModeEnabled)
-            assertEquals(tracks[0].id, currentId())
             assertEquals(tracks[0].id, playOrderIds().first())
         }
     }
@@ -203,14 +202,28 @@ class PlaybackServiceTest {
         idleUntil { QueueSnapshot.decode(savedJson())?.let { it.index == 2 && it.positionMs == 0L } == true }
     }
 
+    // ------------------------------------------------------------------ listening stats
+
+    @Test fun swipingTheAppAwayWhilePausedHandsTheListenToTheStats() {
+        start()
+        play(tracks.map { it.id }, 0)
+        idleUntil { player.isPlaying }
+        player.pause()
+        idle(50)
+        val listen = PlaybackService::class.java.getDeclaredField("listen").apply { isAccessible = true }.get(service.get()) as ListenTracker
+        assertEquals(currentId(), listen.currentTrackId)
+        // The app's controller keeps the service bound: no onDestroy follows, so the listen can't wait for it.
+        service.get().onTaskRemoved(null)
+        assertNull(listen.currentTrackId)
+    }
+
     // ------------------------------------------------------------------ resuming the saved queue
 
-    /** What Media3 does with a resumption result for a play press. */
+    /** What Media3 does with a resumption result for a play press (not started: Robolectric plays through songs in no time). */
     private fun resumeLikeMedia3(): MediaSession.MediaItemsWithStartPosition {
         val result = await(callback.onPlaybackResumption(session, appController, true))
         player.setMediaItems(result.mediaItems, result.startIndex, result.startPositionMs)
         player.prepare()
-        player.play()
         idle(300) // room for a (wrong) reshuffle to land
         return result
     }

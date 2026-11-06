@@ -176,7 +176,12 @@ class PlaybackService : MediaLibraryService() {
         saveNow()
         val playing = player.playWhenReady && player.mediaItemCount > 0 &&
             player.playbackState != Player.STATE_ENDED && player.playbackState != Player.STATE_IDLE
-        if (!playing) pauseAllPlayersAndStopSelf()
+        if (!playing) {
+            // The app's own controller can keep the service bound, so onDestroy may never come before
+            // the process is killed: the listen of the paused song is recorded now.
+            finishListen()
+            pauseAllPlayersAndStopSelf()
+        }
     }
 
     override fun onDestroy() {
