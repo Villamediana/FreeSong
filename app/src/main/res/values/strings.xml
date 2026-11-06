@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Surco</string>
+    <string name="tab_home">Início</string>
+    <string name="tab_search">Buscar</string>
+    <string name="tab_library">Biblioteca</string>
+    <string name="more_options">Mais opções</string>
+    <string name="channel_playback">Reprodução</string>
+    <string name="channel_downloads">Downloads</string>
+    <string name="channel_downloads_done">Downloads concluídos</string>
+    <string name="play">Tocar</string>
+    <string name="pause">Pausar</string>
+    <string name="shuffle">Aleatório</string>
+    <string name="back">Voltar</string>
+    <string name="cancel">Cancelar</string>
+    <string name="save">Salvar</string>
+    <string name="delete">Apagar</string>
+    <string name="unknown_artist">Artista desconhecido</string>
+    <plurals name="n_songs">
+        <item quantity="one">%d música</item>
+        <item quantity="other">%d músicas</item>
+    </plurals>
+</resources>
