@@ -1,9 +1,10 @@
 # Surco — arquitetura e regras de trabalho
 
-Surco é um player de música **offline** para Android (Kotlin + Jetpack Compose + Media3). A internet
-só é usada para **buscar e baixar** (YouTube / YouTube Music via NewPipeExtractor, metadados no
-iTunes Search API, letras no LRCLIB). Tudo o resto — biblioteca, playlists, álbuns, aleatório,
-reprodução inteligente por gênero, letras sincronizadas — funciona sem rede.
+Surco é um player de música para Android (Kotlin + Jetpack Compose + Media3) pensado para ser
+**offline**: busca e baixa do YouTube / YouTube Music (NewPipeExtractor), com metadados do iTunes
+Search API e letras do LRCLIB. Também **toca online** sem baixar (padrão ao tocar um resultado da
+busca), mostra o **vídeo** da música e tem **equalizador**. Biblioteca, playlists, álbuns, aleatório,
+reprodução inteligente por gênero e letras sincronizadas das músicas baixadas funcionam sem rede.
 
 Pacote/applicationId: `com.villamediana.surco` (debug: `.debug`). minSdk 26, target 36, compile 37.
 Toolchain: AGP 9.5.1 (Kotlin embutido — **não** aplicar `org.jetbrains.kotlin.android`), Kotlin 2.4.21,
@@ -99,11 +100,20 @@ JSON: usar `kotlinx.serialization` (o `org.json` do Android vira stub nos testes
   `PlayerConnection.playOnline(remoteTracks, …)`. Músicas online viajam como `Track` transitória
   (`data/OnlineTrack.kt`: id negativo, `isOnline`, mediaId `yt:<videoId>`). O serviço resolve o
   stream na hora (ResolvingDataSource + faixas de 2 MB — requisição aberta ao YouTube cai pra poucos
-  KB/s), usa o arquivo local se a música já estiver baixada, e não grava histórico/fila de online.
+  KB/s), usa o arquivo local se a música já estiver baixada. Músicas online entram na fila salva
+  (`QueueSnapshot.online`, voltam a tocar por streaming) mas não geram histórico nem estatísticas.
+  Camada em `playback/stream/`: `ChunkedHttpDataSource` (Range de 2 MB, renova a URL em 403/410),
+  `StreamUrlCache` (até 4 h ou o `expire` da URL), `OnlineStreams` (placeholder
+  `surco://stream/<id>?q=<qualidade>`, pré-resolve a próxima). Fila online que acaba continua com
+  `YouTubeSource.related` (o "a seguir" do YouTube Music).
   No player, música online mostra "Baixar" no lugar do coração; letra buscada na hora (LRCLIB).
 - **Equalizador** (`AudioEffectsController` em `playback/FeatureContracts.kt`, `graph.effects`):
   Equalizer/BassBoost/Virtualizer na sessão de áudio do ExoPlayer, presets próprios (`EqPreset`),
   persistido. Tela em `ui/equalizer/` (rota `EqualizerRoute`, `navigator.openEqualizer()`).
+  Presets são curvas próprias em dB numa grade de oitavas, amostradas nas bandas do aparelho por
+  interpolação em log-frequência; a curva personalizada é salva por frequência (DataStore
+  `surco_effects`); as bandas são sondadas numa sessão descartável (`generateAudioSessionId`).
+  O serviço chama `graph.effects.attach(sessionId)` quando a sessão muda. O vídeo não é equalizado.
 - **Ver o vídeo** (`VideoPlayback`, `graph.video`; `YouTubeSource.videoStream`): ExoPlayer próprio
   com vídeo + áudio, pausa a música e retoma na mesma posição. Tela imersiva `ui/video/`
   (`VideoRoute`, `navigator.openVideo(videoId, title)`); render com media3-ui-compose `PlayerSurface`.

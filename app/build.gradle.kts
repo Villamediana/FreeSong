@@ -60,7 +60,8 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
+            // Never fall back to the debug key: an APK signed with another key cannot update the installed app.
+            signingConfig = signingConfigs.findByName("release")
         }
     }
 
@@ -107,6 +108,14 @@ android {
                 it.testLogging { events("failed", "skipped"); showStandardStreams = true }
             }
         }
+    }
+}
+
+// Fail fast when a release is requested without the keystore (~/keystores/surco-keystore.properties).
+gradle.taskGraph.whenReady {
+    val wantsRelease = allTasks.any { it.project == project && it.name.contains("Release") && (it.name.startsWith("assemble") || it.name.startsWith("package") || it.name.startsWith("bundle")) }
+    if (wantsRelease && signingProps.getProperty("storeFile") == null) {
+        throw GradleException("Release signing keystore not found: expected ~/keystores/surco-keystore.properties or ./keystore.properties")
     }
 }
 
