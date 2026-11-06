@@ -359,8 +359,8 @@ class PlaybackService : MediaLibraryService() {
         }
     }
 
-    /** Replaces the queue. [shuffleMode] = [SessionProtocol.SHUFFLE_KEEP] / ON / OFF. */
-    private suspend fun playPlan(plan: QueuePlan, shuffleMode: Int, pinFirst: Boolean = true) {
+    /** Replaces the queue, starting at the plan's start song (also first when shuffled). [shuffleMode] = [SessionProtocol.SHUFFLE_KEEP] / ON / OFF. */
+    private suspend fun playPlan(plan: QueuePlan, shuffleMode: Int) {
         val tracks = plan.tracks
         if (tracks.isEmpty()) return
         val start = plan.startIndex.coerceIn(0, tracks.lastIndex)
@@ -373,7 +373,7 @@ class PlaybackService : MediaLibraryService() {
         val order = if (shuffleOn) {
             val taste = taste()
             val useSmart = settings.smartShuffle
-            withContext(Dispatchers.Default) { QueueShuffler.order(tracks, if (pinFirst) start else null, useSmart, taste, seed) }
+            withContext(Dispatchers.Default) { QueueShuffler.order(tracks, start, useSmart, taste, seed) }
         } else null
 
         shuffleJob?.cancel()
@@ -849,11 +849,9 @@ class PlaybackService : MediaLibraryService() {
                     return serialized {
                         val kept = resolveIds(ids, online).withIndex().mapNotNull { (i, t) -> t?.let { IndexedValue(i, it) } }
                         if (kept.isNotEmpty()) {
+                            // The requested song plays first, shuffled or not ("Aleatório" buttons pick a random start themselves).
                             val startIdx = kept.indexOfFirst { it.index >= start }.coerceAtLeast(0)
-                            // "Aleatório" on a whole list lets the shuffle pick the first song too;
-                            // tapping a song (start > 0, or shuffle kept as it was) plays that song first.
-                            val pinFirst = !(shuffle == SessionProtocol.SHUFFLE_ON && start == 0)
-                            playPlan(QueuePlan(kept.map { it.value }, startIdx, src, isSmart), shuffle, pinFirst)
+                            playPlan(QueuePlan(kept.map { it.value }, startIdx, src, isSmart), shuffle)
                         }
                     }
                 }

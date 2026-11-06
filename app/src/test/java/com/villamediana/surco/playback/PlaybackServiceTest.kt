@@ -130,6 +130,22 @@ class PlaybackServiceTest {
 
     private fun currentId(): Long? = player.currentMediaItem?.mediaId?.toLongOrNull()
 
+    /** Timeline indexes in play order. */
+    private fun playOrderIds(): List<Long> =
+        PlayOrder.of(player.currentTimeline, player.shuffleModeEnabled).toList().map { player.getMediaItemAt(it).mediaId.toLong() }
+
+    // ------------------------------------------------------------------ starting a list
+
+    @Test fun tappingTheFirstRowWhileShuffledPlaysThatRow() {
+        start()
+        repeat(5) {
+            play(tracks.map { it.id }, 0, SessionProtocol.SHUFFLE_ON)
+            assertTrue(player.shuffleModeEnabled)
+            assertEquals(tracks[0].id, currentId())
+            assertEquals(tracks[0].id, playOrderIds().first())
+        }
+    }
+
     // ------------------------------------------------------------------ resuming with nothing saved
 
     @Test fun emptyingTheQueueForgetsTheSavedOneAndTheHeadsetFlag() {
