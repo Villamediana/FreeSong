@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="eq_title">Equalizador</string>
+    <string name="eq_enable">Ligar o equalizador</string>
+    <string name="eq_profile">Perfil</string>
+    <string name="eq_reset">Restaurar</string>
+    <string name="eq_effects">Efeitos</string>
+    <string name="eq_bass_boost">Reforço de graves</string>
+    <string name="eq_virtualizer">Espacial</string>
+    <string name="eq_unavailable_idle">Toque uma música para ajustar o equalizador.</string>
+    <string name="eq_unavailable_device">Este aparelho não oferece equalizador.</string>
+    <string name="eq_db">%1$s dB</string>
+    <string name="eq_hz">%1$s Hz</string>
+    <string name="eq_percent">%1$d%%</string>
+    <string name="eq_preset_custom">Personalizado</string>
+    <string name="eq_preset_flat">Plano</string>
+    <string name="eq_preset_bass">Graves</string>
+    <string name="eq_preset_treble">Agudos</string>
+    <string name="eq_preset_vocal">Voz</string>
+    <string name="eq_preset_rock">Rock</string>
+    <string name="eq_preset_pop">Pop</string>
+    <string name="eq_preset_electronic">Eletrônica</string>
+    <string name="eq_preset_hiphop">Hip-hop</string>
+    <string name="eq_preset_latin">Latina</string>
+    <string name="eq_preset_jazz">Jazz</string>
+    <string name="eq_preset_classical">Clássica</string>
+    <string name="eq_preset_acoustic">Acústica</string>
+    <string name="eq_preset_late_night">Noite</string>
+</resources>
