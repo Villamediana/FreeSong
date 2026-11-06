@@ -10,6 +10,7 @@ import androidx.media3.session.MediaSession
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.util.concurrent.ListenableFuture
 import com.villamediana.surco.SurcoApplication
+import com.villamediana.surco.data.Settings
 import com.villamediana.surco.data.db.Track
 import com.villamediana.surco.playback.stream.wav
 import kotlinx.coroutines.Job
@@ -74,7 +75,15 @@ class PlaybackServiceTest {
         val future = MediaController.Builder(app, session.token).buildAsync()
         idleUntil { future.isDone }
         controller = future.get()
+        val expected = runBlocking { graph.settings.current() }.copy(lastQueueJson = null)
+        idleUntil { serviceSettings().copy(lastQueueJson = null) == expected }
     }
+
+    private fun serviceSettings(): Settings =
+        PlaybackService::class.java.getDeclaredField("settings").apply { isAccessible = true }.get(service.get()) as Settings
+
+    /** Autoplay of similar songs (on by default), applied before the service starts. */
+    private fun autoplay(on: Boolean) = runBlocking { graph.settings.setAutoplaySimilar(on) }
 
     @After fun tearDown() {
         if (::controller.isInitialized) controller.release()
@@ -84,6 +93,7 @@ class PlaybackServiceTest {
             val persist = PlaybackService::class.java.getDeclaredField("persistJob").apply { isAccessible = true }
             (persist.get(service.get()) as Job?)?.let { runBlocking { withTimeout(5_000) { it.join() } } }
         }
+        autoplay(true) // the settings store outlives the test
         idle(50)
     }
 
@@ -152,6 +162,38 @@ class PlaybackServiceTest {
             assertEquals(tracks[0].id, currentId())
             assertEquals(tracks[0].id, playOrderIds().first())
         }
+    }
+
+    private fun add(ids: List<Long>, where: String) = send(
+        SessionProtocol.QUEUE_ADD,
+        Bundle().apply {
+            putLongArray(SessionProtocol.ARG_IDS, ids.toLongArray())
+            putString(SessionProtocol.ARG_WHERE, where)
+        },
+    )
+
+    /** Plays [ids] to their very end (autoplay off: nothing gets appended). */
+    private fun playToTheEnd(ids: List<Long>) {
+        play(ids, 0)
+        player.seekTo(ids.lastIndex, 20_000)
+        idleUntil { player.playbackState == Player.STATE_ENDED }
+    }
+
+    // ------------------------------------------------------------------ after the end
+
+    @Test fun songsAddedAfterTheQueueEndedAreWhatPlayGoesTo() {
+        autoplay(false)
+        start()
+        playToTheEnd(tracks.take(2).map { it.id })
+        add(listOf(tracks[4].id), SessionProtocol.WHERE_END)
+        assertEquals(tracks[4].id, currentId())
+        assertFalse(player.playWhenReady) // waits for Play
+        idleUntil { player.playbackState == Player.STATE_READY }
+
+        playToTheEnd(tracks.take(2).map { it.id })
+        add(listOf(tracks[5].id), SessionProtocol.WHERE_NEXT)
+        assertEquals(tracks[5].id, currentId())
+        assertEquals(listOf(tracks[0].id, tracks[1].id, tracks[5].id), playOrderIds())
     }
 
     // ------------------------------------------------------------------ resuming the saved queue

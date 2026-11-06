@@ -402,8 +402,12 @@ class PlaybackService : MediaLibraryService() {
         scheduleSave()
     }
 
-    /** Inserts after the current song ([next]) or at the end — of the play order, also when shuffled. */
-    private fun insert(tracks: List<Track>, next: Boolean) {
+    /**
+     * Inserts after the current song ([next]) or at the end — of the play order, also when shuffled.
+     * When the queue had already ended, the player moves on to the first added song: paused (Play
+     * starts it), or carrying on when [keepPlaying] (autoplay's songs landing late).
+     */
+    private fun insert(tracks: List<Track>, next: Boolean, keepPlaying: Boolean = false) {
         if (tracks.isEmpty()) return
         val items = tracks.map(::mediaItemOf)
         val n = player.mediaItemCount
@@ -415,17 +419,23 @@ class PlaybackService : MediaLibraryService() {
             publishExtras()
             return
         }
+        // Left at ENDED, the player ignores new songs and Play would restart the one that just finished.
+        val ended = player.playbackState == Player.STATE_ENDED
         val cur = player.currentMediaItemIndex.coerceIn(0, n - 1)
+        val timelinePos = if (next) cur + 1 else n
         if (!player.shuffleModeEnabled) {
-            player.addMediaItems(if (next) cur + 1 else n, items)
+            player.addMediaItems(timelinePos, items)
         } else {
             val before = playOrder()
-            val timelinePos = if (next) cur + 1 else n
             val playPos = if (next) before.playIndexOf(cur) + 1 else before.size
             player.addMediaItems(timelinePos, items)
             setShuffleOrder(before.inserted(playPos, timelinePos, items.size))
         }
         extendedAtCount = -1
+        if (ended) {
+            if (!keepPlaying) player.pause()
+            player.seekTo(timelinePos, 0)
+        }
     }
 
     private fun move(from: Int, to: Int) {
@@ -495,7 +505,7 @@ class PlaybackService : MediaLibraryService() {
                 return@launch
             }
             if (more.isEmpty()) return@launch // nothing left that fits; don't retry for this queue
-            insert(more, next = false)
+            insert(more, next = false, keepPlaying = true)
             extendedAtCount = player.mediaItemCount
             if (!smart) {
                 smart = true
@@ -516,7 +526,7 @@ class PlaybackService : MediaLibraryService() {
             val byVideo = localByVideoId(related.map { it.videoId })
             val more = OnlineQueue.continuation(related, queuedVideoIds(), byVideo)
             if (more.isEmpty()) return@launch // offline or nothing new: the queue ends here
-            insert(more, next = false)
+            insert(more, next = false, keepPlaying = true)
             extendedAtCount = player.mediaItemCount
             if (!smart) {
                 smart = true
