@@ -29,7 +29,10 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -68,6 +71,8 @@ internal class DownloadEngine(
     private val probeDuration: (File) -> Long? = ::probeDurationMs,
     chunkSize: Long = CHUNK_SIZE,
     private val retryDelayMs: (attempt: Int) -> Long = { 2_000L shl (it - 1) },
+    /** Where [progress] lives; the controller hands in its own to merge it into the task list. */
+    private val liveProgress: MutableStateFlow<Map<Long, TaskProgress>> = MutableStateFlow(emptyMap()),
 ) {
     enum class Phase {
         /** No run in this process. */
@@ -91,6 +96,11 @@ internal class DownloadEngine(
         @Volatile var finalFile: File? = null
 
         val fraction: Float get() = if (bytesTotal > 0) (bytesDone.toFloat() / bytesTotal).coerceIn(0f, 1f) else 0f
+
+        /** Nothing reported yet (just claimed): the row keeps the progress of the previous attempt. */
+        val started: Boolean get() = bytesDone > 0 || bytesTotal > 0
+
+        fun progress() = TaskProgress(fraction, bytesDone, bytesTotal)
     }
 
     private sealed interface Outcome {
@@ -112,6 +122,15 @@ internal class DownloadEngine(
 
     @Volatile var phase: Phase = Phase.IDLE
         private set
+
+    /**
+     * Byte progress of the running tasks, by task id. It lives in memory: the table gets it only every
+     * [PROGRESS_WRITE_INTERVAL_MS] and on state changes, so the downloads list (with all the history)
+     * is not reloaded by every observer several times a second. Only meaningful for RUNNING rows.
+     */
+    val progress: StateFlow<Map<Long, TaskProgress>> get() = liveProgress
+
+    @Volatile private var lastPublish = 0L
 
     @Volatile private var current: RunReport? = null
 
@@ -146,6 +165,7 @@ internal class DownloadEngine(
             withContext(NonCancellable) {
                 phaseLock.withLock { if (phase == Phase.RUNNING) phase = Phase.EXITING }
             }
+            liveProgress.value = emptyMap()
         }
         report
     }
@@ -202,6 +222,7 @@ internal class DownloadEngine(
         val now = clock()
         val running = cur.copy(state = DownloadState.RUNNING, error = null, updatedAt = now)
         val entry = Running(running, now)
+        liveProgress.update { it - id } // left by an earlier attempt in this run
         inflight[id] = entry
         dao.update(running)
         entry
@@ -482,13 +503,19 @@ internal class DownloadEngine(
         entry.bytesTotal = total ?: 0L
         if (entry.cancelRequested) throw TaskCanceled()
         val now = clock()
-        if (now - entry.lastWrite >= PROGRESS_INTERVAL_MS) {
+        if (now - lastPublish >= PROGRESS_INTERVAL_MS) {
+            lastPublish = now
+            liveProgress.update { live -> live + inflight.values.filter { it.started }.associate { it.task.id to it.progress() } }
+        }
+        if (now - entry.lastWrite >= PROGRESS_WRITE_INTERVAL_MS) {
             entry.lastWrite = now
             writeProgress(entry)
         }
     }
 
+    /** Progress into the table (and the live map, so both agree): on state changes and every few seconds. */
     private suspend fun writeProgress(entry: Running) {
+        liveProgress.update { it + (entry.task.id to entry.progress()) }
         dao.setProgress(entry.task.id, entry.fraction, entry.bytesDone, entry.bytesTotal, clock())
     }
 
@@ -600,7 +627,11 @@ internal class DownloadEngine(
         const val CHUNK_SIZE = 8L * 1024 * 1024
         const val MAX_ATTEMPTS = 3
         const val MAX_URL_REFRESHES = 3
+        /** How often the live [progress] of the running tasks is published. */
         const val PROGRESS_INTERVAL_MS = 250L
+
+        /** How often a running task's progress is written to the table (it only matters after a restart). */
+        const val PROGRESS_WRITE_INTERVAL_MS = 5_000L
         private const val TAG = "SurcoDownload"
 
         internal fun signatureFile(part: File): File = File(part.path + ".sig")
@@ -644,6 +675,9 @@ internal class RunReport {
 }
 
 internal data class RunningItem(val title: String, val artist: String, val fraction: Float)
+
+/** Live progress of one running task. */
+internal data class TaskProgress(val fraction: Float, val bytesDone: Long, val bytesTotal: Long)
 
 /** The current run as the notification sees it. */
 internal data class RunSnapshot(val finished: Int, val queued: Int, val running: List<RunningItem>) {

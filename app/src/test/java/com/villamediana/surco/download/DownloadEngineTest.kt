@@ -22,6 +22,7 @@ import com.villamediana.surco.online.TrackMeta
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -40,6 +41,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.io.File
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -429,7 +431,7 @@ class DownloadEngineTest {
         h.audio("dead").writeDelayMs = 30
         val run = async(Dispatchers.IO) { h.engine.runQueue() }
         val id = h.task("dead").id
-        h.awaitState(id, { it.bytesDone >= 70_000 })
+        h.awaitBytes(id, 70_000)
         run.cancel() // the worker is stopped (constraints lost, process going away)
         runCatching { run.await() }
         assertEquals(DownloadState.QUEUED, h.task("dead").state)
@@ -622,6 +624,32 @@ class DownloadEngineTest {
         val end = h.engine.snapshot()
         assertEquals(3, end.finished)
         assertFalse(end.hasWork)
+    }
+
+    @Test fun byteProgressLivesInMemoryAndReachesTheTableRarely() = runBlocking {
+        val db = SurcoDatabase.inMemory(context)
+        val dao = CountingDownloadDao(db.downloads())
+        h.close()
+        h = Harness(context, db, dao)
+        h.queue.download(listOf(h.song("slow", size = 1_000_000)))
+        h.audio("slow").writeDelayMs = 25 // 16 KB every 25 ms: about 1.6 s
+        val id = h.task("slow").id
+        val seen = CopyOnWriteArrayList<Float>()
+        val watcher = launch(Dispatchers.IO) { h.engine.progress.collect { live -> live[id]?.let { seen += it.fraction } } }
+        val started = System.currentTimeMillis()
+        h.engine.runQueue()
+        val elapsed = System.currentTimeMillis() - started
+        watcher.cancel()
+
+        // The progress bar moved all along...
+        assertTrue("live progress: $seen", seen.distinct().count { it in 0.01f..0.99f } >= 3)
+        // ...while the table (and everyone observing it) got the bytes when the download began, when it
+        // ended and at most once a second in between — not four times a second.
+        val writes = dao.progressWrites.get()
+        assertTrue("$writes progress writes in $elapsed ms", writes <= 2 + elapsed / 1_000)
+        assertEquals(DownloadState.DONE, h.task("slow").state)
+        // Nothing left in memory once the run is over.
+        assertTrue(h.engine.progress.value.isEmpty())
     }
 
     @Test fun cancellingTheRunItselfIsACancellation() = runBlocking {
