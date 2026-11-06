@@ -381,7 +381,9 @@ class PlaybackService : MediaLibraryService() {
             withContext(Dispatchers.Default) { QueueShuffler.order(tracks, start, useSmart, taste, seed) }
         } else null
 
+        // Work computed for the old queue (its shuffle, its autoplay songs) must not land in this one.
         shuffleJob?.cancel()
+        extendJob?.cancel()
         source = plan.source
         smart = plan.smart
         extendedAtCount = -1
@@ -646,6 +648,8 @@ class PlaybackService : MediaLibraryService() {
         if (player.mediaItemCount > 0) return
         val (snap, tracks) = loadSnapshot() ?: return
         if (player.mediaItemCount > 0) return
+        extendJob?.cancel()
+        extendedAtCount = -1
         source = snap.source?.toPlaySource()
         smart = snap.smart
         player.repeatMode = snap.repeat.toPlayer()
@@ -947,6 +951,7 @@ class PlaybackService : MediaLibraryService() {
                     val items = tracks.map(::mediaItemOf)
                     // Only a play press replaces the queue; the system's resume card just shows the item.
                     if (isForPlayback) {
+                        extendJob?.cancel()
                         source = snap.source?.toPlaySource()
                         smart = snap.smart
                         extendedAtCount = -1
@@ -1050,6 +1055,7 @@ class PlaybackService : MediaLibraryService() {
 
     /** A controller outside the app (car, watch, assistant) replaced the queue. */
     private fun applyExternalContext(src: PlaySource?, isSmart: Boolean) {
+        extendJob?.cancel()
         source = src
         smart = isSmart
         extendedAtCount = -1
