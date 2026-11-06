@@ -111,6 +111,16 @@ class CatalogMetadataEnricherTest {
         assertEquals("Alternativo e rock latino", meta.genre)
     }
 
+    @Test fun songAlbumFromSearchGetsCatalogDetailsWhenItIsTheSameRelease() = runTest {
+        val fake = OnlineFixtures.FakeHttp { 200 to OnlineFixtures.itunesDeMusicaLigera }
+        val enricher = CatalogMetadataEnricher(fake.client, country = "BR")
+        val meta = enricher.enrich(input("De Música Ligera", "Soda Stereo", catalog = true, durationMs = 213_000, album = "Canción Animal"))
+        assertEquals("Canción Animal", meta.album)
+        assertEquals("Soda Stereo", meta.albumArtist)
+        assertEquals(6, meta.trackNumber)
+        assertEquals(1990, meta.year)
+    }
+
     @Test fun cachedLookupsDoNotHitTheNetworkAgain() = runTest {
         val fake = OnlineFixtures.FakeHttp { 200 to OnlineFixtures.itunesDeMusicaLigera }
         val enricher = CatalogMetadataEnricher(fake.client, country = "BR")

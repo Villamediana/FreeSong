@@ -218,6 +218,9 @@ class OnlineLiveTest {
         val big = yt.collection("https://www.youtube.com/playlist?list=PLgaFNC_I_ZkmtWBxiCtmsjKcGeenO9vKQ", CollectionKind.PLAYLIST, limit = 150)
         println("PL: ${big.collection} (${big.tracks.size})")
         assertTrue(big.tracks.size in 1..150)
+        // The limit cuts inside a page too.
+        val few = yt.collection("https://www.youtube.com/playlist?list=PLgaFNC_I_ZkmtWBxiCtmsjKcGeenO9vKQ", CollectionKind.PLAYLIST, limit = 7)
+        assertEquals(7, few.tracks.size)
         assertNotNull(big.collection.thumbnailUrl)
     }
 
@@ -228,12 +231,23 @@ class OnlineLiveTest {
         assertEquals("Soda Stereo", d.collection.title)
         assertTrue(d.tracks.size >= 20)
         assertTrue(d.tracks.size <= 120)
+        assertEquals(d.tracks.size.toLong(), d.collection.itemCount)
         assertTrue(d.tracks.all { it.fromMusicCatalog })
         val albums = d.related.filter { it.kind == CollectionKind.ALBUM }
         assertTrue(albums.size >= 5)
         assertTrue(albums.any { it.title == "Canción Animal" })
         assertTrue(albums.all { it.year != null })
         assertNotNull(d.description)
+    }
+
+    @Test fun channelThatIsNotAnArtist() = runBlocking {
+        // No YouTube Music artist page: falls back to the channel's uploads through NewPipe.
+        val d = yt.collection("https://www.youtube.com/channel/UCX6OQ3DkcsbYNE6H8uQQuVA", CollectionKind.ARTIST, limit = 40)
+        println("CHANNEL: ${d.collection} tracks=${d.tracks.size} related=${d.related.size}")
+        assertEquals(CollectionKind.ARTIST, d.collection.kind)
+        assertTrue(d.tracks.isNotEmpty())
+        assertTrue(d.tracks.size <= 40)
+        assertTrue(d.tracks.none { it.fromMusicCatalog })
     }
 
     // ---------------------------------------------------------------- audio

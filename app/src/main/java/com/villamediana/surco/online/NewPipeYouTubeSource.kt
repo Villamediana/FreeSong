@@ -222,6 +222,8 @@ class NewPipeYouTubeSource(private val http: OkHttpClient) : YouTubeSource {
     private fun musicHeader(playlistId: String): YouTubeMusicParser.Header? {
         val json = music.browse("VL$playlistId")
         YouTubeMusicParser.header(json, playlistId)?.let { return it }
+        // Only an album playlist may borrow the album page — a user playlist links many albums.
+        if (YouTubeLinks.playlistKind(playlistId) != CollectionKind.ALBUM) return null
         val albumId = YouTubeMusicParser.albumBrowseId(json) ?: return null
         return YouTubeMusicParser.header(music.browse(albumId), playlistId)
     }
@@ -320,7 +322,7 @@ class NewPipeYouTubeSource(private val http: OkHttpClient) : YouTubeSource {
             thumbnails = runCatching { extractor.thumbnails }.getOrNull().orEmpty(),
             streamCount = runCatching { extractor.streamCount }.getOrNull() ?: -1,
             description = runCatching { extractor.description?.content }.getOrNull(),
-            items = items,
+            items = items.take(limit),
         )
     }
 
@@ -395,7 +397,7 @@ class NewPipeYouTubeSource(private val http: OkHttpClient) : YouTubeSource {
                     title = page.name,
                     author = null,
                     thumbnailUrl = page.thumbnailUrl,
-                    itemCount = tracks.size.toLong(),
+                    itemCount = tracks.take(limit).size.toLong(),
                 ),
                 tracks = tracks.take(limit),
                 description = page.description,

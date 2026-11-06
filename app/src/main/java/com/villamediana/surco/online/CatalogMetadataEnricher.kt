@@ -103,7 +103,7 @@ class CatalogMetadataEnricher(
         val albumFromInput = base.album != null
         val sameAlbum = albumFromInput && catalogAlbum != null && TextMatch.similarity(base.album!!, catalogAlbum) >= 0.85
         val album = base.album ?: catalogAlbum
-        val albumArtist = base.albumArtist ?: if (album != null && !albumFromInput) {
+        val albumArtist = base.albumArtist ?: if (album != null && (!albumFromInput || sameAlbum)) {
             (m.collectionArtistName ?: m.artistName)?.let(TitleCleaner::cleanArtist)
         } else null
         // Track numbers and dates only make sense for the album they come from.

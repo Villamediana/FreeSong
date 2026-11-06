@@ -91,6 +91,8 @@ class TitleCleanerTest {
         assertEquals("Envolver (feat. X)", TitleCleaner.cleanTitle("Envolver feat. X"))
         assertEquals("Dona Maria (feat. Jorge)", TitleCleaner.cleanTitle("Dona Maria (Part. Jorge)"))
         assertEquals("Daft Punk", TitleCleaner.cleanArtist("Daft Punk"))
+        assertEquals("FT Island", TitleCleaner.cleanArtist("FT Island"))
+        assertEquals("Featurette", TitleCleaner.cleanTitle("Featurette"))
         check("Calvin Harris ft. Rihanna - This Is What You Came For (Official Video)", "CalvinHarrisVEVO", "This Is What You Came For (feat. Rihanna)", "Calvin Harris")
         check("Thiaguinho feat. Ludmilla - Ainda Bem (Clipe Oficial)", "Thiaguinho", "Ainda Bem (feat. Ludmilla)", "Thiaguinho")
         check("Bad Bunny x Jhay Cortez - DÁKITI (Video Oficial)", "Bad Bunny", "DÁKITI", "Bad Bunny x Jhay Cortez")

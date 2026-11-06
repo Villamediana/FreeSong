@@ -64,7 +64,7 @@ object TitleCleaner {
     )
 
     private val ws = Regex("\\s+")
-    private val featToken = Regex("(?i)(?<![\\p{L}\\p{N}])(featuring|feat|ft)(?![\\p{L}\\p{N}])\\.?\\s*")
+    private val featToken = Regex("(?i)(?<=[\\s(\\[])(featuring|feat|ft)(?![\\p{L}\\p{N}])\\.?\\s*")
     private val partFeat = Regex("(?i)\\((part\\.|participa[cç][aã]o( especial)?( de)?)\\s+(?=\\p{L})")
     private val hashtags = Regex("(^|\\s)#[\\p{L}\\p{N}_]+")
     private val prodGroup = Regex("(?i)^(prod(\\.|uced)?|produced)(\\s+by)?\\s+.+$")
