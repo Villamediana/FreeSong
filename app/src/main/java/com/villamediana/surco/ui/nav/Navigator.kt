@@ -3,8 +3,10 @@ package com.villamediana.surco.ui.nav
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
+import androidx.navigation.toRoute
 import com.villamediana.surco.data.db.AlbumKey
 import com.villamediana.surco.online.RemoteCollection
 
@@ -14,9 +16,19 @@ class Navigator(val controller: NavHostController) {
     /** Set by the player layer; lets any screen collapse the full-screen player before navigating. */
     var collapsePlayer: () -> Unit = {}
 
+    /**
+     * Opens [route] unless that very page (same arguments) is already on top. Not launchSingleTop:
+     * it only compares destinations, so album B opened from album A would reuse A's entry (and its
+     * ViewModel) and keep showing A.
+     */
     private fun go(route: Any) {
         collapsePlayer()
-        controller.navigate(route) { launchSingleTop = true }
+        if (!isOnTop(route)) controller.navigate(route)
+    }
+
+    private fun isOnTop(route: Any): Boolean {
+        val top = controller.currentBackStackEntry ?: return false
+        return top.destination.hasRoute(route::class) && runCatching { top.toRoute<Any>(route::class) == route }.getOrDefault(false)
     }
 
     fun openAlbum(key: AlbumKey) = go(AlbumRoute(key.artist, key.title))
