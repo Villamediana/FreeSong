@@ -165,6 +165,29 @@ class OnlineStreamsTest {
         assertEquals(C.TIME_UNSET, delayFor(StreamResolveException(OnlineException.Kind.GEO_BLOCKED, RuntimeException())))
         assertTrue(delayFor(StreamResolveException(OnlineException.Kind.NO_NETWORK, RuntimeException())) != C.TIME_UNSET)
         assertTrue(delayFor(IOException("connection reset")) != C.TIME_UNSET)
+        // No network at all: nothing to wait for.
+        assertEquals(C.TIME_UNSET, delayFor(StreamResolveException.offline()))
+    }
+
+    @Test fun offlineAStreamFailsAtOnceWithoutAsking() {
+        youTube.serve("cached", bytesOf(1_000))
+        var online = true
+        val streams = OnlineStreams(scope, online = { online }) { youTube }
+        streams.resolve(StreamUris.audio("cached", AudioQuality.BEST), refresh = false)
+        online = false
+        streams.prefetch(StreamUris.audio("next", AudioQuality.BEST))
+        for (videoId in listOf("cached", "next")) {
+            try {
+                streams.resolve(StreamUris.audio(videoId, AudioQuality.BEST), refresh = false)
+                fail("expected an offline failure")
+            } catch (e: StreamResolveException) {
+                assertTrue(e.offline)
+                assertEquals(StreamErrors.code(OnlineException.Kind.NO_NETWORK), e.reason)
+            }
+        }
+        assertEquals(1, youTube.calls("cached"))
+        assertEquals(0, youTube.calls("next"))
+        assertEquals(Uri.parse("file:///music/1.m4a"), streams.resolve(Uri.parse("file:///music/1.m4a"), refresh = false))
     }
 }
 

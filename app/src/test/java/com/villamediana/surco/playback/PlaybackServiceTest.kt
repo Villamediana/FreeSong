@@ -1,5 +1,6 @@
 package com.villamediana.surco.playback
 
+import android.net.ConnectivityManager
 import android.os.Bundle
 import android.os.Looper
 import androidx.media3.common.Player
@@ -12,6 +13,8 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.villamediana.surco.SurcoApplication
 import com.villamediana.surco.data.Settings
 import com.villamediana.surco.data.db.Track
+import com.villamediana.surco.online.OnlineException
+import com.villamediana.surco.playback.stream.StreamErrors
 import com.villamediana.surco.playback.stream.wav
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.runBlocking
@@ -200,6 +203,49 @@ class PlaybackServiceTest {
         start()
         playToTheEnd(tracks.take(3).map { it.id })
         idleUntil { QueueSnapshot.decode(savedJson())?.let { it.index == 2 && it.positionMs == 0L } == true }
+    }
+
+    // ------------------------------------------------------------------ offline with online songs queued
+
+    private fun onlineSong(videoId: String) = OnlineItem(videoId, "Online $videoId", "Artist").toTrack()
+
+    private fun playMixed(queue: List<Track>, start: Int = 0) = send(
+        SessionProtocol.PLAY,
+        Bundle().apply {
+            putLongArray(SessionProtocol.ARG_IDS, queue.map { it.id }.toLongArray())
+            putInt(SessionProtocol.ARG_START, start)
+            SessionProtocol.putOnline(this, queue)
+        },
+    )
+
+    private fun goOffline() {
+        shadowOf(app.getSystemService(ConnectivityManager::class.java)).clearAllNetworks()
+    }
+
+    @Test fun offlineTheQueueSkipsStraightToTheSongsOnThePhone() {
+        autoplay(false)
+        goOffline()
+        start()
+        val queue = listOf(onlineSong("a"), tracks[1], onlineSong("b"), onlineSong("c"), onlineSong("d"), onlineSong("e"), onlineSong("f"), tracks[4])
+        playMixed(queue)
+        idleUntil { currentId() == tracks[1].id }
+        assertTrue(player.playWhenReady)
+
+        // Six online songs in a row: none of them stops the music.
+        player.seekTo(1, 19_900)
+        idleUntil { currentId() == tracks[4].id && player.playerError == null }
+        assertTrue(player.playWhenReady)
+    }
+
+    @Test fun offlineWithNoSongOnThePhoneLeftItStopsSayingWhy() {
+        autoplay(false)
+        goOffline()
+        start()
+        playMixed(listOf(tracks[0], onlineSong("a"), onlineSong("b")))
+        player.seekTo(0, 19_900)
+        idleUntil { player.playerError != null }
+        assertEquals(StreamErrors.code(OnlineException.Kind.NO_NETWORK), player.playerError!!.errorCode)
+        assertEquals("yt:a", player.currentMediaItem!!.mediaId)
     }
 
     // ------------------------------------------------------------------ listening stats

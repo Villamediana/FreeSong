@@ -32,9 +32,12 @@ import com.villamediana.surco.R
 import com.villamediana.surco.SurcoApplication
 import com.villamediana.surco.data.Settings
 import com.villamediana.surco.data.db.Track
+import com.villamediana.surco.online.OnlineException
 import com.villamediana.surco.playback.stream.OnlineStreams
 import com.villamediana.surco.playback.stream.StreamDataSources
+import com.villamediana.surco.playback.stream.StreamErrors
 import com.villamediana.surco.playback.stream.StreamLoadErrorPolicy
+import com.villamediana.surco.playback.stream.hasInternet
 import com.villamediana.surco.smart.Taste
 import com.villamediana.surco.smart.loadTaste
 import kotlinx.coroutines.CancellationException
@@ -115,7 +118,7 @@ class PlaybackService : MediaLibraryService() {
     override fun onCreate() {
         super.onCreate()
         strings = PlaybackStrings.from(this)
-        streams = OnlineStreams(graph.scope) { graph.youTube }
+        streams = OnlineStreams(graph.scope, online = { hasInternet(this) }) { graph.youTube }
         artwork = ArtworkShare(this)
         player = ExoPlayer.Builder(this)
             .setMediaSourceFactory(
@@ -815,6 +818,7 @@ class PlaybackService : MediaLibraryService() {
 
         override fun onPlayerError(error: PlaybackException) {
             finishListen()
+            if (skipOfflineSongs(error)) return
             consecutiveErrors++
             // A broken or missing file, or a song that can't be streamed (offline, unavailable),
             // shouldn't stop the music: skip it (a few times at most). The app shows why.
@@ -827,6 +831,36 @@ class PlaybackService : MediaLibraryService() {
         override fun onAudioSessionIdChanged(audioSessionId: Int) {
             leveler.apply(settings.normalizeVolume, audioSessionId)
             attachEffects(audioSessionId)
+        }
+    }
+
+    /**
+     * Offline, an online song fails at once (no request, no retries — see OnlineStreams): playback
+     * goes straight on to the next song on the phone, past the other online ones, without counting
+     * as a broken song. With none left it stops here, and the app shows why ("Sem conexão").
+     */
+    private fun skipOfflineSongs(error: PlaybackException): Boolean {
+        if (StreamErrors.kindOf(error.errorCode) != OnlineException.Kind.NO_NETWORK) return false
+        if (!MediaItems.isOnline(player.currentMediaItem) || hasInternet(this)) return false
+        val next = nextLocalIndex()
+        if (next != C.INDEX_UNSET) {
+            player.seekTo(next, 0)
+            player.prepare()
+        }
+        return true
+    }
+
+    /** Timeline index of the next library song after the current one, in play order (around again on "repeat all"). */
+    private fun nextLocalIndex(): Int {
+        val timeline = player.currentTimeline
+        val current = player.currentMediaItemIndex
+        if (timeline.isEmpty || current == C.INDEX_UNSET) return C.INDEX_UNSET
+        val repeat = if (player.repeatMode == Player.REPEAT_MODE_ALL) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
+        var i = current
+        while (true) {
+            i = timeline.getNextWindowIndex(i, repeat, player.shuffleModeEnabled)
+            if (i == C.INDEX_UNSET || i == current) return C.INDEX_UNSET
+            if (!MediaItems.isOnline(player.getMediaItemAt(i))) return i
         }
     }
 
