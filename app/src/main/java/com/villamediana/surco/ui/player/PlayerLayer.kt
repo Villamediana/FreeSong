@@ -44,6 +44,7 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -185,7 +186,8 @@ internal fun PlayerHost(deps: PlayerDeps, bottomBarHeight: Dp, modifier: Modifie
     var queueOpen by rememberSaveable { mutableStateOf(false) }
     var sleepOpen by rememberSaveable { mutableStateOf(false) }
     var lyricsOpen by rememberSaveable { mutableStateOf(false) }
-    var actionsOpen by remember { mutableStateOf(false) }
+    // The song the ⋮ sheet was opened for: it stays on it when the player moves to the next one.
+    var actionsFor by remember { mutableStateOf<Track?>(null) }
 
     LaunchedEffect(expand) { snapshotFlow { expand.target }.collect { savedExpanded = it == 1f } }
 
@@ -194,7 +196,7 @@ internal fun PlayerHost(deps: PlayerDeps, bottomBarHeight: Dp, modifier: Modifie
             lyricsOpen = false
             queueOpen = false
             sleepOpen = false
-            actionsOpen = false
+            actionsFor = null
             if (expand.progress > 0f || expand.target > 0f) expand.animateTo(0f)
         }
         onDispose { navigator.collapsePlayer = {} }
@@ -268,7 +270,7 @@ internal fun PlayerHost(deps: PlayerDeps, bottomBarHeight: Dp, modifier: Modifie
             openQueue = { queueOpen = true },
             openSleep = { sleepOpen = true },
             openLyrics = { lyricsOpen = true },
-            openActions = { actionsOpen = true },
+            openActions = { actionsFor = latestTrack },
             openArtist = { name -> navigator.openArtist(name) },
             openAlbum = { t -> t.albumKey?.let { navigator.openAlbum(it) } },
             openOutput = { OutputRoutes.openSwitcher(context) },
@@ -295,16 +297,21 @@ internal fun PlayerHost(deps: PlayerDeps, bottomBarHeight: Dp, modifier: Modifie
     }
 
     val expandedNow by remember { derivedStateOf { expand.target == 1f } }
-    PredictiveBackHandler(enabled = state.hasMedia && expandedNow && !lyricsOpen) { events ->
-        try {
-            events.collect { expand.backProgress(it.progress) }
-            expand.animateTo(0f)
-        } catch (e: CancellationException) {
-            expand.animateTo(1f)
-            throw e
+    // Back goes to the newest enabled handler. The screen under the player (Search clearing its
+    // query, a playlist leaving reorder mode) registered its own after ours, so ours are added
+    // again whenever the player or the lyrics open: they sit on top while they are showing.
+    key(expandedNow, lyricsOpen) {
+        PredictiveBackHandler(enabled = state.hasMedia && expandedNow && !lyricsOpen) { events ->
+            try {
+                events.collect { expand.backProgress(it.progress) }
+                expand.animateTo(0f)
+            } catch (e: CancellationException) {
+                expand.animateTo(1f)
+                throw e
+            }
         }
+        BackHandler(enabled = lyricsOpen) { lyricsOpen = false }
     }
-    BackHandler(enabled = lyricsOpen) { lyricsOpen = false }
 
     BoxWithConstraints(modifier.fillMaxSize()) {
         val layerW = constraints.maxWidth.toFloat()
@@ -591,8 +598,8 @@ internal fun PlayerHost(deps: PlayerDeps, bottomBarHeight: Dp, modifier: Modifie
     if (sleepOpen) {
         SleepTimerSheet(timer = sleep, onSet = { player.setSleepTimer(it) }, onDismiss = { sleepOpen = false })
     }
-    if (actionsOpen) {
-        TrackActionsSheet(track = track, onDismiss = { actionsOpen = false }, showEqualizer = true)
+    actionsFor?.let { t ->
+        TrackActionsSheet(track = t, onDismiss = { actionsFor = null }, showEqualizer = true)
     }
 }
 

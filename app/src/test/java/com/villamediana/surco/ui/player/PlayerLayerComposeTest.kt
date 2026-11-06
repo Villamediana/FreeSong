@@ -1,7 +1,14 @@
 package com.villamediana.surco.ui.player
 
 import android.app.Application
+import androidx.activity.OnBackPressedDispatcher
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
@@ -105,7 +112,15 @@ class PlayerLayerComposeTest {
 
     private val likes = mutableListOf<Pair<Long, Boolean>>()
 
-    private fun setUp(): FakePlayer {
+    private lateinit var backDispatcher: OnBackPressedDispatcher
+
+    private fun pressBack() {
+        compose.runOnIdle { backDispatcher.onBackPressed() }
+        compose.waitForIdle()
+    }
+
+    /** [below] stands for the screen under the player (composed after it, as a NavHost page can be). */
+    private fun setUp(below: @Composable () -> Unit = {}): FakePlayer {
         val player = FakePlayer(
             PlaybackState(
                 current = tracks[0],
@@ -121,8 +136,10 @@ class PlayerLayerComposeTest {
         compose.setContent {
             SurcoTheme {
                 val nav = rememberNavController()
+                backDispatcher = LocalOnBackPressedDispatcherOwner.current!!.onBackPressedDispatcher
                 CompositionLocalProvider(LocalNavigator provides Navigator(nav)) {
                     PlayerHost(deps, bottomBarHeight = 64.dp)
+                    below()
                 }
             }
         }
@@ -198,6 +215,32 @@ class PlayerLayerComposeTest {
         compose.waitForIdle()
         assertEquals(1, player.nexts)
         compose.onNodeWithText("TOCANDO DE").assertDoesNotExist()
+    }
+
+    @Test
+    fun backWithThePlayerOrTheLyricsOpenIsTheirsNotTheScreenBelow() {
+        var screenBacks = 0
+        var screenShown by mutableStateOf(false)
+        // Like Search after the first switch to its tab: its Back handler comes after the player's.
+        setUp(below = { if (screenShown) BackHandler { screenBacks++ } })
+        screenShown = true
+        compose.waitForIdle()
+
+        expand()
+        compose.onAllNodesWithContentDescription("Letra em tela cheia").onFirst().performClick()
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Fechar letra").assertIsDisplayed()
+
+        pressBack()
+        compose.onNodeWithContentDescription("Fechar letra").assertDoesNotExist()
+        compose.onNodeWithText("TOCANDO DE").assertIsDisplayed()
+        pressBack()
+        compose.onNodeWithText("TOCANDO DE").assertDoesNotExist()
+        assertEquals(0, screenBacks)
+
+        // Collapsed, Back belongs to the screen again.
+        pressBack()
+        assertEquals(1, screenBacks)
     }
 
     // ------------------------------------------------------------------ streamed songs

@@ -135,7 +135,11 @@ class FakePlayer : PlayerConnection {
         onlinePlays += OnlinePlay(tracks, startIndex, source)
     }
 
-    override fun playSmart(seed: SmartSeed) = Unit
+    val smartPlays: MutableList<SmartSeed> = Collections.synchronizedList(mutableListOf())
+
+    override fun playSmart(seed: SmartSeed) {
+        smartPlays += seed
+    }
     override fun togglePlayPause() {
         toggles++
     }

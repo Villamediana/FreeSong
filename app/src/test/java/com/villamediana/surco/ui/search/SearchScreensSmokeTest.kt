@@ -2,7 +2,15 @@ package com.villamediana.surco.ui.search
 
 import android.app.Application
 import android.content.Context
+import androidx.compose.material3.Text
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.hasScrollToNodeAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -12,6 +20,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.test.core.app.ApplicationProvider
@@ -26,6 +35,7 @@ import com.villamediana.surco.online.RemoteCollection
 import com.villamediana.surco.online.ResolvedLink
 import com.villamediana.surco.online.SearchItem
 import com.villamediana.surco.online.SearchPage
+import com.villamediana.surco.ui.nav.Inbound
 import com.villamediana.surco.ui.nav.LinkInbox
 import com.villamediana.surco.ui.nav.RemoteCollectionRoute
 import kotlinx.coroutines.CoroutineScope
@@ -145,7 +155,7 @@ class SearchScreensSmokeTest {
     fun sharedSongLinkShowsTheLinkCard() {
         val song = remoteTrack("dQw4w9WgXcQ", "Té para Tres", artist = "Soda Stereo")
         youTube.onResolve = { ResolvedLink.Track(song) }
-        LinkInbox.post("Olha essa https://music.youtube.com/watch?v=dQw4w9WgXcQ")
+        LinkInbox.post(Inbound.Link("Olha essa https://music.youtube.com/watch?v=dQw4w9WgXcQ"))
         harness.put(searchViewModel())
         harness.show { SearchScreen() }
 
@@ -164,6 +174,19 @@ class SearchScreensSmokeTest {
         rule.waitUntil(20_000) { rule.onAllNodes(hasText(s(R.string.search_link_percent, 40))).fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText(s(R.string.search_link_listen)).assertExists()
         harness.screenshot("search_link_card_downloading")
+    }
+
+    @Test
+    fun aVoiceRequestTheLibraryCannotPlayIsSearchedOnline() {
+        youTube.onSearch = { q, f -> songPage(q, f, listOf("aaaaaaaaaaa")) }
+        LinkInbox.post(Inbound.Query("cerati crimen"))
+        harness.put(searchViewModel())
+        harness.show { SearchScreen() }
+
+        rule.waitUntil(20_000) { rule.onAllNodes(hasText("Song aaaaaaaaaaa")).fetchSemanticsNodes().isNotEmpty() }
+        assertNull(LinkInbox.pending.value)
+        assertEquals("cerati crimen", youTube.searches.first().first)
+        rule.onNode(hasSetTextAction() and hasText("cerati crimen")).assertExists()
     }
 
     @Test
@@ -239,5 +262,37 @@ class SearchScreensSmokeTest {
         rule.onNodeWithText(s(R.string.search_remote_albums)).assertExists()
         rule.onNodeWithText(s(R.string.search_remote_download_popular)).assertExists()
         harness.screenshot("remote_artist")
+    }
+
+    /** What NavHost does with the Search page while a page opened from it is on top: only saveable state survives. */
+    private fun showSearchThatCanBeLeft(away: () -> Boolean) = harness.show {
+        val holder = rememberSaveableStateHolder()
+        if (away()) Text("página aberta") else holder.SaveableStateProvider("search") { SearchScreen() }
+    }
+
+    private fun songIds(n: Int) = (1..n).map { "v" + it.toString().padStart(10, '0') }
+
+    @Test
+    fun resultsKeepTheirScrollAfterComingBackFromAnOpenedPage() {
+        youTube.onSearch = { q, f -> SearchPage(q, f, songIds(60).mapIndexed { i, id -> SearchItem.Song(remoteTrack(id, "Canción ${i + 1}")) }) }
+        var away by mutableStateOf(false)
+        harness.put(searchViewModel())
+        showSearchThatCanBeLeft { away }
+
+        rule.onNode(hasSetTextAction()).performTextInput("soda")
+        rule.onNode(hasSetTextAction()).performImeAction()
+        rule.waitUntil(20_000) { rule.onAllNodes(hasText("Canción 1")).fetchSemanticsNodes().isNotEmpty() }
+        rule.waitForIdle()
+        rule.onNode(hasScrollToNodeAction() and SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
+            .performScrollToNode(hasText("Canción 45"))
+        rule.onNodeWithText("Canción 1").assertDoesNotExist()
+
+        away = true
+        rule.waitForIdle()
+        away = false
+        rule.waitForIdle()
+
+        rule.waitUntil(20_000) { rule.onAllNodes(hasText("Canción 45")).fetchSemanticsNodes().isNotEmpty() }
+        rule.onNodeWithText("Canción 1").assertDoesNotExist()
     }
 }
