@@ -6,6 +6,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.gestures.scrollBy
@@ -172,11 +173,14 @@ internal class ReorderState(
     }
 }
 
-/** Grip for [ReorderState]: drag starts right away (no long-press), with a haptic tick. */
+/**
+ * Grip for [ReorderState]: drag starts right away (no long-press), with a haptic tick. A plain tap
+ * on the grip is swallowed so it doesn't count as tapping the row (which would jump to the song).
+ */
 @Composable
 internal fun Modifier.reorderHandle(state: ReorderState, key: Any): Modifier {
     val haptic = LocalHapticFeedback.current
-    return pointerInput(state, key) {
+    return pointerInput(Unit) { detectTapGestures { } }.pointerInput(state, key) {
         detectDragGestures(
             onDragStart = {
                 state.start(key)
