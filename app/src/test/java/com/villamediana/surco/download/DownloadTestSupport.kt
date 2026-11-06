@@ -229,8 +229,7 @@ internal class FakeLyrics(@Volatile var result: Lyrics? = null) : LyricsSource {
 }
 
 /** Engine + queue over an in-memory database, the [TestServer] and fakes. */
-internal class Harness(context: Context) : AutoCloseable {
-    val db = SurcoDatabase.inMemory(context)
+internal class Harness(context: Context, val db: SurcoDatabase = SurcoDatabase.inMemory(context)) : AutoCloseable {
     val dao = db.downloads()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     val library = LibraryRepository(db, scope)

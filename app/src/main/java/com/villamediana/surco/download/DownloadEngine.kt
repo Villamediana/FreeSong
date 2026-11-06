@@ -383,10 +383,19 @@ internal class DownloadEngine(
         return file to found.synced
     }
 
-    /** Inserts the track (or reuses the row of the same video), places it in its playlist, marks DONE. */
-    private suspend fun commit(entry: Running, existingId: Long?, newTrack: Track?): Outcome = stateLock.withLock {
+    /**
+     * Inserts the track (or reuses the row of the same video), places it in its playlist, marks DONE.
+     * Never cut halfway by a stop: a track inserted but not marked DONE would make [interrupted] move
+     * its audio file back to tmp/ and leave the library pointing at nothing.
+     */
+    private suspend fun commit(entry: Running, existingId: Long?, newTrack: Track?): Outcome = withContext(NonCancellable) {
+        stateLock.withLock { commitLocked(entry, existingId, newTrack) }
+    }
+
+    /** Must hold [stateLock]. */
+    private suspend fun commitLocked(entry: Running, existingId: Long?, newTrack: Track?): Outcome {
         val cur = dao.get(entry.task.id)
-        if (cur == null || cur.state != DownloadState.RUNNING || entry.cancelRequested) return@withLock Outcome.Canceled
+        if (cur == null || cur.state != DownloadState.RUNNING || entry.cancelRequested) return Outcome.Canceled
         val existing = existingId?.let { library.getTrack(it) } ?: library.trackByVideoId(cur.videoId)
         val trackId = when {
             existing != null -> {
@@ -398,10 +407,9 @@ internal class DownloadEngine(
             } catch (e: SQLiteConstraintException) {
                 library.trackByVideoId(cur.videoId)?.id ?: throw e
             }
-            else -> return@withLock Outcome.Canceled
+            else -> return Outcome.Canceled
         }
         entry.finalFile = null
-        signatureFile(storage.tempFile(cur.videoId)).delete()
         place(cur, trackId)
         val size = (existing ?: newTrack)?.fileSize ?: cur.bytesTotal
         val done = cur.copy(
@@ -414,7 +422,9 @@ internal class DownloadEngine(
             updatedAt = clock(),
         )
         dao.update(done)
-        Outcome.Done(done)
+        // The .sig, and a .part left by an earlier attempt when the song came from elsewhere.
+        deletePartIfUnused(cur.videoId)
+        return Outcome.Done(done)
     }
 
     private suspend fun place(task: DownloadTask, trackId: Long) {
@@ -477,11 +487,14 @@ internal class DownloadEngine(
             }
             cur
         }
-        if (cur == null || cur.state == DownloadState.CANCELED || entry.cancelRequested) {
-            discard(entry)
-        } else {
-            restorePart(entry)
-            writeProgress(entry)
+        when {
+            cur == null || cur.state == DownloadState.CANCELED || entry.cancelRequested -> discard(entry)
+            // Finished (committed or failed) before the stop reached it: nothing to put back.
+            cur.state == DownloadState.DONE || cur.state == DownloadState.FAILED -> Unit
+            else -> {
+                restorePart(entry)
+                writeProgress(entry)
+            }
         }
     }
 
@@ -495,9 +508,12 @@ internal class DownloadEngine(
     }
 
     /** Puts an uncommitted final file back as the .part so the next attempt resumes instantly. */
-    private fun restorePart(entry: Running) {
+    private suspend fun restorePart(entry: Running) {
         val file = entry.finalFile ?: return
-        if (file.exists()) move(file, storage.tempFile(entry.task.videoId))
+        // Never take the file of a track that made it into the library.
+        if (file.exists() && library.trackByVideoId(entry.task.videoId)?.filePath != file.path) {
+            move(file, storage.tempFile(entry.task.videoId))
+        }
         entry.finalFile = null
     }
 

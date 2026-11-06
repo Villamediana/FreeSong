@@ -4,10 +4,12 @@ import android.content.Context
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.Rect
+import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.villamediana.surco.data.Settings
 import com.villamediana.surco.data.db.AlbumKey
 import com.villamediana.surco.data.db.DownloadState
+import com.villamediana.surco.data.db.SurcoDatabase
 import com.villamediana.surco.data.db.Track
 import com.villamediana.surco.online.CollectionDetail
 import com.villamediana.surco.online.CollectionKind
@@ -35,6 +37,9 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.io.File
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [ROBOLECTRIC_SDK])
@@ -376,6 +381,49 @@ class DownloadEngineTest {
         val resumed = audioHits("dead").map { it.range!! }.firstOrNull { it.startsWith("bytes=$kept-") }
         assertNotNull("expected a range starting at $kept", resumed)
         assertArrayEquals(h.audio("dead").bytes, File(h.library.trackByVideoId("dead")!!.filePath).readBytes())
+    }
+
+    @Test fun aStopWhileTheTrackIsBeingSavedKeepsItPlayable() = runBlocking {
+        // The worker is stopped (network constraint, REPLACE, timeout) right while the Track row is inserted.
+        val inserting = CountDownLatch(1)
+        val armed = AtomicBoolean(true)
+        val db = Room.inMemoryDatabaseBuilder(context, SurcoDatabase::class.java)
+            .setQueryCallback(Dispatchers.Unconfined) { sql, _ ->
+                if (sql.contains("INSERT", ignoreCase = true) && sql.contains("`tracks`") && armed.getAndSet(false)) {
+                    inserting.countDown()
+                    Thread.sleep(500)
+                }
+            }
+            .build()
+        h.close()
+        h = Harness(context, db)
+        h.queue.download(listOf(h.song("cut")))
+        val run = async(Dispatchers.IO) { h.engine.runQueue() }
+        assertTrue(inserting.await(10, TimeUnit.SECONDS))
+        run.cancel()
+        runCatching { run.await() }
+
+        val track = h.library.trackByVideoId("cut")!!
+        assertEquals(DownloadState.DONE, h.task("cut").state)
+        assertArrayEquals(h.audio("cut").bytes, File(track.filePath).readBytes())
+        assertFalse(part("cut").exists())
+        assertFalse(DownloadEngine.signatureFile(part("cut")).exists())
+        // The next worker has nothing left to do and leaves the file alone.
+        h.engine.runQueue()
+        assertTrue(File(track.filePath).exists())
+        assertFalse(part("cut").exists())
+    }
+
+    @Test fun aSongFinishedElsewhereCleansTheLeftoverPart() = runBlocking {
+        // An earlier attempt left a .part; meanwhile the song reached the library some other way.
+        h.queue.download(listOf(h.song("left")))
+        part("left").apply { parentFile?.mkdirs() }.writeBytes(ByteArray(1_000))
+        DownloadEngine.signatureFile(part("left")).writeText("sig")
+        h.library.insertTrack(Track(videoId = "left", title = "Left", artist = "A", filePath = "/left.m4a"))
+        h.engine.runQueue()
+        assertEquals(DownloadState.DONE, h.task("left").state)
+        assertFalse(part("left").exists())
+        assertFalse(DownloadEngine.signatureFile(part("left")).exists())
     }
 
     // ------------------------------------------------------------------ cancel / retry
