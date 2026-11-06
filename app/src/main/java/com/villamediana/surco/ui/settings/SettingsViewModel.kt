@@ -36,6 +36,12 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
         .mapLatest { withContext(Dispatchers.IO) { graph.storage.usedBytes() } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    /** Whether the equalizer is shaping the sound (the "Equalizador" row says so). */
+    val equalizerOn: StateFlow<Boolean> = graph.effects.state
+        .map { it.available && it.enabled }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
     private val _historyCleared = MutableStateFlow(false)
     val historyCleared: StateFlow<Boolean> = _historyCleared
 
@@ -45,6 +51,7 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     fun setFetchLyrics(v: Boolean) = launch { store.setFetchLyrics(v) }
     fun setSmartShuffle(v: Boolean) = launch { store.setSmartShuffle(v) }
     fun setAutoplay(v: Boolean) = launch { store.setAutoplaySimilar(v) }
+    fun setPlayOnline(v: Boolean) = launch { store.setPlayOnlineByDefault(v) }
 
     fun clearHistory() = launch {
         library.clearHistory()

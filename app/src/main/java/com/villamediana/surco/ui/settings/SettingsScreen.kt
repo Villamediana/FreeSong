@@ -30,6 +30,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
@@ -134,7 +135,7 @@ fun SettingsScreen() {
         item(key = "playback") {
             Column {
                 GroupLabel(stringResource(R.string.home_settings_group_playback))
-                PlaybackGroup(s, vm)
+                PlaybackGroup(s, vm, onEqualizer = nav::openEqualizer)
             }
         }
 
@@ -198,8 +199,37 @@ fun SettingsScreen() {
 }
 
 @Composable
-private fun PlaybackGroup(s: Settings, vm: SettingsViewModel) {
+private fun PlaybackGroup(s: Settings, vm: SettingsViewModel, onEqualizer: () -> Unit) {
+    val equalizerOn by vm.equalizerOn.collectAsStateWithLifecycle()
     Group {
+        SwitchRow(
+            title = stringResource(R.string.home_settings_play_online),
+            subtitle = stringResource(R.string.home_settings_play_online_sub),
+            checked = s.playOnlineByDefault,
+            onChange = vm::setPlayOnline,
+        )
+        Hairline()
+        SettingRow(
+            title = stringResource(R.string.home_settings_equalizer),
+            subtitle = null,
+            onClick = onEqualizer,
+            subtitleContent = {
+                AnimatedContent(
+                    targetState = equalizerOn,
+                    transitionSpec = { fadeIn(Motion.enter()) togetherWith fadeOut(Motion.exit()) },
+                    label = "eqOn",
+                ) { on ->
+                    Text(
+                        stringResource(if (on) R.string.home_settings_equalizer_on else R.string.home_settings_equalizer_sub),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (on) SurcoColors.Accent else SurcoColors.TextMuted,
+                    )
+                }
+            },
+        ) {
+            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = SurcoColors.TextFaint, modifier = Modifier.size(22.dp))
+        }
+        Hairline()
         SwitchRow(
             title = stringResource(R.string.home_settings_smart_shuffle),
             subtitle = stringResource(R.string.home_settings_smart_shuffle_sub),

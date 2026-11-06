@@ -181,4 +181,13 @@
     <string name="dl_empty_action">Buscar música</string>
     <string name="dl_play_missing">Esa canción ya no está en el teléfono.</string>
     <string name="dl_action_error">No se pudo hacer eso ahora.</string>
+
+    <!-- Reproducir online (segunda tanda) -->
+    <string name="search_play_offline">Sin internet para reproducir online. Ahora solo suenan las descargadas.</string>
+    <string name="search_link_listen">Escuchar</string>
+    <string name="search_link_percent">%1$d%%</string>
+    <string name="search_link_retry">Reintentar</string>
+    <string name="search_remote_play">Reproducir todo</string>
+    <string name="search_remote_shuffle">Reproducir en orden aleatorio</string>
+    <string name="search_remote_share">Compartir</string>
 </resources>

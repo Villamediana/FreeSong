@@ -1,5 +1,6 @@
 package com.villamediana.surco.ui.sheets
 
+import android.content.res.Resources
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -30,14 +31,19 @@ import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Album
+import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Equalizer
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlaylistRemove
 import androidx.compose.material.icons.rounded.Radio
+import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.SmartDisplay
 import androidx.compose.material.icons.rounded.SubdirectoryArrowRight
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -67,16 +73,24 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.villamediana.surco.AppGraph
 import com.villamediana.surco.R
 import com.villamediana.surco.SurcoApplication
 import com.villamediana.surco.data.LibraryRepository
 import com.villamediana.surco.data.db.Track
+import com.villamediana.surco.data.isOnline
 import com.villamediana.surco.data.model.PlaylistSummary
+import com.villamediana.surco.playback.PlaySource
 import com.villamediana.surco.playback.SmartSeed
 import com.villamediana.surco.ui.components.Cover
 import com.villamediana.surco.ui.components.MosaicCover
 import com.villamediana.surco.ui.components.PillButton
+import com.villamediana.surco.ui.components.Share
 import com.villamediana.surco.ui.nav.LocalNavigator
+import com.villamediana.surco.ui.search.Connectivity
+import com.villamediana.surco.ui.search.DownloadLookup
+import com.villamediana.surco.ui.search.ItemDownload
+import com.villamediana.surco.ui.search.toRemoteTrack
 import com.villamediana.surco.ui.theme.Dimens
 import com.villamediana.surco.ui.theme.SurcoColors
 import kotlinx.coroutines.CoroutineScope
@@ -93,99 +107,192 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
+import kotlin.math.roundToInt
 
 private enum class TrackSheetStage { Actions, AddToPlaylist, Edit, ConfirmDelete }
 
 /**
  * Bottom sheet with everything you can do with a song: like, play next, add to queue, add to
- * playlist, start radio, go to album/artist, edit info, remove from this playlist, delete.
+ * playlist, start radio, go to album/artist, watch the video, share it (link or file), edit info,
+ * remove from this playlist, delete. A streamed song (not on the phone) gets the short version —
+ * download, queue, radio, video, share — until it is downloaded. [showEqualizer] adds the
+ * equalizer (the sheet of the player's ⋮).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TrackActionsSheet(track: Track, onDismiss: () -> Unit, playlistContext: PlaylistContext? = null) {
+fun TrackActionsSheet(track: Track, onDismiss: () -> Unit, playlistContext: PlaylistContext? = null, showEqualizer: Boolean = false) {
     val graph = SurcoApplication.graph
     val library = graph.library
     val player = graph.player
     val navigator = LocalNavigator.current
     val feedback = rememberSheetFeedback()
     val haptic = LocalHapticFeedback.current
-    val res = LocalContext.current.resources
+    val context = LocalContext.current
+    val res = context.resources
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var stage by rememberSaveable(track.id) { mutableStateOf(TrackSheetStage.Actions) }
 
-    // Live row: the heart reflects changes made elsewhere; deleted elsewhere → close.
-    val live by remember(track.id) { library.track(track.id) }.collectAsStateWithLifecycle(initialValue = track)
-    LaunchedEffect(live == null) { if (live == null) onDismiss() }
+    // Live row: the heart reflects changes made elsewhere; deleted elsewhere → close. A streamed
+    // song follows its YouTube id instead: once downloaded, the sheet becomes the full one.
+    val streamedIn = track.isOnline
+    val liveFlow = remember(track.id, track.videoId) {
+        val videoId = track.videoId
+        when {
+            !streamedIn -> library.track(track.id)
+            videoId != null -> library.tracks.map { all -> all.firstOrNull { it.videoId == videoId } }.distinctUntilChanged()
+            else -> flowOf(null)
+        }
+    }
+    val live by liveFlow.collectAsStateWithLifecycle(initialValue = if (streamedIn) null else track)
+    LaunchedEffect(live == null) { if (!streamedIn && live == null) onDismiss() }
     val t = live ?: track
+
+    val online by remember(context) { Connectivity.online(context) }.collectAsStateWithLifecycle(initialValue = remember(context) { Connectivity.isOnline(context) })
+    val download by remember(t.id, t.videoId) {
+        val videoId = t.videoId
+        if (t.isOnline && videoId != null) {
+            combine(library.downloadedVideoIds, graph.downloads.tasks) { done, tasks -> DownloadLookup.build(done, tasks).stateOf(videoId) }.distinctUntilChanged()
+        } else {
+            flowOf(ItemDownload.None)
+        }
+    }.collectAsStateWithLifecycle(initialValue = ItemDownload.None)
+    val fileExists = remember(t.filePath, t.isOnline) { !t.isOnline && runCatching { File(t.filePath).isFile }.getOrDefault(false) }
+    val actions = TrackSheetRules.actionsFor(t, fileExists, inPlaylist = playlistContext != null, fromPlayer = showEqualizer)
 
     /** Slides the sheet away, then runs [next] (dismiss, navigate, open a dialog…). */
     fun closeThen(next: () -> Unit) {
         scope.launch { sheetState.hide() }.invokeOnCompletion { next() }
     }
 
+    fun offline() {
+        feedback.show(res.getString(R.string.sheet_offline))
+        closeThen(onDismiss)
+    }
+
     when (stage) {
         TrackSheetStage.Actions -> SurcoSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
             SheetHeader(
                 title = t.title,
-                subtitle = listOfNotNull(t.artist, t.album?.takeIf { it.isNotBlank() }).joinToString(" · "),
+                subtitle = listOfNotNull(
+                    t.artist,
+                    t.album?.takeIf { it.isNotBlank() },
+                    res.getString(R.string.sheet_streamed).takeIf { t.isOnline },
+                ).joinToString(" · "),
                 art = { Cover(t.coverPath, Modifier.fillMaxSize(), seed = t.album ?: t.title) },
             )
             Column(Modifier.verticalScroll(rememberScrollState())) {
-                SheetAction(
-                    icon = if (t.liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                    label = stringResource(if (t.liked) R.string.sheet_unlike else R.string.sheet_like),
-                    tint = if (t.liked) SurcoColors.Liked else SurcoColors.TextMuted,
-                    onClick = {
-                        val nowLiked = !t.liked
-                        haptic.performHapticFeedback(if (nowLiked) HapticFeedbackType.ToggleOn else HapticFeedbackType.ToggleOff)
-                        graph.scope.launch { library.setLiked(t.id, nowLiked) }
-                        feedback.show(res.getString(if (nowLiked) R.string.sheet_liked_done else R.string.sheet_unliked_done))
-                        closeThen(onDismiss)
-                    },
-                )
-                SheetAction(Icons.Rounded.SubdirectoryArrowRight, stringResource(R.string.sheet_play_next), onClick = {
-                    player.playNext(listOf(t))
-                    feedback.show(res.getString(R.string.sheet_play_next_done))
-                    closeThen(onDismiss)
-                })
-                SheetAction(Icons.AutoMirrored.Rounded.QueueMusic, stringResource(R.string.sheet_enqueue), onClick = {
-                    player.enqueue(listOf(t))
-                    feedback.show(res.getString(R.string.sheet_enqueue_done))
-                    closeThen(onDismiss)
-                })
-                SheetAction(Icons.AutoMirrored.Rounded.PlaylistAdd, stringResource(R.string.sheet_add_to_playlist), onClick = {
-                    closeThen { stage = TrackSheetStage.AddToPlaylist }
-                })
-                SheetAction(Icons.Rounded.Radio, stringResource(R.string.sheet_start_radio), onClick = {
-                    player.playSmart(SmartSeed.Radio(t))
-                    feedback.show(res.getString(R.string.sheet_radio_done, t.title))
-                    closeThen(onDismiss)
-                })
-                t.albumKey?.let { key ->
-                    SheetAction(Icons.Rounded.Album, stringResource(R.string.sheet_go_album), onClick = {
-                        closeThen { onDismiss(); navigator.openAlbum(key) }
-                    })
+                actions.forEach { action ->
+                    val dimmed = !online && TrackSheetRules.needsNetwork(action, t)
+                    when (action) {
+                        TrackSheetAction.LIKE -> SheetAction(
+                            icon = if (t.liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                            label = stringResource(if (t.liked) R.string.sheet_unlike else R.string.sheet_like),
+                            tint = if (t.liked) SurcoColors.Liked else SurcoColors.TextMuted,
+                            onClick = {
+                                val nowLiked = !t.liked
+                                haptic.performHapticFeedback(if (nowLiked) HapticFeedbackType.ToggleOn else HapticFeedbackType.ToggleOff)
+                                graph.scope.launch { library.setLiked(t.id, nowLiked) }
+                                feedback.show(res.getString(if (nowLiked) R.string.sheet_liked_done else R.string.sheet_unliked_done))
+                                closeThen(onDismiss)
+                            },
+                        )
+                        TrackSheetAction.DOWNLOAD -> {
+                            val busy = download == ItemDownload.Queued || download is ItemDownload.Running
+                            val running = download as? ItemDownload.Running
+                            SheetAction(
+                                icon = Icons.Rounded.Download,
+                                label = stringResource(if (busy) R.string.sheet_downloading else R.string.sheet_download),
+                                tint = SurcoColors.Accent,
+                                dimmed = busy,
+                                trailing = when {
+                                    running != null -> stringResource(R.string.search_link_percent, (running.progress * 100).roundToInt())
+                                    busy -> stringResource(R.string.search_dl_queued)
+                                    !online -> stringResource(R.string.sheet_when_online)
+                                    else -> null
+                                },
+                                onClick = {
+                                    if (!busy) {
+                                        t.toRemoteTrack()?.let { remote ->
+                                            haptic.performHapticFeedback(HapticFeedbackType.Confirm)
+                                            graph.scope.launch { runCatching { graph.downloads.download(listOf(remote)) } }
+                                            feedback.show(res.getString(R.string.sheet_download_started, t.title))
+                                        }
+                                    }
+                                    closeThen(onDismiss)
+                                },
+                            )
+                        }
+                        TrackSheetAction.PLAY_NEXT -> SheetAction(Icons.Rounded.SubdirectoryArrowRight, stringResource(R.string.sheet_play_next), dimmed = dimmed, onClick = {
+                            if (dimmed) return@SheetAction offline()
+                            player.playNext(listOf(t))
+                            feedback.show(res.getString(R.string.sheet_play_next_done))
+                            closeThen(onDismiss)
+                        })
+                        TrackSheetAction.ENQUEUE -> SheetAction(Icons.AutoMirrored.Rounded.QueueMusic, stringResource(R.string.sheet_enqueue), dimmed = dimmed, onClick = {
+                            if (dimmed) return@SheetAction offline()
+                            player.enqueue(listOf(t))
+                            feedback.show(res.getString(R.string.sheet_enqueue_done))
+                            closeThen(onDismiss)
+                        })
+                        TrackSheetAction.ADD_TO_PLAYLIST -> SheetAction(Icons.AutoMirrored.Rounded.PlaylistAdd, stringResource(R.string.sheet_add_to_playlist), onClick = {
+                            closeThen { stage = TrackSheetStage.AddToPlaylist }
+                        })
+                        TrackSheetAction.RADIO -> SheetAction(Icons.Rounded.Radio, stringResource(R.string.sheet_start_radio), dimmed = dimmed, onClick = {
+                            when {
+                                dimmed -> offline()
+                                t.isOnline -> {
+                                    startOnlineRadio(t, graph, feedback, res)
+                                    closeThen(onDismiss)
+                                }
+                                else -> {
+                                    player.playSmart(SmartSeed.Radio(t))
+                                    feedback.show(res.getString(R.string.sheet_radio_done, t.title))
+                                    closeThen(onDismiss)
+                                }
+                            }
+                        })
+                        TrackSheetAction.GO_ALBUM -> t.albumKey?.let { key ->
+                            SheetAction(Icons.Rounded.Album, stringResource(R.string.sheet_go_album), onClick = {
+                                closeThen { onDismiss(); navigator.openAlbum(key) }
+                            })
+                        }
+                        TrackSheetAction.GO_ARTIST -> SheetAction(Icons.Rounded.Person, stringResource(R.string.sheet_go_artist), onClick = {
+                            closeThen { onDismiss(); navigator.openArtist(t.artist) }
+                        })
+                        TrackSheetAction.VIDEO -> t.videoId?.let { videoId ->
+                            SheetAction(Icons.Rounded.SmartDisplay, stringResource(R.string.sheet_video), dimmed = dimmed, onClick = {
+                                if (dimmed) offline() else closeThen { onDismiss(); navigator.openVideo(videoId, t.title) }
+                            })
+                        }
+                        TrackSheetAction.SHARE -> SheetAction(Icons.Rounded.Share, stringResource(R.string.sheet_share), onClick = {
+                            closeThen { onDismiss(); Share.trackLink(context, t) }
+                        })
+                        TrackSheetAction.SEND_FILE -> SheetAction(Icons.Rounded.AttachFile, stringResource(R.string.sheet_send_file), onClick = {
+                            closeThen { onDismiss(); Share.trackFile(context, t) }
+                        })
+                        TrackSheetAction.EQUALIZER -> SheetAction(Icons.Rounded.Equalizer, stringResource(R.string.sheet_equalizer), onClick = {
+                            closeThen { onDismiss(); navigator.openEqualizer() }
+                        })
+                        TrackSheetAction.EDIT -> SheetAction(Icons.Rounded.Edit, stringResource(R.string.sheet_edit), onClick = {
+                            closeThen { stage = TrackSheetStage.Edit }
+                        })
+                        TrackSheetAction.REMOVE_FROM_PLAYLIST -> playlistContext?.let { ctx ->
+                            SheetAction(Icons.Rounded.PlaylistRemove, stringResource(R.string.sheet_remove_from_playlist), onClick = {
+                                removeFromPlaylist(library, graph.scope, t, ctx, feedback, res.getString(R.string.sheet_removed_from_playlist), res.getString(R.string.sheet_undo))
+                                closeThen(onDismiss)
+                            })
+                        }
+                        TrackSheetAction.DELETE -> SheetAction(
+                            Icons.Rounded.DeleteOutline,
+                            stringResource(R.string.sheet_delete_from_phone),
+                            tint = SurcoColors.Danger,
+                            labelColor = SurcoColors.Danger,
+                            onClick = { closeThen { stage = TrackSheetStage.ConfirmDelete } },
+                        )
+                    }
                 }
-                SheetAction(Icons.Rounded.Person, stringResource(R.string.sheet_go_artist), onClick = {
-                    closeThen { onDismiss(); navigator.openArtist(t.artist) }
-                })
-                SheetAction(Icons.Rounded.Edit, stringResource(R.string.sheet_edit), onClick = {
-                    closeThen { stage = TrackSheetStage.Edit }
-                })
-                if (playlistContext != null) {
-                    SheetAction(Icons.Rounded.PlaylistRemove, stringResource(R.string.sheet_remove_from_playlist), onClick = {
-                        removeFromPlaylist(library, graph.scope, t, playlistContext, feedback, res.getString(R.string.sheet_removed_from_playlist), res.getString(R.string.sheet_undo))
-                        closeThen(onDismiss)
-                    })
-                }
-                SheetAction(
-                    Icons.Rounded.DeleteOutline,
-                    stringResource(R.string.sheet_delete_from_phone),
-                    tint = SurcoColors.Danger,
-                    labelColor = SurcoColors.Danger,
-                    onClick = { closeThen { stage = TrackSheetStage.ConfirmDelete } },
-                )
             }
         }
 
@@ -214,6 +321,27 @@ fun TrackActionsSheet(track: Track, onDismiss: () -> Unit, playlistContext: Play
             },
             onDismiss = onDismiss,
         )
+    }
+}
+
+/**
+ * "Iniciar rádio" for a streamed song: the song, then YouTube Music's "up next" for it, streamed.
+ * Runs on the app scope (the sheet is gone by then).
+ */
+private fun startOnlineRadio(track: Track, graph: AppGraph, feedback: SheetFeedback, res: Resources) {
+    val seed = track.toRemoteTrack() ?: return
+    graph.scope.launch {
+        val related = runCatching { graph.youTube.related(seed.videoId) }.getOrDefault(emptyList())
+            .filter { it.videoId != seed.videoId }
+            .distinctBy { it.videoId }
+        withContext(Dispatchers.Main) {
+            if (related.isEmpty()) {
+                feedback.show(res.getString(R.string.sheet_radio_unavailable))
+            } else {
+                graph.player.playOnline(listOf(seed) + related, 0, PlaySource(PlaySource.Type.RADIO, res.getString(R.string.playback_source_radio, track.title), seed.videoId))
+                feedback.show(res.getString(R.string.sheet_radio_done, track.title))
+            }
+        }
     }
 }
 

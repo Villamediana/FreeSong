@@ -55,4 +55,14 @@
     <string name="player_output_choose">Elegir salida de audio</string>
 
     <string name="player_error_dismiss">Descartar</string>
+
+    <!-- Reproducir online, video (segunda tanda) -->
+    <string name="player_streaming">Sonando online</string>
+    <string name="player_download_started">Descargando “%1$s”</string>
+    <string name="player_video">Ver video</string>
+    <string name="player_video_offline">Sin internet para ver el video.</string>
+    <string name="player_lyrics_loading">Buscando la letra</string>
+    <string name="player_lyrics_none_online">No encontramos la letra de esta canción.</string>
+    <string name="player_lyrics_offline_title">Sin internet</string>
+    <string name="player_lyrics_offline_body">La letra aparece cuando vuelva la conexión.</string>
 </resources>

@@ -114,28 +114,46 @@ class FakeDownloads : DownloadController {
 }
 
 class FakePlayer : PlayerConnection {
-    data class Play(val tracks: List<Track>, val index: Int, val source: PlaySource)
+    data class Play(val tracks: List<Track>, val index: Int, val source: PlaySource, val shuffle: Boolean = false)
+    data class OnlinePlay(val tracks: List<RemoteTrack>, val index: Int, val source: PlaySource)
 
     val plays: MutableList<Play> = Collections.synchronizedList(mutableListOf())
-    override val state: StateFlow<PlaybackState> = MutableStateFlow(PlaybackState())
+    val onlinePlays: MutableList<OnlinePlay> = Collections.synchronizedList(mutableListOf())
+    val shuffles: MutableList<Boolean> = Collections.synchronizedList(mutableListOf())
+    val queued: MutableList<Pair<String, List<Track>>> = Collections.synchronizedList(mutableListOf())
+    var toggles = 0
+    val stateFlow = MutableStateFlow(PlaybackState())
+    override val state: StateFlow<PlaybackState> = stateFlow
     override val positionMs: Flow<Long> = flowOf(0L)
     override val sleepTimer: StateFlow<SleepTimer> = MutableStateFlow(SleepTimer.Off)
 
     override fun play(tracks: List<Track>, startIndex: Int, source: PlaySource, shuffle: Boolean) {
-        plays += Play(tracks, startIndex, source)
+        plays += Play(tracks, startIndex, source, shuffle)
+    }
+
+    override fun playOnline(tracks: List<RemoteTrack>, startIndex: Int, source: PlaySource) {
+        onlinePlays += OnlinePlay(tracks, startIndex, source)
     }
 
     override fun playSmart(seed: SmartSeed) = Unit
-    override fun togglePlayPause() = Unit
+    override fun togglePlayPause() {
+        toggles++
+    }
     override fun pause() = Unit
     override fun next() = Unit
     override fun previous() = Unit
     override fun seekTo(positionMs: Long) = Unit
     override fun skipTo(queueIndex: Int) = Unit
-    override fun setShuffle(enabled: Boolean) = Unit
+    override fun setShuffle(enabled: Boolean) {
+        shuffles += enabled
+    }
     override fun cycleRepeat() = Unit
-    override fun playNext(tracks: List<Track>) = Unit
-    override fun enqueue(tracks: List<Track>) = Unit
+    override fun playNext(tracks: List<Track>) {
+        queued += "next" to tracks
+    }
+    override fun enqueue(tracks: List<Track>) {
+        queued += "end" to tracks
+    }
     override fun removeAt(queueIndex: Int) = Unit
     override fun move(from: Int, to: Int) = Unit
     override fun setSleepTimer(timer: SleepTimer) = Unit

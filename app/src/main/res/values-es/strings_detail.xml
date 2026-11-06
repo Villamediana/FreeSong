@@ -174,4 +174,18 @@
         <item quantity="many">%1$d canciones añadidas a %2$s</item>
         <item quantity="other">%1$d canciones añadidas a %2$s</item>
     </plurals>
+
+    <!-- Hoja de la canción: online, video, compartir (segunda tanda) -->
+    <string name="sheet_streamed">online</string>
+    <string name="sheet_download">Descargar</string>
+    <string name="sheet_downloading">Descargando</string>
+    <string name="sheet_download_started">Descargando “%s”</string>
+    <string name="sheet_when_online">cuando haya internet</string>
+    <string name="sheet_video">Ver video</string>
+    <string name="sheet_share">Compartir</string>
+    <string name="sheet_send_file">Enviar archivo</string>
+    <string name="sheet_equalizer">Ecualizador</string>
+    <string name="sheet_offline">Sin internet ahora.</string>
+    <string name="sheet_radio_unavailable">No se pudo armar la radio ahora.</string>
+    <string name="detail_menu_share">Compartir</string>
 </resources>

@@ -130,6 +130,10 @@ fun SheetAction(
     modifier: Modifier = Modifier,
     tint: Color = SurcoColors.TextMuted,
     labelColor: Color = SurcoColors.Text,
+    /** Quiet, unavailable look (e.g. needs the internet); still tappable so it can explain why. */
+    dimmed: Boolean = false,
+    /** Short note on the right ("Na fila…", "Sem internet"). */
+    trailing: String? = null,
 ) {
     Row(
         modifier
@@ -139,9 +143,21 @@ fun SheetAction(
             .padding(horizontal = 24.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(icon, null, tint = tint, modifier = Modifier.size(24.dp))
+        val alpha = if (dimmed) 0.45f else 1f
+        Icon(icon, null, tint = tint.copy(alpha = tint.alpha * alpha), modifier = Modifier.size(24.dp))
         Spacer(Modifier.width(18.dp))
-        Text(label, style = MaterialTheme.typography.bodyLarge, color = labelColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = labelColor.copy(alpha = labelColor.alpha * alpha),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        if (trailing != null) {
+            Spacer(Modifier.width(12.dp))
+            Text(trailing, style = MaterialTheme.typography.labelMedium, color = SurcoColors.TextFaint, maxLines = 1)
+        }
     }
 }
 

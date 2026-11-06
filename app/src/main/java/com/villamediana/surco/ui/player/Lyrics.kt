@@ -29,17 +29,128 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.villamediana.surco.data.Lrc
 import com.villamediana.surco.data.ParsedLyrics
+import com.villamediana.surco.data.db.Track
+import com.villamediana.surco.data.isOnline
+import com.villamediana.surco.online.Lyrics
 import com.villamediana.surco.ui.theme.SurcoColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 
 internal sealed interface LyricsState {
     data object Loading : LyricsState
     data object None : LyricsState
+    /** An online song's lyrics can't be looked up without network. */
+    data object Offline : LyricsState
     data class Ready(val lyrics: ParsedLyrics) : LyricsState
 }
+
+/** What to look up on LRCLIB for a song that is not on the phone. */
+internal data class LyricsQuery(val title: String, val artist: String, val album: String?, val durationMs: Long?) {
+    /** Cache key: the same song always asks the same question. */
+    val key: String get() = listOf(title.trim().lowercase(), artist.trim().lowercase(), album?.trim()?.lowercase().orEmpty(), (durationMs ?: 0) / 1000).joinToString("\u0001")
+}
+
+/** Where the player's lyrics come from. */
+internal sealed interface LyricsOrigin {
+    data class File(val path: String) : LyricsOrigin
+    data class Online(val query: LyricsQuery) : LyricsOrigin
+    data object None : LyricsOrigin
+
+    companion object {
+        /**
+         * [playing] is what the player is on (maybe a streamed, transient song); [libraryCopy] its row
+         * in the library, when there is one. A saved lyrics file always wins; a streamed song without
+         * one asks LRCLIB (even right after it got downloaded); a song from the phone without a file
+         * simply has none.
+         */
+        fun choose(playing: Track, libraryCopy: Track?): LyricsOrigin {
+            val path = libraryCopy?.lyricsPath?.takeIf { it.isNotBlank() }
+                ?: playing.lyricsPath?.takeIf { it.isNotBlank() && !playing.isOnline }
+            return when {
+                path != null -> File(path)
+                playing.isOnline -> Online(
+                    LyricsQuery(
+                        title = playing.title,
+                        artist = playing.artist,
+                        album = playing.album?.takeIf { it.isNotBlank() },
+                        durationMs = playing.durationMs.takeIf { it > 0 },
+                    ),
+                )
+                else -> None
+            }
+        }
+    }
+}
+
+/**
+ * Lyrics of streamed songs, fetched on demand and kept in memory for the session (the card and
+ * the full-screen view share one lookup; skipping back and forth doesn't ask again). "Not found"
+ * is remembered for a while only — LyricsSource can't tell it apart from a failed request.
+ */
+internal class OnlineLyricsCache(
+    private val find: suspend (LyricsQuery) -> Lyrics?,
+    private val now: () -> Long = System::currentTimeMillis,
+    private val capacity: Int = 60,
+    private val missTtlMs: Long = 10 * 60_000L,
+) {
+    private val mutex = Mutex()
+    private val found = object : LinkedHashMap<String, ParsedLyrics>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, ParsedLyrics>?): Boolean = size > capacity
+    }
+    private val missing = HashMap<String, Long>()
+
+    /** Already known: the lyrics, or [MISSING] when recently not found; null = never asked. */
+    suspend fun peek(query: LyricsQuery): ParsedLyrics? = mutex.withLock {
+        found[query.key] ?: missing[query.key]?.takeIf { now() - it < missTtlMs }?.let { MISSING }
+    }
+
+    suspend fun get(query: LyricsQuery): ParsedLyrics? {
+        peek(query)?.let { return it.takeUnless { l -> l === MISSING } }
+        val parsed = runCatching { find(query) }.getOrNull()?.text
+            ?.removePrefix("\uFEFF")
+            ?.let { Lrc.parse(it) }
+            ?.takeIf { lyrics -> lyrics.lines.any { it.text.isNotBlank() } }
+        mutex.withLock {
+            if (parsed != null) {
+                found[query.key] = parsed
+                missing.remove(query.key)
+            } else {
+                missing[query.key] = now()
+            }
+        }
+        return parsed
+    }
+
+    companion object {
+        val MISSING = ParsedLyrics(synced = false, lines = emptyList())
+    }
+}
+
+/** The player's lyrics for [origin]; online lookups wait for the network and retry when it returns. */
+@Composable
+internal fun rememberLyrics(origin: LyricsOrigin, online: Boolean, cache: OnlineLyricsCache?): State<LyricsState> =
+    produceState<LyricsState>(LyricsState.Loading, origin, online, cache) {
+        value = when (origin) {
+            is LyricsOrigin.File -> LyricsFiles.load(origin.path)?.let { LyricsState.Ready(it) } ?: LyricsState.None
+            LyricsOrigin.None -> LyricsState.None
+            is LyricsOrigin.Online -> {
+                val known = cache?.peek(origin.query)
+                when {
+                    cache == null -> LyricsState.None
+                    known != null -> if (known === OnlineLyricsCache.MISSING) LyricsState.None else LyricsState.Ready(known)
+                    !online -> LyricsState.Offline
+                    else -> {
+                        value = LyricsState.Loading
+                        cache.get(origin.query)?.let { LyricsState.Ready(it) } ?: LyricsState.None
+                    }
+                }
+            }
+        }
+    }
 
 internal object LyricsFiles {
     /** Reads and parses a .lrc/.txt lyrics file; null when missing, unreadable or empty. */
@@ -55,11 +166,6 @@ internal object LyricsFiles {
     suspend fun load(path: String?): ParsedLyrics? = withContext(Dispatchers.IO) { read(path) }
 }
 
-@Composable
-internal fun rememberLyrics(path: String?): State<LyricsState> =
-    produceState<LyricsState>(LyricsState.Loading, path) {
-        value = LyricsFiles.load(path)?.let { LyricsState.Ready(it) } ?: LyricsState.None
-    }
 
 /** Colors for lyric lines drawn over [background]: the sung line, lines already sung, lines to come. */
 internal data class LyricColors(val active: Color, val past: Color, val future: Color) {

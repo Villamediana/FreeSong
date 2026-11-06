@@ -1,10 +1,19 @@
 package com.villamediana.surco.ui.player
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -14,6 +23,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -22,6 +32,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CloudQueue
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material3.CircularProgressIndicator
@@ -62,6 +73,9 @@ import androidx.compose.ui.unit.sp
 import com.villamediana.surco.R
 import com.villamediana.surco.ui.components.formatDuration
 import com.villamediana.surco.ui.components.pressScale
+import com.villamediana.surco.ui.search.DownloadIndicator
+import com.villamediana.surco.ui.search.ItemDownload
+import com.villamediana.surco.ui.theme.Motion
 import com.villamediana.surco.ui.theme.SurcoColors
 import kotlinx.coroutines.launch
 
@@ -322,5 +336,68 @@ internal fun LikeButton(
                     scaleY = pop.value
                 },
         )
+    }
+}
+
+/** Small cloud before the artist: this song is streamed, not on the phone. */
+@Composable
+internal fun RowScope.StreamedMark(visible: Boolean, size: Dp, gap: Dp) {
+    val label = stringResource(R.string.player_streaming)
+    AnimatedVisibility(visible, enter = fadeIn(tween(200)) + expandHorizontally(), exit = fadeOut(tween(160)) + shrinkHorizontally()) {
+        Icon(
+            Icons.Rounded.CloudQueue,
+            label,
+            tint = SurcoColors.Text.copy(alpha = 0.62f),
+            modifier = Modifier.padding(end = gap).size(size),
+        )
+    }
+}
+
+/**
+ * The heart — or, for a streamed song, the download button in its place (arrow → queue → filling
+ * ring). When the download lands the song is in the library and the heart springs back.
+ */
+@Composable
+internal fun HeartOrDownload(
+    stream: StreamUi,
+    liked: Boolean,
+    onLike: (Boolean) -> Unit,
+    onDownload: () -> Unit,
+    size: Dp,
+    iconSize: Dp,
+    ringSize: Dp,
+    idleTint: Color,
+) {
+    val haptic = LocalHapticFeedback.current
+    AnimatedContent(
+        targetState = stream.streamed,
+        transitionSpec = {
+            (fadeIn(tween(180)) + scaleIn(Motion.bouncy(), initialScale = 0.6f)) togetherWith
+                (fadeOut(tween(120)) + scaleOut(tween(140), targetScale = 0.6f))
+        },
+        contentAlignment = Alignment.Center,
+        label = "heartOrDownload",
+    ) { streamed ->
+        if (streamed) {
+            val d = stream.download
+            val canStart = d == ItemDownload.None || d is ItemDownload.Failed
+            Box(Modifier.size(size), contentAlignment = Alignment.Center) {
+                DownloadIndicator(
+                    state = d,
+                    onClick = if (canStart) {
+                        {
+                            haptic.performHapticFeedback(HapticFeedbackType.Confirm)
+                            onDownload()
+                        }
+                    } else {
+                        null
+                    },
+                    size = ringSize,
+                    idleTint = idleTint,
+                )
+            }
+        } else {
+            LikeButton(liked = liked, onToggle = onLike, size = size, iconSize = iconSize, idleTint = idleTint)
+        }
     }
 }

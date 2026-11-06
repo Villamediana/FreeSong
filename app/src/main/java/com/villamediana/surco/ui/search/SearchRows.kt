@@ -69,6 +69,7 @@ import com.villamediana.surco.online.RemoteCollection
 import com.villamediana.surco.online.RemoteTrack
 import com.villamediana.surco.ui.components.Cover
 import com.villamediana.surco.ui.components.CoverColors
+import com.villamediana.surco.ui.components.PlayingBars
 import com.villamediana.surco.ui.components.formatDuration
 import com.villamediana.surco.ui.components.pressScale
 import com.villamediana.surco.ui.components.seedColor
@@ -98,6 +99,9 @@ fun RemoteSongRow(
     number: Int? = null,
     selecting: Boolean = false,
     selected: Boolean = false,
+    /** The song the player is on: accent title + live bars. */
+    isCurrent: Boolean = false,
+    isPlaying: Boolean = false,
 ) {
     val bg by animateColorAsState(if (selected) SurcoColors.AccentSoft else Color.Transparent, tween(180), label = "rowBg")
     val dimmed = selecting && (state == ItemDownload.Done || state == ItemDownload.Queued || state is ItemDownload.Running)
@@ -112,17 +116,30 @@ fun RemoteSongRow(
     ) {
         if (number != null) {
             Box(Modifier.width(32.dp), contentAlignment = Alignment.CenterStart) {
-                Text("$number", style = MaterialTheme.typography.bodyMedium, color = SurcoColors.TextMuted)
+                if (isCurrent) PlayingBars(isPlaying, Modifier.size(14.dp))
+                else Text("$number", style = MaterialTheme.typography.bodyMedium, color = SurcoColors.TextMuted)
             }
         } else {
-            Cover(track.thumbnailUrl, Modifier.size(Dimens.RowCover), seed = track.album ?: track.title)
+            Box {
+                Cover(track.thumbnailUrl, Modifier.size(Dimens.RowCover), seed = track.album ?: track.title)
+                if (isCurrent) {
+                    Box(
+                        Modifier.size(Dimens.RowCover).clip(RoundedCornerShape(Dimens.CoverCorner)).background(Color(0x99000000)),
+                        contentAlignment = Alignment.Center,
+                    ) { PlayingBars(isPlaying, Modifier.size(16.dp)) }
+                }
+            }
             Spacer(Modifier.width(14.dp))
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
             Text(
                 track.title,
                 style = MaterialTheme.typography.titleMedium,
-                color = if (dimmed) SurcoColors.TextFaint else SurcoColors.Text,
+                color = when {
+                    dimmed -> SurcoColors.TextFaint
+                    isCurrent -> SurcoColors.Accent
+                    else -> SurcoColors.Text
+                },
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -337,10 +354,12 @@ fun BigButton(
     icon: ImageVector? = null,
     filled: Boolean = true,
     enabled: Boolean = true,
+    /** Side by side with another button: tighter padding. */
+    compact: Boolean = false,
 ) {
     val interaction = remember { MutableInteractionSource() }
     val bg = if (filled) SurcoColors.Accent else Color.Transparent
-    val fg = if (filled) SurcoColors.OnAccent else SurcoColors.Text
+    val fg = (if (filled) SurcoColors.OnAccent else SurcoColors.Text).let { if (enabled) it else it.copy(alpha = 0.45f) }
     Row(
         modifier
             .fillMaxWidth()
@@ -350,13 +369,13 @@ fun BigButton(
             .background(bg)
             .then(if (filled) Modifier else Modifier.border(1.dp, SurcoColors.Hairline, CircleShape))
             .clickable(interactionSource = interaction, indication = null, enabled = enabled, onClick = onClick)
-            .padding(horizontal = 20.dp),
+            .padding(horizontal = if (compact) 14.dp else 20.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
     ) {
         if (icon != null) {
-            Icon(icon, null, tint = fg, modifier = Modifier.size(20.dp))
-            Spacer(Modifier.width(10.dp))
+            Icon(icon, null, tint = fg, modifier = Modifier.size(if (compact) 19.dp else 20.dp))
+            Spacer(Modifier.width(if (compact) 7.dp else 10.dp))
         }
         Text(text, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
@@ -385,7 +404,7 @@ fun ProgressPill(text: String, fraction: Float?, modifier: Modifier = Modifier, 
                 SpinningRing(18.dp)
             }
             Spacer(Modifier.width(10.dp))
-            Text(text, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = SurcoColors.Text, maxLines = 1)
+            Text(text, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = SurcoColors.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -397,6 +416,7 @@ fun LinkCardView(
     state: ItemDownload,
     onDownload: () -> Unit,
     onPlay: () -> Unit,
+    onListen: () -> Unit,
     onRetry: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
@@ -447,24 +467,42 @@ fun LinkCardView(
         }
         if (card is LinkCard.Found) {
             Spacer(Modifier.height(14.dp))
-            val glyph = when (state) {
-                ItemDownload.None -> 0
-                ItemDownload.Queued, is ItemDownload.Running -> 1
-                ItemDownload.Done -> 2
-                is ItemDownload.Failed -> 3
-            }
-            AnimatedContent(glyph, transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(140)) }, label = "linkAction") { g ->
-                when (g) {
-                    0 -> BigButton(stringResource(R.string.search_link_download), onDownload, icon = Icons.Rounded.Download)
-                    1 -> {
-                        val running = state as? ItemDownload.Running
-                        ProgressPill(
-                            text = if (running != null) stringResource(R.string.search_link_downloading, (running.progress * 100).roundToInt()) else stringResource(R.string.search_link_queued),
-                            fraction = running?.progress,
-                        )
+            LinkCardActions(state, onListen = onListen, onDownload = onDownload, onPlay = onPlay, onRetry = onRetry)
+        }
+    }
+}
+
+/**
+ * "Ouvir agora" (streams it) next to "Baixar" (keeps it on the phone). The right side follows the
+ * download: queue → progress → once it is on the phone a single "Tocar" plays the local copy.
+ */
+@Composable
+private fun LinkCardActions(state: ItemDownload, onListen: () -> Unit, onDownload: () -> Unit, onPlay: () -> Unit, onRetry: () -> Unit) {
+    val downloaded = state == ItemDownload.Done
+    AnimatedContent(downloaded, transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(140)) }, label = "linkDone") { done ->
+        if (done) {
+            BigButton(stringResource(R.string.search_link_play), onPlay, icon = Icons.Rounded.PlayArrow)
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                BigButton(stringResource(R.string.search_link_listen), onListen, Modifier.weight(1.15f), icon = Icons.Rounded.PlayArrow, compact = true)
+                Spacer(Modifier.width(10.dp))
+                val side = when (state) {
+                    ItemDownload.None, ItemDownload.Done -> 0
+                    ItemDownload.Queued, is ItemDownload.Running -> 1
+                    is ItemDownload.Failed -> 2
+                }
+                AnimatedContent(side, Modifier.weight(1f), transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(140)) }, label = "linkDownload") { g ->
+                    when (g) {
+                        0 -> BigButton(stringResource(R.string.search_link_download), onDownload, icon = Icons.Rounded.Download, filled = false, compact = true)
+                        1 -> {
+                            val running = state as? ItemDownload.Running
+                            ProgressPill(
+                                text = if (running != null) stringResource(R.string.search_link_percent, (running.progress * 100).roundToInt()) else stringResource(R.string.search_link_queued),
+                                fraction = running?.progress,
+                            )
+                        }
+                        else -> BigButton(stringResource(R.string.search_link_retry), onRetry, icon = Icons.Rounded.Refresh, filled = false, compact = true)
                     }
-                    2 -> BigButton(stringResource(R.string.search_link_play), onPlay, icon = Icons.Rounded.PlayArrow)
-                    else -> BigButton(stringResource(R.string.search_retry), onRetry, icon = Icons.Rounded.Refresh, filled = false)
                 }
             }
         }

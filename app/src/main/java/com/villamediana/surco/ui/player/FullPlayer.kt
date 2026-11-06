@@ -1,10 +1,14 @@
 package com.villamediana.surco.ui.player
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
@@ -27,6 +31,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -52,12 +57,14 @@ import androidx.compose.material.icons.rounded.Lyrics
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.Shuffle
+import androidx.compose.material.icons.rounded.SmartDisplay
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
@@ -79,6 +86,9 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -89,12 +99,14 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.villamediana.surco.R
 import com.villamediana.surco.data.db.Track
+import com.villamediana.surco.data.isOnline
 import com.villamediana.surco.playback.PlaySource
 import com.villamediana.surco.playback.PlaybackState
 import com.villamediana.surco.playback.RepeatMode
 import com.villamediana.surco.playback.SleepTimer
 import com.villamediana.surco.ui.components.Cover
 import com.villamediana.surco.ui.components.pressScale
+import com.villamediana.surco.ui.search.ItemDownload
 import com.villamediana.surco.ui.theme.SurcoColors
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -121,7 +133,22 @@ internal class PlayerActions(
     val openArtist: (String) -> Unit,
     val openAlbum: (Track) -> Unit,
     val openOutput: () -> Unit,
+    /** Streamed song: keep it on the phone. */
+    val download: () -> Unit = {},
+    /** "Ver vídeo" (needs network). */
+    val openVideo: () -> Unit = {},
 )
+
+/**
+ * A streamed song (not on the phone): a small cloud next to the artist and "Baixar" in place of
+ * the heart, following the download until the song is in the library.
+ */
+@Immutable
+internal data class StreamUi(val streamed: Boolean, val download: ItemDownload, val online: Boolean) {
+    companion object {
+        val Local = StreamUi(streamed = false, download = ItemDownload.None, online = true)
+    }
+}
 
 /**
  * Drag-down-to-collapse for the scrolling full player: once the content is at the top, pulling
@@ -154,6 +181,7 @@ internal class CollapseConnection(private val expand: ExpandState, private val r
 internal fun FullPlayer(
     state: PlaybackState,
     track: Track,
+    stream: StreamUi,
     liked: Boolean,
     playing: Boolean,
     durationMs: Long,
@@ -197,27 +225,27 @@ internal fun FullPlayer(
             val visible = { expand.progress >= 1f }
             if (landscape) {
                 Column(section.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
-                    TopBar(state.source, actions)
+                    TopBar(state.source, actions, hasVideo = track.videoId != null, online = stream.online)
                     Row(Modifier.weight(1f).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         BoxWithConstraints(Modifier.weight(0.46f).fillMaxHeight(), contentAlignment = Alignment.Center) {
                             val size = minOf(maxWidth - PlayerGutter * 2, maxHeight - 16.dp).coerceAtLeast(96.dp)
                             CoverPager(state, track, size, maxWidth, coverScale, visible, actions.skipTo, reportCover)
                         }
                         Column(Modifier.weight(0.54f).padding(end = PlayerGutter), verticalArrangement = Arrangement.Center) {
-                            Controls(state, track, liked, playing, durationMs, clock, sleep, output, lyrics, actions)
+                            Controls(state, track, stream, liked, playing, durationMs, clock, sleep, output, lyrics, actions)
                         }
                     }
                 }
             } else {
                 Column(section) {
-                    TopBar(state.source, actions)
+                    TopBar(state.source, actions, hasVideo = track.videoId != null, online = stream.online)
                     BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                         val size = minOf(maxWidth - PlayerGutter * 2, maxHeight - 20.dp).coerceAtLeast(96.dp)
                         CoverPager(state, track, size, maxWidth, coverScale, visible, actions.skipTo, reportCover)
                     }
                     Spacer(Modifier.height(14.dp))
                     Column(Modifier.padding(horizontal = PlayerGutter)) {
-                        Controls(state, track, liked, playing, durationMs, clock, sleep, output, lyrics, actions)
+                        Controls(state, track, stream, liked, playing, durationMs, clock, sleep, output, lyrics, actions)
                     }
                     Spacer(Modifier.height(10.dp))
                 }
@@ -230,6 +258,7 @@ internal fun FullPlayer(
                 onSeek = actions.seek,
                 onOpen = actions.openLyrics,
                 modifier = Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)),
+                streamed = stream.streamed,
             )
             Spacer(Modifier.height(navBottom + 32.dp))
         }
@@ -237,10 +266,11 @@ internal fun FullPlayer(
 }
 
 @Composable
-private fun TopBar(source: PlaySource?, actions: PlayerActions) {
-    Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        PlayerIconButton(Icons.Rounded.KeyboardArrowDown, stringResource(R.string.player_collapse), actions.collapse, iconSize = 30.dp)
-        Column(Modifier.weight(1f).padding(horizontal = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+private fun TopBar(source: PlaySource?, actions: PlayerActions, hasVideo: Boolean, online: Boolean) {
+    // The source stays centered whatever sits on the right (⋮, and "Ver vídeo" when the song has one).
+    Box(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp)) {
+        PlayerIconButton(Icons.Rounded.KeyboardArrowDown, stringResource(R.string.player_collapse), actions.collapse, Modifier.align(Alignment.CenterStart), iconSize = 30.dp)
+        Column(Modifier.align(Alignment.Center).fillMaxWidth().padding(horizontal = 100.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
                 stringResource(if (source != null) R.string.player_playing_from else R.string.player_now_playing).uppercase(),
                 style = MaterialTheme.typography.labelSmall,
@@ -259,7 +289,18 @@ private fun TopBar(source: PlaySource?, actions: PlayerActions) {
                 )
             }
         }
-        PlayerIconButton(Icons.Rounded.MoreVert, stringResource(R.string.more_options), actions.openActions, iconSize = 24.dp)
+        Row(Modifier.align(Alignment.CenterEnd), verticalAlignment = Alignment.CenterVertically) {
+            AnimatedVisibility(hasVideo, enter = fadeIn(tween(200)) + scaleIn(initialScale = 0.7f), exit = fadeOut(tween(140)) + scaleOut(targetScale = 0.7f)) {
+                PlayerIconButton(
+                    Icons.Rounded.SmartDisplay,
+                    stringResource(R.string.player_video),
+                    actions.openVideo,
+                    iconSize = 24.dp,
+                    tint = SurcoColors.Text.copy(alpha = if (online) 0.9f else 0.4f),
+                )
+            }
+            PlayerIconButton(Icons.Rounded.MoreVert, stringResource(R.string.more_options), actions.openActions, iconSize = 24.dp)
+        }
     }
 }
 
@@ -343,6 +384,7 @@ private fun CoverPager(
 private fun Controls(
     state: PlaybackState,
     track: Track,
+    stream: StreamUi,
     liked: Boolean,
     playing: Boolean,
     durationMs: Long,
@@ -352,7 +394,7 @@ private fun Controls(
     lyrics: LyricsState,
     actions: PlayerActions,
 ) {
-    TrackHeader(track, liked, actions)
+    TrackHeader(track, stream, liked, actions)
     Spacer(Modifier.height(14.dp))
     SeekBar(clock = clock, durationMs = durationMs, onSeek = actions.seek, timeColor = SurcoColors.Text.copy(alpha = 0.66f))
     Spacer(Modifier.height(4.dp))
@@ -362,11 +404,12 @@ private fun Controls(
 }
 
 @Composable
-private fun TrackHeader(track: Track, liked: Boolean, actions: PlayerActions) {
+private fun TrackHeader(track: Track, stream: StreamUi, liked: Boolean, actions: PlayerActions) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         AnimatedContent(
             targetState = track,
-            contentKey = { it.id },
+            // A streamed song that gets downloaded is the same song: no title transition.
+            contentKey = { it.videoId ?: it.id },
             transitionSpec = {
                 (fadeIn(tween(260, delayMillis = 60)) + slideInVertically(tween(320)) { it / 3 }) togetherWith fadeOut(tween(120))
             },
@@ -385,15 +428,17 @@ private fun TrackHeader(track: Track, liked: Boolean, actions: PlayerActions) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     val link = MaterialTheme.typography.bodyLarge
                     val dim = SurcoColors.Text.copy(alpha = 0.7f)
+                    StreamedMark(visible = t.isOnline, size = 16.dp, gap = 6.dp)
                     Text(
                         t.artist,
                         style = link,
                         color = dim,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                        // A streamed song's artist/album aren't in the library: no link to follow.
                         modifier = Modifier
                             .weight(1f, fill = false)
-                            .clickable(interactionSource = null, indication = null) { actions.openArtist(t.artist) },
+                            .clickable(enabled = !t.isOnline, interactionSource = null, indication = null) { actions.openArtist(t.artist) },
                     )
                     if (t.hasAlbum) {
                         Text("  ·  ", style = link, color = SurcoColors.Text.copy(alpha = 0.4f))
@@ -405,14 +450,23 @@ private fun TrackHeader(track: Track, liked: Boolean, actions: PlayerActions) {
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier
                                 .weight(1f, fill = false)
-                                .clickable(interactionSource = null, indication = null) { actions.openAlbum(t) },
+                                .clickable(enabled = !t.isOnline, interactionSource = null, indication = null) { actions.openAlbum(t) },
                         )
                     }
                 }
             }
         }
         Spacer(Modifier.width(8.dp))
-        LikeButton(liked = liked, onToggle = actions.like, idleTint = SurcoColors.Text.copy(alpha = 0.8f), iconSize = 28.dp)
+        HeartOrDownload(
+            stream = stream,
+            liked = liked,
+            onLike = actions.like,
+            onDownload = actions.download,
+            size = 48.dp,
+            iconSize = 28.dp,
+            ringSize = 27.dp,
+            idleTint = SurcoColors.Text.copy(alpha = 0.8f),
+        )
     }
 }
 
@@ -461,16 +515,43 @@ private fun BottomRow(outputName: String?, output: OutputRoute, sleep: SleepTime
 @Composable
 private fun BottomButtons(sleep: SleepTimer, lyrics: LyricsState, actions: PlayerActions) {
     Row(verticalAlignment = Alignment.CenterVertically) {
+        LyricsPill(lyrics, actions.openLyrics)
+        Spacer(Modifier.width(4.dp))
         SleepButton(sleep, actions.openSleep)
         PlayerIconButton(Icons.AutoMirrored.Rounded.QueueMusic, stringResource(R.string.player_queue), actions.openQueue, size = 44.dp, iconSize = 24.dp, tint = SurcoColors.Text.copy(alpha = 0.85f))
-        PlayerIconButton(
-            Icons.Rounded.Lyrics,
-            stringResource(R.string.player_lyrics_open),
-            actions.openLyrics,
-            size = 44.dp,
-            iconSize = 23.dp,
-            tint = if (lyrics is LyricsState.Ready) SurcoColors.Text.copy(alpha = 0.85f) else SurcoColors.Text.copy(alpha = 0.4f),
-        )
+    }
+}
+
+/**
+ * "Letra": one tap to the full-screen lyrics. Lit when there are lyrics (with a tangerine dot when
+ * they follow the song), quiet otherwise; the screen itself explains when there are none.
+ */
+@Composable
+private fun LyricsPill(lyrics: LyricsState, onClick: () -> Unit) {
+    val ready = lyrics as? LyricsState.Ready
+    val tint by animateColorAsState(SurcoColors.Text.copy(alpha = if (ready != null) 0.95f else 0.5f), tween(240), label = "lyricsPill")
+    val fill by animateColorAsState(SurcoColors.Text.copy(alpha = if (ready != null) 0.12f else 0.06f), tween(240), label = "lyricsPillBg")
+    val interaction = remember { MutableInteractionSource() }
+    val label = stringResource(R.string.player_lyrics_open)
+    Row(
+        Modifier
+            .height(34.dp)
+            .pressScale(interaction, 0.94f)
+            .clip(CircleShape)
+            .background(fill)
+            .clickable(interactionSource = interaction, indication = null, onClickLabel = label, role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = label }
+            .padding(start = 10.dp, end = 13.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box {
+            Icon(Icons.Rounded.Lyrics, null, tint = tint, modifier = Modifier.size(18.dp))
+            if (ready?.lyrics?.synced == true) {
+                Box(Modifier.align(Alignment.TopEnd).offset(x = 2.dp, y = (-1).dp).size(6.dp).clip(CircleShape).background(SurcoColors.Accent))
+            }
+        }
+        Spacer(Modifier.width(7.dp))
+        Text(stringResource(R.string.player_lyrics), style = MaterialTheme.typography.labelLarge, color = tint, maxLines = 1)
     }
 }
 

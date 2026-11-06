@@ -4,16 +4,20 @@ import android.app.Application
 import android.content.Context
 import androidx.lifecycle.viewModelScope
 import androidx.test.core.app.ApplicationProvider
+import com.villamediana.surco.R
 import com.villamediana.surco.data.LibraryRepository
+import com.villamediana.surco.data.asTransientTrack
 import com.villamediana.surco.data.db.AlbumKey
 import com.villamediana.surco.data.db.DownloadState
 import com.villamediana.surco.data.db.SurcoDatabase
 import com.villamediana.surco.data.db.Track
+import com.villamediana.surco.data.isOnline
 import com.villamediana.surco.online.CollectionDetail
 import com.villamediana.surco.online.CollectionKind
 import com.villamediana.surco.online.OnlineException
 import com.villamediana.surco.online.RemoteCollection
 import com.villamediana.surco.playback.PlaySource
+import com.villamediana.surco.playback.PlaybackState
 import com.villamediana.surco.ui.nav.RemoteCollectionRoute
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -35,6 +39,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import kotlin.random.Random
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
@@ -70,14 +75,16 @@ class RemoteCollectionViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun viewModel(kind: CollectionKind, url: String = playlistUrl): RemoteCollectionViewModel {
+    private fun viewModel(kind: CollectionKind, url: String = playlistUrl, playOnline: Boolean = true): RemoteCollectionViewModel {
         val vm = RemoteCollectionViewModel(
             RemoteCollectionRoute(url, kind.name, "Rock nacional", "Surco"),
             youTube, library, downloads, player, online, initiallyOnline = online.value,
+            playOnlineFlow = MutableStateFlow(playOnline), random = Random(7),
         )
         vms += vm
         scope.launch { vm.lookup.collect { } }
         scope.launch { vm.progress.collect { } }
+        scope.launch { vm.here.collect { } }
         return vm
     }
 
@@ -146,7 +153,8 @@ class RemoteCollectionViewModelTest {
         vm.openInLibrary()
         assertEquals(RemoteEvent.Open(LocalDestination.Album(AlbumKey("Soda Stereo", "Signos"))), vm.nextEvent())
 
-        vm.onSongTap(tracks[2])
+        // The check of a downloaded song plays the local copies, in page order.
+        vm.onIndicatorTap(tracks[2])
         awaitUntil { player.plays.size == 1 }
         val play = player.plays.single()
         assertEquals(listOf("a", "c"), play.tracks.map { it.videoId })
@@ -172,7 +180,7 @@ class RemoteCollectionViewModelTest {
     fun singleSongDownloadAndRetryOfFailures() {
         val vm = viewModel(CollectionKind.PLAYLIST)
         awaitUntil { vm.load.value is RemoteLoad.Loaded }
-        vm.onSongTap(tracks[0])
+        vm.onIndicatorTap(tracks[0])
         awaitUntil { downloads.downloadCalls.size == 1 }
         assertEquals(listOf("a"), downloads.downloadCalls.single().map { it.videoId })
         awaitUntil { vm.lookup.value.stateOf("a") == ItemDownload.Queued }
@@ -182,6 +190,87 @@ class RemoteCollectionViewModelTest {
         vm.retryFailed()
         awaitUntil { downloads.retried.size == 1 }
         awaitUntil { vm.progress.value.queued == 1 }
+    }
+
+    @Test
+    fun tappingASongStreamsThePageFromIt() {
+        val vm = viewModel(CollectionKind.PLAYLIST)
+        awaitUntil { vm.load.value is RemoteLoad.Loaded }
+        vm.onSongTap(tracks[1])
+        val play = player.onlinePlays.single()
+        assertEquals(tracks, play.tracks)
+        assertEquals(1, play.index)
+        assertEquals(PlaySource(PlaySource.Type.PLAYLIST, "Rock nacional", playlistUrl), play.source)
+        assertEquals(listOf(false), player.shuffles.toList())
+        assertTrue(downloads.downloadCalls.isEmpty())
+    }
+
+    @Test
+    fun withOnlinePlayOffATapDownloads() {
+        val vm = viewModel(CollectionKind.PLAYLIST, playOnline = false)
+        awaitUntil { vm.load.value is RemoteLoad.Loaded }
+        vm.onSongTap(tracks[1])
+        awaitUntil { downloads.downloadCalls.size == 1 }
+        assertEquals(listOf("b"), downloads.downloadCalls.single().map { it.videoId })
+        assertTrue(player.onlinePlays.isEmpty())
+    }
+
+    @Test
+    fun playAndShuffleStreamTheWholePageAndPlayPausesWhenItIsPlaying() {
+        val albumTracks = listOf(remoteTrack("a"), remoteTrack("b"), remoteTrack("a"), remoteTrack("c"))
+        youTube.onCollection = { url, kind -> CollectionDetail(RemoteCollection(kind, url, "Signos", "Soda Stereo"), albumTracks) }
+        val url = "https://music.youtube.com/browse/MPREb_signos"
+        val vm = viewModel(CollectionKind.ALBUM, url)
+        awaitUntil { vm.load.value is RemoteLoad.Loaded }
+
+        vm.playAll(shuffle = false)
+        val first = player.onlinePlays.single()
+        assertEquals(listOf("a", "b", "c"), first.tracks.map { it.videoId })
+        assertEquals(0, first.index)
+        assertEquals(PlaySource(PlaySource.Type.ALBUM, "Signos", url), first.source)
+        assertEquals(listOf(false), player.shuffles.toList())
+
+        vm.playAll(shuffle = true)
+        assertEquals(Random(7).nextInt(3), player.onlinePlays[1].index)
+        assertEquals(listOf(false, true), player.shuffles.toList())
+
+        // The player is on this page: Play pauses/resumes instead of starting over.
+        player.stateFlow.value = PlaybackState(current = remoteTrack("b").asTransientTrack(), isPlaying = true, source = first.source)
+        awaitUntil { vm.here.value == HerePlaying(playing = true, shuffle = false) }
+        vm.playAll(shuffle = false)
+        assertEquals(1, player.toggles)
+        assertEquals(2, player.onlinePlays.size)
+    }
+
+    @Test
+    fun withoutNetworkPlayUsesWhatIsOnThePhone() {
+        insertTrack("b")
+        val vm = viewModel(CollectionKind.PLAYLIST)
+        awaitUntil { vm.load.value is RemoteLoad.Loaded && vm.progress.value.done == 1 }
+        online.value = false
+        awaitUntil { !vm.online.value }
+        vm.playAll(shuffle = false)
+        awaitUntil { player.plays.size == 1 }
+        assertEquals(listOf("b"), player.plays.single().tracks.map { it.videoId })
+        assertTrue(player.onlinePlays.isEmpty())
+
+        vm.onSongTap(tracks[0])
+        assertEquals(RemoteEvent.Message(R.string.search_play_offline), vm.nextEvent())
+        assertEquals(0, vm.queueAll(next = true))
+        assertEquals(RemoteEvent.Message(R.string.search_play_offline), vm.nextEvent())
+    }
+
+    @Test
+    fun queueingThePageUsesLocalCopiesAndStreamsTheRest() {
+        insertTrack("a")
+        val vm = viewModel(CollectionKind.PLAYLIST)
+        awaitUntil { vm.load.value is RemoteLoad.Loaded && vm.progress.value.done == 1 }
+        assertEquals(3, vm.queueAll(next = true))
+        awaitUntil { player.queued.size == 1 }
+        val (where, songs) = player.queued.single()
+        assertEquals("next", where)
+        assertEquals(listOf("a", "b", "c"), songs.map { it.videoId })
+        assertEquals(listOf(false, true, true), songs.map { it.isOnline })
     }
 
     @Test
