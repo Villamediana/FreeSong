@@ -150,9 +150,13 @@ internal class DownloadEngine(
         report
     }
 
-    /** Marks the end of a run started with [runQueue] (after its summary was shown). */
+    /**
+     * Marks the end of a run started with [runQueue] (after its summary was shown). Ignored while
+     * another run holds the loop: a replaced worker ends after the one that replaced it started.
+     */
     suspend fun idle() = withContext(NonCancellable) {
-        phaseLock.withLock { phase = Phase.IDLE }
+        // runQueue sets RUNNING under phaseLock while it holds runLock, so this check cannot race it.
+        phaseLock.withLock { if (!runLock.isLocked) phase = Phase.IDLE }
     }
 
     /**

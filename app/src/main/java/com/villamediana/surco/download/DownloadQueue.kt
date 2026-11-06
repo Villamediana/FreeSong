@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.first
 
 /** How to (re)start the background worker. */
 internal enum class SchedulePolicy {
-    /** Fresh work with the current constraints (no worker is downloading right now). */
+    /** Fresh work with the current constraints; a worker that is downloading is stopped and replaced. */
     REPLACE,
 
     /** A worker is finishing: run another one right after it. */

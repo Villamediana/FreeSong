@@ -459,6 +459,24 @@ class DownloadEngineTest {
         assertEquals(listOf(SchedulePolicy.APPEND), h.scheduled)
     }
 
+    @Test fun aReplacedWorkerEndingLateDoesNotIdleTheNewRun() = runBlocking {
+        h.queue.download(listOf(h.song("new", size = 300_000)))
+        h.audio("new").writeDelayMs = 20
+        val run = async(Dispatchers.IO) { h.engine.runQueue() }
+        h.awaitState(h.task("new").id, { it.state == DownloadState.RUNNING })
+        // The worker replaced by REPLACE ("only on Wi-Fi" changed) runs its finally after the new run started.
+        h.engine.idle()
+        assertEquals(DownloadEngine.Phase.RUNNING, h.engine.phase)
+        h.scheduled.clear()
+        h.queue.download(listOf(h.song("more")))
+        // Still picked up by the running loop: no worker scheduled on top of it.
+        assertTrue(h.scheduled.isEmpty())
+        val report = withTimeout(10_000) { run.await() }
+        assertEquals(setOf("new", "more"), report.done.map { it.videoId }.toSet())
+        h.engine.idle()
+        assertEquals(DownloadEngine.Phase.IDLE, h.engine.phase)
+    }
+
     @Test fun respectsParallelDownloads() = runBlocking {
         h.settings = Settings(parallelDownloads = 1)
         h.queue.download(listOf(h.song("one"), h.song("two")))

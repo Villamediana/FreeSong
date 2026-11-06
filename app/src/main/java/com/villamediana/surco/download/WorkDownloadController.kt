@@ -1,10 +1,10 @@
 package com.villamediana.surco.download
 
 import android.content.Context
-import android.net.ConnectivityManager
 import android.util.Log
 import com.villamediana.surco.SurcoApplication
 import com.villamediana.surco.data.LibraryRepository
+import com.villamediana.surco.data.Settings
 import com.villamediana.surco.data.SettingsStore
 import com.villamediana.surco.data.Storage
 import com.villamediana.surco.data.db.DownloadState
@@ -84,18 +84,7 @@ class WorkDownloadController(
         .distinctUntilChanged()
 
     init {
-        // "Only on Wi-Fi" changed: re-create the work so its network constraint follows the setting.
-        scope.launch {
-            settings.settings.map { it.wifiOnly }.distinctUntilChanged().drop(1).collect { wifiOnly ->
-                if (dao.pending().isEmpty()) return@collect
-                val restart = when {
-                    engine.phase != DownloadEngine.Phase.RUNNING -> true
-                    wifiOnly -> appContext.getSystemService(ConnectivityManager::class.java)?.isActiveNetworkMetered ?: true
-                    else -> false
-                }
-                if (restart) scheduler.schedule(SchedulePolicy.REPLACE)
-            }
-        }
+        scope.launch { followWifiOnly(settings.settings, hasPending = { dao.pending().isNotEmpty() }, scheduler) }
     }
 
     override suspend fun download(tracks: List<RemoteTrack>) {
@@ -126,6 +115,19 @@ class WorkDownloadController(
 
     private companion object {
         const val TAG = "SurcoDownload"
+    }
+}
+
+/**
+ * "Only on Wi-Fi" changed: re-creates the work so its network constraint follows the setting —
+ * also while a worker is downloading. WorkManager never re-reads the constraints of a request, so
+ * a running worker would keep downloading on mobile data (setting turned on) or stay stuck waiting
+ * for Wi-Fi (turned off). The replaced worker puts its tasks back in the queue with their .part
+ * files and the new one resumes them.
+ */
+internal suspend fun followWifiOnly(settings: Flow<Settings>, hasPending: suspend () -> Boolean, scheduler: DownloadScheduler) {
+    settings.map { it.wifiOnly }.distinctUntilChanged().drop(1).collect {
+        if (hasPending()) scheduler.schedule(SchedulePolicy.REPLACE)
     }
 }
 
