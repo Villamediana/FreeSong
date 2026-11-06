@@ -42,6 +42,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -67,6 +68,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -542,7 +544,8 @@ private fun TypingContent(
     val typed = vm.query.text.trim()
     val isLink = remember(typed) { YouTubeLinks.contains(typed) }
     val navigator = navigator()
-    val listState = remember { LazyListState() }
+    // Saveable: coming back from an album or artist opened here keeps the scroll.
+    val listState = rememberLazyListState()
     HideKeyboardOnScroll(listState, onScroll)
     val card = vm.link
     LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(top = 2.dp, bottom = LocalBottomInset.current)) {
@@ -764,7 +767,8 @@ private fun OfflineResults(vm: SearchViewModel, lookup: DownloadLookup, actions:
 private fun ResultsList(vm: SearchViewModel, r: ResultsState, lookup: DownloadLookup, actions: LinkActions, onScroll: () -> Unit) {
     val navigator = navigator()
     val haptics = LocalHapticFeedback.current
-    val listState = remember(r.query, r.filter) { LazyListState() }
+    // Fresh per search/filter, but saved: Back from an album or playlist returns to the same row.
+    val listState = rememberSaveable(r.query, r.filter, saver = LazyListState.Saver) { LazyListState() }
     HideKeyboardOnScroll(listState, onScroll)
     val songs = remember(r.items) { r.items.mapNotNull { (it as? SearchItem.Song)?.track } }
     val selection = vm.selection
