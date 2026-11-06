@@ -31,6 +31,7 @@ import org.schabi.newpipe.extractor.stream.StreamInfoItem
 import org.schabi.newpipe.extractor.stream.StreamType
 import kotlin.coroutines.cancellation.CancellationException
 import org.schabi.newpipe.extractor.stream.AudioStream as NpAudioStream
+import org.schabi.newpipe.extractor.stream.VideoStream as NpVideoStream
 
 /**
  * YouTube / YouTube Music through NewPipeExtractor, plus a few YouTube Music pages read directly
@@ -456,6 +457,88 @@ class NewPipeYouTubeSource(private val http: OkHttpClient) : YouTubeSource {
             ?: throw OnlineException("No downloadable audio for $videoId", kind = OnlineException.Kind.UNAVAILABLE)
     }
 
+    // ------------------------------------------------------------------------------- up next
+
+    /**
+     * YouTube Music's radio after the song (the "A seguir" panel of music.youtube.com); YouTube's
+     * related videos when that answers nothing. The seed itself is left out. Never throws.
+     */
+    override suspend fun related(videoId: String, limit: Int): List<RemoteTrack> {
+        if (limit <= 0 || videoId.isBlank()) return emptyList()
+        return try {
+            withContext(Dispatchers.IO) {
+                NewPipeHttp.init(http)
+                val fromMusic = runCatching { onlineCall("next") { YouTubeMusicParser.watchNext(music.next(videoId)) } }.getOrNull().orEmpty()
+                    .filter { it.videoId != videoId }
+                val list = fromMusic.ifEmpty { runCatching { relatedVideos(videoId) }.getOrNull().orEmpty() }
+                list.filter { it.videoId != videoId }.distinctBy { it.videoId }.take(limit)
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Throwable) {
+            emptyList()
+        }
+    }
+
+    private fun relatedVideos(videoId: String): List<RemoteTrack> = onlineCall("related") {
+        val info = StreamInfo.getInfo(service, YouTubeLinks.watchUrl(videoId, music = false))
+        info.relatedItems.filterIsInstance<StreamInfoItem>()
+            .mapNotNull { streamItemToTrack(it, catalog = false, requireDuration = true) }
+    }
+
+    // ------------------------------------------------------------------------------- video
+
+    /**
+     * "Ver o vídeo": best H.264 video ≤ [maxHeight] + the M4A audio (or a muxed stream). For catalog
+     * audio tracks ("Artist - Topic", a still cover) the official music video is looked up first.
+     */
+    override suspend fun videoStream(videoId: String, maxHeight: Int): VideoStream = io("video") {
+        val info = StreamInfo.getInfo(service, YouTubeLinks.watchUrl(videoId, music = false))
+        if (TitleCleaner.isTopicChannel(info.uploaderName.orEmpty())) {
+            val official = runCatching { officialVideo(info) }.getOrNull()
+            official?.let { pickVideo(it, maxHeight) }?.let { return@io it }
+        }
+        pickVideo(info, maxHeight)
+            ?: throw OnlineException("No playable video for $videoId", kind = OnlineException.Kind.UNAVAILABLE)
+    }
+
+    private fun pickVideo(info: StreamInfo, maxHeight: Int): VideoStream? {
+        fun usable(s: NpVideoStream) = s.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP && s.isUrl && !s.content.isNullOrBlank()
+        fun describe(s: NpVideoStream) = VideoStreams.Video(
+            url = s.content,
+            width = s.width,
+            height = s.height.takeIf { it > 0 } ?: VideoStreams.heightOf(s.getResolution()),
+            fps = s.fps,
+            codec = s.codec?.ifBlank { null },
+            mimeType = s.format?.mimeType.orEmpty(),
+            bitrate = s.bitrate,
+        )
+        val videoOnly = info.videoOnlyStreams.filter(::usable).map(::describe)
+        val muxed = info.videoStreams.filter { usable(it) && !it.isVideoOnly }.map(::describe)
+        val audio = AudioStreams.pick(info.audioStreams, AudioQuality.COMPATIBLE)
+        return VideoStreams.pick(videoOnly, muxed, audio, maxHeight)
+    }
+
+    /** Searches the videos for "artist title" and reads the best match (see [MusicVideoMatch]). */
+    private fun officialVideo(art: StreamInfo): StreamInfo? {
+        val artist = TitleCleaner.cleanArtist(art.uploaderName.orEmpty())
+        val title = art.name.orEmpty()
+        if (artist.isBlank() || title.isBlank()) return null
+        val handler = service.searchQHFactory.fromQuery("$artist ${TitleCleaner.baseTitle(title)}", listOf(YoutubeSearchQueryHandlerFactory.VIDEOS), "")
+        val extractor = service.getSearchExtractor(handler)
+        extractor.fetchPage()
+        val candidates = extractor.initialPage.items.filterIsInstance<StreamInfoItem>()
+            .filter { it.streamType != StreamType.LIVE_STREAM && it.streamType != StreamType.AUDIO_LIVE_STREAM }
+            .take(MAX_VIDEO_CANDIDATES)
+            .mapNotNull { item ->
+                val id = YouTubeLinks.videoIdOf(item.url) ?: return@mapNotNull null
+                MusicVideoMatch.Candidate(id, item.name.orEmpty(), item.uploaderName.orEmpty(), item.duration.coerceAtLeast(0) * 1000)
+            }
+        val durationMs = art.duration.takeIf { it > 0 }?.times(1000)
+        val best = MusicVideoMatch.best(title, artist, durationMs, candidates, exclude = art.id) ?: return null
+        return StreamInfo.getInfo(service, YouTubeLinks.watchUrl(best.videoId, music = false))
+    }
+
     override suspend fun track(videoId: String): RemoteTrack = io("track") {
         val info = StreamInfo.getInfo(service, YouTubeLinks.watchUrl(videoId, music = false))
         val uploader = info.uploaderName.orEmpty()
@@ -542,6 +625,8 @@ class NewPipeYouTubeSource(private val http: OkHttpClient) : YouTubeSource {
 
     internal companion object {
         const val MAX_SUGGESTIONS = 8
+        /** Search results looked at when hunting for the official music video. */
+        const val MAX_VIDEO_CANDIDATES = 12
         private val albumPrefix = Regex("^(album|álbum|ep|single)\\s*[-–—:]\\s+", RegexOption.IGNORE_CASE)
         private val year = Regex("\\b(19[0-9]{2}|20[0-9]{2})\\b")
 

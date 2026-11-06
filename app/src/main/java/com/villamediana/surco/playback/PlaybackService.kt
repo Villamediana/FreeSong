@@ -10,7 +10,9 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.ShuffleOrder.DefaultShuffleOrder
 import androidx.media3.session.CommandButton
 import androidx.media3.session.DefaultMediaNotificationProvider
@@ -30,6 +32,9 @@ import com.villamediana.surco.R
 import com.villamediana.surco.SurcoApplication
 import com.villamediana.surco.data.Settings
 import com.villamediana.surco.data.db.Track
+import com.villamediana.surco.playback.stream.OnlineStreams
+import com.villamediana.surco.playback.stream.StreamDataSources
+import com.villamediana.surco.playback.stream.StreamLoadErrorPolicy
 import com.villamediana.surco.smart.Taste
 import com.villamediana.surco.smart.loadTaste
 import kotlinx.coroutines.CancellationException
@@ -45,16 +50,21 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlin.random.Random
+import androidx.annotation.OptIn as AndroidxOptIn
 
 /**
  * Foreground media service hosting ExoPlayer + MediaLibrarySession.
  *
- * Plays local files only. Audio focus, "becoming noisy" (headphones unplugged / Bluetooth gone →
+ * Plays local files and online songs (streamed from YouTube in 2 MB ranges, see
+ * [com.villamediana.surco.playback.stream]); a queue may mix both. Audio focus, "becoming noisy" (headphones unplugged / Bluetooth gone →
  * pause) and the wake lock are ExoPlayer's; the session makes Surco controllable from the
  * notification, lock screen, headset buttons (AVRCP), watches and cars, with a browse tree for the
  * latter. The service also owns everything that must survive the UI: smart shuffle, autoplay of
- * similar songs, the sleep timer, listening stats and the saved queue.
+ * similar songs (from the library, or YouTube Music's radio after an online song), the sleep
+ * timer, listening stats (library songs only) and the saved queue (online songs included). It also
+ * hands ExoPlayer's audio session to the equalizer ([com.villamediana.surco.playback.AudioEffectsController]).
  */
+@AndroidxOptIn(UnstableApi::class)
 class PlaybackService : MediaLibraryService() {
     private val graph get() = SurcoApplication.graph
     private val library get() = graph.library
@@ -65,6 +75,8 @@ class PlaybackService : MediaLibraryService() {
     private lateinit var output: OutputDeviceMonitor
     private lateinit var browser: LibraryBrowser
     private lateinit var strings: PlaybackStrings
+    private lateinit var streams: OnlineStreams
+    private lateinit var artwork: ArtworkShare
     private val leveler = VolumeLeveler()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val listen = ListenTracker { SystemClock.elapsedRealtime() }
@@ -72,6 +84,7 @@ class PlaybackService : MediaLibraryService() {
     // Library mirror (kept fresh by the repository's flow).
     private var allTracks: List<Track> = emptyList()
     private var tracksById: Map<Long, Track> = emptyMap()
+    private var tracksByVideoId: Map<String, Track> = emptyMap()
     private var libraryLoaded = false
     private var settings = Settings()
 
@@ -86,19 +99,28 @@ class PlaybackService : MediaLibraryService() {
     private var suppressShuffleReorder = false
     private var reorderOnNextTimeline = false
     private var pendingRestore: QueueSnapshot? = null
+    /** Media ids of the queue handed to Media3 by [onPlaybackResumption], to recognise it when it lands. */
+    private var pendingRestoreKeys: List<String>? = null
     private var extendJob: Job? = null
     private var extendedAtCount = -1
     private var saveJob: Job? = null
     private var positionSaver: Job? = null
     private var consecutiveErrors = 0
     private var buttonsKey: String? = null
+    private var wakeMode = C.WAKE_MODE_LOCAL
     private val searchResults = HashMap<String, List<MediaItem>>()
     private val commandMutex = Mutex()
 
     override fun onCreate() {
         super.onCreate()
         strings = PlaybackStrings.from(this)
+        streams = OnlineStreams(graph.scope) { graph.youTube }
+        artwork = ArtworkShare(this)
         player = ExoPlayer.Builder(this)
+            .setMediaSourceFactory(
+                DefaultMediaSourceFactory(StreamDataSources.factory(this, streams))
+                    .setLoadErrorHandlingPolicy(StreamLoadErrorPolicy()),
+            )
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)
@@ -110,6 +132,7 @@ class PlaybackService : MediaLibraryService() {
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
         player.addListener(PlayerEvents())
+        attachEffects(player.audioSessionId)
 
         setMediaNotificationProvider(
             DefaultMediaNotificationProvider.Builder(this)
@@ -161,6 +184,7 @@ class PlaybackService : MediaLibraryService() {
         sleep.release()
         output.stop()
         leveler.release()
+        runCatching { graph.effects.release() }
         scope.cancel()
         session.release()
         player.release()
@@ -172,24 +196,88 @@ class PlaybackService : MediaLibraryService() {
     private fun onLibrary(list: List<Track>) {
         allTracks = list
         tracksById = list.associateBy { it.id }
+        tracksByVideoId = list.mapNotNull { t -> t.videoId?.takeIf { it.isNotBlank() }?.let { it to t } }.toMap()
         libraryLoaded = true
         syncQueueWithLibrary()
         updateButtons()
     }
 
-    /** Songs deleted from the library leave the queue; edited ones (title, cover…) refresh in place. */
-    private fun syncQueueWithLibrary() {
+    /**
+     * Songs deleted from the library leave the queue; edited ones (title, cover…) refresh in place.
+     * An online song that got downloaded meanwhile plays from the file from its next start on (the
+     * playing one keeps streaming unless [includeCurrent], used right as it starts).
+     */
+    private fun syncQueueWithLibrary(includeCurrent: Boolean = false) {
         val n = player.mediaItemCount
         if (n == 0) return
+        val current = player.currentMediaItemIndex
         val gone = ArrayList<Int>()
+        val swaps = ArrayList<Pair<Int, MediaItem>>()
+        var currentToFile: MediaItem? = null
         for (i in 0 until n) {
             val item = player.getMediaItemAt(i)
-            val id = MediaItems.trackId(item) ?: continue
+            val id = MediaItems.trackId(item)
+            if (id == null) {
+                val local = MediaItems.videoId(item)?.let(tracksByVideoId::get) ?: continue
+                when {
+                    i != current -> swaps += i to mediaItemOf(local)
+                    includeCurrent -> currentToFile = mediaItemOf(local)
+                }
+                continue
+            }
             val track = tracksById[id]
             if (track == null) gone += i
-            else if (!MediaItems.matches(item, track)) player.replaceMediaItem(i, MediaItems.of(track))
+            else if (!MediaItems.matches(item, track)) swaps += i to mediaItemOf(track)
         }
+        if (swaps.isEmpty() && gone.isEmpty() && currentToFile == null) return
+        // A replaced uri is a remove + add for ExoPlayer, which would drop the song somewhere random in the shuffle.
+        val before = if (player.shuffleModeEnabled && swaps.isNotEmpty()) playOrder() else null
+        swaps.forEach { (i, replacement) -> player.replaceMediaItem(i, replacement) }
+        before?.let(::setShuffleOrder)
+        currentToFile?.let(::replaceCurrent)
         gone.asReversed().forEach { player.removeMediaItem(it) }
+    }
+
+    /**
+     * Swaps the playing item for another source of the same song (it restarts from the top, so only
+     * used as it starts): the replacement goes right after it in play order, then the old one leaves —
+     * the player moves on to the replacement, and the rest of the (shuffle) order stays as it was.
+     */
+    private fun replaceCurrent(replacement: MediaItem) {
+        val i = player.currentMediaItemIndex
+        // On "repeat one" the player would have no "next" to move to; the song simply keeps streaming.
+        if (i == C.INDEX_UNSET || player.repeatMode == Player.REPEAT_MODE_ONE) return
+        val before = playOrder()
+        suppressShuffleReorder = true
+        try {
+            player.addMediaItem(i + 1, replacement)
+            if (player.shuffleModeEnabled) setShuffleOrder(before.inserted(before.playIndexOf(i) + 1, i + 1, 1))
+            player.removeMediaItem(i)
+        } finally {
+            suppressShuffleReorder = false
+        }
+    }
+
+    /** Library songs by video id (also before the library flow delivered, straight from the database). */
+    private suspend fun localByVideoId(videoIds: Collection<String>): Map<String, Track> {
+        if (videoIds.isEmpty()) return emptyMap()
+        if (libraryLoaded) return videoIds.mapNotNull { id -> tracksByVideoId[id]?.let { id to it } }.toMap()
+        return withContext(Dispatchers.IO) {
+            videoIds.distinct().mapNotNull { id -> runCatching { library.trackByVideoId(id) }.getOrNull()?.let { id to it } }.toMap()
+        }
+    }
+
+    /** The songs a command names (library ids and online songs), in order; null where nothing resolves. */
+    private suspend fun resolveIds(ids: List<Long>, online: Map<Long, OnlineItem>): List<Track?> {
+        val local = tracksFor(ids.filter { it >= 0 }.distinct()).associateBy { it.id }
+        val byVideo = localByVideoId(online.values.map { it.videoId })
+        return OnlineQueue.resolve(ids, online, local, byVideo)
+    }
+
+    private fun attachEffects(audioSessionId: Int) {
+        if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
+        // Equalizer/BassBoost/Virtualizer and the leveler's DynamicsProcessing are separate effects on the same session.
+        runCatching { graph.effects.attach(audioSessionId) }
     }
 
     private fun onSettings(s: Settings) {
@@ -217,7 +305,39 @@ class PlaybackService : MediaLibraryService() {
 
     // ================================================================ queue helpers
 
-    private fun mediaIds(): List<Long?> = (0 until player.mediaItemCount).map { MediaItems.trackId(player.getMediaItemAt(it)) }
+    /** Media3 item for a song: the library file, or the online stream at the current quality setting. */
+    private fun mediaItemOf(track: Track): MediaItem = MediaItems.of(track, settings.audioQuality)
+
+    /** Media ids in timeline order — what identifies "the same queue" across async work. */
+    private fun mediaKeys(): List<String> = (0 until player.mediaItemCount).map { player.getMediaItemAt(it).mediaId }
+
+    /** The queue as tracks, timeline order: library songs, online songs as transient tracks; null = gone. */
+    private fun queueTracks(): List<Track?> = (0 until player.mediaItemCount).map { i ->
+        val item = player.getMediaItemAt(i)
+        MediaItems.trackId(item)?.let(tracksById::get) ?: MediaItems.onlineTrack(item)
+    }
+
+    /** Video ids already in the queue (online songs and downloaded ones). */
+    private fun queuedVideoIds(): Set<String> = (0 until player.mediaItemCount).mapNotNullTo(HashSet()) { i ->
+        val item = player.getMediaItemAt(i)
+        MediaItems.videoId(item) ?: MediaItems.trackId(item)?.let { tracksById[it]?.videoId }
+    }
+
+    /** Keeps Wi-Fi awake too (not just the CPU) while the queue streams, so the screen going off doesn't cut it. */
+    private fun updateWakeMode() {
+        val streaming = (0 until player.mediaItemCount).any { MediaItems.isOnline(player.getMediaItemAt(it)) }
+        val mode = if (streaming) C.WAKE_MODE_NETWORK else C.WAKE_MODE_LOCAL
+        if (mode == wakeMode) return
+        wakeMode = mode
+        player.setWakeMode(mode)
+    }
+
+    /** Resolves the next song's stream ahead of time, so an online song starts as fast as a local one. */
+    private fun prefetchUpcoming() {
+        val next = player.nextMediaItemIndex
+        if (next == C.INDEX_UNSET || next >= player.mediaItemCount) return
+        streams.prefetch(player.getMediaItemAt(next).localConfiguration?.uri)
+    }
 
     private fun playOrder(): PlayOrder = PlayOrder.of(player.currentTimeline, player.shuffleModeEnabled)
 
@@ -253,10 +373,11 @@ class PlaybackService : MediaLibraryService() {
         consecutiveErrors = 0
         reorderOnNextTimeline = false
         pendingRestore = null
+        pendingRestoreKeys = null
         suppressShuffleReorder = true
         try {
             player.shuffleModeEnabled = shuffleOn
-            player.setMediaItems(tracks.map(MediaItems::of), order?.timelineIndexOf(0) ?: start, 0)
+            player.setMediaItems(tracks.map(::mediaItemOf), order?.timelineIndexOf(0) ?: start, 0)
             if (order != null) player.setShuffleOrder(DefaultShuffleOrder(order.toIntArray(), seed))
         } finally {
             suppressShuffleReorder = false
@@ -267,13 +388,14 @@ class PlaybackService : MediaLibraryService() {
         publishExtras()
         updateButtons()
         maybeExtend()
+        prefetchUpcoming()
         scheduleSave()
     }
 
     /** Inserts after the current song ([next]) or at the end — of the play order, also when shuffled. */
     private fun insert(tracks: List<Track>, next: Boolean) {
         if (tracks.isEmpty()) return
-        val items = tracks.map(MediaItems::of)
+        val items = tracks.map(::mediaItemOf)
         val n = player.mediaItemCount
         if (n == 0) {
             source = null
@@ -312,15 +434,16 @@ class PlaybackService : MediaLibraryService() {
     private fun applyShuffleOrder() {
         shuffleJob?.cancel()
         if (player.mediaItemCount <= 1) return
-        val ids = mediaIds()
-        val items = ids.map { id -> id?.let(tracksById::get) }
+        // Online songs shuffle like any other song (they just have no listening history to weigh).
+        val keys = mediaKeys()
+        val items = queueTracks()
         val current = player.currentMediaItemIndex.takeIf { it != C.INDEX_UNSET }
         val useSmart = settings.smartShuffle
         val seed = Random.nextLong()
         shuffleJob = scope.launch {
             val taste = taste()
             val order = withContext(Dispatchers.Default) { QueueShuffler.order(items, current, useSmart, taste, seed) }
-            if (!player.shuffleModeEnabled || mediaIds() != ids) return@launch
+            if (!player.shuffleModeEnabled || mediaKeys() != keys) return@launch
             val now = player.currentMediaItemIndex
             setShuffleOrder(if (now != C.INDEX_UNSET) order.withFirst(now) else order)
             scheduleSave()
@@ -332,15 +455,22 @@ class PlaybackService : MediaLibraryService() {
     /**
      * When the last song of the play order starts (repeat off), append what fits: similar songs
      * when "autoplay similar" is on, and always for smart queues (radio, genre, mixes, smart shuffle).
+     * After an online song, "similar" is YouTube Music's radio from it; the library's own
+     * continuation only ever looks at library songs.
      */
     private fun maybeExtend() {
         if (suppressShuffleReorder) return // mid queue replacement; the caller extends when done
         val count = player.mediaItemCount
         if (count == 0 || player.repeatMode != Player.REPEAT_MODE_OFF) return
-        if (!(settings.autoplaySimilar || smart)) return
         if (player.currentMediaItemIndex == C.INDEX_UNSET || player.hasNextMediaItem()) return
+        val lastOnline = MediaItems.videoId(player.currentMediaItem)?.takeIf { settings.autoplaySimilar }
+        if (lastOnline == null && !(settings.autoplaySimilar || smart)) return
         if (extendJob?.isActive == true || extendedAtCount == count) return
         extendedAtCount = count
+        if (lastOnline != null) {
+            extendOnline(lastOnline, count)
+            return
+        }
         val order = playOrder()
         val queueIds = (0 until order.size).mapNotNull { MediaItems.trackId(player.getMediaItemAt(order.timelineIndexOf(it))) }
         val src = source
@@ -361,6 +491,28 @@ class PlaybackService : MediaLibraryService() {
                 smart = true
                 publishExtras()
             }
+            scheduleSave()
+        }
+    }
+
+    /** Online queue at its end: YouTube Music's radio after [videoId], minus what's already queued. */
+    private fun extendOnline(videoId: String, count: Int) {
+        extendJob = scope.launch {
+            val related = graph.youTube.related(videoId, OnlineQueue.CONTINUATION * 2)
+            if (player.mediaItemCount != count || player.hasNextMediaItem()) {
+                extendedAtCount = -1
+                return@launch
+            }
+            val byVideo = localByVideoId(related.map { it.videoId })
+            val more = OnlineQueue.continuation(related, queuedVideoIds(), byVideo)
+            if (more.isEmpty()) return@launch // offline or nothing new: the queue ends here
+            insert(more, next = false)
+            extendedAtCount = player.mediaItemCount
+            if (!smart) {
+                smart = true
+                publishExtras()
+            }
+            prefetchUpcoming()
             scheduleSave()
         }
     }
@@ -386,7 +538,19 @@ class PlaybackService : MediaLibraryService() {
     private fun snapshot(): QueueSnapshot? {
         val n = player.mediaItemCount
         if (n == 0) return null
-        val ids = mediaIds().map { it ?: return null }
+        val ids = ArrayList<Long>(n)
+        val online = LinkedHashMap<String, OnlineItem>()
+        for (i in 0 until n) {
+            val item = player.getMediaItemAt(i)
+            val local = MediaItems.trackId(item)
+            if (local != null) {
+                ids += local
+                continue
+            }
+            val o = MediaItems.onlineItem(item) ?: return null
+            ids += o.trackId
+            online.putIfAbsent(o.videoId, o)
+        }
         val shuffle = player.shuffleModeEnabled
         return QueueSnapshot(
             ids = ids,
@@ -398,6 +562,7 @@ class PlaybackService : MediaLibraryService() {
             source = QueueSnapshot.SavedSource.of(source),
             smart = smart,
             savedAt = System.currentTimeMillis(),
+            online = online.values.toList(),
         )
     }
 
@@ -416,12 +581,17 @@ class PlaybackService : MediaLibraryService() {
         graph.scope.launch { runCatching { store.setLastQueueJson(json) } }
     }
 
+    /** The saved queue, without songs deleted meanwhile; online songs stream again (or play from the file if downloaded since). */
     private suspend fun loadSnapshot(): Pair<QueueSnapshot, List<Track>>? {
         val raw = QueueSnapshot.decode(graph.settings.current().lastQueueJson) ?: return null
-        val found = tracksFor(raw.ids.distinct())
+        val found = tracksFor(raw.ids.filter { it >= 0 }.distinct())
         val snap = raw.retain(found.mapTo(HashSet()) { it.id }) ?: return null
         val byId = found.associateBy { it.id }
-        return snap to snap.ids.map { byId.getValue(it) }
+        val online = snap.onlineById
+        val byVideo = localByVideoId(online.values.map { it.videoId })
+        return snap to snap.ids.map { id ->
+            if (id < 0) online.getValue(id).let { byVideo[it.videoId] ?: it.toTrack() } else byId.getValue(id)
+        }
     }
 
     /** Puts the saved queue back without playing (the mini player shows the last song). */
@@ -435,7 +605,7 @@ class PlaybackService : MediaLibraryService() {
         suppressShuffleReorder = true
         try {
             player.shuffleModeEnabled = snap.shuffle
-            player.setMediaItems(tracks.map(MediaItems::of), snap.index, snap.positionMs)
+            player.setMediaItems(tracks.map(::mediaItemOf), snap.index, snap.positionMs)
             if (snap.shuffle) PlayOrder.validOrNull(snap.order, tracks.size)?.let(::setShuffleOrder)
         } finally {
             suppressShuffleReorder = false
@@ -459,14 +629,17 @@ class PlaybackService : MediaLibraryService() {
     private fun updateButtons() {
         val liked = currentTrack()?.liked == true
         val shuffle = player.shuffleModeEnabled
-        val key = "$liked/$shuffle"
+        // An online song isn't in the library: nothing to like (the app offers to download it instead).
+        val online = MediaItems.isOnline(player.currentMediaItem)
+        val key = "$liked/$shuffle/$online"
         if (key == buttonsKey) return
         buttonsKey = key
-        session.setMediaButtonPreferences(buttons(liked, shuffle))
+        session.setMediaButtonPreferences(buttons(liked, shuffle, online))
     }
 
-    private fun buttons(liked: Boolean, shuffle: Boolean): List<CommandButton> = listOf(
-        CommandButton.Builder(if (liked) CommandButton.ICON_HEART_FILLED else CommandButton.ICON_HEART_UNFILLED)
+    private fun buttons(liked: Boolean, shuffle: Boolean, online: Boolean = false): List<CommandButton> = listOfNotNull(
+        if (online) null
+        else CommandButton.Builder(if (liked) CommandButton.ICON_HEART_FILLED else CommandButton.ICON_HEART_UNFILLED)
             .setDisplayName(getString(if (liked) R.string.playback_unlike else R.string.playback_like))
             .setSessionCommand(SessionProtocol.command(SessionProtocol.LIKE))
             .setSlots(CommandButton.SLOT_OVERFLOW)
@@ -505,8 +678,15 @@ class PlaybackService : MediaLibraryService() {
                 finishListen()
                 startListen(mediaItem)
             }
+            // Downloaded while it waited in the queue: switch to the file now that it starts from the top.
+            if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED &&
+                MediaItems.videoId(mediaItem)?.let(tracksByVideoId::containsKey) == true
+            ) {
+                syncQueueWithLibrary(includeCurrent = true)
+            }
             updateButtons()
             maybeExtend()
+            prefetchUpcoming()
             scheduleSave()
         }
 
@@ -537,13 +717,15 @@ class PlaybackService : MediaLibraryService() {
 
         override fun onTimelineChanged(timeline: Timeline, reason: Int) {
             if (reason != Player.TIMELINE_CHANGE_REASON_PLAYLIST_CHANGED) return
+            updateWakeMode()
             if (timeline.isEmpty) {
                 finishListen()
                 return
             }
             pendingRestore?.let { snap ->
-                if (mediaIds() == snap.ids) {
+                if (mediaKeys() == pendingRestoreKeys) {
                     pendingRestore = null
+                    pendingRestoreKeys = null
                     suppressShuffleReorder = true
                     try {
                         player.shuffleModeEnabled = snap.shuffle
@@ -558,6 +740,7 @@ class PlaybackService : MediaLibraryService() {
                 if (player.shuffleModeEnabled) applyShuffleOrder()
             }
             maybeExtend()
+            prefetchUpcoming()
             scheduleSave()
         }
 
@@ -566,6 +749,7 @@ class PlaybackService : MediaLibraryService() {
             if (!shuffleModeEnabled) shuffleJob?.cancel()
             updateButtons()
             maybeExtend()
+            prefetchUpcoming()
             scheduleSave()
         }
 
@@ -585,7 +769,8 @@ class PlaybackService : MediaLibraryService() {
         override fun onPlayerError(error: PlaybackException) {
             finishListen()
             consecutiveErrors++
-            // A broken or missing file shouldn't stop the music: skip it (a few times at most).
+            // A broken or missing file, or a song that can't be streamed (offline, unavailable),
+            // shouldn't stop the music: skip it (a few times at most). The app shows why.
             if (consecutiveErrors <= MAX_SKIPS_ON_ERROR && player.hasNextMediaItem()) {
                 player.seekToNextMediaItem()
                 player.prepare()
@@ -594,6 +779,7 @@ class PlaybackService : MediaLibraryService() {
 
         override fun onAudioSessionIdChanged(audioSessionId: Int) {
             leveler.apply(settings.normalizeVolume, audioSessionId)
+            attachEffects(audioSessionId)
         }
     }
 
@@ -627,23 +813,24 @@ class PlaybackService : MediaLibraryService() {
                     val shuffle = args.getInt(SessionProtocol.ARG_SHUFFLE, SessionProtocol.SHUFFLE_KEEP)
                     val src = SessionProtocol.getSource(args)
                     val isSmart = args.getBoolean(SessionProtocol.ARG_SMART)
+                    val online = SessionProtocol.getOnline(args)
                     return serialized {
-                        val found = tracksFor(ids.distinct()).associateBy { it.id }
-                        val kept = ids.withIndex().filter { it.value in found }
+                        val kept = resolveIds(ids, online).withIndex().mapNotNull { (i, t) -> t?.let { IndexedValue(i, it) } }
                         if (kept.isNotEmpty()) {
                             val startIdx = kept.indexOfFirst { it.index >= start }.coerceAtLeast(0)
                             // "Aleatório" on a whole list lets the shuffle pick the first song too;
                             // tapping a song (start > 0, or shuffle kept as it was) plays that song first.
                             val pinFirst = !(shuffle == SessionProtocol.SHUFFLE_ON && start == 0)
-                            playPlan(QueuePlan(kept.map { found.getValue(it.value) }, startIdx, src, isSmart), shuffle, pinFirst)
+                            playPlan(QueuePlan(kept.map { it.value }, startIdx, src, isSmart), shuffle, pinFirst)
                         }
                     }
                 }
                 SessionProtocol.QUEUE_ADD -> {
                     val ids = args.getLongArray(SessionProtocol.ARG_IDS)?.toList().orEmpty()
                     val next = args.getString(SessionProtocol.ARG_WHERE) == SessionProtocol.WHERE_NEXT
+                    val online = SessionProtocol.getOnline(args)
                     return serialized {
-                        insert(tracksFor(ids), next)
+                        insert(resolveIds(ids, online).filterNotNull(), next)
                         scheduleSave()
                     }
                 }
@@ -674,7 +861,7 @@ class PlaybackService : MediaLibraryService() {
             controller: MediaSession.ControllerInfo,
             mediaItems: MutableList<MediaItem>,
         ): ListenableFuture<MutableList<MediaItem>> = future {
-            mediaItems.flatMap { item -> browser.resolve(item)?.tracks.orEmpty().map(MediaItems::of) }.toMutableList()
+            mediaItems.flatMap { item -> queuedOnline(item)?.let(::listOf) ?: browser.resolve(item)?.tracks.orEmpty().map(::mediaItemOf) }.toMutableList()
         }
 
         override fun onSetMediaItems(
@@ -684,12 +871,12 @@ class PlaybackService : MediaLibraryService() {
             startIndex: Int,
             startPositionMs: Long,
         ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> = future {
-            val single = mediaItems.singleOrNull()?.let { browser.resolve(it) }
+            val single = mediaItems.singleOrNull()?.takeIf { queuedOnline(it) == null }?.let { browser.resolve(it) }
             if (single != null) {
                 applyExternalContext(single.source, single.smart)
-                MediaSession.MediaItemsWithStartPosition(single.tracks.map(MediaItems::of), single.startIndex, 0)
+                MediaSession.MediaItemsWithStartPosition(single.tracks.map(::mediaItemOf), single.startIndex, 0)
             } else {
-                val items = mediaItems.flatMap { browser.resolve(it)?.tracks.orEmpty().map(MediaItems::of) }
+                val items = mediaItems.flatMap { queuedOnline(it)?.let(::listOf) ?: browser.resolve(it)?.tracks.orEmpty().map(::mediaItemOf) }
                 applyExternalContext(null, false)
                 val index = if (startIndex == C.INDEX_UNSET) C.INDEX_UNSET else startIndex.coerceIn(0, (items.size - 1).coerceAtLeast(0))
                 MediaSession.MediaItemsWithStartPosition(items, index, if (index == C.INDEX_UNSET) C.TIME_UNSET else startPositionMs)
@@ -712,9 +899,11 @@ class PlaybackService : MediaLibraryService() {
                     smart = snap.smart
                     extendedAtCount = -1
                     player.repeatMode = snap.repeat.toPlayer()
+                    val items = tracks.map(::mediaItemOf)
                     pendingRestore = snap
+                    pendingRestoreKeys = items.map { it.mediaId }
                     publishExtras()
-                    result.set(MediaSession.MediaItemsWithStartPosition(tracks.map(MediaItems::of), snap.index, snap.positionMs))
+                    result.set(MediaSession.MediaItemsWithStartPosition(items, snap.index, snap.positionMs))
                 } catch (c: CancellationException) {
                     result.cancel(false)
                 } catch (t: Throwable) {
@@ -750,7 +939,7 @@ class PlaybackService : MediaLibraryService() {
         ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> = future {
             val children = this@PlaybackService.browser.children(parentId)
             if (children == null) LibraryResult.ofError(SessionResult.RESULT_ERROR_BAD_VALUE)
-            else with(LibraryBrowser) { LibraryResult.ofItemList(children.page(page, pageSize), params) }
+            else with(LibraryBrowser) { LibraryResult.ofItemList(artwork.forController(children.page(page, pageSize), browser.packageName), params) }
         }
 
         override fun onGetItem(
@@ -758,8 +947,9 @@ class PlaybackService : MediaLibraryService() {
             browser: MediaSession.ControllerInfo,
             mediaId: String,
         ): ListenableFuture<LibraryResult<MediaItem>> = future {
-            val item = this@PlaybackService.browser.item(mediaId)
-            if (item == null) LibraryResult.ofError(SessionResult.RESULT_ERROR_BAD_VALUE) else LibraryResult.ofItem(item, null)
+            val item = queuedOnline(mediaId) ?: this@PlaybackService.browser.item(mediaId)
+            if (item == null) LibraryResult.ofError(SessionResult.RESULT_ERROR_BAD_VALUE)
+            else LibraryResult.ofItem(artwork.forController(item, browser.packageName), null)
         }
 
         override fun onSearch(
@@ -786,8 +976,16 @@ class PlaybackService : MediaLibraryService() {
             params: LibraryParams?,
         ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> = future {
             val results = searchResults[query] ?: this@PlaybackService.browser.search(query).also { searchResults[query] = it }
-            with(LibraryBrowser) { LibraryResult.ofItemList(results.page(page, pageSize), params) }
+            with(LibraryBrowser) { LibraryResult.ofItemList(artwork.forController(results.page(page, pageSize), browser.packageName), params) }
         }
+    }
+
+    /** An online song of the current queue named by a controller (they only know it by its "yt:" id). */
+    private fun queuedOnline(item: MediaItem): MediaItem? = queuedOnline(item.mediaId)
+
+    private fun queuedOnline(mediaId: String): MediaItem? {
+        if (!mediaId.startsWith(com.villamediana.surco.data.ONLINE_MEDIA_PREFIX)) return null
+        return (0 until player.mediaItemCount).map(player::getMediaItemAt).firstOrNull { it.mediaId == mediaId }
     }
 
     /** A controller outside the app (car, watch, assistant) replaced the queue. */

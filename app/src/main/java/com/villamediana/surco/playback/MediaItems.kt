@@ -1,19 +1,43 @@
 package com.villamediana.surco.playback
 
 import android.net.Uri
+import android.os.Bundle
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import com.villamediana.surco.data.AudioQuality
+import com.villamediana.surco.data.ONLINE_MEDIA_PREFIX
 import com.villamediana.surco.data.db.Track
+import com.villamediana.surco.data.isOnline
+import com.villamediana.surco.playback.stream.StreamUris
 import java.io.File
 
-/** Track → Media3 [MediaItem] (mediaId = Track.id, uri = the local file, full metadata). */
+/**
+ * Track → Media3 [MediaItem]. Library songs: mediaId = Track.id, uri = the local file. Online songs
+ * (transient tracks): mediaId = "yt:<videoId>", uri = a [StreamUris] placeholder the data source
+ * resolves when it plays, artwork = the thumbnail url, watch url in the metadata extras.
+ */
 internal object MediaItems {
-    fun of(track: Track): MediaItem =
-        MediaItem.Builder()
+    private const val EXTRA_URL = "surco.url"
+
+    fun of(track: Track, quality: AudioQuality = AudioQuality.BEST): MediaItem {
+        val videoId = track.videoId
+        if (track.isOnline && !videoId.isNullOrBlank()) return online(track, videoId, quality)
+        return MediaItem.Builder()
             .setMediaId(track.id.toString())
             .setUri(Uri.fromFile(File(track.filePath)))
             .setMediaMetadata(metadata(track).build())
             .build()
+    }
+
+    private fun online(track: Track, videoId: String, quality: AudioQuality): MediaItem {
+        val extras = Bundle().apply { (track.sourceUrl ?: track.filePath).takeIf { it.startsWith("http") }?.let { putString(EXTRA_URL, it) } }
+        return MediaItem.Builder()
+            .setMediaId(ONLINE_MEDIA_PREFIX + videoId)
+            .setUri(StreamUris.audio(videoId, quality))
+            .setCustomCacheKey("yt-audio:$videoId:${quality.name}")
+            .setMediaMetadata(metadata(track).setExtras(extras).build())
+            .build()
+    }
 
     /** Same metadata under another id (browse tree entries carry their context in the id). */
     fun browsable(mediaId: String, track: Track): MediaItem =
@@ -40,7 +64,10 @@ internal object MediaItems {
             .setIsBrowsable(false)
             .setIsPlayable(true)
 
-    fun coverUri(path: String?): Uri? = path?.takeIf { it.isNotBlank() }?.let { Uri.fromFile(File(it)) }
+    /** A cover file path → file uri; an online thumbnail (http url) stays as it is. */
+    fun coverUri(path: String?): Uri? = path?.takeIf { it.isNotBlank() }?.let {
+        if (it.startsWith("https://") || it.startsWith("http://")) Uri.parse(it) else Uri.fromFile(File(it))
+    }
 
     /** True when [item] already shows what [track] says (title edits, new cover…). */
     fun matches(item: MediaItem, track: Track): Boolean {
@@ -56,5 +83,30 @@ internal object MediaItems {
             item.localConfiguration?.uri == Uri.fromFile(File(track.filePath))
     }
 
+    /** Library track id of [item]; null for online songs (and anything else). */
     fun trackId(item: MediaItem?): Long? = item?.mediaId?.toLongOrNull()
+
+    /** Video id of an online [item]; null for library songs. */
+    fun videoId(item: MediaItem?): String? =
+        item?.mediaId?.takeIf { it.startsWith(ONLINE_MEDIA_PREFIX) }?.removePrefix(ONLINE_MEDIA_PREFIX)?.takeIf { it.isNotBlank() }
+
+    fun isOnline(item: MediaItem?): Boolean = videoId(item) != null
+
+    /** What an online [item] carries (also on the controller side, where the uri isn't visible). */
+    fun onlineItem(item: MediaItem?): OnlineItem? {
+        val videoId = videoId(item) ?: return null
+        val m = item!!.mediaMetadata
+        return OnlineItem(
+            videoId = videoId,
+            title = m.title?.toString().orEmpty(),
+            artist = m.artist?.toString().orEmpty(),
+            album = m.albumTitle?.toString()?.takeIf { it.isNotBlank() },
+            durationMs = m.durationMs?.takeIf { it > 0 },
+            thumbnailUrl = m.artworkUri?.toString()?.takeIf { it.startsWith("http") },
+            url = m.extras?.getString(EXTRA_URL),
+        )
+    }
+
+    /** The transient [Track] of an online [item] (see data/OnlineTrack.kt). */
+    fun onlineTrack(item: MediaItem?): Track? = onlineItem(item)?.toTrack()
 }

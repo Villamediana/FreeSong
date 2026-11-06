@@ -16,9 +16,12 @@ internal object SessionProtocol {
     const val SHUFFLE = "surco.SHUFFLE"
 
     // ---------------------------------------------------------------- commands (Surco's own UI)
-    /** Replace the queue: [ARG_IDS], [ARG_START], [ARG_SHUFFLE], source args, [ARG_SMART]. */
+    /**
+     * Replace the queue: [ARG_IDS], [ARG_START], [ARG_SHUFFLE], source args, [ARG_SMART]. Online
+     * songs go in [ARG_IDS] by their transient (negative) id and are described in [ARG_ONLINE].
+     */
     const val PLAY = "surco.PLAY"
-    /** Insert [ARG_IDS] after the current song ([ARG_WHERE] = [WHERE_NEXT]) or at the end. */
+    /** Insert [ARG_IDS] (+ [ARG_ONLINE]) after the current song ([ARG_WHERE] = [WHERE_NEXT]) or at the end. */
     const val QUEUE_ADD = "surco.QUEUE_ADD"
     /** Move play position [ARG_FROM] to [ARG_TO]. */
     const val QUEUE_MOVE = "surco.QUEUE_MOVE"
@@ -35,6 +38,8 @@ internal object SessionProtocol {
     fun command(action: String) = SessionCommand(action, Bundle.EMPTY)
 
     const val ARG_IDS = "ids"
+    /** JSON list of [OnlineItem] for the negative ids in [ARG_IDS]. */
+    const val ARG_ONLINE = "online"
     const val ARG_START = "start"
     const val ARG_SHUFFLE = "shuffle"
     const val ARG_SMART = "smart"
@@ -64,6 +69,16 @@ internal object SessionProtocol {
     // ---------------------------------------------------------------- session extras
     const val EXTRA_SMART = "smart"
     const val EXTRA_OUTPUT = "output"
+
+    /** Describes the online songs among [tracks] (transient tracks) in [ARG_ONLINE]. */
+    fun putOnline(b: Bundle, tracks: List<com.villamediana.surco.data.db.Track>) {
+        val online = tracks.mapNotNull(OnlineItem::of).distinctBy { it.videoId }
+        if (online.isNotEmpty()) b.putString(ARG_ONLINE, OnlineItem.encodeList(online))
+    }
+
+    /** Online songs described in [ARG_ONLINE], by transient id. */
+    fun getOnline(b: Bundle?): Map<Long, OnlineItem> =
+        OnlineItem.decodeList(b?.getString(ARG_ONLINE)).associateBy { it.trackId }
 
     fun putSource(b: Bundle, source: PlaySource?) {
         if (source == null) {
