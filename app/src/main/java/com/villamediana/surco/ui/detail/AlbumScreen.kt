@@ -37,6 +37,7 @@ import com.villamediana.surco.data.db.AlbumKey
 import com.villamediana.surco.data.model.AlbumDetail
 import com.villamediana.surco.data.model.AlbumSummary
 import com.villamediana.surco.ui.components.Cover
+import com.villamediana.surco.ui.components.songCount
 import com.villamediana.surco.ui.nav.AlbumRoute
 import com.villamediana.surco.ui.nav.LocalNavigator
 import com.villamediana.surco.ui.sheets.ConfirmDialog
@@ -102,7 +103,7 @@ private fun AlbumContent(detail: AlbumDetail, vm: AlbumViewModel) {
     val source = Sources.album(s.key.artist, s.key.title, s.title)
     val status = playback.statusOf(source)
     val shuffleOn = if (status.isSource) playback.shuffle else shuffleLocal
-    val countText = pluralStringResource(R.plurals.n_songs, tracks.size, tracks.size)
+    val countText = songCount(tracks.size)
     val wash = rememberWash(s.coverPath, s.accentColor, seed = s.title)
 
     CollectionScaffold(
@@ -197,7 +198,7 @@ private fun AlbumContent(detail: AlbumDetail, vm: AlbumViewModel) {
             item(key = "more", contentType = "carousel") {
                 AlbumCarousel(
                     albums = more,
-                    caption = { a -> a.year?.toString() ?: res.getQuantityString(R.plurals.n_songs, a.trackCount, a.trackCount) },
+                    caption = { a -> a.year?.toString() ?: songCount(res, a.trackCount) },
                     onOpen = { a -> navigator.openAlbum(a.key) },
                 )
             }

@@ -66,7 +66,6 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -88,6 +87,7 @@ import com.villamediana.surco.ui.components.Cover
 import com.villamediana.surco.ui.components.EmptyState
 import com.villamediana.surco.ui.components.MosaicCover
 import com.villamediana.surco.ui.components.Share
+import com.villamediana.surco.ui.components.songCount
 import com.villamediana.surco.ui.nav.PlaylistRoute
 import com.villamediana.surco.ui.sheets.ConfirmDialog
 import com.villamediana.surco.ui.sheets.PlaylistContext
@@ -251,7 +251,7 @@ private fun PlaylistContent(detail: PlaylistDetail, vm: PlaylistViewModel) {
     val source = Sources.playlist(summary.id, summary.name)
     val status = playback.statusOf(source)
     val shuffleOn = if (status.isSource) playback.shuffle else shuffleLocal
-    val countText = pluralStringResource(R.plurals.n_songs, summary.trackCount, summary.trackCount)
+    val countText = songCount(summary.trackCount)
     val wash = rememberWash(summary.coverPath ?: summary.mosaic.firstOrNull(), null, seed = summary.name)
     val art: @Composable (Modifier) -> Unit = { m ->
         val custom = summary.coverPath

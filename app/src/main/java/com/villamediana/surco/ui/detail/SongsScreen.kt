@@ -37,7 +37,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.os.ConfigurationCompat
@@ -52,6 +51,7 @@ import com.villamediana.surco.data.db.Track
 import com.villamediana.surco.data.model.TrackSort
 import com.villamediana.surco.ui.components.EmptyState
 import com.villamediana.surco.ui.components.pressScale
+import com.villamediana.surco.ui.components.songCount
 import com.villamediana.surco.ui.theme.LocalBottomInset
 import com.villamediana.surco.ui.theme.SurcoColors
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -117,7 +117,7 @@ private fun SongsContent(songs: SortedSongs, vm: SongsViewModel) {
     val status = playback.statusOf(source)
     val shuffleOn = if (status.isSource) playback.shuffle else shuffleLocal
     val duration = remember(tracks) { tracks.sumOf { it.durationMs } }
-    val countText = pluralStringResource(R.plurals.n_songs, tracks.size, tracks.size)
+    val countText = songCount(tracks.size)
     val wash = rememberWash(newest?.coverPath, newest?.accentColor, seed = newest?.let { it.album ?: it.title } ?: title)
 
     // New sort → back to the top so the first letter is what you see.

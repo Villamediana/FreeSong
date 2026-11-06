@@ -427,9 +427,9 @@ private fun StorageBlock(usedBytes: Long?, stats: LibraryStats?) {
         Spacer(Modifier.height(18.dp))
         Row(Modifier.fillMaxWidth()) {
             val st = stats ?: LibraryStats(0, 0, 0, 0, 0)
-            Stat(st.trackCount.toString(), pluralStringResource(R.plurals.home_settings_stat_songs, st.trackCount), Modifier.weight(1f))
-            Stat(st.albumCount.toString(), pluralStringResource(R.plurals.home_settings_stat_albums, st.albumCount), Modifier.weight(1f))
-            Stat(st.artistCount.toString(), pluralStringResource(R.plurals.home_settings_stat_artists, st.artistCount), Modifier.weight(1f))
+            Stat(st.trackCount.toString(), pluralStringResource(R.plurals.home_settings_stat_songs, labelQuantity(st.trackCount)), Modifier.weight(1f))
+            Stat(st.albumCount.toString(), pluralStringResource(R.plurals.home_settings_stat_albums, labelQuantity(st.albumCount)), Modifier.weight(1f))
+            Stat(st.artistCount.toString(), pluralStringResource(R.plurals.home_settings_stat_artists, labelQuantity(st.artistCount)), Modifier.weight(1f))
             Stat(formatHours(st.durationMs), stringResource(R.string.home_settings_stat_hours), Modifier.weight(1f))
         }
     }

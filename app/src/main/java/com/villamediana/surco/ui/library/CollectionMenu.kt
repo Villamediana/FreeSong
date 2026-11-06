@@ -18,7 +18,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import com.villamediana.surco.R
 import com.villamediana.surco.SurcoApplication
@@ -31,6 +30,7 @@ import com.villamediana.surco.playback.PlaySource
 import com.villamediana.surco.ui.components.Cover
 import com.villamediana.surco.ui.components.MosaicCover
 import com.villamediana.surco.ui.components.Share
+import com.villamediana.surco.ui.components.songCount
 import com.villamediana.surco.ui.sheets.ConfirmDialog
 import com.villamediana.surco.ui.sheets.SheetAction
 import com.villamediana.surco.ui.sheets.SheetHeader
@@ -173,6 +173,3 @@ private fun CollectionMenuHeader(target: CollectionTarget) {
         }
     })
 }
-
-@Composable
-internal fun songCount(count: Int): String = pluralStringResource(R.plurals.n_songs, count, count)

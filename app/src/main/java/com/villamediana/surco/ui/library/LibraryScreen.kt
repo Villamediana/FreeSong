@@ -95,6 +95,7 @@ import com.villamediana.surco.ui.components.MosaicCover
 import com.villamediana.surco.ui.components.PillButton
 import com.villamediana.surco.ui.components.PlayingBars
 import com.villamediana.surco.ui.components.TrackRow
+import com.villamediana.surco.ui.components.songCount
 import com.villamediana.surco.ui.home.GenreArt
 import com.villamediana.surco.ui.home.LiveBadge
 import com.villamediana.surco.ui.home.isFromAlbum

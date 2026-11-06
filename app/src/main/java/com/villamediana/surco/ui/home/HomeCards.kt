@@ -72,6 +72,7 @@ import com.villamediana.surco.ui.components.PlayingBars
 import com.villamediana.surco.ui.components.SurcoMark
 import com.villamediana.surco.ui.components.pressScale
 import com.villamediana.surco.ui.components.seedColor
+import com.villamediana.surco.ui.components.songCount
 import com.villamediana.surco.ui.theme.Dimens
 import com.villamediana.surco.ui.theme.Motion
 import com.villamediana.surco.ui.theme.SurcoColors
@@ -274,7 +275,7 @@ fun GenreCard(genre: GenreSummary, onClick: () -> Unit, modifier: Modifier = Mod
             )
             Spacer(Modifier.height(2.dp))
             Text(
-                pluralStringResource(R.plurals.n_songs, genre.trackCount, genre.trackCount),
+                songCount(genre.trackCount),
                 style = MaterialTheme.typography.labelMedium,
                 color = SurcoColors.Text.copy(alpha = 0.72f),
                 maxLines = 1,

@@ -23,5 +23,11 @@ fun formatHours(durationMs: Long, locale: Locale = Locale.getDefault()): String 
     return if (hours < 10) String.format(locale, "%.1f", hours) else String.format(locale, "%.0f", hours)
 }
 
+/**
+ * Quantity for a stat's plural label, shown under its number ("0" over "músicas"): Portuguese
+ * plural rules put 0 in "one", which would read "0 música"; any count but 1 takes the plural.
+ */
+fun labelQuantity(n: Int): Int = if (n == 0) 2 else n
+
 /** Version line: "1.0.0 (1)". */
 fun versionLabel(name: String, code: Int): String = "$name ($code)"

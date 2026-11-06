@@ -11,7 +11,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -22,6 +21,7 @@ import com.villamediana.surco.smart.Mix
 import com.villamediana.surco.smart.MixLabels
 import com.villamediana.surco.smart.SmartMixes
 import com.villamediana.surco.ui.components.CoverColors
+import com.villamediana.surco.ui.components.songCount
 import com.villamediana.surco.ui.nav.MixRoute
 import com.villamediana.surco.ui.theme.SurcoColors
 import kotlinx.coroutines.Dispatchers
@@ -83,7 +83,7 @@ private fun MixContent(mix: Mix) {
     val duration = remember(tracks) { tracks.sumOf { it.durationMs } }
     val source = Sources.mix(mix.id, mix.title)
     val status = playback.statusOf(source)
-    val countText = pluralStringResource(R.plurals.n_songs, tracks.size, tracks.size)
+    val countText = songCount(tracks.size)
 
     CollectionScaffold(
         header = HeaderSpec(
