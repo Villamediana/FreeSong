@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Buscar -->
+    <string name="search_title">Buscar</string>
+    <string name="search_field_hint">Músicas, artistas, álbuns ou links</string>
+    <string name="search_clear_field">Limpar busca</string>
+    <string name="search_paste_link">Colar link do YouTube</string>
+    <string name="search_paste_link_dismiss">Ignorar link copiado</string>
+    <string name="search_recent_title">Buscas recentes</string>
+    <string name="search_recent_clear">Limpar</string>
+    <string name="search_recent_remove">Remover “%1$s”</string>
+    <string name="search_hint_overline">Do YouTube para o celular</string>
+    <string name="search_hint_body">Cole um link do YouTube ou YouTube Music para baixar música, álbum ou playlist inteira</string>
+    <string name="search_genres_overline">Explorar</string>
+    <string name="search_genres_title">Seus gêneros</string>
+    <string name="search_suggestion_fill">Completar com “%1$s”</string>
+    <string name="search_open_link">Abrir link do YouTube</string>
+    <string name="search_in_library">Na sua biblioteca</string>
+    <string name="search_typing_offline">Sem conexão. Mostrando só o que já está no celular.</string>
+    <string name="search_downloads">Downloads</string>
+    <string name="search_downloads_active">Downloads: %1$d em andamento</string>
+
+    <string name="search_filter_songs">Músicas</string>
+    <string name="search_filter_albums">Álbuns</string>
+    <string name="search_filter_playlists">Playlists</string>
+    <string name="search_filter_artists">Artistas</string>
+    <string name="search_filter_videos">Vídeos</string>
+
+    <string name="search_kind_album">Álbum</string>
+    <string name="search_kind_playlist">Playlist</string>
+    <string name="search_kind_artist">Artista</string>
+    <string name="search_kind_album_upper">ÁLBUM</string>
+    <string name="search_kind_playlist_upper">PLAYLIST</string>
+    <string name="search_kind_artist_upper">ARTISTA</string>
+    <string name="search_kind_video">Vídeo</string>
+
+    <string name="search_offline_title">Sem conexão</string>
+    <string name="search_offline_body">A busca online volta junto com a internet. Enquanto isso, o que já está no seu celular:</string>
+    <string name="search_offline_body_empty">A busca online volta junto com a internet. Nada com esse nome no seu celular por enquanto.</string>
+    <string name="search_error_title">Não deu para buscar</string>
+    <string name="search_error_body">O YouTube não respondeu agora. Tente de novo em instantes.</string>
+    <string name="search_error_rate_limited">O YouTube pediu uma pausa. Tente de novo em alguns minutos.</string>
+    <string name="search_retry">Tentar de novo</string>
+    <string name="search_empty_title">Nada encontrado</string>
+    <string name="search_empty_body">Tente outras palavras ou outro filtro.</string>
+    <string name="search_more_error">Não deu para carregar mais.</string>
+    <string name="search_end_of_results">Fim dos resultados</string>
+
+    <plurals name="search_selected">
+        <item quantity="one">%d selecionada</item>
+        <item quantity="other">%d selecionadas</item>
+    </plurals>
+    <plurals name="search_download_n">
+        <item quantity="one">Baixar %d música</item>
+        <item quantity="other">Baixar %d músicas</item>
+    </plurals>
+    <string name="search_select_cancel">Sair da seleção</string>
+    <string name="search_select_hint">Toque nas músicas para escolher</string>
+
+    <!-- Link colado / compartilhado -->
+    <string name="search_link_overline">Link do YouTube</string>
+    <string name="search_link_resolving">Abrindo link…</string>
+    <string name="search_link_download">Baixar</string>
+    <string name="search_link_downloading">Baixando… %1$d%%</string>
+    <string name="search_link_queued">Na fila…</string>
+    <string name="search_link_play">Tocar</string>
+    <string name="search_link_dismiss">Fechar</string>
+    <string name="search_link_unsupported">Esse link não leva a uma música, álbum, playlist ou artista.</string>
+    <string name="search_link_offline">Sem internet para abrir o link.</string>
+    <string name="search_link_error">Não deu para abrir o link.</string>
+    <string name="search_link_not_found">Esse vídeo não existe mais ou é privado.</string>
+    <string name="search_link_age">Esse vídeo tem restrição de idade.</string>
+    <string name="search_link_geo">Esse conteúdo não está disponível no seu país.</string>
+    <string name="search_link_unavailable">Esse conteúdo não está disponível.</string>
+    <string name="search_download_error">Não deu para começar o download.</string>
+
+    <!-- Botão de download de uma música -->
+    <string name="search_dl_download">Baixar</string>
+    <string name="search_dl_queued">Na fila</string>
+    <string name="search_dl_running">Baixando, %1$d%%</string>
+    <string name="search_dl_done">No celular. Tocar</string>
+    <string name="search_dl_failed">Falhou. Tentar de novo</string>
+    <string name="search_dl_selected">Selecionada</string>
+    <string name="search_dl_not_selected">Não selecionada</string>
+
+    <!-- Página online de álbum / playlist / artista -->
+    <string name="search_remote_download_all">Baixar tudo</string>
+    <plurals name="search_remote_download_rest">
+        <item quantity="one">Baixar %d restante</item>
+        <item quantity="other">Baixar %d restantes</item>
+    </plurals>
+    <string name="search_remote_download_popular">Baixar populares</string>
+    <string name="search_remote_save_playlist">Salvar playlist</string>
+    <string name="search_remote_progress">Baixando %1$d de %2$d</string>
+    <string name="search_remote_in_library">Na sua biblioteca</string>
+    <string name="search_remote_enqueuing">Preparando…</string>
+    <string name="search_remote_playlist_note">Cria a playlist “%1$s” na sua biblioteca</string>
+    <string name="search_remote_playlist_note_existing">Atualiza a playlist “%1$s” da sua biblioteca</string>
+    <plurals name="search_remote_failed">
+        <item quantity="one">%d música falhou</item>
+        <item quantity="other">%d músicas falharam</item>
+    </plurals>
+    <string name="search_remote_retry_failed">Tentar de novo</string>
+    <plurals name="search_remote_on_phone">
+        <item quantity="one">%d já está no celular</item>
+        <item quantity="other">%d já estão no celular</item>
+    </plurals>
+    <string name="search_remote_popular">Populares</string>
+    <string name="search_remote_albums">Álbuns e singles</string>
+    <string name="search_remote_error_title">Não deu para abrir</string>
+    <string name="search_remote_error_body">O YouTube não respondeu agora. Tente de novo em instantes.</string>
+    <string name="search_remote_offline_body">Conecte-se à internet para ver e baixar as músicas.</string>
+    <string name="search_remote_not_found_body">Essa página não existe mais ou é privada.</string>
+    <string name="search_remote_empty_title">Nada para baixar</string>
+    <string name="search_remote_empty_body">Essa página não tem músicas disponíveis.</string>
+    <string name="search_remote_open_error">Não deu para abrir na biblioteca.</string>
+
+    <!-- Downloads -->
+    <string name="dl_title">Downloads</string>
+    <string name="dl_overline_active">Baixando</string>
+    <string name="dl_overline_idle">Downloads</string>
+    <string name="dl_of_total">de %1$d</string>
+    <string name="dl_idle_title">Tudo em dia</string>
+    <string name="dl_idle_title_failed">Algumas falharam</string>
+    <plurals name="dl_running">
+        <item quantity="one">%d baixando</item>
+        <item quantity="other">%d baixando</item>
+    </plurals>
+    <plurals name="dl_queued">
+        <item quantity="one">%d na fila</item>
+        <item quantity="other">%d na fila</item>
+    </plurals>
+    <plurals name="dl_failed">
+        <item quantity="one">%d falhou</item>
+        <item quantity="other">%d falharam</item>
+    </plurals>
+    <plurals name="dl_done">
+        <item quantity="one">%d concluída</item>
+        <item quantity="other">%d concluídas</item>
+    </plurals>
+    <plurals name="dl_canceled">
+        <item quantity="one">%d cancelada</item>
+        <item quantity="other">%d canceladas</item>
+    </plurals>
+    <string name="dl_retry_failed">Tentar de novo as falhas</string>
+    <string name="dl_clear_done">Limpar concluídas</string>
+    <string name="dl_cancel_all">Cancelar tudo</string>
+    <string name="dl_cancel_all_title">Cancelar todos os downloads?</string>
+    <string name="dl_cancel_all_body">As músicas que ainda não terminaram saem da fila. O que já foi baixado continua no celular.</string>
+    <string name="dl_keep">Continuar baixando</string>
+    <string name="dl_state_queued">Na fila</string>
+    <string name="dl_state_starting">Iniciando…</string>
+    <string name="dl_state_percent">%1$d%%</string>
+    <string name="dl_state_bytes">%1$s de %2$s</string>
+    <string name="dl_state_done">Concluído</string>
+    <string name="dl_state_failed">Falhou</string>
+    <string name="dl_state_canceled">Cancelado</string>
+    <string name="dl_loose_title">Músicas</string>
+    <string name="dl_batch_progress">Baixando %1$d de %2$d</string>
+    <string name="dl_batch_untitled">Sem título</string>
+    <string name="dl_batch_open">Abrir na biblioteca</string>
+    <string name="dl_batch_cancel">Cancelar os downloads de “%1$s”</string>
+    <string name="dl_batch_expand">Mostrar músicas</string>
+    <string name="dl_batch_collapse">Ocultar músicas</string>
+    <string name="dl_cancel">Cancelar download</string>
+    <string name="dl_retry">Tentar de novo</string>
+    <string name="dl_redownload">Baixar de novo</string>
+    <string name="dl_swipe_cancel">Cancelar</string>
+    <string name="dl_empty_title">Nada baixando</string>
+    <string name="dl_empty_body">Busque uma música ou cole um link do YouTube para começar.</string>
+    <string name="dl_empty_action">Buscar música</string>
+    <string name="dl_play_missing">Essa música não está mais no celular.</string>
+    <string name="dl_action_error">Não deu para fazer isso agora.</string>
+</resources>
