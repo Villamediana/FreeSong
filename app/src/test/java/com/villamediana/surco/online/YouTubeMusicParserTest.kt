@@ -48,6 +48,7 @@ class YouTubeMusicParserTest {
         {"header":{"musicImmersiveHeaderRenderer":{
             "title":{"runs":[{"text":"Soda Stereo"}]},
             "description":{"runs":[{"text":"Soda Stereo foi uma banda de rock argentina."}]},
+            "shareEndpoint":{"shareEntityEndpoint":{"serializedShareEntity":"GhhVQ1FKdVRqaHRiNk95eTJrU3RBMUJVS3c%3D"}},
             "thumbnail":{"musicThumbnailRenderer":{"thumbnail":{"thumbnails":[{"url":"https://lh3.googleusercontent.com/v0SO=w1440-h600-p-l90-rj","width":1440,"height":600}]}}}}},
          "microformat":{"microformatDataRenderer":{"title":"Soda Stereo","thumbnail":{"thumbnails":[{"url":"https://lh3.googleusercontent.com/v0SO=w544-h544-p-l90-rj","width":544,"height":544}]}}},
          "contents":{"singleColumnBrowseResultsRenderer":{"tabs":[{"tabRenderer":{"content":{"sectionListRenderer":{"contents":[
@@ -140,6 +141,7 @@ class YouTubeMusicParserTest {
         val p = YouTubeMusicParser.artistPage(artistPage)!!
         assertTrue(p.looksLikeArtist)
         assertEquals("Soda Stereo", p.name)
+        assertEquals("UCQJuTjhtb6Oyy2kStA1BUKw", p.channelId)
         assertEquals("Soda Stereo foi uma banda de rock argentina.", p.description)
         // Square portrait from the microformat, not the wide banner.
         assertEquals("https://lh3.googleusercontent.com/v0SO=w1080-h1080-p-l90-rj", p.thumbnailUrl)

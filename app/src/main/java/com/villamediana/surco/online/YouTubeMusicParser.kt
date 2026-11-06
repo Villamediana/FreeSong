@@ -25,6 +25,8 @@ internal object YouTubeMusicParser {
     data class BrowseRef(val browseId: String, val params: String?)
 
     data class ArtistPage(
+        /** YouTube Music's own id for the artist (same for the topic and the official channel). */
+        val channelId: String?,
         val name: String,
         val thumbnailUrl: String?,
         val description: String?,
@@ -81,6 +83,21 @@ internal object YouTubeMusicParser {
             ?.toHttpUrlOrNull()?.queryParameter("list")?.let { return it }
         json.findFirst("audioPlaylistId").asString()?.takeIf { it.isNotBlank() }?.let { return it }
         return findOlak(json)
+    }
+
+    /** First album page (MPREb_…) linked from a response — e.g. from the rows of an album playlist. */
+    fun albumBrowseId(json: JsonObject): String? = findBrowseId(json) { it.startsWith("MPREb_") }
+
+    private fun findBrowseId(e: JsonElement?, accept: (String) -> Boolean): String? {
+        when (e) {
+            is JsonObject -> {
+                e["browseId"].asString()?.takeIf(accept)?.let { return it }
+                for (v in e.values) findBrowseId(v, accept)?.let { return it }
+            }
+            is JsonArray -> for (v in e) findBrowseId(v, accept)?.let { return it }
+            else -> Unit
+        }
+        return null
     }
 
     private fun findOlak(e: JsonElement?): String? {
@@ -140,6 +157,7 @@ internal object YouTubeMusicParser {
         }
 
         return ArtistPage(
+            channelId = canonicalChannelId(headerObj),
             name = name,
             thumbnailUrl = Thumbnails.best(thumb, Thumbnails.COLLECTION),
             description = description?.trim()?.ifEmpty { null },
@@ -148,6 +166,21 @@ internal object YouTubeMusicParser {
             releaseShelves = releaseShelves,
             playlists = playlists.distinctBy { it.url },
         )
+    }
+
+    private val channelIdRe = Regex("UC[A-Za-z0-9_-]{22}")
+
+    /**
+     * The share button carries the artist's canonical id (protobuf, base64): browsing either the
+     * "Artist - Topic" channel or the official artist channel gives the same one.
+     */
+    private fun canonicalChannelId(header: JsonObject?): String? {
+        val serialized = header.at("shareEndpoint.shareEntityEndpoint.serializedShareEntity").asString() ?: return null
+        return runCatching {
+            val b64 = java.net.URLDecoder.decode(serialized, "UTF-8")
+            val bytes = java.util.Base64.getUrlDecoder().decode(b64.replace('+', '-').replace('/', '_').trimEnd('='))
+            channelIdRe.find(String(bytes, Charsets.ISO_8859_1))?.value
+        }.getOrNull()
     }
 
     /** "See all" grid of albums/singles (discography page). */
