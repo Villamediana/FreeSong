@@ -38,6 +38,7 @@
     <string name="search_offline_body">La búsqueda en línea vuelve con internet. Mientras tanto, lo que ya está en tu teléfono:</string>
     <string name="search_offline_body_empty">La búsqueda en línea vuelve con internet. Por ahora no hay nada con ese nombre en tu teléfono.</string>
     <string name="search_error_title">No se pudo buscar</string>
+    <string name="search_error_details">Ver detalles</string>
     <string name="search_error_body">YouTube no respondió ahora. Inténtalo de nuevo en un momento.</string>
     <string name="search_error_rate_limited">YouTube pidió una pausa. Inténtalo de nuevo en unos minutos.</string>
     <string name="search_retry">Reintentar</string>

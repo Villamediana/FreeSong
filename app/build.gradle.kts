@@ -54,8 +54,10 @@ android {
             applicationIdSuffix = ".debug"
         }
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
+            // No R8: it rewrites NewPipe/OkHttp/Kotlin internals and the search broke on the phone
+            // while every JVM live test passed. The release runs the same bytecode the tests run.
+            isMinifyEnabled = false
+            isShrinkResources = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",

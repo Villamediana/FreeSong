@@ -698,7 +698,7 @@ private fun ResultsContent(
             Phase.Error -> if (r?.error == SearchError.Offline) {
                 OfflineResults(vm, lookup, actions, onTrackMore)
             } else {
-                ErrorState(r?.error ?: SearchError.Generic, onRetry = vm::retry, card = vm.link, lookup = lookup, actions = actions)
+                ErrorState(r?.error ?: SearchError.Generic, r?.errorDetail, onRetry = vm::retry, card = vm.link, lookup = lookup, actions = actions)
             }
             Phase.Empty -> CenteredList(vm.link, lookup, actions) {
                 EmptyState(Icons.Rounded.SearchOff, stringResource(R.string.search_empty_title), stringResource(R.string.search_empty_body))
@@ -727,13 +727,27 @@ private fun CenteredList(card: LinkCard?, lookup: DownloadLookup, actions: LinkA
 }
 
 @Composable
-private fun ErrorState(error: SearchError, onRetry: () -> Unit, card: LinkCard?, lookup: DownloadLookup, actions: LinkActions) {
+private fun ErrorState(error: SearchError, detail: String?, onRetry: () -> Unit, card: LinkCard?, lookup: DownloadLookup, actions: LinkActions) {
+    var showDetail by remember { mutableStateOf(false) }
     CenteredList(card, lookup, actions) {
         EmptyState(
             icon = Icons.Rounded.ErrorOutline,
             title = stringResource(R.string.search_error_title),
             body = stringResource(if (error == SearchError.RateLimited) R.string.search_error_rate_limited else R.string.search_error_body),
-            action = { PillButton(stringResource(R.string.search_retry), onRetry, icon = Icons.Rounded.Refresh, filled = true) },
+            action = {
+                androidx.compose.foundation.layout.Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    PillButton(stringResource(R.string.search_retry), onRetry, icon = Icons.Rounded.Refresh, filled = true)
+                    if (detail != null) {
+                        Text(
+                            if (showDetail) detail else stringResource(R.string.search_error_details),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = SurcoColors.TextFaint,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            modifier = Modifier.padding(top = 18.dp).clickable { showDetail = !showDetail }.padding(8.dp),
+                        )
+                    }
+                }
+            },
         )
     }
 }

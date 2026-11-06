@@ -38,6 +38,7 @@
     <string name="search_offline_body">A busca online volta junto com a internet. Enquanto isso, o que já está no seu celular:</string>
     <string name="search_offline_body_empty">A busca online volta junto com a internet. Nada com esse nome no seu celular por enquanto.</string>
     <string name="search_error_title">Não deu para buscar</string>
+    <string name="search_error_details">Ver detalhes</string>
     <string name="search_error_body">O YouTube não respondeu agora. Tente de novo em instantes.</string>
     <string name="search_error_rate_limited">O YouTube pediu uma pausa. Tente de novo em alguns minutos.</string>
     <string name="search_retry">Tentar de novo</string>

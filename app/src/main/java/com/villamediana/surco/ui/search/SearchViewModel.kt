@@ -74,9 +74,17 @@ data class ResultsState(
     val loadingMore: Boolean = false,
     val error: SearchError? = null,
     val moreError: Boolean = false,
+    /** Technical cause of [error] (exception chain), shown only on demand. */
+    val errorDetail: String? = null,
 ) {
     val hasMore: Boolean get() = page?.hasMore == true
 }
+
+/** "OnlineException: … ← IOException: …" — short, for the error details line. */
+internal fun Throwable.describeChain(max: Int = 400): String =
+    generateSequence(this) { it.cause?.takeIf { c -> c !== it } }.take(4)
+        .joinToString(" ← ") { "${it::class.java.simpleName}: ${it.message.orEmpty().take(140)}" }
+        .take(max)
 
 /** The card on top of the Search screen for a pasted/shared song link. */
 sealed interface LinkCard {
@@ -277,7 +285,10 @@ class SearchViewModel(
         jobs[f] = viewModelScope.launch {
             attempt { youTube.search(q, f) }
                 .onSuccess { page -> update(q, f) { ResultsState(q, f, items = page.items.distinctBy { it.key }, page = page) } }
-                .onFailure { e -> update(q, f) { ResultsState(q, f, error = e.toSearchError(online.value)) } }
+                .onFailure { e ->
+                    android.util.Log.w("Sound", "search failed: $q / $f", e)
+                    update(q, f) { ResultsState(q, f, error = e.toSearchError(online.value), errorDetail = e.describeChain()) }
+                }
         }
     }
 
