@@ -31,9 +31,14 @@ internal object SessionProtocol {
     const val SLEEP = "surco.SLEEP"
     /** Loads the last saved queue, paused, if the player is empty. */
     const val RESTORE = "surco.RESTORE"
+    /**
+     * Shuffle on/off ([ARG_ENABLED]) in line with the queue commands: "play this list" followed right
+     * away by "shuffle it" applies to the new list, never to the old one while the new one is computed.
+     */
+    const val SET_SHUFFLE = "surco.SET_SHUFFLE"
 
     val publicCommands = listOf(LIKE, SHUFFLE)
-    val appCommands = listOf(PLAY, QUEUE_ADD, QUEUE_MOVE, QUEUE_REMOVE, SLEEP, RESTORE)
+    val appCommands = listOf(PLAY, QUEUE_ADD, QUEUE_MOVE, QUEUE_REMOVE, SLEEP, RESTORE, SET_SHUFFLE)
 
     fun command(action: String) = SessionCommand(action, Bundle.EMPTY)
 
@@ -47,6 +52,7 @@ internal object SessionProtocol {
     const val ARG_FROM = "from"
     const val ARG_TO = "to"
     const val ARG_INDEX = "index"
+    const val ARG_ENABLED = "enabled"
     const val WHERE_NEXT = "next"
     const val WHERE_END = "end"
 

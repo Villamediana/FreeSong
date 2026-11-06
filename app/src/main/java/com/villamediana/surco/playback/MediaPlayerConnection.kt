@@ -392,7 +392,12 @@ class MediaPlayerConnection(
         resume(c)
     }
 
-    override fun setShuffle(enabled: Boolean) = withController { it.shuffleModeEnabled = enabled }
+    /**
+     * In line with the queue commands (not a plain player command): right after [play] or
+     * [playOnline] it applies to the new queue, whose start song stays first, even while the
+     * service is still computing that queue's order.
+     */
+    override fun setShuffle(enabled: Boolean) = send(SessionProtocol.SET_SHUFFLE, Bundle().apply { putBoolean(SessionProtocol.ARG_ENABLED, enabled) })
 
     override fun cycleRepeat() = withController { c ->
         c.repeatMode = when (c.repeatMode) {

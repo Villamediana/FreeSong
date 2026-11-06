@@ -894,6 +894,10 @@ class PlaybackService : MediaLibraryService() {
                         scheduleSave()
                     }
                 }
+                SessionProtocol.SET_SHUFFLE -> {
+                    val enabled = args.getBoolean(SessionProtocol.ARG_ENABLED)
+                    return serialized { player.shuffleModeEnabled = enabled }
+                }
                 SessionProtocol.SLEEP -> sleep.set(SessionProtocol.getSleep(args))
                 SessionProtocol.RESTORE -> return serialized { restore() }
                 else -> return Futures.immediateFuture(SessionResult(SessionResult.RESULT_ERROR_NOT_SUPPORTED))

@@ -257,6 +257,41 @@ class PlaybackServiceTest {
         assertEquals(Player.REPEAT_MODE_OFF, player.repeatMode)
     }
 
+    // ------------------------------------------------------------------ shuffle right after play
+
+    private fun shuffleCommand(enabled: Boolean) =
+        controller.sendCustomCommand(SessionProtocol.command(SessionProtocol.SET_SHUFFLE), Bundle().apply { putBoolean(SessionProtocol.ARG_ENABLED, enabled) })
+
+    private fun playCommand(ids: List<Long>, start: Int) = controller.sendCustomCommand(
+        SessionProtocol.command(SessionProtocol.PLAY),
+        Bundle().apply {
+            putLongArray(SessionProtocol.ARG_IDS, ids.toLongArray())
+            putInt(SessionProtocol.ARG_START, start)
+            putInt(SessionProtocol.ARG_SHUFFLE, SessionProtocol.SHUFFLE_KEEP)
+        },
+    )
+
+    @Test fun shuffleOnRightAfterPlayKeepsTheStartSongFirst() {
+        start()
+        val ids = tracks.map { it.id }
+        playCommand(ids, 2)
+        await(shuffleCommand(true))
+        assertTrue(player.shuffleModeEnabled)
+        idleUntil { playOrderIds().first() == ids[2] && playOrderIds().toSet() == ids.toSet() }
+    }
+
+    @Test fun shuffleOffRightAfterPlayWinsOverTheShuffleBeingComputed() {
+        start()
+        val ids = tracks.map { it.id }
+        play(ids.take(3), 0)
+        await(shuffleCommand(true))
+        // The new queue is shuffled (shuffle was on) while "off" is already on its way.
+        playCommand(ids, 3)
+        await(shuffleCommand(false))
+        assertFalse(player.shuffleModeEnabled)
+        assertEquals(ids, playOrderIds())
+    }
+
     // ------------------------------------------------------------------ resuming with nothing saved
 
     @Test fun emptyingTheQueueForgetsTheSavedOneAndTheHeadsetFlag() {
