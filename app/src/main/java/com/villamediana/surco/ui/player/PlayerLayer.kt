@@ -186,7 +186,8 @@ internal fun PlayerHost(deps: PlayerDeps, bottomBarHeight: Dp, modifier: Modifie
     var queueOpen by rememberSaveable { mutableStateOf(false) }
     var sleepOpen by rememberSaveable { mutableStateOf(false) }
     var lyricsOpen by rememberSaveable { mutableStateOf(false) }
-    var actionsOpen by remember { mutableStateOf(false) }
+    // The song the ⋮ sheet was opened for: it stays on it when the player moves to the next one.
+    var actionsFor by remember { mutableStateOf<Track?>(null) }
 
     LaunchedEffect(expand) { snapshotFlow { expand.target }.collect { savedExpanded = it == 1f } }
 
@@ -195,7 +196,7 @@ internal fun PlayerHost(deps: PlayerDeps, bottomBarHeight: Dp, modifier: Modifie
             lyricsOpen = false
             queueOpen = false
             sleepOpen = false
-            actionsOpen = false
+            actionsFor = null
             if (expand.progress > 0f || expand.target > 0f) expand.animateTo(0f)
         }
         onDispose { navigator.collapsePlayer = {} }
@@ -269,7 +270,7 @@ internal fun PlayerHost(deps: PlayerDeps, bottomBarHeight: Dp, modifier: Modifie
             openQueue = { queueOpen = true },
             openSleep = { sleepOpen = true },
             openLyrics = { lyricsOpen = true },
-            openActions = { actionsOpen = true },
+            openActions = { actionsFor = latestTrack },
             openArtist = { name -> navigator.openArtist(name) },
             openAlbum = { t -> t.albumKey?.let { navigator.openAlbum(it) } },
             openOutput = { OutputRoutes.openSwitcher(context) },
@@ -597,8 +598,8 @@ internal fun PlayerHost(deps: PlayerDeps, bottomBarHeight: Dp, modifier: Modifie
     if (sleepOpen) {
         SleepTimerSheet(timer = sleep, onSet = { player.setSleepTimer(it) }, onDismiss = { sleepOpen = false })
     }
-    if (actionsOpen) {
-        TrackActionsSheet(track = track, onDismiss = { actionsOpen = false }, showEqualizer = true)
+    actionsFor?.let { t ->
+        TrackActionsSheet(track = t, onDismiss = { actionsFor = null }, showEqualizer = true)
     }
 }
 
