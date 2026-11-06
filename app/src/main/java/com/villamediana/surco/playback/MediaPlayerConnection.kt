@@ -37,6 +37,15 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
+ * Music that can be told to carry on: it plays if it isn't playing and does nothing if it is,
+ * judged on the player's own live state — unlike a toggle decided on a [PlaybackState] that may
+ * still lag a command behind.
+ */
+internal interface ResumablePlayer {
+    fun resume()
+}
+
+/**
  * The app's [PlayerConnection]: a Media3 [MediaController] bound to [PlaybackService].
  *
  * Everything runs on the main thread (callers may use any thread). Commands issued before the
@@ -53,7 +62,7 @@ class MediaPlayerConnection(
     private val library: LibraryRepository,
     @Suppress("unused") settings: SettingsStore,
     scope: CoroutineScope,
-) : PlayerConnection {
+) : PlayerConnection, ResumablePlayer {
     private val app: Context = context.applicationContext
     private val main = CoroutineScope(scope.coroutineContext + Dispatchers.Main.immediate)
     private val strings by lazy { PlaybackStrings.from(app) }
@@ -355,6 +364,11 @@ class MediaPlayerConnection(
     override fun togglePlayPause() = withController { c ->
         if (c.isPlaying || (c.playWhenReady && c.playbackState == Player.STATE_BUFFERING)) c.pause()
         else resume(c)
+    }
+
+    override fun resume() = withController { c ->
+        val playing = c.isPlaying || (c.playWhenReady && c.playbackState == Player.STATE_BUFFERING)
+        if (c.mediaItemCount > 0 && !playing) resume(c)
     }
 
     private fun resume(c: MediaController) {

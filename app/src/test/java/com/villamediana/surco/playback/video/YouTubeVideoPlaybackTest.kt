@@ -9,6 +9,7 @@ import com.villamediana.surco.data.db.Track
 import com.villamediana.surco.playback.PlaybackState
 import com.villamediana.surco.playback.PlaySource
 import com.villamediana.surco.playback.PlayerConnection
+import com.villamediana.surco.playback.ResumablePlayer
 import com.villamediana.surco.playback.SleepTimer
 import com.villamediana.surco.playback.SmartSeed
 import com.villamediana.surco.playback.stream.FakeStreams
@@ -96,7 +97,8 @@ class YouTubeVideoPlaybackTest {
         assertEquals(Player.STATE_IDLE, player.playbackState) // released
         assertEquals(1, music.seeks.size)
         assertTrue(music.seeks.single() in 31_000..31_500)
-        assertEquals(1, music.toggles)
+        assertEquals(1, music.resumes)
+        assertEquals(0, music.toggles)
     }
 
     @Test fun anotherSongsVideoResumesTheMusicOnlyIfItWasPlaying() {
@@ -106,15 +108,26 @@ class YouTubeVideoPlaybackTest {
         video.close(resumeMusic = true)
         idleUntil { video.player.value == null }
         assertEquals(emptyList<Long>(), music.seeks) // not the same song: its position stays
-        assertEquals(1, music.toggles) // it was playing before
+        assertEquals(1, music.resumes) // it was playing before
 
         music.state.value = music.state.value.copy(isPlaying = false)
-        music.toggles = 0
+        music.resumes = 0
         video.open("other", null, startAtMs = 0)
         idleUntil { video.state.value.playing }
         video.close(resumeMusic = true)
         idleUntil { video.player.value == null }
+        assertEquals(0, music.resumes)
         assertEquals(0, music.toggles)
+    }
+
+    @Test fun closingRightAfterOpeningStillResumesTheMusic() {
+        youTube.serveVideo("mv1", wav(10), wav(10))
+        music.stale = true // the pause from open() hasn't reached the state yet
+        video.open("mv1", null, startAtMs = 0)
+        video.close(resumeMusic = true)
+        idleUntil { video.player.value == null && music.resumes == 1 }
+        assertEquals(1, music.pauses)
+        assertEquals(0, music.toggles) // a toggle on the stale "playing" would have paused it for good
     }
 
     @Test fun reopeningTheSameVideoKeepsItPlaying() {
@@ -148,17 +161,25 @@ private object VideoStateDefaults {
 }
 
 /** Records what the video player asks of the music. */
-private class FakeMusic(initial: PlaybackState) : PlayerConnection {
+private class FakeMusic(initial: PlaybackState) : PlayerConnection, ResumablePlayer {
     override val state = MutableStateFlow(initial)
     override val positionMs: Flow<Long> = MutableStateFlow(0L)
     override val sleepTimer: StateFlow<SleepTimer> = MutableStateFlow(SleepTimer.Off)
     var pauses = 0
     var toggles = 0
+    var resumes = 0
+    /** The state lags behind: a pause isn't reflected in [state] yet (as right after the command goes out). */
+    var stale = false
     val seeks = mutableListOf<Long>()
 
     override fun pause() {
         pauses++
-        state.value = state.value.copy(isPlaying = false)
+        if (!stale) state.value = state.value.copy(isPlaying = false)
+    }
+
+    override fun resume() {
+        resumes++
+        state.value = state.value.copy(isPlaying = true)
     }
 
     override fun togglePlayPause() {

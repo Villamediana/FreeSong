@@ -20,6 +20,7 @@ import com.villamediana.surco.online.OnlineException
 import com.villamediana.surco.online.VideoStream
 import com.villamediana.surco.online.YouTubeSource
 import com.villamediana.surco.playback.PlayerConnection
+import com.villamediana.surco.playback.ResumablePlayer
 import com.villamediana.surco.online.messageRes
 import com.villamediana.surco.online.onlineKind
 import com.villamediana.surco.playback.VideoPlayback
@@ -180,7 +181,11 @@ class YouTubeVideoPlayback internal constructor(
                 val duration = now.durationMs.takeIf { it > 0 } ?: now.current?.durationMs?.takeIf { it > 0 }
                 music.seekTo(if (duration != null) position.coerceAtMost(duration - END_MARGIN_MS).coerceAtLeast(0) else position)
             }
-            if (resumeMusic && now.current != null && !now.isPlaying && (sameSong || s.musicWasPlaying)) music.togglePlayPause()
+            if (!resumeMusic || !(sameSong || s.musicWasPlaying)) return@launch
+            // Not a toggle on [now]: right after the pause sent on open it can still say "playing"
+            // (or "paused" when the music was started meanwhile), and the toggle would do the opposite.
+            if (music is ResumablePlayer) music.resume()
+            else if (now.current != null && !now.isPlaying) music.togglePlayPause()
         }
     }
 
