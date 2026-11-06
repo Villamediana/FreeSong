@@ -32,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
@@ -67,6 +68,8 @@ fun DownloadIndicator(
     onClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
     size: Dp = 26.dp,
+    /** Color of the "not downloaded" arrow (the player draws it over the cover's color). */
+    idleTint: Color = SurcoColors.TextMuted,
 ) {
     val description = when (state) {
         ItemDownload.None -> stringResource(R.string.search_dl_download)
@@ -96,8 +99,8 @@ fun DownloadIndicator(
             label = "downloadGlyph",
         ) { glyph ->
             when (glyph) {
-                Glyph.None -> Box(Modifier.size(size).border(1.6.dp, SurcoColors.TextMuted, CircleShape), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Rounded.ArrowDownward, null, tint = SurcoColors.TextMuted, modifier = Modifier.size(size * 0.6f))
+                Glyph.None -> Box(Modifier.size(size).border(1.6.dp, idleTint, CircleShape), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Rounded.ArrowDownward, null, tint = idleTint, modifier = Modifier.size(size * 0.6f))
                 }
                 Glyph.Queued -> SpinningRing(size)
                 Glyph.Running -> ProgressRing(progress, size)

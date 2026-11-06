@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.villamediana.surco.data.db.Track
+import com.villamediana.surco.data.isOnline
 import com.villamediana.surco.ui.theme.SurcoColors
 import kotlin.math.abs
 
@@ -41,6 +42,7 @@ internal val MiniSideMargin = 8.dp
 @Composable
 internal fun MiniPlayerBar(
     track: Track,
+    stream: StreamUi,
     liked: Boolean,
     playing: Boolean,
     clock: PlaybackClock,
@@ -49,6 +51,7 @@ internal fun MiniPlayerBar(
     swipeWidth: Float,
     onTogglePlay: () -> Unit,
     onLike: (Boolean) -> Unit,
+    onDownload: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -80,7 +83,7 @@ internal fun MiniPlayerBar(
             ) {
                 AnimatedContent(
                     targetState = track,
-                    contentKey = { it.id },
+                    contentKey = { it.videoId ?: it.id },
                     transitionSpec = { fadeIn(tween(220, delayMillis = 40)) togetherWith fadeOut(tween(120)) },
                     label = "mini-title",
                 ) { t ->
@@ -93,11 +96,23 @@ internal fun MiniPlayerBar(
                             modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 2_000, repeatDelayMillis = 3_000),
                         )
                         Spacer(Modifier.height(1.dp))
-                        Text(t.artist, style = MaterialTheme.typography.bodySmall, color = SurcoColors.Text.copy(alpha = 0.66f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            StreamedMark(visible = t.isOnline, size = 13.dp, gap = 4.dp)
+                            Text(t.artist, style = MaterialTheme.typography.bodySmall, color = SurcoColors.Text.copy(alpha = 0.66f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
                     }
                 }
             }
-            LikeButton(liked = liked, onToggle = onLike, size = 40.dp, iconSize = 22.dp, idleTint = SurcoColors.Text.copy(alpha = 0.8f))
+            HeartOrDownload(
+                stream = stream,
+                liked = liked,
+                onLike = onLike,
+                onDownload = onDownload,
+                size = 40.dp,
+                iconSize = 22.dp,
+                ringSize = 22.dp,
+                idleTint = SurcoColors.Text.copy(alpha = 0.8f),
+            )
             MorphPlayPauseIcon(playing = playing, onClick = onTogglePlay, size = 44.dp)
         }
     }

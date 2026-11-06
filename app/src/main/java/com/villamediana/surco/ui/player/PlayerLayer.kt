@@ -83,20 +83,37 @@ import androidx.compose.ui.unit.dp
 import com.villamediana.surco.R
 import com.villamediana.surco.SurcoApplication
 import com.villamediana.surco.data.db.Track
+import com.villamediana.surco.data.isOnline
+import com.villamediana.surco.online.RemoteTrack
 import com.villamediana.surco.playback.PlayerConnection
 import com.villamediana.surco.ui.components.Cover
 import com.villamediana.surco.ui.components.CoverColors
 import com.villamediana.surco.ui.components.rememberCoverColor
 import com.villamediana.surco.ui.components.seedColor
 import com.villamediana.surco.ui.nav.LocalNavigator
+import com.villamediana.surco.ui.search.Connectivity
+import com.villamediana.surco.ui.search.DownloadLookup
+import com.villamediana.surco.ui.search.ItemDownload
+import com.villamediana.surco.ui.search.toRemoteTrack
 import com.villamediana.surco.ui.sheets.TrackActionsSheet
+import com.villamediana.surco.ui.sheets.rememberSheetFeedback
 import com.villamediana.surco.ui.theme.Dimens
 import com.villamediana.surco.ui.theme.SurcoColors
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.roundToInt
@@ -106,7 +123,22 @@ internal class PlayerDeps(
     val player: PlayerConnection,
     val trackFlow: (Long) -> Flow<Track?>,
     val setLiked: (Long, Boolean) -> Unit,
+    /** Library row of a song by its YouTube id — a streamed song that is (or just got) downloaded. */
+    val libraryTrack: (String) -> Flow<Track?> = { flowOf(null) },
+    /** Download state of every song: the "Baixar" button that stands in for the heart of streamed songs. */
+    val downloads: Flow<DownloadLookup> = flowOf(DownloadLookup.Empty),
+    val download: (RemoteTrack) -> Unit = {},
+    /** Lyrics of streamed songs (LRCLIB on demand); null = none. */
+    val lyrics: OnlineLyricsCache? = null,
+    val online: StateFlow<Boolean> = MutableStateFlow(true),
 )
+
+/** One lyrics cache for the whole process: reopening the player doesn't ask LRCLIB again. */
+private object PlayerLyrics {
+    val cache: OnlineLyricsCache by lazy {
+        OnlineLyricsCache({ q -> SurcoApplication.graph.lyrics.find(q.title, q.artist, q.album, q.durationMs) })
+    }
+}
 
 /**
  * Mini player docked above the bottom bar + the full-screen player it expands into, with one
@@ -120,6 +152,13 @@ fun PlayerLayer(bottomBarHeight: Dp, modifier: Modifier = Modifier) {
             player = graph.player,
             trackFlow = { id -> graph.library.track(id) },
             setLiked = { id, liked -> graph.scope.launch { graph.library.setLiked(id, liked) } },
+            libraryTrack = { videoId -> graph.library.tracks.map { all -> all.firstOrNull { it.videoId == videoId } }.distinctUntilChanged() },
+            downloads = combine(graph.library.downloadedVideoIds, graph.downloads.tasks) { done, tasks -> DownloadLookup.build(done, tasks) }
+                .flowOn(Dispatchers.Default),
+            download = { remote -> graph.scope.launch { runCatching { graph.downloads.download(listOf(remote)) } } },
+            lyrics = PlayerLyrics.cache,
+            online = Connectivity.online(graph.appContext)
+                .stateIn(graph.scope, SharingStarted.WhileSubscribed(5_000), Connectivity.isOnline(graph.appContext)),
         )
     }
     PlayerHost(deps, bottomBarHeight, modifier)
@@ -173,10 +212,21 @@ internal fun PlayerHost(deps: PlayerDeps, bottomBarHeight: Dp, modifier: Modifie
         }
     }
     val shown = state.current ?: lastTrack ?: return
+    val online by deps.online.collectAsState()
 
-    // Live row from the library: likes, edits and lyrics that arrive later show up at once.
-    val live by remember(shown.id) { deps.trackFlow(shown.id) }.collectAsState(initial = null)
-    val track = live?.takeIf { it.id == shown.id } ?: shown
+    // Live row from the library: likes, edits and lyrics that arrive later show up at once. A
+    // streamed song is looked up by its YouTube id: once downloaded it becomes a library song.
+    val streaming = shown.isOnline
+    val live by remember(shown.id, shown.videoId) {
+        if (streaming) shown.videoId?.let(deps.libraryTrack) ?: flowOf(null) else deps.trackFlow(shown.id)
+    }.collectAsState(initial = null)
+    val libraryCopy = live?.takeIf { if (streaming) it.videoId == shown.videoId else it.id == shown.id }
+    val track = libraryCopy ?: shown
+    val download by remember(track.id, track.videoId) {
+        val videoId = track.videoId
+        if (track.isOnline && videoId != null) deps.downloads.map { it.stateOf(videoId) }.distinctUntilChanged() else flowOf(ItemDownload.None)
+    }.collectAsState(initial = ItemDownload.None)
+    val stream = StreamUi(streamed = track.isOnline, download = download, online = online)
     val likeOverrides = remember { mutableStateMapOf<Long, Boolean>() }
     LaunchedEffect(track.id, track.liked) { if (likeOverrides[track.id] == track.liked) likeOverrides.remove(track.id) }
     val liked = likeOverrides[track.id] ?: track.liked
@@ -190,11 +240,14 @@ internal fun PlayerHost(deps: PlayerDeps, bottomBarHeight: Dp, modifier: Modifie
     val durationMs = state.durationMs.takeIf { it > 0 } ?: track.durationMs
     val clock = rememberPlaybackClock(player, state.isPlaying, durationMs, state.current?.id)
     val coverScale = animateFloatAsState(if (playing) 1f else 0.88f, spring(dampingRatio = 0.62f, stiffness = 260f), label = "cover")
-    val lyrics by rememberLyrics(track.lyricsPath)
+    val lyrics by rememberLyrics(LyricsOrigin.choose(shown, libraryCopy), online, deps.lyrics)
     val output = rememberOutputRoute()
+    val feedback = rememberSheetFeedback()
 
     val latestState by rememberUpdatedState(state)
     val latestTrack by rememberUpdatedState(track)
+    val latestOnline by rememberUpdatedState(online)
+    val latestDownload by rememberUpdatedState(download)
     val actions = remember(player, navigator, expand) {
         PlayerActions(
             togglePlay = { player.togglePlayPause() },
@@ -219,6 +272,25 @@ internal fun PlayerHost(deps: PlayerDeps, bottomBarHeight: Dp, modifier: Modifie
             openArtist = { name -> navigator.openArtist(name) },
             openAlbum = { t -> t.albumKey?.let { navigator.openAlbum(it) } },
             openOutput = { OutputRoutes.openSwitcher(context) },
+            download = {
+                val t = latestTrack
+                val d = latestDownload
+                if (t.isOnline && (d == ItemDownload.None || d is ItemDownload.Failed)) {
+                    t.toRemoteTrack()?.let { remote ->
+                        deps.download(remote)
+                        feedback.show(context.getString(R.string.player_download_started, t.title))
+                    }
+                }
+            },
+            openVideo = {
+                val t = latestTrack
+                val videoId = t.videoId
+                when {
+                    videoId == null -> Unit
+                    !latestOnline -> feedback.show(context.getString(R.string.player_video_offline))
+                    else -> navigator.openVideo(videoId, t.title)
+                }
+            },
         )
     }
 
@@ -349,6 +421,7 @@ internal fun PlayerHost(deps: PlayerDeps, bottomBarHeight: Dp, modifier: Modifie
                         FullPlayer(
                             state = state,
                             track = track,
+                            stream = stream,
                             liked = liked,
                             playing = playing,
                             durationMs = durationMs,
@@ -369,6 +442,7 @@ internal fun PlayerHost(deps: PlayerDeps, bottomBarHeight: Dp, modifier: Modifie
                     SemanticsGate(miniHidden) {
                         MiniPlayerBar(
                             track = track,
+                            stream = stream,
                             liked = liked,
                             playing = playing,
                             clock = clock,
@@ -377,6 +451,7 @@ internal fun PlayerHost(deps: PlayerDeps, bottomBarHeight: Dp, modifier: Modifie
                             swipeWidth = swipeWidth,
                             onTogglePlay = actions.togglePlay,
                             onLike = actions.like,
+                            onDownload = actions.download,
                             modifier = miniGestures,
                         )
                     }
@@ -499,6 +574,7 @@ internal fun PlayerHost(deps: PlayerDeps, bottomBarHeight: Dp, modifier: Modifie
                 onSeek = actions.seek,
                 onTogglePlay = actions.togglePlay,
                 onClose = { lyricsOpen = false },
+                streamed = stream.streamed,
             )
         }
     }
@@ -516,7 +592,7 @@ internal fun PlayerHost(deps: PlayerDeps, bottomBarHeight: Dp, modifier: Modifie
         SleepTimerSheet(timer = sleep, onSet = { player.setSleepTimer(it) }, onDismiss = { sleepOpen = false })
     }
     if (actionsOpen) {
-        TrackActionsSheet(track = track, onDismiss = { actionsOpen = false })
+        TrackActionsSheet(track = track, onDismiss = { actionsOpen = false }, showEqualizer = true)
     }
 }
 

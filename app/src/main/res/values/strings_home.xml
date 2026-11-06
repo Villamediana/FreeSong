@@ -153,4 +153,12 @@
     <string name="home_settings_credit_newpipe">Busca e download no YouTube · GPL-3.0</string>
     <string name="home_settings_credit_itunes">Capas e informações dos álbuns</string>
     <string name="home_settings_credit_lrclib">Letras sincronizadas</string>
+
+    <!-- Ajustes: tocar online, equalizador; compartilhar playlist (segunda leva) -->
+    <string name="home_settings_play_online">Tocar online ao tocar resultados da busca</string>
+    <string name="home_settings_play_online_sub">Toca na hora, sem baixar. Desligado, o toque baixa a música.</string>
+    <string name="home_settings_equalizer">Equalizador</string>
+    <string name="home_settings_equalizer_sub">Graves, agudos e presets para o seu fone.</string>
+    <string name="home_settings_equalizer_on">Ligado</string>
+    <string name="home_lib_share">Compartilhar</string>
 </resources>

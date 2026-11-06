@@ -5,8 +5,11 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -18,7 +21,12 @@ import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.rememberNavController
+import com.villamediana.surco.data.asTransientTrack
+import com.villamediana.surco.data.db.DownloadState
+import com.villamediana.surco.data.db.DownloadTask
 import com.villamediana.surco.data.db.Track
+import com.villamediana.surco.online.Lyrics
+import com.villamediana.surco.online.RemoteTrack
 import com.villamediana.surco.playback.PlaySource
 import com.villamediana.surco.playback.PlaybackState
 import com.villamediana.surco.playback.PlayerConnection
@@ -27,9 +35,11 @@ import com.villamediana.surco.playback.SleepTimer
 import com.villamediana.surco.playback.SmartSeed
 import com.villamediana.surco.ui.nav.LocalNavigator
 import com.villamediana.surco.ui.nav.Navigator
+import com.villamediana.surco.ui.search.DownloadLookup
 import com.villamediana.surco.ui.theme.SurcoTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -188,6 +198,89 @@ class PlayerLayerComposeTest {
         compose.waitForIdle()
         assertEquals(1, player.nexts)
         compose.onNodeWithText("TOCANDO DE").assertDoesNotExist()
+    }
+
+    // ------------------------------------------------------------------ streamed songs
+
+    private val remote = RemoteTrack(
+        "abcdefghijk", "https://music.youtube.com/watch?v=abcdefghijk", "Té para Tres", "Soda Stereo", "Canción Animal", 140_000,
+        thumbnailUrl = "https://i.ytimg.com/vi/abcdefghijk/hq.jpg", fromMusicCatalog = true,
+    )
+    private val downloadsAsked = mutableListOf<RemoteTrack>()
+    private val libraryCopy = MutableStateFlow<Track?>(null)
+    private val lookup = MutableStateFlow(DownloadLookup.Empty)
+    private val lyricsAsked = mutableListOf<LyricsQuery>()
+
+    private fun setUpStreaming(online: Boolean = true): FakePlayer {
+        val streamed = remote.asTransientTrack()
+        val player = FakePlayer(PlaybackState(current = streamed, isPlaying = true, durationMs = 140_000, queue = listOf(streamed), queueIndex = 0, source = PlaySource(PlaySource.Type.SEARCH, "soda")))
+        val deps = PlayerDeps(
+            player = player,
+            trackFlow = { flowOf(null) },
+            setLiked = { id, liked -> likes += id to liked },
+            libraryTrack = { videoId -> libraryCopy.map { it?.takeIf { t -> t.videoId == videoId } } },
+            downloads = lookup,
+            download = { downloadsAsked += it },
+            lyrics = OnlineLyricsCache({ q ->
+                lyricsAsked += q
+                Lyrics("[00:01.00]Una verdad sin fin\n[00:40.00]Té para tres", synced = true)
+            }),
+            online = MutableStateFlow(online),
+        )
+        compose.setContent {
+            SurcoTheme {
+                val nav = rememberNavController()
+                CompositionLocalProvider(LocalNavigator provides Navigator(nav)) {
+                    PlayerHost(deps, bottomBarHeight = 64.dp)
+                }
+            }
+        }
+        return player
+    }
+
+    @Test
+    fun aStreamedSongOffersDownloadInsteadOfTheHeartUntilItIsInTheLibrary() {
+        setUpStreaming()
+        compose.onAllNodesWithContentDescription("Tocando online").onFirst().assertExists()
+        compose.onNodeWithContentDescription("Curtir").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Baixar").performClick()
+        compose.waitForIdle()
+        assertEquals(listOf(remote), downloadsAsked)
+
+        // The queue takes it: the button follows the download.
+        lookup.value = DownloadLookup.build(emptySet(), listOf(DownloadTask(id = 1, videoId = remote.videoId, url = remote.url, title = remote.title, artist = remote.artist, state = DownloadState.RUNNING, progress = 0.5f)))
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Baixando, 50%").assertExists()
+
+        // Downloaded: it is a library song now — the heart is back and likes the library row.
+        libraryCopy.value = Track(id = 50, videoId = remote.videoId, title = remote.title, artist = remote.artist, filePath = "/music/abc.m4a")
+        lookup.value = DownloadLookup.build(setOf(remote.videoId), emptyList())
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Tocando online").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Curtir").performClick()
+        compose.waitForIdle()
+        assertEquals(listOf(50L to true), likes)
+    }
+
+    @Test
+    fun aStreamedSongHasLyricsVideoAndTheLetraButton() {
+        setUpStreaming()
+        expand()
+        compose.onNodeWithContentDescription("Ver vídeo").assertExists()
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("Una verdad sin fin").fetchSemanticsNodes().isNotEmpty() }
+        assertEquals(listOf(LyricsQuery("Té para Tres", "Soda Stereo", "Canción Animal", 140_000)), lyricsAsked.distinct())
+        // The "Letra" pill of the bottom row (the card below has its own open button too).
+        compose.onAllNodesWithContentDescription("Letra em tela cheia").onFirst().assert(hasText("Letra")).performClick()
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Fechar letra").assertIsDisplayed()
+    }
+
+    @Test
+    fun offlineTheLyricsOfAStreamedSongWaitForTheNetwork() {
+        setUpStreaming(online = false)
+        expand()
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("A letra aparece quando a conexão voltar.").fetchSemanticsNodes().isNotEmpty() }
+        assertTrue(lyricsAsked.isEmpty())
     }
 
     @Test

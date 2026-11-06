@@ -22,6 +22,7 @@ import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PushPin
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -43,6 +44,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -52,9 +54,12 @@ import com.villamediana.surco.SurcoApplication
 import com.villamediana.surco.data.db.Track
 import com.villamediana.surco.data.model.AlbumSummary
 import com.villamediana.surco.data.model.PlaylistSummary
+import com.villamediana.surco.online.CollectionKind
+import com.villamediana.surco.online.RemoteCollection
 import com.villamediana.surco.playback.PlaySource
 import com.villamediana.surco.ui.components.Cover
 import com.villamediana.surco.ui.components.MosaicCover
+import com.villamediana.surco.ui.components.Share
 import com.villamediana.surco.ui.theme.Dimens
 import com.villamediana.surco.ui.theme.SurcoColors
 import kotlinx.coroutines.Dispatchers
@@ -117,6 +122,7 @@ object CollectionCommands {
 fun CollectionMenuSheet(target: CollectionTarget, onDismiss: () -> Unit) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     var confirmDelete by remember { mutableStateOf(false) }
 
     fun closeThen(action: () -> Unit) {
@@ -147,6 +153,13 @@ fun CollectionMenuSheet(target: CollectionTarget, onDismiss: () -> Unit) {
             stringResource(if (pinned) R.string.home_lib_unpin else R.string.home_lib_pin),
             tint = if (pinned) SurcoColors.Accent else SurcoColors.Text,
         ) { closeThen { CollectionCommands.setPinned(target, !pinned) } }
+        val shareUrl = (target as? CollectionTarget.Playlist)?.summary?.playlist?.sourceUrl?.takeIf { it.startsWith("http") }
+        if (target is CollectionTarget.Playlist && shareUrl != null) {
+            // Imported from YouTube: the link of the original playlist.
+            MenuAction(Icons.Rounded.Share, stringResource(R.string.home_lib_share)) {
+                closeThen { Share.collection(context, RemoteCollection(CollectionKind.PLAYLIST, shareUrl, target.summary.name)) }
+            }
+        }
         if (target is CollectionTarget.Playlist) {
             MenuAction(Icons.Outlined.DeleteOutline, stringResource(R.string.home_lib_delete_playlist), tint = SurcoColors.Danger) { confirmDelete = true }
         }

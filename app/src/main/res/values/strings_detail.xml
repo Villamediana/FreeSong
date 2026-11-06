@@ -169,4 +169,18 @@
         <item quantity="one">Adicionada a %2$s</item>
         <item quantity="other">%1$d músicas adicionadas a %2$s</item>
     </plurals>
+
+    <!-- Folha da música: online, vídeo, compartilhar (segunda leva) -->
+    <string name="sheet_streamed">online</string>
+    <string name="sheet_download">Baixar</string>
+    <string name="sheet_downloading">Baixando</string>
+    <string name="sheet_download_started">Baixando “%s”</string>
+    <string name="sheet_when_online">quando houver internet</string>
+    <string name="sheet_video">Ver vídeo</string>
+    <string name="sheet_share">Compartilhar</string>
+    <string name="sheet_send_file">Enviar arquivo</string>
+    <string name="sheet_equalizer">Equalizador</string>
+    <string name="sheet_offline">Sem internet agora.</string>
+    <string name="sheet_radio_unavailable">Não deu para montar a rádio agora.</string>
+    <string name="detail_menu_share">Compartilhar</string>
 </resources>

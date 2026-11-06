@@ -8,6 +8,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
@@ -125,6 +126,12 @@ class SearchScreensSmokeTest {
         assertEquals(listOf("aaaaaaaaaaa"), downloads.downloadCalls.single().map { it.videoId })
         rule.waitUntil(20_000) { rule.onAllNodesWithContentDescription(s(R.string.search_dl_queued)).fetchSemanticsNodes().isNotEmpty() }
 
+        // A tap on a song streams the visible songs from it.
+        rule.onNodeWithText("Persiana Americana").performClick()
+        rule.waitUntil(20_000) { player.onlinePlays.isNotEmpty() }
+        assertEquals(listOf("aaaaaaaaaaa", "lib1", "bbbbbbbbbbb"), player.onlinePlays.single().tracks.map { it.videoId })
+        assertEquals(1, player.onlinePlays.single().index)
+
         // Long-press another song → selection bar.
         rule.onNodeWithText("Nada Personal").performTouchInput { longClick() }
         rule.waitUntil(20_000) { rule.onAllNodes(hasText(context.resources.getQuantityString(R.plurals.search_download_n, 1, 1))).fetchSemanticsNodes().isNotEmpty() }
@@ -147,10 +154,15 @@ class SearchScreensSmokeTest {
         assertEquals(listOf("https://music.youtube.com/watch?v=dQw4w9WgXcQ"), youTube.resolved.toList())
         harness.screenshot("search_link_card")
 
+        rule.onNodeWithText(s(R.string.search_link_listen)).performClick()
+        rule.waitUntil(20_000) { player.onlinePlays.isNotEmpty() }
+        assertEquals(listOf(song), player.onlinePlays.single().tracks)
+
         rule.onNodeWithText(s(R.string.search_link_download)).performClick()
         rule.waitUntil(20_000) { downloads.downloadCalls.isNotEmpty() }
         downloads.setState("dQw4w9WgXcQ", DownloadState.RUNNING, 0.4f)
-        rule.waitUntil(20_000) { rule.onAllNodes(hasText(s(R.string.search_link_downloading, 40))).fetchSemanticsNodes().isNotEmpty() }
+        rule.waitUntil(20_000) { rule.onAllNodes(hasText(s(R.string.search_link_percent, 40))).fetchSemanticsNodes().isNotEmpty() }
+        rule.onNodeWithText(s(R.string.search_link_listen)).assertExists()
         harness.screenshot("search_link_card_downloading")
     }
 
@@ -184,6 +196,21 @@ class SearchScreensSmokeTest {
         rule.onNodeWithText(s(R.string.search_remote_download_all)).assertExists()
         rule.onNodeWithText(s(R.string.search_remote_playlist_note, "Rock nacional")).assertExists()
         harness.screenshot("remote_playlist")
+
+        // Play streams the whole playlist from the first song.
+        rule.onNodeWithContentDescription(s(R.string.search_remote_play)).performClick()
+        rule.waitUntil(20_000) { player.onlinePlays.isNotEmpty() }
+        assertEquals(listOf("aaaaaaaaaaa", "bbbbbbbbbbb", "ccccccccccc"), player.onlinePlays.single().tracks.map { it.videoId })
+        assertEquals(0, player.onlinePlays.single().index)
+        rule.onNodeWithContentDescription(s(R.string.search_remote_shuffle)).assertExists()
+
+        // ⋮ → share the playlist.
+        rule.onNodeWithContentDescription(s(R.string.more_options)).performClick()
+        rule.waitUntil(20_000) { rule.onAllNodes(hasText(s(R.string.search_remote_share))).fetchSemanticsNodes().isNotEmpty() }
+        rule.onNodeWithText(s(R.string.detail_menu_play_next)).performClick()
+        rule.waitUntil(20_000) { player.queued.isNotEmpty() }
+        assertEquals(listOf("aaaaaaaaaaa", "bbbbbbbbbbb", "ccccccccccc"), player.queued.single().second.map { it.videoId })
+        rule.waitUntil(20_000) { rule.onAllNodes(hasText(s(R.string.search_remote_share))).fetchSemanticsNodes().isEmpty() }
 
         rule.onNodeWithText(s(R.string.search_remote_download_all)).performClick()
         rule.waitUntil(20_000) { downloads.collectionCalls.isNotEmpty() }

@@ -4,8 +4,10 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -33,12 +35,19 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
+import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.MusicOff
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.Shuffle
+import androidx.compose.material.icons.rounded.SubdirectoryArrowRight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
@@ -49,6 +58,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -60,6 +70,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
@@ -67,6 +78,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -81,13 +95,17 @@ import com.villamediana.surco.ui.components.Cover
 import com.villamediana.surco.ui.components.EmptyState
 import com.villamediana.surco.ui.components.PillButton
 import com.villamediana.surco.ui.components.SectionHeader
+import com.villamediana.surco.ui.components.Share
 import com.villamediana.surco.ui.components.formatDuration
 import com.villamediana.surco.ui.components.formatLongDuration
 import com.villamediana.surco.ui.components.pressScale
+import com.villamediana.surco.ui.detail.CollectionMenuSheet
+import com.villamediana.surco.ui.detail.MenuItem
 import com.villamediana.surco.ui.nav.RemoteCollectionRoute
 import com.villamediana.surco.ui.nav.navigator
 import com.villamediana.surco.ui.theme.Dimens
 import com.villamediana.surco.ui.theme.LocalBottomInset
+import com.villamediana.surco.ui.theme.Motion
 import com.villamediana.surco.ui.theme.SurcoColors
 import kotlinx.coroutines.launch
 
@@ -105,6 +123,11 @@ fun RemoteCollectionScreen(route: RemoteCollectionRoute) {
     val load by vm.load.collectAsStateWithLifecycle()
     val lookup by vm.lookup.collectAsStateWithLifecycle()
     val progress by vm.progress.collectAsStateWithLifecycle()
+    val nowPlaying by vm.nowPlaying.collectAsStateWithLifecycle()
+    val here by vm.here.collectAsStateWithLifecycle()
+    val online by vm.online.collectAsStateWithLifecycle()
+    val playOnline by vm.playOnline.collectAsStateWithLifecycle()
+    var menuOpen by remember { mutableStateOf(false) }
     val detail = (load as? RemoteLoad.Loaded)?.detail
     val kind = vm.kind
     val title = detail?.collection?.title?.takeIf { it.isNotBlank() } ?: route.title
@@ -141,7 +164,13 @@ fun RemoteCollectionScreen(route: RemoteCollectionRoute) {
     }
 
     val action = PrimaryAction.of(kind == CollectionKind.PLAYLIST, progress, vm.localPlaylistId != null, vm.enqueuing)
-    val trackIds = remember(detail) { detail?.tracks?.map { it.videoId }.orEmpty() }
+    // Streaming needs the network; without it the songs already on the phone still play.
+    val canPlay = online || progress.done > 0
+
+    fun message(text: String) {
+        snackbar.currentSnackbarData?.dismiss()
+        scope.launch { snackbar.showSnackbar(text) }
+    }
 
     Box(Modifier.fillMaxSize().background(SurcoColors.Ink)) {
         LazyColumn(
@@ -169,6 +198,10 @@ fun RemoteCollectionScreen(route: RemoteCollectionRoute) {
                     onOpenLibrary = vm::openInLibrary,
                     onOpenDownloads = navigator::openDownloads,
                     onRetryFailed = vm::retryFailed,
+                    here = here,
+                    canPlay = canPlay,
+                    onPlay = { vm.playAll(shuffle = false) },
+                    onShuffle = { vm.playAll(shuffle = true) },
                     modifier = Modifier.onSizeChanged { headerHeight = it.height },
                 )
             }
@@ -191,17 +224,22 @@ fun RemoteCollectionScreen(route: RemoteCollectionRoute) {
                     }
                     itemsIndexed(tracks, key = { i, t -> "$i:${t.videoId}" }, contentType = { _, _ -> "song" }) { index, track ->
                         val state = lookup.stateOf(track.videoId)
-                        val tap = {
-                            if (state == ItemDownload.None) haptics.performHapticFeedback(HapticFeedbackType.Confirm)
-                            vm.onSongTap(track)
-                        }
+                        val current = nowPlaying.of(track.videoId)
                         RemoteSongRow(
                             track = track,
                             state = state,
-                            onClick = tap,
-                            onIndicatorClick = tap,
+                            onClick = {
+                                if (SongTapAction.of(state, playOnline, online) == SongTapAction.Download) haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+                                vm.onSongTap(track)
+                            },
+                            onIndicatorClick = {
+                                if (state == ItemDownload.None) haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+                                vm.onIndicatorTap(track)
+                            },
                             number = if (kind == CollectionKind.ALBUM) index + 1 else null,
                             subtitle = rowSubtitle(kind, track),
+                            isCurrent = current != null,
+                            isPlaying = current == true,
                         )
                     }
                     if (kind == CollectionKind.ARTIST && l.detail.related.isNotEmpty()) {
@@ -234,7 +272,7 @@ fun RemoteCollectionScreen(route: RemoteCollectionRoute) {
                 .padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            BackButton(onClick = navigator::back, backdrop = 0.45f * (1f - barAlpha))
+            BarButton(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.back), onClick = navigator::back, backdrop = 0.45f * (1f - barAlpha))
             Spacer(Modifier.width(8.dp))
             Text(
                 title,
@@ -244,6 +282,10 @@ fun RemoteCollectionScreen(route: RemoteCollectionRoute) {
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f).graphicsLayer { alpha = barAlpha },
             )
+            if (detail != null) {
+                Spacer(Modifier.width(8.dp))
+                BarButton(Icons.Rounded.MoreVert, stringResource(R.string.more_options), onClick = { menuOpen = true }, backdrop = 0.45f * (1f - barAlpha))
+            }
         }
 
         SnackbarHost(
@@ -263,7 +305,46 @@ fun RemoteCollectionScreen(route: RemoteCollectionRoute) {
             )
         }
     }
+
+    val loaded = detail
+    if (menuOpen && loaded != null) {
+        val res = context.resources
+        val count = loaded.tracks.distinctBy { it.videoId }.size
+        val items = buildList {
+            if (count > 0) {
+                add(
+                    MenuItem(Icons.Rounded.SubdirectoryArrowRight, res.getString(R.string.detail_menu_play_next)) {
+                        val n = vm.queueAll(next = true)
+                        if (n > 0) message(res.getQuantityString(R.plurals.detail_play_next_done, n, n))
+                    },
+                )
+                add(
+                    MenuItem(Icons.AutoMirrored.Rounded.QueueMusic, res.getString(R.string.detail_menu_enqueue)) {
+                        val n = vm.queueAll(next = false)
+                        if (n > 0) message(res.getQuantityString(R.plurals.detail_enqueue_done, n, n))
+                    },
+                )
+            }
+            add(MenuItem(Icons.Rounded.Share, res.getString(R.string.search_remote_share)) { Share.collection(context, loaded.collection) })
+        }
+        CollectionMenuSheet(
+            title = title,
+            subtitle = listOfNotNull(collectionLabel(kind), author).joinToString(" · "),
+            art = { m -> Cover(thumbnail, m, seed = title, shape = if (kind == CollectionKind.ARTIST) CircleShape else RoundedCornerShape(Dimens.CoverCorner)) },
+            items = items,
+            onDismiss = { menuOpen = false },
+        )
+    }
 }
+
+@Composable
+private fun collectionLabel(kind: CollectionKind): String = stringResource(
+    when (kind) {
+        CollectionKind.ALBUM -> R.string.search_kind_album
+        CollectionKind.PLAYLIST -> R.string.search_kind_playlist
+        CollectionKind.ARTIST -> R.string.search_kind_artist
+    },
+)
 
 private fun rowSubtitle(kind: CollectionKind, track: RemoteTrack): String {
     val duration = track.durationMs?.takeIf { it > 0 }?.let(::formatDuration)
@@ -276,8 +357,9 @@ private fun rowSubtitle(kind: CollectionKind, track: RemoteTrack): String {
     }
 }
 
+/** Round button of the top bar, on a dark disc while it floats over the cover's color. */
 @Composable
-private fun BackButton(onClick: () -> Unit, backdrop: Float) {
+private fun BarButton(icon: ImageVector, description: String, onClick: () -> Unit, backdrop: Float) {
     val interaction = remember { MutableInteractionSource() }
     Box(
         Modifier
@@ -288,7 +370,7 @@ private fun BackButton(onClick: () -> Unit, backdrop: Float) {
             .clickable(interactionSource = interaction, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.back), tint = SurcoColors.Text)
+        Icon(icon, description, tint = SurcoColors.Text)
     }
 }
 
@@ -309,6 +391,10 @@ private fun RemoteHeader(
     onOpenLibrary: () -> Unit,
     onOpenDownloads: () -> Unit,
     onRetryFailed: () -> Unit,
+    here: HerePlaying?,
+    canPlay: Boolean,
+    onPlay: () -> Unit,
+    onShuffle: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp
@@ -374,7 +460,19 @@ private fun RemoteHeader(
             if (loading) {
                 Box(Modifier.fillMaxWidth().height(52.dp).shimmer(CircleShape))
             } else {
-                PrimaryActionView(kind, action, onDownloadAll, onOpenLibrary, onOpenDownloads)
+                val playable = !tracks.isNullOrEmpty()
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.weight(1f)) {
+                        // With Play beside it, downloading is the quiet (outlined) action: one accent per screen.
+                        PrimaryActionView(kind, action, onDownloadAll, onOpenLibrary, onOpenDownloads, filled = !playable)
+                    }
+                    if (playable) {
+                        Spacer(Modifier.width(12.dp))
+                        ShuffleCircle(active = here?.shuffle == true, enabled = canPlay, onClick = onShuffle)
+                        Spacer(Modifier.width(10.dp))
+                        PlayCircle(playing = here?.playing == true, enabled = canPlay, onClick = onPlay)
+                    }
+                }
             }
 
             val note = when {
@@ -421,6 +519,7 @@ private fun PrimaryActionView(
     onDownloadAll: () -> Unit,
     onOpenLibrary: () -> Unit,
     onOpenDownloads: () -> Unit,
+    filled: Boolean,
 ) {
     AnimatedContent(
         targetState = action,
@@ -439,15 +538,66 @@ private fun PrimaryActionView(
                 },
                 onClick = onDownloadAll,
                 icon = Icons.Rounded.Download,
+                filled = filled,
+                compact = !filled,
             )
-            PrimaryAction.SavePlaylist -> BigButton(stringResource(R.string.search_remote_save_playlist), onDownloadAll, icon = Icons.AutoMirrored.Rounded.PlaylistAdd)
+            PrimaryAction.SavePlaylist -> BigButton(stringResource(R.string.search_remote_save_playlist), onDownloadAll, icon = Icons.AutoMirrored.Rounded.PlaylistAdd, filled = filled, compact = !filled)
             is PrimaryAction.Progress -> {
                 // The live numbers come from the latest action, not the one the transition captured.
                 val live = action as? PrimaryAction.Progress ?: a
                 ProgressPill(stringResource(R.string.search_remote_progress, live.done, live.total), live.fraction, onClick = onOpenDownloads)
             }
-            PrimaryAction.InLibrary -> BigButton(stringResource(R.string.search_remote_in_library), onOpenLibrary, icon = Icons.Rounded.CheckCircle, filled = false)
+            PrimaryAction.InLibrary -> BigButton(stringResource(R.string.search_remote_in_library), onOpenLibrary, icon = Icons.Rounded.CheckCircle, filled = false, compact = !filled)
         }
+    }
+}
+
+/** The big round Play of the page (accent): streams it all; pauses when this page is playing. */
+@Composable
+private fun PlayCircle(playing: Boolean, enabled: Boolean, onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    val label = stringResource(if (playing) R.string.pause else R.string.search_remote_play)
+    Box(
+        Modifier
+            .size(56.dp)
+            .pressScale(interaction, 0.9f)
+            .clip(CircleShape)
+            .background(if (enabled) SurcoColors.Accent else SurcoColors.Surface3)
+            .clickable(interactionSource = interaction, indication = null, role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = label },
+        contentAlignment = Alignment.Center,
+    ) {
+        AnimatedContent(playing, transitionSpec = { (fadeIn(tween(160)) + scaleIn(Motion.bouncy(), initialScale = 0.6f)) togetherWith fadeOut(tween(100)) }, label = "pagePlay") { on ->
+            Icon(
+                if (on) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                null,
+                tint = if (enabled) SurcoColors.OnAccent else SurcoColors.TextFaint,
+                modifier = Modifier.size(30.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ShuffleCircle(active: Boolean, enabled: Boolean, onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    val label = stringResource(R.string.search_remote_shuffle)
+    val tint = when {
+        !enabled -> SurcoColors.TextFaint
+        active -> SurcoColors.Accent
+        else -> SurcoColors.Text
+    }
+    Box(
+        Modifier
+            .size(48.dp)
+            .pressScale(interaction, 0.9f)
+            .clip(CircleShape)
+            .border(1.dp, if (active && enabled) SurcoColors.Accent.copy(alpha = 0.5f) else SurcoColors.Hairline, CircleShape)
+            .clickable(interactionSource = interaction, indication = null, role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = label },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(Icons.Rounded.Shuffle, null, tint = tint, modifier = Modifier.size(22.dp))
     }
 }
 

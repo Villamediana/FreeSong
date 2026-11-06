@@ -132,9 +132,17 @@ class SearchViewModel(
     private val recentStore: RecentSearchStore,
     onlineFlow: Flow<Boolean>,
     initiallyOnline: Boolean,
+    /** Settings.playOnlineByDefault: a tap streams the song (true) or downloads it (false). */
+    playOnlineFlow: Flow<Boolean> = flowOf(true),
 ) : ViewModel() {
 
     val online: StateFlow<Boolean> = onlineFlow.stateIn(viewModelScope, SharingStarted.Eagerly, initiallyOnline)
+
+    val playOnline: StateFlow<Boolean> = playOnlineFlow.stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    /** The song playing now — its row in the results gets the live bars. */
+    val nowPlaying: StateFlow<NowPlaying?> = player.state.nowPlaying()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     // ------------------------------------------------------------------ query
 
@@ -353,13 +361,37 @@ class SearchViewModel(
         }
     }
 
-    /** One tap on a song: download it, retry it, or play it when it is on the phone. */
-    fun onSongTap(track: RemoteTrack, context: List<String>, sourceTitle: String) {
-        when (val s = lookup.value.stateOf(track.videoId)) {
-            ItemDownload.None -> download(listOf(track))
-            is ItemDownload.Failed -> retry(s.taskId, track.videoId)
-            ItemDownload.Done -> playDownloaded(track.videoId, context, sourceTitle)
-            ItemDownload.Queued, is ItemDownload.Running -> Unit
+    /**
+     * One tap on a song: streams the visible songs from it (the default), or — with online play off
+     * or no network — plays the downloaded copy, downloads it or retries it.
+     */
+    fun onSongTap(track: RemoteTrack, songs: List<RemoteTrack>, sourceTitle: String) {
+        val state = lookup.value.stateOf(track.videoId)
+        perform(SongTapAction.of(state, playOnline.value, online.value), track, songs, sourceTitle)
+    }
+
+    /** The trailing button keeps the song on the phone: download, retry, or play the local copy. */
+    fun onIndicatorTap(track: RemoteTrack, songs: List<RemoteTrack>, sourceTitle: String) {
+        perform(SongTapAction.ofIndicator(lookup.value.stateOf(track.videoId)), track, songs, sourceTitle)
+    }
+
+    /** "Ouvir agora" on the link card. */
+    fun listenNow(track: RemoteTrack) {
+        val action = if (online.value) SongTapAction.PlayOnline else SongTapAction.of(lookup.value.stateOf(track.videoId), true, false)
+        perform(action, track, listOf(track), track.title)
+    }
+
+    private fun perform(action: SongTapAction, track: RemoteTrack, songs: List<RemoteTrack>, sourceTitle: String) {
+        when (action) {
+            SongTapAction.PlayOnline -> {
+                val list = songs.distinctBy { it.videoId }.takeIf { l -> l.any { it.videoId == track.videoId } } ?: listOf(track)
+                player.playOnline(list, list.indexOfFirst { it.videoId == track.videoId }, PlaySource(PlaySource.Type.SEARCH, sourceTitle))
+            }
+            SongTapAction.PlayDownloaded -> playDownloaded(track.videoId, songs.map { it.videoId }, sourceTitle)
+            SongTapAction.Download -> download(listOf(track))
+            is SongTapAction.Retry -> retry(action.taskId, track.videoId)
+            SongTapAction.Offline -> _events.trySend(SearchEvent.Message(R.string.search_play_offline))
+            SongTapAction.Busy -> Unit
         }
     }
 
@@ -471,6 +503,7 @@ class SearchViewModel(
                 recentStore = RecentSearchStore(g.appContext),
                 onlineFlow = Connectivity.online(g.appContext),
                 initiallyOnline = Connectivity.isOnline(g.appContext),
+                playOnlineFlow = g.settings.settings.map { it.playOnlineByDefault }.distinctUntilChanged(),
             )
         }
     }

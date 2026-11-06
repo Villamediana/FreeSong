@@ -1,9 +1,15 @@
 package com.villamediana.surco.ui.player
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -29,6 +35,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,8 +46,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -61,6 +71,7 @@ internal fun LyricsCard(
     onSeek: (Long) -> Unit,
     onOpen: () -> Unit,
     modifier: Modifier = Modifier,
+    streamed: Boolean = false,
 ) {
     val colors = LyricColors.over(lyricsBackground(washTarget))
     Column(
@@ -82,8 +93,8 @@ internal fun LyricsCard(
             PlayerIconButton(Icons.Rounded.OpenInFull, stringResource(R.string.player_lyrics_open), onOpen, size = 44.dp, iconSize = 18.dp)
         }
         when (lyrics) {
-            LyricsState.Loading -> Spacer(Modifier.height(140.dp))
-            LyricsState.None -> NoLyrics(Modifier.padding(start = 20.dp, end = 20.dp, bottom = 26.dp))
+            LyricsState.Loading -> LyricsLoading(lineHeight = 20.dp, Modifier.padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 30.dp))
+            LyricsState.None, LyricsState.Offline -> NoLyrics(lyrics, streamed, Modifier.padding(start = 20.dp, end = 20.dp, bottom = 26.dp))
             is LyricsState.Ready -> LyricsLines(
                 lyrics = lyrics.lyrics,
                 clock = clock,
@@ -99,11 +110,29 @@ internal fun LyricsCard(
 }
 
 @Composable
-private fun NoLyrics(modifier: Modifier = Modifier) {
+private fun NoLyrics(state: LyricsState, streamed: Boolean, modifier: Modifier = Modifier) {
+    val (title, body) = when {
+        state == LyricsState.Offline -> R.string.player_lyrics_offline_title to R.string.player_lyrics_offline_body
+        streamed -> R.string.player_lyrics_none_title to R.string.player_lyrics_none_online
+        else -> R.string.player_lyrics_none_title to R.string.player_lyrics_none_body
+    }
     Column(modifier) {
-        Text(stringResource(R.string.player_lyrics_none_title), style = MaterialTheme.typography.headlineSmall, color = SurcoColors.Text)
+        Text(stringResource(title), style = MaterialTheme.typography.headlineSmall, color = SurcoColors.Text)
         Spacer(Modifier.height(4.dp))
-        Text(stringResource(R.string.player_lyrics_none_body), style = MaterialTheme.typography.bodyMedium, color = SurcoColors.Text.copy(alpha = 0.7f))
+        Text(stringResource(body), style = MaterialTheme.typography.bodyMedium, color = SurcoColors.Text.copy(alpha = 0.7f))
+    }
+}
+
+/** Looking the lyrics up online: a few soft lines breathing where the words will be. */
+@Composable
+private fun LyricsLoading(lineHeight: Dp, modifier: Modifier = Modifier) {
+    val transition = rememberInfiniteTransition(label = "lyricsLoading")
+    val pulse by transition.animateFloat(0.07f, 0.15f, infiniteRepeatable(tween(900), RepeatMode.Reverse), label = "pulse")
+    val label = stringResource(R.string.player_lyrics_loading)
+    Column(modifier.fillMaxWidth().semantics { contentDescription = label }, verticalArrangement = Arrangement.spacedBy(lineHeight * 0.7f)) {
+        listOf(0.82f, 0.64f, 0.74f, 0.48f).forEach { w ->
+            Box(Modifier.fillMaxWidth(w).height(lineHeight).clip(RoundedCornerShape(lineHeight / 2)).drawBehind { drawRect(SurcoColors.Text.copy(alpha = pulse)) })
+        }
     }
 }
 
@@ -121,6 +150,7 @@ internal fun LyricsScreen(
     onTogglePlay: () -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
+    streamed: Boolean = false,
 ) {
     val colors = LyricColors.over(lyricsBackground(washTarget))
     Box(
@@ -161,8 +191,8 @@ internal fun LyricsScreen(
                     },
             ) {
                 when (lyrics) {
-                    LyricsState.Loading -> Unit
-                    LyricsState.None -> NoLyrics(Modifier.padding(horizontal = 28.dp, vertical = 24.dp))
+                    LyricsState.Loading -> LyricsLoading(lineHeight = 28.dp, Modifier.padding(horizontal = 28.dp, vertical = 32.dp))
+                    LyricsState.None, LyricsState.Offline -> NoLyrics(lyrics, streamed, Modifier.padding(horizontal = 28.dp, vertical = 24.dp))
                     is LyricsState.Ready -> LyricsLines(
                         lyrics = lyrics.lyrics,
                         clock = clock,

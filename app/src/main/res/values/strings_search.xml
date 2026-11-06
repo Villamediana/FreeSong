@@ -171,4 +171,13 @@
     <string name="dl_empty_action">Buscar música</string>
     <string name="dl_play_missing">Essa música não está mais no celular.</string>
     <string name="dl_action_error">Não deu para fazer isso agora.</string>
+
+    <!-- Tocar online (segunda leva) -->
+    <string name="search_play_offline">Sem internet para tocar online. Só as baixadas tocam agora.</string>
+    <string name="search_link_listen">Ouvir agora</string>
+    <string name="search_link_percent">%1$d%%</string>
+    <string name="search_link_retry">Tentar</string>
+    <string name="search_remote_play">Tocar tudo</string>
+    <string name="search_remote_shuffle">Tocar em ordem aleatória</string>
+    <string name="search_remote_share">Compartilhar</string>
 </resources>

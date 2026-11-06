@@ -39,6 +39,7 @@ import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.PushPin
 import androidx.compose.material.icons.rounded.RemoveCircleOutline
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.SwapVert
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -81,9 +82,12 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.villamediana.surco.R
 import com.villamediana.surco.data.db.PlaylistEntry
 import com.villamediana.surco.data.model.PlaylistDetail
+import com.villamediana.surco.online.CollectionKind
+import com.villamediana.surco.online.RemoteCollection
 import com.villamediana.surco.ui.components.Cover
 import com.villamediana.surco.ui.components.EmptyState
 import com.villamediana.surco.ui.components.MosaicCover
+import com.villamediana.surco.ui.components.Share
 import com.villamediana.surco.ui.nav.PlaylistRoute
 import com.villamediana.surco.ui.sheets.ConfirmDialog
 import com.villamediana.surco.ui.sheets.PlaylistContext
@@ -337,6 +341,12 @@ private fun PlaylistContent(detail: PlaylistDetail, vm: PlaylistViewModel) {
                     add(MenuItem(Icons.Rounded.Image, res.getString(R.string.detail_menu_choose_cover)) { choosingCover = true })
                     if (entries.size > 1) add(MenuItem(Icons.Rounded.SwapVert, res.getString(R.string.detail_menu_reorder)) { editing = true })
                     addAll(queueMenuItems(tracks, res, snackbar.feedback) { sheets.addToPlaylist = it })
+                    playlist.sourceUrl?.takeIf { it.startsWith("http") }?.let { url ->
+                        // Imported from YouTube: share the original playlist's link.
+                        add(MenuItem(Icons.Rounded.Share, res.getString(R.string.detail_menu_share)) {
+                            Share.collection(context, RemoteCollection(CollectionKind.PLAYLIST, url, summary.name))
+                        })
+                    }
                     add(MenuItem(Icons.Rounded.DeleteOutline, res.getString(R.string.detail_menu_delete_playlist), destructive = true) { confirmDelete = true })
                 }
                 CollectionMenuSheet(

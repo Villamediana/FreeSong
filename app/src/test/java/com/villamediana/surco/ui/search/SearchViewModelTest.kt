@@ -18,6 +18,7 @@ import com.villamediana.surco.online.ResolvedLink
 import com.villamediana.surco.online.SearchFilter
 import com.villamediana.surco.online.SearchItem
 import com.villamediana.surco.playback.PlaySource
+import com.villamediana.surco.playback.PlaybackState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -52,6 +53,7 @@ class SearchViewModelTest {
     private val downloads = FakeDownloads()
     private val player = FakePlayer()
     private val online = MutableStateFlow(true)
+    private val playOnline = MutableStateFlow(true)
     private lateinit var vm: SearchViewModel
 
     @Before
@@ -61,9 +63,10 @@ class SearchViewModelTest {
         db = SurcoDatabase.inMemory(context)
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         library = LibraryRepository(db, scope)
-        vm = SearchViewModel(youTube, library, downloads, player, RecentSearchStore(context), online, initiallyOnline = true)
+        vm = SearchViewModel(youTube, library, downloads, player, RecentSearchStore(context), online, initiallyOnline = true, playOnlineFlow = playOnline)
         // The screen keeps these subscribed.
         scope.launch { vm.lookup.collect { } }
+        scope.launch { vm.nowPlaying.collect { } }
         scope.launch { vm.local.collect { } }
         scope.launch { vm.suggestions.collect { } }
     }
@@ -246,7 +249,7 @@ class SearchViewModelTest {
         downloads.setState("new", DownloadState.FAILED)
         awaitUntil { vm.lookup.value.stateOf("new") is ItemDownload.Failed }
         val failed = vm.lookup.value.stateOf("new") as ItemDownload.Failed
-        vm.onSongTap(remoteTrack("new"), listOf("new"), "q")
+        vm.onIndicatorTap(remoteTrack("new"), listOf(remoteTrack("new")), "q")
         awaitUntil { downloads.retried.toList() == listOf(failed.taskId) }
         awaitUntil { vm.lookup.value.stateOf("new") == ItemDownload.Queued }
 
@@ -256,16 +259,82 @@ class SearchViewModelTest {
     }
 
     @Test
-    fun tappingADownloadedSongPlaysTheDownloadedResultsInOrder() {
+    fun tappingADownloadedSongPlaysTheDownloadedResultsInOrderWhenOnlinePlayIsOff() {
+        playOnline.value = false
         insertTrack("a")
         insertTrack("c")
         awaitUntil { vm.lookup.value.isDownloaded("a") && vm.lookup.value.isDownloaded("c") }
-        vm.onSongTap(remoteTrack("c"), listOf("a", "b", "c"), "soda")
+        vm.onSongTap(remoteTrack("c"), listOf(remoteTrack("a"), remoteTrack("b"), remoteTrack("c")), "soda")
         awaitUntil { player.plays.size == 1 }
         val play = player.plays.single()
         assertEquals(listOf("a", "c"), play.tracks.map { it.videoId })
         assertEquals(1, play.index)
         assertEquals(PlaySource(PlaySource.Type.SEARCH, "soda"), play.source)
+        assertTrue(player.onlinePlays.isEmpty())
+
+        // Not downloaded → the tap downloads it, as before online play existed.
+        vm.onSongTap(remoteTrack("b"), listOf(remoteTrack("a"), remoteTrack("b"), remoteTrack("c")), "soda")
+        awaitUntil { downloads.downloadCalls.size == 1 }
+        assertEquals(listOf("b"), downloads.downloadCalls.single().map { it.videoId })
+        assertTrue(player.onlinePlays.isEmpty())
+    }
+
+    @Test
+    fun tappingASongStreamsTheVisibleResultsFromIt() {
+        insertTrack("b") // downloaded songs stream too: the player picks the local copy itself
+        awaitUntil { vm.lookup.value.isDownloaded("b") }
+        val songs = listOf(remoteTrack("a"), remoteTrack("b"), remoteTrack("c"), remoteTrack("b"))
+        vm.onSongTap(songs[1], songs, "soda")
+        val play = player.onlinePlays.single()
+        assertEquals(listOf("a", "b", "c"), play.tracks.map { it.videoId })
+        assertEquals(1, play.index)
+        assertEquals(PlaySource(PlaySource.Type.SEARCH, "soda"), play.source)
+        assertTrue(player.plays.isEmpty())
+        assertTrue(downloads.downloadCalls.isEmpty())
+
+        // The trailing button still keeps a song on the phone.
+        vm.onIndicatorTap(songs[2], songs, "soda")
+        awaitUntil { downloads.downloadCalls.size == 1 }
+        assertEquals(listOf("c"), downloads.downloadCalls.single().map { it.videoId })
+        assertEquals(1, player.onlinePlays.size)
+    }
+
+    @Test
+    fun withoutNetworkOnlyDownloadedSongsPlayAndTheRestExplain() {
+        insertTrack("a")
+        awaitUntil { vm.lookup.value.isDownloaded("a") }
+        online.value = false
+        awaitUntil { !vm.online.value }
+        val songs = listOf(remoteTrack("a"), remoteTrack("b"))
+        vm.onSongTap(songs[0], songs, "soda")
+        awaitUntil { player.plays.size == 1 }
+        assertEquals(listOf("a"), player.plays.single().tracks.map { it.videoId })
+
+        vm.onSongTap(songs[1], songs, "soda")
+        assertEquals(SearchEvent.Message(R.string.search_play_offline), nextEvent())
+        assertTrue(player.onlinePlays.isEmpty())
+        assertTrue(downloads.downloadCalls.isEmpty())
+    }
+
+    @Test
+    fun listenNowStreamsTheSharedSong() {
+        val song = remoteTrack("dQw4w9WgXcQ", "Té para Tres")
+        vm.listenNow(song)
+        val play = player.onlinePlays.single()
+        assertEquals(listOf(song), play.tracks)
+        assertEquals(0, play.index)
+        assertEquals(PlaySource(PlaySource.Type.SEARCH, "Té para Tres"), play.source)
+    }
+
+    @Test
+    fun theSongPlayingNowLightsUpItsRow() {
+        assertNull(vm.nowPlaying.value)
+        player.stateFlow.value = PlaybackState(current = Track(id = -5, videoId = "a", title = "A", artist = "B", filePath = "https://music.youtube.com/watch?v=a"), isPlaying = true)
+        awaitUntil { vm.nowPlaying.value == NowPlaying("a", true) }
+        assertEquals(true, vm.nowPlaying.value.of("a"))
+        assertNull(vm.nowPlaying.value.of("b"))
+        player.stateFlow.value = player.stateFlow.value.copy(isPlaying = false)
+        awaitUntil { vm.nowPlaying.value == NowPlaying("a", false) }
     }
 
     @Test

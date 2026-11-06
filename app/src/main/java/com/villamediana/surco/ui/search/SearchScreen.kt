@@ -180,6 +180,7 @@ fun SearchScreen() {
         LinkActions(
             download = { t -> vm.download(listOf(t)) },
             play = { t -> vm.playDownloaded(t.videoId, listOf(t.videoId), t.title) },
+            listen = vm::listenNow,
             retry = { t, taskId -> vm.retry(taskId, t.videoId) },
             dismiss = vm::dismissLink,
         )
@@ -317,6 +318,7 @@ fun SearchScreen() {
 private class LinkActions(
     val download: (com.villamediana.surco.online.RemoteTrack) -> Unit,
     val play: (com.villamediana.surco.online.RemoteTrack) -> Unit,
+    val listen: (com.villamediana.surco.online.RemoteTrack) -> Unit,
     val retry: (com.villamediana.surco.online.RemoteTrack, Long) -> Unit,
     val dismiss: () -> Unit,
 )
@@ -331,6 +333,7 @@ private fun LazyListScope.linkCard(card: LinkCard?, lookup: DownloadLookup, acti
             state = state,
             onDownload = { track?.let(actions.download) },
             onPlay = { track?.let(actions.play) },
+            onListen = { track?.let(actions.listen) },
             onRetry = { if (track != null && state is ItemDownload.Failed) actions.retry(track, state.taskId) },
             onDismiss = actions.dismiss,
             modifier = Modifier.animateItem().padding(top = 4.dp, bottom = 22.dp),
@@ -535,6 +538,7 @@ private fun TypingContent(
 ) {
     val suggestions by vm.suggestions.collectAsStateWithLifecycle()
     val local by vm.local.collectAsStateWithLifecycle()
+    val nowPlaying by vm.nowPlaying.collectAsStateWithLifecycle()
     val typed = vm.query.text.trim()
     val isLink = remember(typed) { YouTubeLinks.contains(typed) }
     val navigator = navigator()
@@ -562,6 +566,7 @@ private fun TypingContent(
             onArtist = navigator::openArtist,
             onPlaylist = navigator::openPlaylist,
             topGap = suggestions.isNotEmpty() || isLink,
+            nowPlaying = nowPlaying,
         )
     }
 }
@@ -588,6 +593,7 @@ private fun LazyListScope.localSection(
     onArtist: (String) -> Unit,
     onPlaylist: (Long) -> Unit,
     topGap: Boolean,
+    nowPlaying: NowPlaying?,
 ) {
     if (local == null || local.isEmpty) return
     if (topGap) item(key = "local-gap") { Spacer(Modifier.height(18.dp)) }
@@ -595,11 +601,14 @@ private fun LazyListScope.localSection(
         SectionHeader(title = stringResource(R.string.search_in_library), modifier = Modifier.animateItem())
     }
     itemsIndexed(local.tracks.take(4), key = { _, t -> "lt:${t.id}" }) { index, track ->
+        val current = track.videoId?.let { nowPlaying.of(it) }
         TrackRow(
             track = track,
             onClick = { onPlay(local.tracks, index, sourceTitle) },
             onMore = { onTrackMore(track) },
             showDuration = track.durationMs > 0,
+            isCurrent = current != null,
+            isPlaying = current == true,
             modifier = Modifier.animateItem(),
         )
     }
@@ -724,6 +733,7 @@ private fun ErrorState(error: SearchError, onRetry: () -> Unit, card: LinkCard?,
 @Composable
 private fun OfflineResults(vm: SearchViewModel, lookup: DownloadLookup, actions: LinkActions, onTrackMore: (Track) -> Unit) {
     val local by vm.local.collectAsStateWithLifecycle()
+    val nowPlaying by vm.nowPlaying.collectAsStateWithLifecycle()
     val navigator = navigator()
     val hasLocal = local?.isEmpty == false
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(top = 4.dp, bottom = LocalBottomInset.current)) {
@@ -745,6 +755,7 @@ private fun OfflineResults(vm: SearchViewModel, lookup: DownloadLookup, actions:
             onArtist = navigator::openArtist,
             onPlaylist = navigator::openPlaylist,
             topGap = false,
+            nowPlaying = nowPlaying,
         )
     }
 }
@@ -755,9 +766,12 @@ private fun ResultsList(vm: SearchViewModel, r: ResultsState, lookup: DownloadLo
     val haptics = LocalHapticFeedback.current
     val listState = remember(r.query, r.filter) { LazyListState() }
     HideKeyboardOnScroll(listState, onScroll)
-    val songIds = remember(r.items) { r.items.mapNotNull { (it as? SearchItem.Song)?.track?.videoId } }
+    val songs = remember(r.items) { r.items.mapNotNull { (it as? SearchItem.Song)?.track } }
     val selection = vm.selection
     val selecting = selection.isNotEmpty()
+    val nowPlaying by vm.nowPlaying.collectAsStateWithLifecycle()
+    val playOnline by vm.playOnline.collectAsStateWithLifecycle()
+    val online by vm.online.collectAsStateWithLifecycle()
 
     // Infinite scroll: ask for the next page when the end gets close.
     LaunchedEffect(listState, r.query, r.filter) {
@@ -780,14 +794,21 @@ private fun ResultsList(vm: SearchViewModel, r: ResultsState, lookup: DownloadLo
                     val state = lookup.stateOf(track.videoId)
                     val selectable = state == ItemDownload.None || state is ItemDownload.Failed
                     val tap = {
-                        if (state == ItemDownload.None) haptics.performHapticFeedback(HapticFeedbackType.Confirm)
-                        vm.onSongTap(track, songIds, r.query)
+                        if (SongTapAction.of(state, playOnline, online) == SongTapAction.Download) haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+                        vm.onSongTap(track, songs, r.query)
                     }
+                    val keep = {
+                        if (state == ItemDownload.None) haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+                        vm.onIndicatorTap(track, songs, r.query)
+                    }
+                    val current = nowPlaying.of(track.videoId)
                     RemoteSongRow(
                         track = track,
                         state = state,
                         onClick = { if (selecting) { if (selectable) vm.toggleSelection(track) } else tap() },
-                        onIndicatorClick = tap,
+                        onIndicatorClick = keep,
+                        isCurrent = current != null,
+                        isPlaying = current == true,
                         onLongClick = {
                             if (selectable) {
                                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)

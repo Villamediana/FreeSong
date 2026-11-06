@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import com.villamediana.surco.R
 import com.villamediana.surco.SurcoApplication
 import com.villamediana.surco.data.LibraryRepository
+import com.villamediana.surco.data.asTransientTrack
 import com.villamediana.surco.data.db.AlbumKey
 import com.villamediana.surco.download.DownloadController
 import com.villamediana.surco.online.CollectionDetail
@@ -27,6 +28,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -34,6 +38,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.random.Random
 
 enum class RemoteError { Offline, NotFound, RateLimited, Generic }
 
@@ -49,6 +54,9 @@ sealed interface LocalDestination {
     data class Album(val key: AlbumKey) : LocalDestination
     data class Artist(val name: String) : LocalDestination
 }
+
+/** The player is on this page: is it sounding, is shuffle on. */
+data class HerePlaying(val playing: Boolean, val shuffle: Boolean)
 
 sealed interface RemoteEvent {
     data class Open(val destination: LocalDestination) : RemoteEvent
@@ -76,11 +84,26 @@ class RemoteCollectionViewModel(
     private val player: PlayerConnection,
     onlineFlow: Flow<Boolean>,
     initiallyOnline: Boolean,
+    /** Settings.playOnlineByDefault: a tap on a song streams the page from it (true) or downloads it (false). */
+    playOnlineFlow: Flow<Boolean> = flowOf(true),
+    private val random: Random = Random.Default,
 ) : ViewModel() {
 
     val kind: CollectionKind = CollectionKind.entries.firstOrNull { it.name == route.kind } ?: CollectionKind.PLAYLIST
 
     val online: StateFlow<Boolean> = onlineFlow.stateIn(viewModelScope, SharingStarted.Eagerly, initiallyOnline)
+
+    val playOnline: StateFlow<Boolean> = playOnlineFlow.stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    /** The song playing now — its row gets the live bars. */
+    val nowPlaying: StateFlow<NowPlaying?> = player.state.nowPlaying()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** Whether the player is on this page (played online from here), and whether it sounds. */
+    val here: StateFlow<HerePlaying?> = player.state
+        .map { s -> if (s.current != null && s.source?.id == route.url) HerePlaying(s.isPlaying, s.shuffle) else null }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     private val _load = MutableStateFlow<RemoteLoad>(RemoteLoad.Loading)
     val load: StateFlow<RemoteLoad> = _load
@@ -208,31 +231,109 @@ class RemoteCollectionViewModel(
         }
     }
 
+    /**
+     * A tap on a song: streams the page from it (the default), or — with online play off or no
+     * network — plays the local copy, downloads it or retries it.
+     */
     fun onSongTap(track: RemoteTrack) {
-        when (val s = lookup.value.stateOf(track.videoId)) {
-            ItemDownload.None -> download(track)
-            is ItemDownload.Failed -> retry(s.taskId, track.videoId)
-            ItemDownload.Done -> play(track.videoId)
-            ItemDownload.Queued, is ItemDownload.Running -> Unit
+        when (val action = SongTapAction.of(lookup.value.stateOf(track.videoId), playOnline.value, online.value)) {
+            // Keeps the page's shuffle when it is already the one playing.
+            SongTapAction.PlayOnline -> streamFrom(track.videoId, shuffle = here.value?.shuffle ?: false)
+            else -> runIndicator(action, track)
         }
     }
 
-    /** Plays this page's songs that are on the phone, in page order, starting at [videoId]. */
-    private fun play(videoId: String) {
+    /** The trailing button keeps the song on the phone: download, retry, or play the local copy. */
+    fun onIndicatorTap(track: RemoteTrack) = runIndicator(SongTapAction.ofIndicator(lookup.value.stateOf(track.videoId)), track)
+
+    private fun runIndicator(action: SongTapAction, track: RemoteTrack) {
+        when (action) {
+            SongTapAction.Download -> download(track)
+            is SongTapAction.Retry -> retry(action.taskId, track.videoId)
+            SongTapAction.PlayDownloaded -> play(track.videoId, shuffle = false)
+            SongTapAction.Offline -> _events.trySend(RemoteEvent.Message(R.string.search_play_offline))
+            SongTapAction.PlayOnline -> streamFrom(track.videoId, shuffle = here.value?.shuffle ?: false)
+            SongTapAction.Busy -> Unit
+        }
+    }
+
+    /**
+     * The big Play / Shuffle: streams the whole page from its first song (or a random one). Without
+     * network the songs already on the phone play instead. Play on the page that is playing pauses.
+     */
+    fun playAll(shuffle: Boolean) {
+        val detail = detail ?: return
+        if (detail.tracks.isEmpty()) return
+        val current = here.value
+        if (!shuffle && current != null) {
+            player.togglePlayPause()
+            return
+        }
+        when {
+            online.value -> streamFrom(null, shuffle)
+            detail.tracks.any { lookup.value.isDownloaded(it.videoId) } -> play(null, shuffle)
+            else -> _events.trySend(RemoteEvent.Message(R.string.search_play_offline))
+        }
+    }
+
+    /** The page's songs, once each (the same video twice would be the same transient song). */
+    private fun pageTracks(): List<RemoteTrack> = detail?.tracks?.distinctBy { it.videoId }.orEmpty()
+
+    private fun source(): PlaySource = PlaySource(sourceType(), detail?.collection?.title?.ifBlank { null } ?: route.title, route.url)
+
+    private fun sourceType(): PlaySource.Type = when (kind) {
+        CollectionKind.ALBUM -> PlaySource.Type.ALBUM
+        CollectionKind.PLAYLIST -> PlaySource.Type.PLAYLIST
+        CollectionKind.ARTIST -> PlaySource.Type.ARTIST
+    }
+
+    private fun streamFrom(videoId: String?, shuffle: Boolean) {
+        val tracks = pageTracks()
+        if (tracks.isEmpty()) return
+        val start = when {
+            videoId != null -> tracks.indexOfFirst { it.videoId == videoId }.coerceAtLeast(0)
+            shuffle -> random.nextInt(tracks.size)
+            else -> 0
+        }
+        player.playOnline(tracks, start, source())
+        player.setShuffle(shuffle)
+    }
+
+    /** Plays this page's songs that are on the phone, in page order, starting at [videoId] (or the first / a random one). */
+    private fun play(videoId: String?, shuffle: Boolean) {
         val detail = detail ?: return
         viewModelScope.launch {
             val l = lookup.value
             val ids = detail.tracks.map { it.videoId }.distinct().filter(l::isDownloaded)
             val tracks = ids.mapNotNull { library.trackByVideoId(it) }
-            val index = tracks.indexOfFirst { it.videoId == videoId }
-            if (index < 0) return@launch
-            val type = when (kind) {
-                CollectionKind.ALBUM -> PlaySource.Type.ALBUM
-                CollectionKind.PLAYLIST -> PlaySource.Type.PLAYLIST
-                CollectionKind.ARTIST -> PlaySource.Type.ARTIST
+            if (tracks.isEmpty()) return@launch
+            val index = when {
+                videoId != null -> tracks.indexOfFirst { it.videoId == videoId }
+                shuffle -> random.nextInt(tracks.size)
+                else -> 0
             }
-            player.play(tracks, index, PlaySource(type, detail.collection.title.ifBlank { route.title }, localPlaylistId?.toString()))
+            if (index < 0) return@launch
+            player.play(tracks, index, PlaySource(sourceType(), detail.collection.title.ifBlank { route.title }, localPlaylistId?.toString()), shuffle)
         }
+    }
+
+    /**
+     * "Tocar a seguir" / "Adicionar à fila" for the whole page: downloaded songs go as the local
+     * copy, the rest streamed. Returns how many songs were queued (0 = nothing, or no network).
+     */
+    fun queueAll(next: Boolean): Int {
+        val tracks = pageTracks()
+        if (tracks.isEmpty()) return 0
+        if (!online.value) {
+            _events.trySend(RemoteEvent.Message(R.string.search_play_offline))
+            return 0
+        }
+        viewModelScope.launch {
+            val l = lookup.value
+            val songs = tracks.map { t -> (if (l.isDownloaded(t.videoId)) library.trackByVideoId(t.videoId) else null) ?: t.asTransientTrack() }
+            if (next) player.playNext(songs) else player.enqueue(songs)
+        }
+        return tracks.size
     }
 
     /** "Na sua biblioteca": the local playlist, album or artist these songs became. */
@@ -267,6 +368,7 @@ class RemoteCollectionViewModel(
                 player = g.player,
                 onlineFlow = Connectivity.online(g.appContext),
                 initiallyOnline = Connectivity.isOnline(g.appContext),
+                playOnlineFlow = g.settings.settings.map { it.playOnlineByDefault }.distinctUntilChanged(),
             )
         }
     }
