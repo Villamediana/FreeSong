@@ -7,6 +7,7 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import com.villamediana.surco.ui.nav.ExternalRequest
 import com.villamediana.surco.ui.nav.SurcoRoot
 import com.villamediana.surco.ui.theme.SurcoTheme
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,11 +37,9 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handle(intent: Intent?) {
-        val text = when (intent?.action) {
-            Intent.ACTION_SEND -> intent.getStringExtra(Intent.EXTRA_TEXT)
-            Intent.ACTION_VIEW -> intent.dataString
-            else -> null
+        when (val request = ExternalRequest.of(intent)) {
+            is ExternalRequest.OpenLink -> incomingLink.value = request.text
+            null -> Unit
         }
-        if (!text.isNullOrBlank()) incomingLink.value = text
     }
 }
