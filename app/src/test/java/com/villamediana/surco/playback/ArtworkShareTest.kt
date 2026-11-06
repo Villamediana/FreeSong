@@ -9,6 +9,7 @@ import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -21,6 +22,8 @@ import java.io.File
 class ArtworkShareTest {
     private val context = ApplicationProvider.getApplicationContext<Application>()
     private val share = ArtworkShare(context)
+
+    @Before fun freshProviderPaths() = resetFileProviderPaths()
 
     private fun item(art: Uri?) = MediaItem.Builder()
         .setMediaId("album/x")
@@ -47,9 +50,34 @@ class ArtworkShareTest {
         assertSame(none, share.forController(none, "com.example.car"))
     }
 
+    @Test fun queueItemsGetTheProviderUriToo() {
+        val covers = context.getExternalFilesDir(Environment.DIRECTORY_MUSIC)!!.resolve("surco/covers").apply { mkdirs() }
+        val cover = File(covers, "luz.jpg").apply { writeBytes(byteArrayOf(4, 5)) }
+        val shared = share.shareable(item(Uri.fromFile(cover)))
+        val art = shared.mediaMetadata.artworkUri!!
+        assertEquals("content", art.scheme)
+        assertEquals(art, share.shareableUri(Uri.fromFile(cover)))
+        context.contentResolver.openInputStream(art)!!.use { assertEquals(listOf<Byte>(4, 5), it.readBytes().toList()) }
+        // Already shareable: passes as it is (and a grant for a car is just a grant).
+        assertSame(shared, share.shareable(shared))
+        assertEquals(art, share.forController(shared, "com.google.android.projection.gearhead").mediaMetadata.artworkUri)
+        share.grantCovers("com.google.android.projection.gearhead", covers)
+        val online = Uri.parse("https://lh3.googleusercontent.com/x=w720")
+        assertSame(online, share.shareableUri(online))
+    }
+
     @Test fun filesOutsideTheSharedFoldersAreNotExposed() {
         val secret = File(context.filesDir.parentFile, "databases/surco.db")
         val shared = share.forController(item(Uri.fromFile(secret)), "com.example.car")
         assertNull(shared.mediaMetadata.artworkUri)
     }
+}
+
+/**
+ * FileProvider keeps each authority's folders in a static cache, built from the first test's app
+ * folders; Robolectric gives every test new ones. Tests that share files through it start clean.
+ */
+internal fun resetFileProviderPaths() {
+    val cache = androidx.core.content.FileProvider::class.java.getDeclaredField("sCache").apply { isAccessible = true }.get(null) as HashMap<*, *>
+    synchronized(cache) { cache.clear() }
 }

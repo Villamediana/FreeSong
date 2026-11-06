@@ -236,7 +236,7 @@ class PlaybackService : MediaLibraryService() {
             }
             val track = tracksById[id]
             if (track == null) gone += i
-            else if (!MediaItems.matches(item, track)) swaps += i to mediaItemOf(track)
+            else if (!upToDate(item, track)) swaps += i to mediaItemOf(track)
         }
         if (swaps.isEmpty() && gone.isEmpty() && currentToFile == null) return
         // A replaced uri is a remove + add for ExoPlayer, which would drop the song somewhere random in the shuffle.
@@ -323,8 +323,15 @@ class PlaybackService : MediaLibraryService() {
 
     // ================================================================ queue helpers
 
-    /** Media3 item for a song: the library file, or the online stream at the current quality setting. */
-    private fun mediaItemOf(track: Track): MediaItem = MediaItems.of(track, settings.audioQuality)
+    /**
+     * Media3 item for a song: the library file, or the online stream at the current quality setting.
+     * Its cover is a content:// uri: the queue reaches other apps too (car, system media controls).
+     */
+    private fun mediaItemOf(track: Track): MediaItem = artwork.shareable(MediaItems.of(track, settings.audioQuality))
+
+    /** True when the queue's [item] already shows what [track] says. */
+    private fun upToDate(item: MediaItem, track: Track): Boolean =
+        MediaItems.matches(item, track, artwork.shareableUri(MediaItems.coverUri(track.coverPath)))
 
     /** Media ids in timeline order — what identifies "the same queue" across async work. */
     private fun mediaKeys(): List<String> = (0 until player.mediaItemCount).map { player.getMediaItemAt(it).mediaId }
@@ -872,6 +879,7 @@ class PlaybackService : MediaLibraryService() {
             val commands = base.availableSessionCommands.buildUpon()
             SessionProtocol.publicCommands.forEach { commands.add(SessionProtocol.command(it)) }
             if (controller.packageName == packageName) SessionProtocol.appCommands.forEach { commands.add(SessionProtocol.command(it)) }
+            else artwork.grantCovers(controller.packageName, graph.storage.coversDir)
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session, controller)
                 .setAvailableSessionCommands(commands.build())
                 .setAvailablePlayerCommands(base.availablePlayerCommands)
@@ -1006,7 +1014,9 @@ class PlaybackService : MediaLibraryService() {
                         pendingRestoreKeys = items.map { it.mediaId }
                         publishExtras()
                     }
-                    result.set(MediaSession.MediaItemsWithStartPosition(items, snap.index, snap.positionMs))
+                    // The system's resume card shows the current song's cover: it gets to read it.
+                    val shown = if (isForPlayback) items else items.mapIndexed { i, item -> if (i == snap.index) artwork.forController(item, controller.packageName) else item }
+                    result.set(MediaSession.MediaItemsWithStartPosition(shown, snap.index, snap.positionMs))
                 } catch (c: CancellationException) {
                     result.cancel(false)
                 } catch (t: Throwable) {

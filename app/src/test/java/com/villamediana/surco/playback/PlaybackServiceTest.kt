@@ -23,6 +23,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -60,6 +61,7 @@ class PlaybackServiceTest {
 
     @Before fun setUp() {
         com.villamediana.surco.testing.blockMediaSessionBinding()
+        resetFileProviderPaths()
         val audio = wav(20)
         tracks = runBlocking {
             graph.settings.setLastQueueJson(null)
@@ -246,6 +248,41 @@ class PlaybackServiceTest {
         idleUntil { player.playerError != null }
         assertEquals(StreamErrors.code(OnlineException.Kind.NO_NETWORK), player.playerError!!.errorCode)
         assertEquals("yt:a", player.currentMediaItem!!.mediaId)
+    }
+
+    // ------------------------------------------------------------------ covers for other apps
+
+    private fun withCover(track: Track): Track {
+        val cover = File(graph.storage.coversDir, "${track.id}.jpg").apply { writeBytes(byteArrayOf(1, 2, 3)) }
+        val updated = track.copy(coverPath = cover.absolutePath)
+        runBlocking { graph.db.tracks().update(updated) }
+        return updated
+    }
+
+    @Test fun theQueueCarriesCoversOtherAppsCanOpen() {
+        val covered = withCover(tracks[0])
+        start()
+        play(listOf(covered.id, tracks[1].id), 0)
+        val art = player.getMediaItemAt(0).mediaMetadata.artworkUri!!
+        assertEquals("content", art.scheme)
+        assertEquals("${app.packageName}.files", art.authority)
+        app.contentResolver.openInputStream(art)!!.use { assertEquals(3, it.readBytes().size) }
+
+        // Library updates (a like, a play count) don't make the queue look out of date because of it.
+        val item = player.getMediaItemAt(0)
+        runBlocking { graph.library.setLiked(tracks[1].id, true) }
+        idle(300)
+        assertSame(item, player.getMediaItemAt(0))
+    }
+
+    @Test fun theSystemResumeCardGetsAReadableCover() {
+        val covered = withCover(tracks[2])
+        runBlocking {
+            graph.settings.setLastQueueJson(QueueSnapshot(ids = listOf(tracks[1].id, covered.id), index = 1).encode())
+        }
+        start()
+        val result = await(callback.onPlaybackResumption(session, appController, false))
+        assertEquals("content", result.mediaItems[result.startIndex].mediaMetadata.artworkUri!!.scheme)
     }
 
     // ------------------------------------------------------------------ listening stats
