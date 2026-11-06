@@ -1,0 +1,57 @@
+package com.villamediana.surco.ui.settings
+
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.villamediana.surco.SurcoApplication
+import com.villamediana.surco.data.AudioQuality
+import com.villamediana.surco.data.Settings
+import com.villamediana.surco.data.model.LibraryStats
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class SettingsViewModel(app: Application) : AndroidViewModel(app) {
+    private val graph = SurcoApplication.graph
+    private val store = graph.settings
+    private val library = graph.library
+
+    val settings: StateFlow<Settings?> = store.settings.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    val stats: StateFlow<LibraryStats?> = library.stats.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** Everything Surco keeps on the phone (audio, covers, lyrics) — re-measured when the library's size changes. */
+    val usedBytes: StateFlow<Long?> = library.stats
+        .map { it.trackCount to it.bytes }
+        .distinctUntilChanged()
+        .mapLatest { withContext(Dispatchers.IO) { graph.storage.usedBytes() } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    private val _historyCleared = MutableStateFlow(false)
+    val historyCleared: StateFlow<Boolean> = _historyCleared
+
+    fun setQuality(q: AudioQuality) = launch { store.setAudioQuality(q) }
+    fun setWifiOnly(v: Boolean) = launch { store.setWifiOnly(v) }
+    fun setParallel(n: Int) = launch { store.setParallelDownloads(n) }
+    fun setFetchLyrics(v: Boolean) = launch { store.setFetchLyrics(v) }
+    fun setSmartShuffle(v: Boolean) = launch { store.setSmartShuffle(v) }
+    fun setAutoplay(v: Boolean) = launch { store.setAutoplaySimilar(v) }
+
+    fun clearHistory() = launch {
+        library.clearHistory()
+        _historyCleared.value = true
+    }
+
+    private fun launch(block: suspend () -> Unit) {
+        viewModelScope.launch { block() }
+    }
+}

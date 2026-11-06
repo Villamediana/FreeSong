@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Início -->
+    <string name="home_greeting_morning">Bom dia</string>
+    <string name="home_greeting_afternoon">Boa tarde</string>
+    <string name="home_greeting_night">Boa noite</string>
+    <string name="home_settings">Ajustes</string>
+    <string name="home_liked">Curtidas</string>
+    <string name="home_smart_title">Aleatório inteligente</string>
+    <string name="home_smart_subtitle">Toca a sua biblioteca e aprende com o que você curte.</string>
+    <string name="home_made_for_you">Feitos pra você</string>
+    <string name="home_recently_played">Tocadas recentemente</string>
+    <string name="home_recently_added">Adicionadas recentemente</string>
+    <string name="home_by_genre">Por gênero</string>
+    <string name="home_your_artists">Seus artistas</string>
+    <string name="home_empty_line">Busque, baixe e ouça sem internet</string>
+    <string name="home_empty_action">Buscar músicas</string>
+    <plurals name="home_downloads_active">
+        <item quantity="one">%d download em andamento</item>
+        <item quantity="many">%d downloads em andamento</item>
+        <item quantity="other">%d downloads em andamento</item>
+    </plurals>
+    <plurals name="home_downloads_failed">
+        <item quantity="one">%d download com erro</item>
+        <item quantity="many">%d downloads com erro</item>
+        <item quantity="other">%d downloads com erro</item>
+    </plurals>
+
+    <!-- Mixes (SmartMixes) -->
+    <string name="home_mix_genre">Seu %1$s</string>
+    <string name="home_mix_genre_subtitle">%1$s e mais</string>
+    <string name="home_mix_liked">Suas curtidas</string>
+    <string name="home_mix_liked_subtitle">As que você mais ama, misturadas</string>
+    <string name="home_mix_on_repeat">No repeat</string>
+    <string name="home_mix_on_repeat_subtitle">O que você não para de ouvir</string>
+    <string name="home_mix_rediscover">Redescubra</string>
+    <string name="home_mix_rediscover_subtitle">Faz tempo que você não ouve</string>
+    <string name="home_mix_fresh">Recém-chegadas</string>
+    <string name="home_mix_fresh_subtitle">O que você acabou de baixar</string>
+    <string name="home_mix_decade">Anos %1$d</string>
+    <string name="home_mix_decade_short">Anos %1$02d</string>
+    <string name="home_mix_decade_subtitle">Uma viagem no tempo</string>
+    <string name="home_mix_artist">Mix de %1$s</string>
+    <string name="home_mix_daily">Mix do dia</string>
+    <string name="home_mix_daily_subtitle">Um pouco de tudo que você gosta</string>
+
+    <!-- Biblioteca -->
+    <string name="home_lib_title">Sua biblioteca</string>
+    <string name="home_lib_new_playlist">Nova playlist</string>
+    <string name="home_lib_playlist_name">Nome</string>
+    <string name="home_lib_playlist_description">Descrição (opcional)</string>
+    <string name="home_lib_create">Criar</string>
+    <string name="home_lib_clear_filter">Limpar filtro</string>
+    <string name="home_lib_filter_playlists">Playlists</string>
+    <string name="home_lib_filter_albums">Álbuns</string>
+    <string name="home_lib_filter_artists">Artistas</string>
+    <string name="home_lib_filter_songs">Músicas</string>
+    <string name="home_lib_filter_genres">Gêneros</string>
+    <string name="home_lib_sort_by">Ordenar por</string>
+    <string name="home_lib_sort_recent">Recentes</string>
+    <string name="home_lib_sort_added">Adicionados recentemente</string>
+    <string name="home_lib_sort_alpha">A–Z</string>
+    <string name="home_lib_sort_artist">Artista</string>
+    <string name="home_lib_sort_plays">Mais tocados</string>
+    <string name="home_lib_view_list">Ver em lista</string>
+    <string name="home_lib_view_grid">Ver em grade</string>
+    <string name="home_lib_playlist_sub">Playlist · %1$s</string>
+    <string name="home_lib_album_sub">Álbum · %1$s</string>
+    <string name="home_lib_artist_sub">Artista</string>
+    <string name="home_lib_pinned">Fixado</string>
+    <string name="home_lib_pin">Fixar na biblioteca</string>
+    <string name="home_lib_unpin">Desafixar</string>
+    <string name="home_lib_delete_playlist">Apagar playlist</string>
+    <string name="home_lib_delete_title">Apagar “%1$s”?</string>
+    <string name="home_lib_delete_body">As músicas continuam no celular.</string>
+    <string name="home_lib_all_songs">Todas as músicas</string>
+    <string name="home_lib_downloads">Downloads</string>
+    <plurals name="home_lib_dl_active">
+        <item quantity="one">Baixando %d música</item>
+        <item quantity="many">Baixando %d músicas</item>
+        <item quantity="other">Baixando %d músicas</item>
+    </plurals>
+    <plurals name="home_lib_dl_failed">
+        <item quantity="one">%d com erro</item>
+        <item quantity="many">%d com erro</item>
+        <item quantity="other">%d com erro</item>
+    </plurals>
+    <string name="home_lib_dl_pair">%1$s · %2$s</string>
+    <string name="home_lib_dl_done">Tudo baixado</string>
+    <string name="home_lib_empty_title">Sua biblioteca está vazia</string>
+    <string name="home_lib_empty_body">Busque e baixe músicas pra ouvir sem internet.</string>
+    <string name="home_lib_empty_playlists_title">Nenhuma playlist ainda</string>
+    <string name="home_lib_empty_playlists_body">Crie uma ou baixe uma playlist inteira do YouTube.</string>
+    <string name="home_lib_empty_albums_title">Nenhum álbum ainda</string>
+    <string name="home_lib_empty_albums_body">Baixe um álbum inteiro pela busca.</string>
+    <string name="home_lib_empty_artists_title">Nenhum artista ainda</string>
+    <string name="home_lib_empty_artists_body">Os artistas aparecem conforme você baixa músicas.</string>
+    <string name="home_lib_empty_songs_title">Nenhuma música ainda</string>
+    <string name="home_lib_empty_songs_body">Busque e baixe as músicas que quiser.</string>
+    <string name="home_lib_empty_genres_title">Nenhum gênero ainda</string>
+    <string name="home_lib_empty_genres_body">Os gêneros aparecem quando as músicas baixadas trazem essa informação.</string>
+
+    <!-- Ajustes -->
+    <string name="home_settings_group_downloads">Downloads</string>
+    <string name="home_settings_group_playback">Reprodução</string>
+    <string name="home_settings_group_storage">Armazenamento</string>
+    <string name="home_settings_group_about">Sobre</string>
+    <string name="home_settings_quality">Qualidade do áudio</string>
+    <string name="home_settings_quality_sub">Vale para os próximos downloads.</string>
+    <string name="home_settings_quality_best">Máxima</string>
+    <string name="home_settings_quality_best_sub">Opus ~160 kbps, o melhor som disponível</string>
+    <string name="home_settings_quality_compatible">Compatível</string>
+    <string name="home_settings_quality_compatible_sub">AAC ~128 kbps, toca em qualquer aparelho</string>
+    <string name="home_settings_quality_saver">Econômica</string>
+    <string name="home_settings_quality_saver_sub">~64 kbps, ocupa pouco espaço</string>
+    <string name="home_settings_quality_size">≈ %1$s</string>
+    <string name="home_settings_quality_per_song">por música</string>
+    <string name="home_settings_wifi">Baixar só no Wi-Fi</string>
+    <string name="home_settings_wifi_sub">Os downloads esperam uma rede Wi-Fi.</string>
+    <string name="home_settings_parallel">Downloads simultâneos</string>
+    <string name="home_settings_parallel_sub">Quantas músicas baixar ao mesmo tempo.</string>
+    <string name="home_settings_lyrics">Buscar letras</string>
+    <string name="home_settings_lyrics_sub">Baixa a letra junto, sincronizada quando houver.</string>
+    <string name="home_settings_smart_shuffle">Aleatório inteligente</string>
+    <string name="home_settings_smart_shuffle_sub">Mistura pelo seu gosto e evita o mesmo artista em seguida.</string>
+    <string name="home_settings_autoplay">Continuar com músicas parecidas</string>
+    <string name="home_settings_autoplay_sub">Quando a fila acaba, segue com músicas parecidas da sua biblioteca.</string>
+    <string name="home_settings_storage_used">usados no celular</string>
+    <plurals name="home_settings_stat_songs">
+        <item quantity="one">música</item>
+        <item quantity="many">músicas</item>
+        <item quantity="other">músicas</item>
+    </plurals>
+    <plurals name="home_settings_stat_albums">
+        <item quantity="one">álbum</item>
+        <item quantity="many">álbuns</item>
+        <item quantity="other">álbuns</item>
+    </plurals>
+    <plurals name="home_settings_stat_artists">
+        <item quantity="one">artista</item>
+        <item quantity="many">artistas</item>
+        <item quantity="other">artistas</item>
+    </plurals>
+    <string name="home_settings_stat_hours">horas</string>
+    <string name="home_settings_clear_history">Limpar histórico</string>
+    <string name="home_settings_clear_history_sub">Zera as reproduções que alimentam os mixes.</string>
+    <string name="home_settings_history_cleared">Histórico limpo</string>
+    <string name="home_settings_clear_title">Limpar histórico?</string>
+    <string name="home_settings_clear_body">O registro de reproduções usado pelos mixes e pelo aleatório inteligente recomeça do zero. Suas músicas continuam no celular.</string>
+    <string name="home_settings_clear_confirm">Limpar</string>
+    <string name="home_settings_version">Versão %1$s</string>
+    <string name="home_settings_credits">Feito com</string>
+    <string name="home_settings_credit_newpipe">Busca e download no YouTube · GPL-3.0</string>
+    <string name="home_settings_credit_itunes">Capas e informações dos álbuns</string>
+    <string name="home_settings_credit_lrclib">Letras sincronizadas</string>
+</resources>
