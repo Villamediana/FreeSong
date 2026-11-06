@@ -163,12 +163,17 @@ fun SleeveWithRecord(cover: String?, seed: String, spinning: Boolean, modifier: 
             }
         }
     }
+    // Tucked a bit into the sleeve while idle, slides out when it plays.
+    val out by animateFloatAsState(if (spinning) 1f else 0f, Motion.bouncy(), label = "recordOut")
     Box(modifier.size(width = sleeve * 1.42f, height = sleeve)) {
         Box(
             Modifier
                 .size(sleeve * 0.94f)
                 .align(Alignment.CenterEnd)
-                .graphicsLayer { rotationZ = rotation.value },
+                .graphicsLayer {
+                    translationX = -(1f - out) * sleeve.toPx() * 0.16f
+                    rotationZ = rotation.value
+                },
             contentAlignment = Alignment.Center,
         ) {
             Canvas(Modifier.fillMaxSize()) {

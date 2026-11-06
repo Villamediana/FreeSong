@@ -321,7 +321,7 @@ private fun QualityPicker(current: AudioQuality, onPick: (AudioQuality) -> Unit)
                 Column(Modifier.weight(1f)) {
                     Text(stringResource(title), style = MaterialTheme.typography.titleSmall, color = if (selected) SurcoColors.Text else SurcoColors.TextMuted)
                     Spacer(Modifier.height(1.dp))
-                    Text(stringResource(body), style = MaterialTheme.typography.bodySmall, color = SurcoColors.TextFaint, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(stringResource(body), style = MaterialTheme.typography.bodySmall, color = SurcoColors.TextFaint, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
                 Spacer(Modifier.width(10.dp))
                 Column(horizontalAlignment = Alignment.End) {
@@ -348,14 +348,14 @@ private fun RadioDot(selected: Boolean) {
 
 @Composable
 private fun ParallelRow(current: Int, onPick: (Int) -> Unit) {
-    SettingRow(
-        title = stringResource(R.string.home_settings_parallel),
-        subtitle = stringResource(R.string.home_settings_parallel_sub),
-        onClick = null,
-    ) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)) {
+        Text(stringResource(R.string.home_settings_parallel), style = MaterialTheme.typography.titleMedium, color = SurcoColors.Text)
+        Spacer(Modifier.height(3.dp))
+        Text(stringResource(R.string.home_settings_parallel_sub), style = MaterialTheme.typography.bodyMedium, color = SurcoColors.TextMuted)
+        Spacer(Modifier.height(12.dp))
         Row(
-            Modifier.clip(RoundedCornerShape(10.dp)).background(SurcoColors.Surface3).padding(3.dp),
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(SurcoColors.Surface3).padding(3.dp),
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
         ) {
             (1..4).forEach { n ->
                 val selected = n == current
@@ -363,8 +363,9 @@ private fun ParallelRow(current: Int, onPick: (Int) -> Unit) {
                 val fg by animateColorAsState(if (selected) SurcoColors.Ink else SurcoColors.TextMuted, label = "segText")
                 Box(
                     Modifier
-                        .size(width = 34.dp, height = 32.dp)
-                        .clip(RoundedCornerShape(8.dp))
+                        .weight(1f)
+                        .height(36.dp)
+                        .clip(RoundedCornerShape(9.dp))
                         .background(bg)
                         .clickable { onPick(n) },
                     contentAlignment = Alignment.Center,

@@ -17,8 +17,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -71,21 +73,35 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
 
     private val view: Flow<View> = combine(filter, prefs.sort, prefs.viewMode) { f, s, m -> View(f, s, m) }
 
-    val state: StateFlow<LibraryUiState> = combine(source, view, graph.downloads.tasks) { src, v, tasks ->
-        val sections = buildSections(src, v.filter, v.sort)
-        val empty = src.tracks.isEmpty() && src.playlists.isEmpty()
+    private data class Built(val view: View, val sections: LibrarySections, val empty: Boolean, val likedCount: Int, val songCount: Int)
+
+    /** Sorting/grouping only reruns when the library or the view changes — not on download progress. */
+    private val built: Flow<Built> = combine(source, view) { src, v ->
+        Built(
+            view = v,
+            sections = buildSections(src, v.filter, v.sort),
+            empty = src.tracks.isEmpty() && src.playlists.isEmpty(),
+            likedCount = src.tracks.count { it.liked },
+            songCount = src.tracks.size,
+        )
+    }.flowOn(Dispatchers.Default)
+
+    private val downloads: Flow<DownloadsRowState?> = graph.downloads.tasks.map { downloadsRow(it) }.distinctUntilChanged()
+
+    val state: StateFlow<LibraryUiState> = combine(built, downloads) { b, dl ->
+        val f = b.view.filter
         LibraryUiState(
             loaded = true,
-            filter = v.filter,
-            sort = effectiveSort(v.sort, v.filter),
-            viewMode = v.mode,
-            libraryEmpty = empty,
-            likedCount = src.tracks.count { it.liked },
-            showLiked = showsLiked(v.filter) && !empty,
-            downloads = if (showsDownloads(v.filter)) downloadsRow(tasks) else null,
-            pinned = sections.pinned,
-            items = sections.items,
-            songCount = src.tracks.size,
+            filter = f,
+            sort = effectiveSort(b.view.sort, f),
+            viewMode = b.view.mode,
+            libraryEmpty = b.empty,
+            likedCount = b.likedCount,
+            showLiked = showsLiked(f) && !b.empty,
+            downloads = if (showsDownloads(f)) dl else null,
+            pinned = b.sections.pinned,
+            items = b.sections.items,
+            songCount = b.songCount,
         )
     }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryUiState())
 

@@ -309,7 +309,14 @@ private fun LibraryContent(
                     current = false,
                     playing = false,
                     onClick = { nav.openSongs() },
-                    trailing = { Icon(Icons.Rounded.ChevronRight, null, tint = SurcoColors.TextFaint, modifier = Modifier.size(22.dp)) },
+                    trailing = {
+                        Box(Modifier.padding(start = 2.dp).size(40.dp), contentAlignment = Alignment.Center) {
+                            Icon(Icons.Rounded.ChevronRight, null, tint = SurcoColors.TextFaint, modifier = Modifier.size(22.dp))
+                        }
+                    },
+                    // Same metrics as the TrackRows below it.
+                    artSize = Dimens.RowCover,
+                    height = Dimens.RowHeight,
                     modifier = Modifier.animateItem(),
                 )
             }
@@ -420,16 +427,18 @@ private fun LibraryRow(
     onLongClick: (() -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
     horizontalPadding: Dp = Dimens.Gutter,
+    artSize: Dp = 56.dp,
+    height: Dp = 72.dp,
 ) {
     Row(
         modifier
             .fillMaxWidth()
-            .height(72.dp)
+            .height(height)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = horizontalPadding),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        art(Modifier.size(56.dp))
+        art(Modifier.size(artSize))
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(
