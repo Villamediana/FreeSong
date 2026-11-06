@@ -198,6 +198,101 @@ class YouTubeMusicParserTest {
         assertTrue(albums.all { it.url.startsWith("https://music.youtube.com/playlist?list=OLAK5uy_") })
     }
 
+    private val songSearch = json(
+        """
+        {"contents":{"tabbedSearchResultsRenderer":{"tabs":[{"tabRenderer":{"content":{"sectionListRenderer":{"contents":[
+          {"musicShelfRenderer":{"contents":[
+            {"musicResponsiveListItemRenderer":{
+               "thumbnail":{"musicThumbnailRenderer":{"thumbnail":{"thumbnails":[{"url":"https://lh3.googleusercontent.com/dt=w60-h60-l90-rj","width":60,"height":60},{"url":"https://lh3.googleusercontent.com/dt=w120-h120-l90-rj","width":120,"height":120}]}}},
+               "flexColumns":[
+                 {"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"DtMF","navigationEndpoint":{"watchEndpoint":{"videoId":"TiebZllW8As"}}}]}}},
+                 {"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[
+                    {"text":"Bad Bunny","navigationEndpoint":{"browseEndpoint":{"browseId":"UCiY3z8HAGD6BlSNKVn2kSvQ"}}},{"text":" • "},
+                    {"text":"DeBÍ TiRAR MáS FOToS","navigationEndpoint":{"browseEndpoint":{"browseId":"MPREb_tZC7e1H5mfm"}}},{"text":" • "},
+                    {"text":"3:58"}]}}},
+                 {"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"Tocou 1 bi vezes"}]}}}],
+               "playlistItemData":{"videoId":"TiebZllW8As"}}},
+            {"musicResponsiveListItemRenderer":{
+               "flexColumns":[
+                 {"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"UN DIA (ONE DAY)"}]}}},
+                 {"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[
+                    {"text":"J Balvin","navigationEndpoint":{"browseEndpoint":{"browseId":"UCt-k6JwNWHMXDBGm9IYHdsg"}}},{"text":", "},
+                    {"text":"Dua Lipa","navigationEndpoint":{"browseEndpoint":{"browseId":"UC-J-KZfRV8c13fOCkhXdLiQ"}}},{"text":" & "},
+                    {"text":"Bad Bunny","navigationEndpoint":{"browseEndpoint":{"browseId":"UCiY3z8HAGD6BlSNKVn2kSvQ"}}},{"text":" • "},
+                    {"text":"UN DIA (ONE DAY)","navigationEndpoint":{"browseEndpoint":{"browseId":"MPREb_x"}}},{"text":" • "},
+                    {"text":"1:03:52"}]}}}],
+               "playlistItemData":{"videoId":"BjhW3vBA1QU"}}},
+            {"musicResponsiveListItemRenderer":{"musicItemRendererDisplayPolicy":"MUSIC_ITEM_RENDERER_DISPLAY_POLICY_GREY_OUT",
+               "flexColumns":[{"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"Unavailable"}]}}}],
+               "playlistItemData":{"videoId":"zzzzzzzzzzz"}}}],
+            "continuations":[{"nextContinuationData":{"continuation":"EtoKEN-1"}}]}}]}}}}]}}}
+        """,
+    )
+
+    private val albumSearch = json(
+        """
+        {"contents":{"tabbedSearchResultsRenderer":{"tabs":[{"tabRenderer":{"content":{"sectionListRenderer":{"contents":[
+          {"musicShelfRenderer":{"contents":[
+            {"musicResponsiveListItemRenderer":{
+               "thumbnail":{"musicThumbnailRenderer":{"thumbnail":{"thumbnails":[{"url":"https://yt3.googleusercontent.com/fqz=w120-h120-l90-rj","width":120,"height":120}]}}},
+               "overlay":{"musicItemThumbnailOverlayRenderer":{"content":{"musicPlayButtonRenderer":{"playNavigationEndpoint":{"watchPlaylistEndpoint":{"playlistId":"OLAK5uy_nhHzfeEh8qiJo8EbAoWRfLH6wFcYPSigI"}}}}}},
+               "flexColumns":[
+                 {"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"Canción Animal"}]}}},
+                 {"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"Álbum"},{"text":" • "},
+                    {"text":"Soda Stereo","navigationEndpoint":{"browseEndpoint":{"browseId":"UCQJuTjhtb6Oyy2kStA1BUKw"}}},{"text":" • "},{"text":"1990"}]}}}],
+               "navigationEndpoint":{"browseEndpoint":{"browseId":"MPREb_ZMGnFMwKuo8"}}}},
+            {"musicResponsiveListItemRenderer":{
+               "flexColumns":[
+                 {"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"Languis"}]}}},
+                 {"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"EP"},{"text":" • "},{"text":"Soda Stereo"},{"text":" • "},{"text":"1989"}]}}}],
+               "navigationEndpoint":{"browseEndpoint":{"browseId":"MPREb_lc1XfxpYzzM"}}}}]}}]}}}}]}}}
+        """,
+    )
+
+    @Test fun songSearchShelf() {
+        val r = YouTubeMusicParser.searchResults(songSearch, SearchFilter.SONGS)!!
+        val songs = r.items.map { (it as SearchItem.Song).track }
+        assertEquals(2, songs.size)
+        val dtmf = songs[0]
+        assertEquals("TiebZllW8As", dtmf.videoId)
+        assertEquals("DtMF", dtmf.title)
+        assertEquals("Bad Bunny", dtmf.artist)
+        assertEquals("DeBÍ TiRAR MáS FOToS", dtmf.album)
+        assertEquals(238_000L, dtmf.durationMs)
+        assertTrue(dtmf.fromMusicCatalog)
+        assertEquals("https://lh3.googleusercontent.com/dt=w720-h720-l90-rj", dtmf.thumbnailUrl)
+        assertEquals("J Balvin, Dua Lipa & Bad Bunny", songs[1].artist)
+        assertEquals(3_832_000L, songs[1].durationMs)
+        assertEquals("EtoKEN-1", r.continuation)
+    }
+
+    @Test fun albumSearchShelf() {
+        val albums = YouTubeMusicParser.searchResults(albumSearch, SearchFilter.ALBUMS)!!.items.map { (it as SearchItem.Collection).collection }
+        assertEquals(2, albums.size)
+        assertEquals("Canción Animal", albums[0].title)
+        assertEquals("Soda Stereo", albums[0].author)
+        assertEquals(1990, albums[0].year)
+        assertEquals("https://music.youtube.com/playlist?list=OLAK5uy_nhHzfeEh8qiJo8EbAoWRfLH6wFcYPSigI", albums[0].url)
+        assertEquals("https://yt3.googleusercontent.com/fqz=w1080-h1080-l90-rj", albums[0].thumbnailUrl)
+        // Without a play overlay the album page link is kept; author without a link still read.
+        assertEquals("https://music.youtube.com/browse/MPREb_lc1XfxpYzzM", albums[1].url)
+        assertEquals("Soda Stereo", albums[1].author)
+        assertEquals(1989, albums[1].year)
+    }
+
+    @Test fun searchContinuationAndUnknownLayout() {
+        val cont = json(
+            """{"continuationContents":{"musicShelfContinuation":{"contents":[
+                 {"musicResponsiveListItemRenderer":{"flexColumns":[{"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"Song"}]}}}],"playlistItemData":{"videoId":"abcdefghijk"}}}]}}}""",
+        )
+        val r = YouTubeMusicParser.searchResults(cont, SearchFilter.SONGS)!!
+        assertEquals(1, r.items.size)
+        assertNull(r.continuation)
+        assertNull(YouTubeMusicParser.searchResults(json("""{"contents":{"somethingNew":{}}}"""), SearchFilter.SONGS))
+        assertEquals(213_000L, YouTubeMusicParser.durationMs("3:33"))
+        assertNull(YouTubeMusicParser.durationMs("Tocou 1 bi vezes"))
+    }
+
     @Test fun suggestions() {
         val s = YouTubeMusicParser.suggestions(
             json(

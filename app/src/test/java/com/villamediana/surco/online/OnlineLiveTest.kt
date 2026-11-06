@@ -42,12 +42,24 @@ class OnlineLiveTest {
         assertTrue(songs.none { it.artist.endsWith(" - Topic") })
         assertTrue(songs.all { (it.durationMs ?: 0) > 60_000 })
         assertTrue(songs.first().thumbnailUrl!!.contains("=w${Thumbnails.SONG}-h${Thumbnails.SONG}"))
+        // Each catalog song carries its album.
+        assertTrue(songs.count { it.album != null } >= songs.size - 2)
+        assertTrue(songs.any { it.artist == "Soda Stereo" && it.album != null })
         assertTrue(page.hasMore)
         val next = yt.more(page)
         println("SONGS p2: " + next.items.size)
         assertTrue(next.items.isNotEmpty())
         val ids = (page.items + next.items).filterIsInstance<SearchItem.Song>().map { it.track.videoId }
         assertEquals(ids.size, ids.toSet().size)
+    }
+
+    @Test fun searchFindsAlbumEvenWhenTheCatalogLookupCannot() = runBlocking {
+        // iTunes doesn't index this release; YouTube Music's own search still names the album.
+        val dtmf = yt.search("Bad Bunny DtMF", SearchFilter.SONGS).items.filterIsInstance<SearchItem.Song>()
+            .map { it.track }.first { it.title.equals("DtMF", ignoreCase = true) }
+        println("DtMF: $dtmf")
+        assertEquals("Bad Bunny", dtmf.artist)
+        assertTrue(dtmf.album!!.contains("FOToS", ignoreCase = true))
     }
 
     @Test fun searchVideos() = runBlocking {
@@ -70,6 +82,8 @@ class OnlineLiveTest {
         assertTrue(albums.all { it.kind == CollectionKind.ALBUM && it.url.contains("list=OLAK5uy_") })
         assertTrue(albums.any { it.title == "Canción Animal" && it.author == "Soda Stereo" })
         assertTrue(albums.first().thumbnailUrl!!.contains("=w${Thumbnails.COLLECTION}-h${Thumbnails.COLLECTION}"))
+        assertTrue(albums.any { it.title == "Canción Animal" && it.year == 1990 })
+        assertTrue(albums.count { it.year != null } >= albums.size - 2)
         assertTrue(yt.more(page).items.isNotEmpty())
     }
 

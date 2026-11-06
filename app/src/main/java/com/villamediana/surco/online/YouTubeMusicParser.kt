@@ -191,6 +191,108 @@ internal object YouTubeMusicParser {
             .mapNotNull { twoRowAlbum(it, artistName) }
     }
 
+    // ---------------------------------------------------------------- search
+
+    data class SearchResults(val items: List<SearchItem>, val continuation: String?)
+
+    /**
+     * Songs or albums of a search page or continuation. Null when the response isn't laid out as
+     * expected (the caller then falls back to NewPipe's own parser).
+     */
+    fun searchResults(json: JsonObject, filter: SearchFilter): SearchResults? {
+        val shelves: List<JsonObject> = when {
+            json.obj("continuationContents") != null ->
+                listOfNotNull(json.at("continuationContents.musicShelfContinuation") as? JsonObject)
+            json.at("contents.tabbedSearchResultsRenderer") != null ->
+                json.at("contents.tabbedSearchResultsRenderer.tabs.0.tabRenderer.content.sectionListRenderer.contents")
+                    .objects().mapNotNull { it.obj("musicShelfRenderer") }
+            else -> return null
+        }
+        val items = shelves.flatMap { it.arr("contents").objects() }
+            .mapNotNull { it.obj("musicResponsiveListItemRenderer") }
+            .filter { it.str("musicItemRendererDisplayPolicy") != "MUSIC_ITEM_RENDERER_DISPLAY_POLICY_GREY_OUT" }
+            .mapNotNull { row ->
+                when (filter) {
+                    SearchFilter.SONGS -> songSearchRow(row)?.let { SearchItem.Song(it) }
+                    SearchFilter.ALBUMS -> albumSearchRow(row)?.let { SearchItem.Collection(it) }
+                    else -> null
+                }
+            }
+        val continuation = shelves.lastOrNull()?.arr("continuations").objects()
+            .firstNotNullOfOrNull { it.at("nextContinuationData.continuation").asString() }
+        return SearchResults(items, continuation)
+    }
+
+    /** "Artist, Other • Album • 3:58" */
+    private fun songSearchRow(row: JsonObject): RemoteTrack? {
+        val columns = row.arr("flexColumns").objects().map { it.obj("musicResponsiveListItemFlexColumnRenderer")?.obj("text") }
+        val videoId = row.at("playlistItemData.videoId").asString()
+            ?: columns.firstOrNull()?.arr("runs").objects().firstNotNullOfOrNull { it.at("navigationEndpoint.watchEndpoint.videoId").asString() }
+            ?: return null
+        val title = columns.firstOrNull().text()?.trim()?.ifEmpty { null } ?: return null
+        val groups = groups(columns.getOrNull(1)?.arr("runs").objects())
+        val album = groups.flatten().firstOrNull { it.at("navigationEndpoint.browseEndpoint.browseId").asString()?.startsWith("MPREb") == true }
+            ?.str("text")?.trim()
+        val duration = groups.lastOrNull()?.joinToString("") { it.str("text").orEmpty() }?.trim()?.let(::durationMs)
+        val artistGroup = groups.firstOrNull { g -> g.any { it.at("navigationEndpoint.browseEndpoint.browseId").asString()?.startsWith("UC") == true } }
+            ?: groups.firstOrNull()?.takeIf { g -> g.none { it.at("navigationEndpoint.browseEndpoint.browseId").asString()?.startsWith("MPREb") == true } }
+        val artist = artistGroup?.joinToString("") { it.str("text").orEmpty() }?.trim().orEmpty()
+        return RemoteTrack(
+            videoId = videoId,
+            url = YouTubeLinks.watchUrl(videoId, music = true),
+            title = title,
+            artist = TitleCleaner.cleanArtist(artist),
+            album = album?.ifEmpty { null },
+            durationMs = duration,
+            thumbnailUrl = Thumbnails.best(thumbnails(row.obj("thumbnail")), Thumbnails.SONG),
+            fromMusicCatalog = true,
+        )
+    }
+
+    /** "Álbum • Artist • 1990" */
+    private fun albumSearchRow(row: JsonObject): RemoteCollection? {
+        val columns = row.arr("flexColumns").objects().map { it.obj("musicResponsiveListItemFlexColumnRenderer")?.obj("text") }
+        val title = columns.firstOrNull().text()?.trim()?.ifEmpty { null } ?: return null
+        val browseId = row.at("navigationEndpoint.browseEndpoint.browseId").asString()
+        val playlistId = row.obj("overlay")?.findFirst("watchPlaylistEndpoint").str("playlistId")?.takeIf { it.startsWith("OLAK5uy_") }
+        val url = when {
+            playlistId != null -> YouTubeLinks.playlistUrl(playlistId)
+            browseId != null && browseId.startsWith("MPREb_") -> YouTubeLinks.albumBrowseUrl(browseId)
+            else -> return null
+        }
+        val groups = groups(columns.getOrNull(1)?.arr("runs").objects())
+        val texts = groups.map { g -> g.joinToString("") { it.str("text").orEmpty() }.trim() }
+        val year = texts.firstNotNullOfOrNull { yearRe.matchEntire(it)?.value?.toIntOrNull() }
+        val artistGroup = groups.firstOrNull { g -> g.any { it.at("navigationEndpoint.browseEndpoint.browseId").asString()?.startsWith("UC") == true } }
+        val author = artistGroup?.joinToString("") { it.str("text").orEmpty() }?.trim()
+            ?: texts.getOrNull(1)?.takeIf { yearRe.matchEntire(it) == null }
+        return RemoteCollection(
+            kind = CollectionKind.ALBUM,
+            url = url,
+            title = title,
+            author = author?.let(TitleCleaner::cleanArtist)?.ifEmpty { null },
+            thumbnailUrl = Thumbnails.best(thumbnails(row.obj("thumbnail")), Thumbnails.COLLECTION),
+            year = year,
+        )
+    }
+
+    /** Splits description runs on the " • " separators. */
+    private fun groups(runs: List<JsonObject>): List<List<JsonObject>> {
+        val out = mutableListOf<MutableList<JsonObject>>(mutableListOf())
+        for (r in runs) {
+            if (r.str("text")?.trim() == "•") out += mutableListOf<JsonObject>() else out.last() += r
+        }
+        return out.filter { it.isNotEmpty() }
+    }
+
+    private val durationRe = Regex("^(?:(\\d+):)?(\\d{1,2}):(\\d{2})$")
+
+    fun durationMs(text: String): Long? {
+        val m = durationRe.matchEntire(text.trim()) ?: return null
+        val h = m.groupValues[1].toLongOrNull() ?: 0
+        return ((h * 60 + m.groupValues[2].toLong()) * 60 + m.groupValues[3].toLong()) * 1000
+    }
+
     // ---------------------------------------------------------------- suggestions
 
     fun suggestions(json: JsonObject): List<String> =

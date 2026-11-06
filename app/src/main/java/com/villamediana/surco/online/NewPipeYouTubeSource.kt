@@ -44,6 +44,9 @@ class NewPipeYouTubeSource(private val http: OkHttpClient) : YouTubeSource {
     /** Opaque search continuation: the query handler + NewPipe page + what was already shown. */
     private class Cursor(val handler: SearchQueryHandler, val page: Page, val seen: Set<String>)
 
+    /** Continuation of a search read straight from YouTube Music (songs/albums). */
+    private class MusicCursor(val token: String, val seen: Set<String>)
+
     private suspend fun <T> io(what: String, block: () -> T): T = withContext(Dispatchers.IO) {
         NewPipeHttp.init(http)
         onlineCall(what, block)
@@ -55,6 +58,9 @@ class NewPipeYouTubeSource(private val http: OkHttpClient) : YouTubeSource {
         val q = query.trim()
         if (q.isEmpty()) return SearchPage(query, filter, emptyList())
         return io("search") {
+            // Songs and albums: read YouTube Music's shelves ourselves to also get each song's album and
+            // each album's year. NewPipe's parser stays as the fallback if the layout ever changes.
+            musicSearch(query, q, filter)?.let { return@io it }
             val handler = service.searchQHFactory.fromQuery(q, listOf(contentFilter(filter)), "")
             val extractor = service.getSearchExtractor(handler)
             extractor.fetchPage()
@@ -63,7 +69,45 @@ class NewPipeYouTubeSource(private val http: OkHttpClient) : YouTubeSource {
         }
     }
 
+    private fun musicSearch(query: String, q: String, filter: SearchFilter): SearchPage? {
+        val params = when (filter) {
+            SearchFilter.SONGS -> YouTubeMusicApi.PARAMS_SONGS
+            SearchFilter.ALBUMS -> YouTubeMusicApi.PARAMS_ALBUMS
+            else -> return null
+        }
+        val results = runCatching { YouTubeMusicParser.searchResults(music.search(q, params), filter) }.getOrNull() ?: return null
+        return toMusicPage(query, filter, results, emptySet())
+    }
+
+    private fun toMusicPage(query: String, filter: SearchFilter, results: YouTubeMusicParser.SearchResults, seen: Set<String>): SearchPage {
+        val keys = seen.toMutableSet()
+        val items = results.items.filter { keys.add(keyOf(it)) }
+        return SearchPage(query, filter, items, results.continuation?.let { MusicCursor(it, keys) })
+    }
+
+    private fun keyOf(item: SearchItem): String = when (item) {
+        is SearchItem.Song -> "v:" + item.track.videoId
+        is SearchItem.Collection -> "c:" + item.collection.url
+    }
+
     override suspend fun more(page: SearchPage): SearchPage {
+        (page.cursor as? MusicCursor)?.let { cursor ->
+            return io("more") {
+                var token: String? = cursor.token
+                var seen = cursor.seen
+                var result = SearchPage(page.query, page.filter, emptyList(), null)
+                var tries = 0
+                while (token != null && tries < 3) {
+                    val parsed = YouTubeMusicParser.searchResults(music.searchContinuation(token), page.filter) ?: break
+                    result = toMusicPage(page.query, page.filter, parsed, seen)
+                    if (result.items.isNotEmpty()) break
+                    seen = (result.cursor as? MusicCursor)?.seen ?: seen
+                    token = parsed.continuation
+                    tries++
+                }
+                result
+            }
+        }
         val cursor = page.cursor as? Cursor ?: return page.copy(items = emptyList(), cursor = null)
         return io("more") {
             var next: Page? = cursor.page
@@ -95,11 +139,7 @@ class NewPipeYouTubeSource(private val http: OkHttpClient) : YouTubeSource {
         val out = ArrayList<SearchItem>(items.size)
         for (item in items) {
             val converted = toSearchItem(item, filter) ?: continue
-            val key = when (converted) {
-                is SearchItem.Song -> "v:" + converted.track.videoId
-                is SearchItem.Collection -> "c:" + converted.collection.url
-            }
-            if (keys.add(key)) out += converted
+            if (keys.add(keyOf(converted))) out += converted
         }
         val next = nextPage?.takeIf { it.url != null || it.body != null }
         return SearchPage(query, filter, out, next?.let { Cursor(handler, it, keys) })

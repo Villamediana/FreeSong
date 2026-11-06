@@ -14,11 +14,18 @@ import org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper
 import java.io.IOException
 
 /**
- * The few YouTube Music (InnerTube "WEB_REMIX") calls NewPipeExtractor doesn't cover: artist pages,
- * album pages (MPREb_ → OLAK5uy_ playlist, year), playlist headers and music search suggestions.
+ * The YouTube Music (InnerTube "WEB_REMIX") calls NewPipeExtractor doesn't cover: artist pages,
+ * album pages (MPREb_ → OLAK5uy_ playlist, year), playlist headers, suggestions, and the song/album
+ * search shelves read in full (album of each song, year of each album).
  * Blocking — call from Dispatchers.IO.
  */
 internal class YouTubeMusicApi(private val http: OkHttpClient) {
+    companion object {
+        /** Shelf selectors of music.youtube.com/search (same values the web app sends). */
+        const val PARAMS_SONGS = "Eg-KAQwIARAAGAAgACgAMABqChAEEAUQAxAKEAk%3D"
+        const val PARAMS_ALBUMS = "Eg-KAQwIABAAGAEgACgAMABqChAEEAUQAxAKEAk%3D"
+    }
+
     private val jsonType = "application/json".toMediaType()
 
     fun browse(browseId: String, params: String? = null): JsonObject =
@@ -27,6 +34,19 @@ internal class YouTubeMusicApi(private val http: OkHttpClient) {
             put("browseId", browseId)
             if (params != null) put("params", params)
         })
+
+    /** First page of a YouTube Music search; [params] selects the shelf (songs, albums…). */
+    fun search(query: String, params: String): JsonObject =
+        post("search", buildJsonObject {
+            put("context", context())
+            put("query", query)
+            put("params", params)
+        })
+
+    fun searchContinuation(token: String): JsonObject {
+        val t = java.net.URLEncoder.encode(token, "UTF-8")
+        return post("search", buildJsonObject { put("context", context()) }, "ctoken=$t&continuation=$t&type=next")
+    }
 
     fun suggestions(query: String): List<String> =
         YouTubeMusicParser.suggestions(post("music/get_search_suggestions", buildJsonObject {
@@ -50,9 +70,9 @@ internal class YouTubeMusicApi(private val http: OkHttpClient) {
         }
     }
 
-    private fun post(endpoint: String, body: JsonObject): JsonObject {
+    private fun post(endpoint: String, body: JsonObject, query: String? = null): JsonObject {
         val builder = Request.Builder()
-            .url("https://music.youtube.com/youtubei/v1/$endpoint?prettyPrint=false")
+            .url("https://music.youtube.com/youtubei/v1/$endpoint?" + (query?.let { "$it&" } ?: "") + "prettyPrint=false")
             .post(body.toString().toRequestBody(jsonType))
             .header("User-Agent", NewPipeHttp.USER_AGENT)
             .header("Accept-Language", acceptLanguage())
