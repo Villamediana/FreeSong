@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Player: mini player, tela cheia, letra, fila e timer de sono -->
+    <string name="player_play">Tocar</string>
+    <string name="player_pause">Pausar</string>
+    <string name="player_like">Curtir</string>
+    <string name="player_unlike">Remover das curtidas</string>
+    <string name="player_next">Próxima</string>
+    <string name="player_previous">Anterior</string>
+    <string name="player_shuffle_enable">Ligar aleatório</string>
+    <string name="player_shuffle_disable">Desligar aleatório</string>
+    <string name="player_repeat_off">Repetir: desligado</string>
+    <string name="player_repeat_all">Repetir: tudo</string>
+    <string name="player_repeat_one">Repetir: esta música</string>
+    <string name="player_collapse">Minimizar player</string>
+    <string name="player_expand">Abrir player</string>
+    <string name="player_playing_from">Tocando de</string>
+    <string name="player_now_playing">Tocando agora</string>
+    <string name="player_cover">Capa de %1$s</string>
+
+    <string name="player_queue">Fila</string>
+    <string name="player_queue_now">Tocando agora</string>
+    <string name="player_queue_next">A seguir</string>
+    <string name="player_queue_from">Tocando de %1$s</string>
+    <string name="player_queue_empty">Nada a seguir</string>
+    <string name="player_queue_empty_body">Quando esta acabar, a fila termina.</string>
+    <string name="player_queue_smart">Inteligente</string>
+    <string name="player_queue_smart_hint">A fila continua sozinha com músicas parecidas.</string>
+    <string name="player_queue_reorder">Arrastar para reordenar</string>
+    <string name="player_queue_remove">Remover da fila</string>
+
+    <string name="player_lyrics">Letra</string>
+    <string name="player_lyrics_open">Letra em tela cheia</string>
+    <string name="player_lyrics_close">Fechar letra</string>
+    <string name="player_lyrics_none_title">Sem letra</string>
+    <string name="player_lyrics_none_body">Esta música não tem letra salva.</string>
+
+    <string name="player_sleep">Timer de sono</string>
+    <string name="player_sleep_hint">A música para sozinha.</string>
+    <string name="player_sleep_ends_in">Para em %1$s</string>
+    <string name="player_sleep_at_end">Para quando esta música acabar</string>
+    <plurals name="player_sleep_minutes">
+        <item quantity="one">%d minuto</item>
+        <item quantity="many">%d minutos</item>
+        <item quantity="other">%d minutos</item>
+    </plurals>
+    <string name="player_sleep_minutes_short">%d min</string>
+    <string name="player_sleep_end_of_track">Fim da faixa</string>
+    <string name="player_sleep_off">Desligar timer</string>
+
+    <string name="player_output_phone">Este celular</string>
+    <string name="player_output_wired">Fone de ouvido</string>
+    <string name="player_output_bluetooth">Bluetooth</string>
+    <string name="player_output_usb">Áudio USB</string>
+    <string name="player_output_choose">Escolher saída de áudio</string>
+
+    <string name="player_error_dismiss">Dispensar</string>
+</resources>
