@@ -235,14 +235,26 @@ internal fun PlayerHost(deps: PlayerDeps, bottomBarHeight: Dp, modifier: Modifie
 
     val seed = track.album ?: track.title
     val fallbackColor = remember(seed) { CoverColors.tune(seedColor(seed)) }
-    val washTarget = rememberCoverColor(track.coverPath, track.accentColor, fallbackColor)
+    // Streamed songs have an http cover: extract its color through the network image cache.
+    val washTarget = if (track.coverPath?.startsWith("http") == true) {
+        com.villamediana.surco.ui.search.rememberRemoteCoverColor(track.coverPath, fallbackColor)
+    } else {
+        rememberCoverColor(track.coverPath, track.accentColor, fallbackColor)
+    }
     val wash = animateColorAsState(washTarget, tween(700), label = "wash")
 
     val playing = state.isPlaying || state.isBuffering
     val durationMs = state.durationMs.takeIf { it > 0 } ?: track.durationMs
-    val clock = rememberPlaybackClock(player, state.isPlaying, durationMs, state.current?.id)
+    val clock = rememberPlaybackClock(player, state.isPlaying, durationMs, state.current?.let { it.videoId ?: it.id })
     val coverScale = animateFloatAsState(if (playing) 1f else 0.88f, spring(dampingRatio = 0.62f, stiffness = 260f), label = "cover")
-    val lyrics by rememberLyrics(LyricsOrigin.choose(shown, libraryCopy), online, deps.lyrics)
+    // A streamed song that gets downloaded mid-play turns into its library row; keep treating it
+    // as streamed for lyrics (LRCLIB) until the song changes, unless the download saved a file.
+    var streamedAs by remember { mutableStateOf<Track?>(null) }
+    LaunchedEffect(shown.videoId, shown.isOnline) {
+        if (shown.isOnline) streamedAs = shown else if (streamedAs?.videoId != shown.videoId) streamedAs = null
+    }
+    val lyricsSubject = streamedAs?.takeIf { shown.videoId != null && it.videoId == shown.videoId } ?: shown
+    val lyrics by rememberLyrics(LyricsOrigin.choose(lyricsSubject, libraryCopy), online, deps.lyrics)
     val output = rememberOutputRoute()
     val feedback = rememberSheetFeedback()
 

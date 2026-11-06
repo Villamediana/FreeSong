@@ -82,18 +82,20 @@ internal class PlaybackClock {
 
 /** Feeds a [PlaybackClock] from the player: ticks, play state and a frame loop while playing. */
 @Composable
-internal fun rememberPlaybackClock(player: PlayerConnection, playing: Boolean, durationMs: Long, trackId: Long?): PlaybackClock {
+internal fun rememberPlaybackClock(player: PlayerConnection, playing: Boolean, durationMs: Long, trackKey: Any?): PlaybackClock {
     val clock = remember { PlaybackClock() }
-    val lastTrack = remember { longArrayOf(trackId ?: NO_TRACK) }
+    // Keyed by media identity (videoId when there is one): a streamed song that lands in the
+    // library changes its row id but not the song, and must not jump back to 0:00.
+    val lastTrack = remember { arrayOf<Any?>(trackKey) }
     LaunchedEffect(player) {
         player.positionMs.collect { clock.onTick(it, System.nanoTime()) }
     }
-    LaunchedEffect(trackId) {
+    LaunchedEffect(trackKey) {
         // A new song starts from zero; don't let the old position glide on until its first tick.
         // (Not on first composition: a paused song restored mid-way keeps its ticked position.)
         val previous = lastTrack[0]
-        lastTrack[0] = trackId ?: NO_TRACK
-        if (trackId != null && previous != NO_TRACK && previous != trackId) clock.reset(0L, System.nanoTime())
+        lastTrack[0] = trackKey
+        if (trackKey != null && previous != null && previous != trackKey) clock.reset(0L, System.nanoTime())
     }
     LaunchedEffect(playing, durationMs) {
         clock.onState(playing, durationMs, System.nanoTime())
@@ -105,4 +107,3 @@ internal fun rememberPlaybackClock(player: PlayerConnection, playing: Boolean, d
     return clock
 }
 
-private const val NO_TRACK = Long.MIN_VALUE

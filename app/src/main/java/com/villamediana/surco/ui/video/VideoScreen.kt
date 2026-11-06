@@ -149,10 +149,10 @@ private class VideoSession(private val video: VideoPlayback) {
         active = true
     }
 
-    fun close() {
+    fun close(resumeMusic: Boolean = true) {
         if (!active) return
         active = false
-        video.close(resumeMusic = true)
+        video.close(resumeMusic = resumeMusic)
     }
 }
 
@@ -186,7 +186,9 @@ internal fun VideoHost(route: VideoRoute, deps: VideoDeps, onLeave: () -> Unit) 
         opened = true
     }
     DisposableEffect(session) {
-        onDispose { if (activity?.isChangingConfigurations != true) session.close() }
+        // Swiping Surco away from Recents finishes the activity: stop the video without
+        // restarting the music in the background. Back / "Voltar ao áudio" never finish it.
+        onDispose { if (activity?.isChangingConfigurations != true) session.close(resumeMusic = activity?.isFinishing != true) }
     }
 
     ImmersiveWindow(activity)
