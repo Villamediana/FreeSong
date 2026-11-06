@@ -32,9 +32,12 @@ import com.villamediana.surco.R
 import com.villamediana.surco.SurcoApplication
 import com.villamediana.surco.data.Settings
 import com.villamediana.surco.data.db.Track
+import com.villamediana.surco.online.OnlineException
 import com.villamediana.surco.playback.stream.OnlineStreams
 import com.villamediana.surco.playback.stream.StreamDataSources
+import com.villamediana.surco.playback.stream.StreamErrors
 import com.villamediana.surco.playback.stream.StreamLoadErrorPolicy
+import com.villamediana.surco.playback.stream.hasInternet
 import com.villamediana.surco.smart.Taste
 import com.villamediana.surco.smart.loadTaste
 import kotlinx.coroutines.CancellationException
@@ -104,6 +107,7 @@ class PlaybackService : MediaLibraryService() {
     private var extendJob: Job? = null
     private var extendedAtCount = -1
     private var saveJob: Job? = null
+    private var persistJob: Job? = null
     private var positionSaver: Job? = null
     private var consecutiveErrors = 0
     private var buttonsKey: String? = null
@@ -114,7 +118,7 @@ class PlaybackService : MediaLibraryService() {
     override fun onCreate() {
         super.onCreate()
         strings = PlaybackStrings.from(this)
-        streams = OnlineStreams(graph.scope) { graph.youTube }
+        streams = OnlineStreams(graph.scope, online = { hasInternet(this) }) { graph.youTube }
         artwork = ArtworkShare(this)
         player = ExoPlayer.Builder(this)
             .setMediaSourceFactory(
@@ -175,7 +179,12 @@ class PlaybackService : MediaLibraryService() {
         saveNow()
         val playing = player.playWhenReady && player.mediaItemCount > 0 &&
             player.playbackState != Player.STATE_ENDED && player.playbackState != Player.STATE_IDLE
-        if (!playing) pauseAllPlayersAndStopSelf()
+        if (!playing) {
+            // The app's own controller can keep the service bound, so onDestroy may never come before
+            // the process is killed: the listen of the paused song is recorded now.
+            finishListen()
+            pauseAllPlayersAndStopSelf()
+        }
     }
 
     override fun onDestroy() {
@@ -227,7 +236,7 @@ class PlaybackService : MediaLibraryService() {
             }
             val track = tracksById[id]
             if (track == null) gone += i
-            else if (!MediaItems.matches(item, track)) swaps += i to mediaItemOf(track)
+            else if (!upToDate(item, track)) swaps += i to mediaItemOf(track)
         }
         if (swaps.isEmpty() && gone.isEmpty() && currentToFile == null) return
         // A replaced uri is a remove + add for ExoPlayer, which would drop the song somewhere random in the shuffle.
@@ -290,6 +299,15 @@ class PlaybackService : MediaLibraryService() {
     private suspend fun libraryTracks(): List<Track> =
         if (libraryLoaded) allTracks else withContext(Dispatchers.IO) { library.allTracks() }
 
+    /** The whole library, smart-shuffled — what plays when there's no queue to go back to; null when it's empty. */
+    private suspend fun libraryPlan(): QueuePlan? {
+        val lib = libraryTracks()
+        if (lib.isEmpty()) return null
+        val taste = taste()
+        val seed = Random.nextLong()
+        return withContext(Dispatchers.Default) { SmartPlans.plan(SmartSeed.Library, lib, taste, strings, seed) }
+    }
+
     private suspend fun tracksFor(ids: List<Long>): List<Track> =
         if (libraryLoaded) ids.mapNotNull(tracksById::get)
         else withContext(Dispatchers.IO) { ids.chunked(500).flatMap { library.getTracks(it) } }
@@ -305,8 +323,15 @@ class PlaybackService : MediaLibraryService() {
 
     // ================================================================ queue helpers
 
-    /** Media3 item for a song: the library file, or the online stream at the current quality setting. */
-    private fun mediaItemOf(track: Track): MediaItem = MediaItems.of(track, settings.audioQuality)
+    /**
+     * Media3 item for a song: the library file, or the online stream at the current quality setting.
+     * Its cover is a content:// uri: the queue reaches other apps too (car, system media controls).
+     */
+    private fun mediaItemOf(track: Track): MediaItem = artwork.shareable(MediaItems.of(track, settings.audioQuality))
+
+    /** True when the queue's [item] already shows what [track] says. */
+    private fun upToDate(item: MediaItem, track: Track): Boolean =
+        MediaItems.matches(item, track, artwork.shareableUri(MediaItems.coverUri(track.coverPath)))
 
     /** Media ids in timeline order — what identifies "the same queue" across async work. */
     private fun mediaKeys(): List<String> = (0 until player.mediaItemCount).map { player.getMediaItemAt(it).mediaId }
@@ -349,8 +374,8 @@ class PlaybackService : MediaLibraryService() {
         }
     }
 
-    /** Replaces the queue. [shuffleMode] = [SessionProtocol.SHUFFLE_KEEP] / ON / OFF. */
-    private suspend fun playPlan(plan: QueuePlan, shuffleMode: Int, pinFirst: Boolean = true) {
+    /** Replaces the queue, starting at the plan's start song (also first when shuffled). [shuffleMode] = [SessionProtocol.SHUFFLE_KEEP] / ON / OFF. */
+    private suspend fun playPlan(plan: QueuePlan, shuffleMode: Int) {
         val tracks = plan.tracks
         if (tracks.isEmpty()) return
         val start = plan.startIndex.coerceIn(0, tracks.lastIndex)
@@ -363,10 +388,12 @@ class PlaybackService : MediaLibraryService() {
         val order = if (shuffleOn) {
             val taste = taste()
             val useSmart = settings.smartShuffle
-            withContext(Dispatchers.Default) { QueueShuffler.order(tracks, if (pinFirst) start else null, useSmart, taste, seed) }
+            withContext(Dispatchers.Default) { QueueShuffler.order(tracks, start, useSmart, taste, seed) }
         } else null
 
+        // Work computed for the old queue (its shuffle, its autoplay songs) must not land in this one.
         shuffleJob?.cancel()
+        extendJob?.cancel()
         source = plan.source
         smart = plan.smart
         extendedAtCount = -1
@@ -392,8 +419,12 @@ class PlaybackService : MediaLibraryService() {
         scheduleSave()
     }
 
-    /** Inserts after the current song ([next]) or at the end — of the play order, also when shuffled. */
-    private fun insert(tracks: List<Track>, next: Boolean) {
+    /**
+     * Inserts after the current song ([next]) or at the end — of the play order, also when shuffled.
+     * When the queue had already ended, the player moves on to the first added song: paused (Play
+     * starts it), or carrying on when [keepPlaying] (autoplay's songs landing late).
+     */
+    private fun insert(tracks: List<Track>, next: Boolean, keepPlaying: Boolean = false) {
         if (tracks.isEmpty()) return
         val items = tracks.map(::mediaItemOf)
         val n = player.mediaItemCount
@@ -405,17 +436,23 @@ class PlaybackService : MediaLibraryService() {
             publishExtras()
             return
         }
+        // Left at ENDED, the player ignores new songs and Play would restart the one that just finished.
+        val ended = player.playbackState == Player.STATE_ENDED
         val cur = player.currentMediaItemIndex.coerceIn(0, n - 1)
+        val timelinePos = if (next) cur + 1 else n
         if (!player.shuffleModeEnabled) {
-            player.addMediaItems(if (next) cur + 1 else n, items)
+            player.addMediaItems(timelinePos, items)
         } else {
             val before = playOrder()
-            val timelinePos = if (next) cur + 1 else n
             val playPos = if (next) before.playIndexOf(cur) + 1 else before.size
             player.addMediaItems(timelinePos, items)
             setShuffleOrder(before.inserted(playPos, timelinePos, items.size))
         }
         extendedAtCount = -1
+        if (ended) {
+            if (!keepPlaying) player.pause()
+            player.seekTo(timelinePos, 0)
+        }
     }
 
     private fun move(from: Int, to: Int) {
@@ -485,7 +522,7 @@ class PlaybackService : MediaLibraryService() {
                 return@launch
             }
             if (more.isEmpty()) return@launch // nothing left that fits; don't retry for this queue
-            insert(more, next = false)
+            insert(more, next = false, keepPlaying = true)
             extendedAtCount = player.mediaItemCount
             if (!smart) {
                 smart = true
@@ -506,7 +543,7 @@ class PlaybackService : MediaLibraryService() {
             val byVideo = localByVideoId(related.map { it.videoId })
             val more = OnlineQueue.continuation(related, queuedVideoIds(), byVideo)
             if (more.isEmpty()) return@launch // offline or nothing new: the queue ends here
-            insert(more, next = false)
+            insert(more, next = false, keepPlaying = true)
             extendedAtCount = player.mediaItemCount
             if (!smart) {
                 smart = true
@@ -555,7 +592,8 @@ class PlaybackService : MediaLibraryService() {
         return QueueSnapshot(
             ids = ids,
             index = player.currentMediaItemIndex.coerceIn(0, n - 1),
-            positionMs = player.currentPosition.coerceAtLeast(0),
+            // A queue that ended comes back at the start of its last song, not at its very end (where Play does nothing).
+            positionMs = if (player.playbackState == Player.STATE_ENDED) 0 else player.currentPosition.coerceAtLeast(0),
             shuffle = shuffle,
             order = if (shuffle) playOrder().toList() else emptyList(),
             repeat = player.repeatMode.toRepeatMode(),
@@ -577,15 +615,36 @@ class PlaybackService : MediaLibraryService() {
     private fun saveNow() {
         saveJob?.cancel()
         val json = snapshot()?.encode() ?: return
+        ResumableQueue.set(this, true)
+        persist(json)
+    }
+
+    /** The queue is gone (emptied, or every song of the saved one deleted): nothing for the headset to resume. */
+    private fun forgetSavedQueue() {
+        saveJob?.cancel()
+        ResumableQueue.set(this, false)
+        persist(null)
+    }
+
+    /** Writes the saved queue in call order (a save launched just before a "forget" must not land after it). */
+    private fun persist(json: String?) {
         val store = graph.settings
-        graph.scope.launch { runCatching { store.setLastQueueJson(json) } }
+        val previous = persistJob
+        persistJob = graph.scope.launch {
+            previous?.join()
+            runCatching { store.setLastQueueJson(json) }
+        }
     }
 
     /** The saved queue, without songs deleted meanwhile; online songs stream again (or play from the file if downloaded since). */
     private suspend fun loadSnapshot(): Pair<QueueSnapshot, List<Track>>? {
-        val raw = QueueSnapshot.decode(graph.settings.current().lastQueueJson) ?: return null
-        val found = tracksFor(raw.ids.filter { it >= 0 }.distinct())
-        val snap = raw.retain(found.mapTo(HashSet()) { it.id }) ?: return null
+        val raw = QueueSnapshot.decode(graph.settings.current().lastQueueJson)
+        val found = raw?.let { tracksFor(it.ids.filter { id -> id >= 0 }.distinct()) }.orEmpty()
+        val snap = raw?.retain(found.mapTo(HashSet()) { it.id }) ?: run {
+            // Nothing (left) to resume; unless a new queue started meanwhile, drop what's saved.
+            if (player.mediaItemCount == 0) forgetSavedQueue()
+            return null
+        }
         val byId = found.associateBy { it.id }
         val online = snap.onlineById
         val byVideo = localByVideoId(online.values.map { it.videoId })
@@ -599,6 +658,8 @@ class PlaybackService : MediaLibraryService() {
         if (player.mediaItemCount > 0) return
         val (snap, tracks) = loadSnapshot() ?: return
         if (player.mediaItemCount > 0) return
+        extendJob?.cancel()
+        extendedAtCount = -1
         source = snap.source?.toPlaySource()
         smart = snap.smart
         player.repeatMode = snap.repeat.toPlayer()
@@ -720,19 +781,15 @@ class PlaybackService : MediaLibraryService() {
             updateWakeMode()
             if (timeline.isEmpty) {
                 finishListen()
+                forgetSavedQueue()
                 return
             }
             pendingRestore?.let { snap ->
                 if (mediaKeys() == pendingRestoreKeys) {
                     pendingRestore = null
                     pendingRestoreKeys = null
-                    suppressShuffleReorder = true
-                    try {
-                        player.shuffleModeEnabled = snap.shuffle
-                        if (snap.shuffle) PlayOrder.validOrNull(snap.order, snap.ids.size)?.let(::setShuffleOrder)
-                    } finally {
-                        suppressShuffleReorder = false
-                    }
+                    // The shuffle mode was set before the queue landed; only the saved order is left.
+                    if (player.shuffleModeEnabled) PlayOrder.validOrNull(snap.order, snap.ids.size)?.let(::setShuffleOrder)
                 }
             }
             if (reorderOnNextTimeline) {
@@ -768,6 +825,7 @@ class PlaybackService : MediaLibraryService() {
 
         override fun onPlayerError(error: PlaybackException) {
             finishListen()
+            if (skipOfflineSongs(error)) return
             consecutiveErrors++
             // A broken or missing file, or a song that can't be streamed (offline, unavailable),
             // shouldn't stop the music: skip it (a few times at most). The app shows why.
@@ -783,6 +841,36 @@ class PlaybackService : MediaLibraryService() {
         }
     }
 
+    /**
+     * Offline, an online song fails at once (no request, no retries — see OnlineStreams): playback
+     * goes straight on to the next song on the phone, past the other online ones, without counting
+     * as a broken song. With none left it stops here, and the app shows why ("Sem conexão").
+     */
+    private fun skipOfflineSongs(error: PlaybackException): Boolean {
+        if (StreamErrors.kindOf(error.errorCode) != OnlineException.Kind.NO_NETWORK) return false
+        if (!MediaItems.isOnline(player.currentMediaItem) || hasInternet(this)) return false
+        val next = nextLocalIndex()
+        if (next != C.INDEX_UNSET) {
+            player.seekTo(next, 0)
+            player.prepare()
+        }
+        return true
+    }
+
+    /** Timeline index of the next library song after the current one, in play order (around again on "repeat all"). */
+    private fun nextLocalIndex(): Int {
+        val timeline = player.currentTimeline
+        val current = player.currentMediaItemIndex
+        if (timeline.isEmpty || current == C.INDEX_UNSET) return C.INDEX_UNSET
+        val repeat = if (player.repeatMode == Player.REPEAT_MODE_ALL) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
+        var i = current
+        while (true) {
+            i = timeline.getNextWindowIndex(i, repeat, player.shuffleModeEnabled)
+            if (i == C.INDEX_UNSET || i == current) return C.INDEX_UNSET
+            if (!MediaItems.isOnline(player.getMediaItemAt(i))) return i
+        }
+    }
+
     // ================================================================ session callback
 
     private inner class SessionCallback : MediaLibrarySession.Callback {
@@ -791,6 +879,7 @@ class PlaybackService : MediaLibraryService() {
             val commands = base.availableSessionCommands.buildUpon()
             SessionProtocol.publicCommands.forEach { commands.add(SessionProtocol.command(it)) }
             if (controller.packageName == packageName) SessionProtocol.appCommands.forEach { commands.add(SessionProtocol.command(it)) }
+            else artwork.grantCovers(controller.packageName, graph.storage.coversDir)
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session, controller)
                 .setAvailableSessionCommands(commands.build())
                 .setAvailablePlayerCommands(base.availablePlayerCommands)
@@ -817,11 +906,9 @@ class PlaybackService : MediaLibraryService() {
                     return serialized {
                         val kept = resolveIds(ids, online).withIndex().mapNotNull { (i, t) -> t?.let { IndexedValue(i, it) } }
                         if (kept.isNotEmpty()) {
+                            // The requested song plays first, shuffled or not ("Aleatório" buttons pick a random start themselves).
                             val startIdx = kept.indexOfFirst { it.index >= start }.coerceAtLeast(0)
-                            // "Aleatório" on a whole list lets the shuffle pick the first song too;
-                            // tapping a song (start > 0, or shuffle kept as it was) plays that song first.
-                            val pinFirst = !(shuffle == SessionProtocol.SHUFFLE_ON && start == 0)
-                            playPlan(QueuePlan(kept.map { it.value }, startIdx, src, isSmart), shuffle, pinFirst)
+                            playPlan(QueuePlan(kept.map { it.value }, startIdx, src, isSmart), shuffle)
                         }
                     }
                 }
@@ -848,6 +935,10 @@ class PlaybackService : MediaLibraryService() {
                         removeAt(index)
                         scheduleSave()
                     }
+                }
+                SessionProtocol.SET_SHUFFLE -> {
+                    val enabled = args.getBoolean(SessionProtocol.ARG_ENABLED)
+                    return serialized { player.shuffleModeEnabled = enabled }
                 }
                 SessionProtocol.SLEEP -> sleep.set(SessionProtocol.getSleep(args))
                 SessionProtocol.RESTORE -> return serialized { restore() }
@@ -892,18 +983,40 @@ class PlaybackService : MediaLibraryService() {
             scope.launch {
                 try {
                     val (snap, tracks) = loadSnapshot() ?: run {
-                        result.setException(IllegalStateException("No saved queue"))
+                        // Nothing saved (or all of it deleted since). A play press must still play
+                        // something: the service may have been started in the foreground for it.
+                        val plan = if (isForPlayback) libraryPlan() else null
+                        if (plan == null) {
+                            result.setException(IllegalStateException("Nothing to resume"))
+                        } else {
+                            applyExternalContext(plan.source, plan.smart)
+                            result.set(MediaSession.MediaItemsWithStartPosition(plan.tracks.map(::mediaItemOf), plan.startIndex, 0))
+                        }
                         return@launch
                     }
-                    source = snap.source?.toPlaySource()
-                    smart = snap.smart
-                    extendedAtCount = -1
-                    player.repeatMode = snap.repeat.toPlayer()
                     val items = tracks.map(::mediaItemOf)
-                    pendingRestore = snap
-                    pendingRestoreKeys = items.map { it.mediaId }
-                    publishExtras()
-                    result.set(MediaSession.MediaItemsWithStartPosition(items, snap.index, snap.positionMs))
+                    // Only a play press replaces the queue; the system's resume card just shows the item.
+                    if (isForPlayback) {
+                        extendJob?.cancel()
+                        source = snap.source?.toPlaySource()
+                        smart = snap.smart
+                        extendedAtCount = -1
+                        player.repeatMode = snap.repeat.toPlayer()
+                        // The shuffle mode goes now, outside any player callback: set from onTimelineChanged,
+                        // ExoPlayer would deliver the change after it and the saved order would be reshuffled.
+                        suppressShuffleReorder = true
+                        try {
+                            player.shuffleModeEnabled = snap.shuffle
+                        } finally {
+                            suppressShuffleReorder = false
+                        }
+                        pendingRestore = snap.takeIf { it.shuffle }
+                        pendingRestoreKeys = items.map { it.mediaId }
+                        publishExtras()
+                    }
+                    // The system's resume card shows the current song's cover: it gets to read it.
+                    val shown = if (isForPlayback) items else items.mapIndexed { i, item -> if (i == snap.index) artwork.forController(item, controller.packageName) else item }
+                    result.set(MediaSession.MediaItemsWithStartPosition(shown, snap.index, snap.positionMs))
                 } catch (c: CancellationException) {
                     result.cancel(false)
                 } catch (t: Throwable) {
@@ -990,6 +1103,7 @@ class PlaybackService : MediaLibraryService() {
 
     /** A controller outside the app (car, watch, assistant) replaced the queue. */
     private fun applyExternalContext(src: PlaySource?, isSmart: Boolean) {
+        extendJob?.cancel()
         source = src
         smart = isSmart
         extendedAtCount = -1

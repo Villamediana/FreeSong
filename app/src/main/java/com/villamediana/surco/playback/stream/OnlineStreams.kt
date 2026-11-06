@@ -1,6 +1,8 @@
 package com.villamediana.surco.playback.stream
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
 import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
@@ -20,6 +22,7 @@ import com.villamediana.surco.online.YouTubeSource
 import com.villamediana.surco.online.onlineKind
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.runBlocking
+import java.io.IOException
 import java.io.InterruptedIOException
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -71,7 +74,24 @@ data class StreamKey(val videoId: String, val quality: AudioQuality)
  * custom [PlaybackException] error code, so the app's controller can tell the listener why.
  */
 class StreamResolveException(val kind: OnlineException.Kind, cause: Throwable) :
-    DataSourceException("Stream resolution failed: ${cause.message}", cause, StreamErrors.code(kind))
+    DataSourceException("Stream resolution failed: ${cause.message}", cause, StreamErrors.code(kind)) {
+    /** The phone had no network at all: the stream wasn't even tried, and retrying now won't help. */
+    val offline: Boolean get() = cause is NoNetworkException
+
+    companion object {
+        fun offline() = StreamResolveException(OnlineException.Kind.NO_NETWORK, NoNetworkException())
+    }
+}
+
+/** No network with internet on the phone (see [hasInternet]). */
+class NoNetworkException : IOException("No network connection")
+
+/** Whether the phone has a network with internet right now. */
+internal fun hasInternet(context: Context): Boolean {
+    val cm = context.getSystemService(ConnectivityManager::class.java) ?: return true
+    val caps = cm.activeNetwork?.let { cm.getNetworkCapabilities(it) } ?: return false
+    return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+}
 
 /** Error codes of online playback, as they reach [androidx.media3.session.MediaController]s. */
 object StreamErrors {
@@ -110,9 +130,11 @@ internal fun <T> resolveBlocking(block: suspend () -> T): T = try {
 /**
  * Stream urls of online songs for the music player: resolved when the player reads (or ahead of
  * time for the next song), cached ~4 h per video and quality, refreshed when googlevideo refuses one.
+ * Without network ([online] false) a stream fails at once, before any request.
  */
 internal class OnlineStreams(
     scope: CoroutineScope,
+    private val online: () -> Boolean = { true },
     private val youTube: () -> YouTubeSource,
 ) : ChunkedHttpDataSource.UriResolver {
 
@@ -120,13 +142,16 @@ internal class OnlineStreams(
         youTube().audioStream(key.videoId, key.quality)
     }
 
-    /** Resolves the stream behind [uri] in the background (no-op for local files). */
+    /** Resolves the stream behind [uri] in the background (no-op for local files, or offline). */
     fun prefetch(uri: Uri?) {
-        StreamUris.audioKey(uri)?.let(urls::prefetch)
+        val key = StreamUris.audioKey(uri) ?: return
+        if (online()) urls.prefetch(key)
     }
 
     override fun resolve(uri: Uri, refresh: Boolean): Uri {
         val key = StreamUris.audioKey(uri) ?: return uri
+        // Even a cached url would only fail later, after the HTTP layer's own retries.
+        if (!online()) throw StreamResolveException.offline()
         return Uri.parse(resolveBlocking { urls.get(key, refresh) }.url)
     }
 }
@@ -147,9 +172,10 @@ internal object StreamDataSources {
 }
 
 /**
- * Retries what may get better (a dropped connection, being offline for a moment) the default way,
- * but gives up at once on a stream that can't be resolved (unavailable, region-locked, age-gated):
- * the service then skips to the next song without the listener waiting through retries.
+ * Retries what may get better (a dropped connection, a network that comes and goes) the default
+ * way, but gives up at once on a stream that can't be resolved (unavailable, region-locked,
+ * age-gated) or when the phone has no network at all: the service then moves on without the
+ * listener waiting through retries.
  */
 @OptIn(UnstableApi::class)
 internal class StreamLoadErrorPolicy : DefaultLoadErrorHandlingPolicy() {
@@ -157,6 +183,7 @@ internal class StreamLoadErrorPolicy : DefaultLoadErrorHandlingPolicy() {
         val resolve = generateSequence(loadErrorInfo.exception as Throwable?) { it.cause }.take(8)
             .filterIsInstance<StreamResolveException>().firstOrNull()
         if (resolve != null) {
+            if (resolve.offline) return C.TIME_UNSET
             return when (resolve.kind) {
                 OnlineException.Kind.NO_NETWORK, OnlineException.Kind.UNKNOWN -> super.getRetryDelayMsFor(loadErrorInfo)
                 else -> C.TIME_UNSET

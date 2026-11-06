@@ -69,8 +69,11 @@ internal object MediaItems {
         if (it.startsWith("https://") || it.startsWith("http://")) Uri.parse(it) else Uri.fromFile(File(it))
     }
 
-    /** True when [item] already shows what [track] says (title edits, new cover…). */
-    fun matches(item: MediaItem, track: Track): Boolean {
+    /**
+     * True when [item] already shows what [track] says (title edits, new cover…). [artworkUri] is
+     * the cover uri the item is expected to carry (the service hands out content:// ones).
+     */
+    fun matches(item: MediaItem, track: Track, artworkUri: Uri? = coverUri(track.coverPath)): Boolean {
         val m = item.mediaMetadata
         return m.title?.toString() == track.title &&
             m.artist?.toString() == track.artist &&
@@ -79,7 +82,7 @@ internal object MediaItems {
             m.genre?.toString() == track.genre?.takeIf { it.isNotBlank() } &&
             m.trackNumber == track.trackNumber &&
             m.recordingYear == track.year &&
-            m.artworkUri == coverUri(track.coverPath) &&
+            m.artworkUri == artworkUri &&
             item.localConfiguration?.uri == Uri.fromFile(File(track.filePath))
     }
 
