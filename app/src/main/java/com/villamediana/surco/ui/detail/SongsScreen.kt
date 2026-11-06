@@ -38,6 +38,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.core.os.ConfigurationCompat
 import androidx.lifecycle.SavedStateHandle
@@ -259,6 +261,7 @@ private fun SortButton(sort: TrackSort, onSort: (TrackSort) -> Unit) {
                         open = false
                         onSort(value)
                     },
+                    modifier = Modifier.semantics { this.selected = selected },
                     colors = MenuDefaults.itemColors(),
                 )
             }

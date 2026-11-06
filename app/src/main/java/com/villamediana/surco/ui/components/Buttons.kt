@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Pause
@@ -29,6 +30,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.villamediana.surco.ui.theme.SurcoColors
@@ -103,9 +105,12 @@ fun PillButton(
     }
 }
 
-/** Selectable chip used for filters (search filters, library tabs). */
+/**
+ * Selectable chip used for filters (search filters, library tabs, equalizer presets). Exposes its
+ * selected state to TalkBack; disabled, it neither reacts nor shrinks on touch.
+ */
 @Composable
-fun FilterPill(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun FilterPill(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
     val interaction = remember { MutableInteractionSource() }
     Box(
         modifier
@@ -113,7 +118,14 @@ fun FilterPill(text: String, selected: Boolean, onClick: () -> Unit, modifier: M
             .pressScale(interaction, 0.95f)
             .clip(CircleShape)
             .background(if (selected) SurcoColors.Text else SurcoColors.Surface2)
-            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+            .selectable(
+                selected = selected,
+                interactionSource = interaction,
+                indication = null,
+                enabled = enabled,
+                role = Role.Tab,
+                onClick = onClick,
+            )
             .padding(horizontal = 16.dp),
         contentAlignment = Alignment.Center,
     ) {

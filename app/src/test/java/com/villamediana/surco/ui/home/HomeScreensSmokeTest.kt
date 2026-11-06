@@ -16,7 +16,14 @@ import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasScrollToKeyAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isSelectable
+import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
@@ -121,6 +128,9 @@ class HomeScreensSmokeTest {
         compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription("Ver em grade").fetchSemanticsNodes().isNotEmpty() }
         compose.onAllNodesWithText("Álbuns")[0].performClick()
         waitForText("Canción Animal")
+        // TalkBack hears which filter is on.
+        compose.onNode(hasText("Álbuns") and isSelectable()).assertIsSelected()
+        compose.onNode(hasText("Playlists") and isSelectable()).assertIsNotSelected()
         shot("library-albums")
         compose.onAllNodesWithText("Músicas")[0].performClick()
         waitForText("Todas as músicas")
@@ -133,6 +143,10 @@ class HomeScreensSmokeTest {
         compose.setContent { Host { SettingsScreen() } }
         waitForText("Qualidade do áudio")
         waitForText("Máxima")
+        // Choices and switches carry their state for TalkBack (the whole row is the control).
+        compose.onNode(hasText("Máxima") and isSelectable()).assertIsSelected()
+        compose.onNode(hasText("Buscar letras") and isToggleable()).assertIsOn()
+        compose.onNode(hasText("Baixar só no Wi-Fi") and isToggleable()).assertIsOff()
         shot("settings")
         compose.onAllNodes(hasScrollToKeyAction())[0].performScrollToKey("about")
         waitForText("NewPipeExtractor")

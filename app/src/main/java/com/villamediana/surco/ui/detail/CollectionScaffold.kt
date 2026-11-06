@@ -28,6 +28,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -62,6 +63,7 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
@@ -391,7 +393,7 @@ internal fun PlainTopBar() {
     ) { BackButton() }
 }
 
-/** Shuffle toggle: tangerine with a dot when on. */
+/** Shuffle toggle: tangerine with a dot when on; TalkBack hears it as a switch (on / off). */
 @Composable
 internal fun ShuffleToggle(on: Boolean, onToggle: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
@@ -402,7 +404,13 @@ internal fun ShuffleToggle(on: Boolean, onToggle: () -> Unit) {
             .size(48.dp)
             .pressScale(interaction)
             .clip(CircleShape)
-            .clickable(interactionSource = interaction, indication = null, onClick = onToggle),
+            .toggleable(
+                value = on,
+                interactionSource = interaction,
+                indication = null,
+                role = Role.Switch,
+                onValueChange = { onToggle() },
+            ),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {

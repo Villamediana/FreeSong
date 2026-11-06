@@ -6,7 +6,11 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -121,6 +125,12 @@ class DetailScreensSmokeTest {
         assertShown("1990")
         assertShown("3 músicas")
         shot("album")
+
+        // The shuffle toggle tells TalkBack whether it is on.
+        val shuffle = compose.onNode(hasContentDescription("Aleatório") and isToggleable())
+        shuffle.assertIsOff()
+        shuffle.performClick()
+        shuffle.assertIsOn()
 
         compose.onAllNodes(hasScrollAction()).onFirst().performScrollToNode(hasText("Mais de Soda Stereo"))
         assertShown("Signos")
