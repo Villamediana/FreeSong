@@ -44,6 +44,7 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -295,16 +296,21 @@ internal fun PlayerHost(deps: PlayerDeps, bottomBarHeight: Dp, modifier: Modifie
     }
 
     val expandedNow by remember { derivedStateOf { expand.target == 1f } }
-    PredictiveBackHandler(enabled = state.hasMedia && expandedNow && !lyricsOpen) { events ->
-        try {
-            events.collect { expand.backProgress(it.progress) }
-            expand.animateTo(0f)
-        } catch (e: CancellationException) {
-            expand.animateTo(1f)
-            throw e
+    // Back goes to the newest enabled handler. The screen under the player (Search clearing its
+    // query, a playlist leaving reorder mode) registered its own after ours, so ours are added
+    // again whenever the player or the lyrics open: they sit on top while they are showing.
+    key(expandedNow, lyricsOpen) {
+        PredictiveBackHandler(enabled = state.hasMedia && expandedNow && !lyricsOpen) { events ->
+            try {
+                events.collect { expand.backProgress(it.progress) }
+                expand.animateTo(0f)
+            } catch (e: CancellationException) {
+                expand.animateTo(1f)
+                throw e
+            }
         }
+        BackHandler(enabled = lyricsOpen) { lyricsOpen = false }
     }
-    BackHandler(enabled = lyricsOpen) { lyricsOpen = false }
 
     BoxWithConstraints(modifier.fillMaxSize()) {
         val layerW = constraints.maxWidth.toFloat()
