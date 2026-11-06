@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Módulo ui-detail: pantallas de Álbum, Artista, Playlist, Género, Mix, Me gusta, Canciones (detail_) y hojas de acciones (sheet_). -->
+<resources>
+    <!-- Sobrelíneas (el código las pone en mayúsculas) -->
+    <string name="detail_overline_album">Álbum</string>
+    <string name="detail_overline_artist">Artista</string>
+    <string name="detail_overline_playlist">Playlist</string>
+    <string name="detail_overline_genre">Género</string>
+    <string name="detail_overline_mix">Mix</string>
+    <string name="detail_overline_library">Biblioteca</string>
+
+    <!-- No encontrado -->
+    <string name="detail_album_missing">Álbum no encontrado</string>
+    <string name="detail_artist_missing">Artista no encontrado</string>
+    <string name="detail_playlist_missing">Playlist no encontrada</string>
+    <string name="detail_genre_missing">Género no encontrado</string>
+    <string name="detail_missing_body">Puede que se haya borrado o cambiado de nombre.</string>
+    <string name="detail_mix_missing">Mix no encontrado</string>
+    <string name="detail_mix_missing_body">Los mixes cambian según lo que escuchas. Vuelve al Inicio para ver los de hoy.</string>
+
+    <!-- Cabecera -->
+    <string name="detail_pin">Fijar en la Biblioteca</string>
+    <string name="detail_unpin">Dejar de fijar</string>
+    <string name="detail_pinned">Fijado en la Biblioteca</string>
+    <string name="detail_unpinned">Quitado de fijados</string>
+    <string name="detail_artists_and_more">%s y más</string>
+    <string name="detail_imported_youtube">Importada de YouTube</string>
+    <string name="detail_done">Listo</string>
+    <plurals name="detail_n_albums">
+        <item quantity="one">%d álbum</item>
+        <item quantity="many">%d álbumes</item>
+        <item quantity="other">%d álbumes</item>
+    </plurals>
+
+    <!-- Álbum -->
+    <string name="detail_more_by">Más de %s</string>
+    <string name="detail_see_artist">Ver artista</string>
+    <string name="detail_delete_album_title">¿Borrar el álbum del teléfono?</string>
+    <plurals name="detail_delete_album_body">
+        <item quantity="one">La canción de “%2$s” sale del teléfono y de todas las playlists.</item>
+        <item quantity="many">Las %1$d canciones de “%2$s” salen del teléfono y de todas las playlists.</item>
+        <item quantity="other">Las %1$d canciones de “%2$s” salen del teléfono y de todas las playlists.</item>
+    </plurals>
+    <string name="detail_album_deleted">“%s” borrado del teléfono</string>
+
+    <!-- Artista -->
+    <string name="detail_popular">Populares</string>
+    <string name="detail_show_more">Ver más</string>
+    <string name="detail_show_less">Ver menos</string>
+    <string name="detail_albums">Álbumes</string>
+    <string name="detail_singles">Sencillos</string>
+    <string name="detail_single">Sencillo</string>
+    <string name="detail_all_songs">Todas las canciones</string>
+    <string name="detail_artist_radio">Radio del artista</string>
+    <string name="detail_radio_short">Radio</string>
+    <string name="detail_artist_radio_started">Sonando la radio de %s</string>
+
+    <!-- Playlist -->
+    <string name="detail_playlist_empty_title">Playlist vacía</string>
+    <string name="detail_playlist_empty_body">Abre el ⋮ de cualquier canción y toca Añadir a una playlist.</string>
+    <string name="detail_reorder_hint">Arrastra desde el asa para cambiar el orden.</string>
+    <string name="detail_drag_to_reorder">Arrastrar para reordenar</string>
+    <string name="detail_remove">Quitar</string>
+    <string name="detail_removed_from_playlist">“%s” quitada</string>
+    <string name="detail_undo">Deshacer</string>
+    <string name="detail_edit_playlist_title">Editar playlist</string>
+    <string name="detail_field_name">Nombre</string>
+    <string name="detail_field_description">Descripción</string>
+    <string name="detail_choose_cover_title">Elegir portada</string>
+    <string name="detail_choose_cover_subtitle">Usa la portada de una de las canciones o el mosaico.</string>
+    <string name="detail_cover_mosaic">Mosaico</string>
+    <string name="detail_delete_playlist_title">¿Borrar la playlist?</string>
+    <string name="detail_delete_playlist_body">“%s” sale de la biblioteca. Las canciones siguen en el teléfono.</string>
+    <string name="detail_playlist_deleted">Playlist “%s” borrada</string>
+
+    <!-- Me gusta y Todas las canciones -->
+    <string name="detail_liked_title">Me gusta</string>
+    <string name="detail_liked_empty_title">Aún no hay nada aquí</string>
+    <string name="detail_liked_empty_body">Toca el corazón de una canción y aparecerá aquí.</string>
+    <string name="detail_songs_title">Todas las canciones</string>
+    <string name="detail_songs_empty_title">Aún no hay canciones</string>
+    <string name="detail_songs_empty_body">Busca y descarga canciones para escucharlas sin internet.</string>
+    <string name="detail_sort_by">Ordenar por</string>
+    <string name="detail_sort_title">Título</string>
+    <string name="detail_sort_artist">Artista</string>
+    <string name="detail_sort_album">Álbum</string>
+    <string name="detail_sort_recent">Recientes</string>
+    <string name="detail_sort_most_played">Más escuchadas</string>
+    <string name="detail_sort_duration">Duración</string>
+
+    <!-- Menú ⋮ de las colecciones -->
+    <string name="detail_menu_play_next">Reproducir a continuación</string>
+    <string name="detail_menu_enqueue">Añadir a la cola</string>
+    <string name="detail_menu_add_to_playlist">Añadir a una playlist</string>
+    <string name="detail_menu_go_artist">Ir al artista</string>
+    <string name="detail_menu_delete_album">Borrar álbum del teléfono</string>
+    <string name="detail_menu_edit_playlist">Editar nombre y descripción</string>
+    <string name="detail_menu_choose_cover">Elegir portada</string>
+    <string name="detail_menu_reorder">Ordenar canciones</string>
+    <string name="detail_menu_delete_playlist">Borrar playlist</string>
+    <plurals name="detail_play_next_done">
+        <item quantity="one">Suena a continuación</item>
+        <item quantity="many">%d canciones suenan a continuación</item>
+        <item quantity="other">%d canciones suenan a continuación</item>
+    </plurals>
+    <plurals name="detail_enqueue_done">
+        <item quantity="one">Añadida a la cola</item>
+        <item quantity="many">%d canciones añadidas a la cola</item>
+        <item quantity="other">%d canciones añadidas a la cola</item>
+    </plurals>
+
+    <!-- Mixes (mismos ids que las tarjetas del Inicio) -->
+    <string name="detail_mix_genre">Mix %1$s</string>
+    <string name="detail_mix_genre_subtitle">%1$s y más</string>
+    <string name="detail_mix_liked">Tus favoritas</string>
+    <string name="detail_mix_liked_subtitle">Lo que más te gusta</string>
+    <string name="detail_mix_on_repeat">En bucle</string>
+    <string name="detail_mix_on_repeat_subtitle">Lo que no dejas de escuchar</string>
+    <string name="detail_mix_rediscover">Redescubre</string>
+    <string name="detail_mix_rediscover_subtitle">Canciones que hace tiempo no escuchas</string>
+    <string name="detail_mix_fresh">Recién llegadas</string>
+    <string name="detail_mix_fresh_subtitle">Lo último que descargaste</string>
+    <string name="detail_mix_decade">Años %1$s</string>
+    <string name="detail_mix_decade_subtitle">Un viaje en el tiempo</string>
+    <string name="detail_mix_artist">Mix %1$s</string>
+    <string name="detail_mix_daily">Mix del día</string>
+    <string name="detail_mix_daily_subtitle">Hecho para hoy</string>
+
+    <!-- Hoja de acciones de la canción -->
+    <string name="sheet_like">Me gusta</string>
+    <string name="sheet_unlike">Quitar de Me gusta</string>
+    <string name="sheet_liked_done">Añadida a Me gusta</string>
+    <string name="sheet_unliked_done">Quitada de Me gusta</string>
+    <string name="sheet_play_next">Reproducir a continuación</string>
+    <string name="sheet_play_next_done">Suena a continuación</string>
+    <string name="sheet_enqueue">Añadir a la cola</string>
+    <string name="sheet_enqueue_done">Añadida a la cola</string>
+    <string name="sheet_add_to_playlist">Añadir a una playlist</string>
+    <string name="sheet_start_radio">Iniciar radio</string>
+    <string name="sheet_radio_done">Sonando la radio de “%s”</string>
+    <string name="sheet_go_album">Ir al álbum</string>
+    <string name="sheet_go_artist">Ir al artista</string>
+    <string name="sheet_edit">Editar información</string>
+    <string name="sheet_remove_from_playlist">Quitar de esta playlist</string>
+    <string name="sheet_removed_from_playlist">Quitada de la playlist</string>
+    <string name="sheet_undo">Deshacer</string>
+    <string name="sheet_delete_from_phone">Borrar del teléfono</string>
+    <string name="sheet_delete_title">¿Borrar del teléfono?</string>
+    <string name="sheet_delete_body">“%s” sale del teléfono y de todas las playlists. Para escucharla otra vez tendrás que descargarla de nuevo.</string>
+    <string name="sheet_deleted">Canción borrada del teléfono</string>
+
+    <!-- Editar información -->
+    <string name="sheet_edit_title">Editar información</string>
+    <string name="sheet_field_title">Título</string>
+    <string name="sheet_field_artist">Artista</string>
+    <string name="sheet_field_album">Álbum</string>
+    <string name="sheet_field_album_artist">Artista del álbum</string>
+    <string name="sheet_field_genre">Género</string>
+    <string name="sheet_field_year">Año</string>
+    <string name="sheet_field_track_number">N.º de pista</string>
+    <string name="sheet_edit_saved">Información guardada</string>
+
+    <!-- Añadir a una playlist -->
+    <string name="sheet_add_title">Añadir a una playlist</string>
+    <string name="sheet_new_playlist">Nueva playlist</string>
+    <string name="sheet_new_playlist_name">Nombre de la playlist</string>
+    <string name="sheet_create">Crear</string>
+    <string name="sheet_no_playlists">Aún no tienes playlists. Crea la primera arriba.</string>
+    <string name="sheet_in_playlist">Ya está en la playlist</string>
+    <string name="sheet_already_in">Ya está en %s</string>
+    <string name="sheet_playlist_created">Playlist “%s” creada</string>
+    <plurals name="sheet_added_to">
+        <item quantity="one">Añadida a %2$s</item>
+        <item quantity="many">%1$d canciones añadidas a %2$s</item>
+        <item quantity="other">%1$d canciones añadidas a %2$s</item>
+    </plurals>
+</resources>
