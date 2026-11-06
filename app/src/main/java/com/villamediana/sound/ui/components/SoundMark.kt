@@ -1,68 +1,70 @@
 package com.villamediana.sound.ui.components
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.villamediana.sound.ui.theme.SoundColors
-import kotlin.math.cos
-import kotlin.math.sin
 
-/**
- * The Sound mark: one groove spiralling out of the record's center and ending in the needle dot.
- * Same geometry as the launcher icon (res/drawable/ic_launcher_foreground.xml).
- */
+/** Bar heights of the Sound mark (same as res/drawable/ic_launcher_foreground.xml). */
+private val MarkBars = floatArrayOf(0.40f, 0.74f, 1.0f, 0.62f, 0.30f)
+
+/** Just the sound-wave bars, [color] on transparent. */
 @Composable
-fun SoundMark(modifier: Modifier = Modifier, size: Dp = 28.dp, color: Color = SoundColors.Accent) {
-    Canvas(modifier.size(size)) {
-        val c = Offset(this.size.width / 2, this.size.height / 2)
-        val maxR = this.size.minDimension * 0.44f
-        val stroke = this.size.minDimension * 0.085f
-        val path = Path()
-        val turns = 2.25f
-        val steps = 160
-        val start = 0.16f
-        var endPoint = c
-        for (s in 0..steps) {
-            val t = s / steps.toFloat()
-            val a = (t * turns * 2 * Math.PI - Math.PI / 2).toFloat()
-            val r = maxR * (start + (1 - start) * t)
-            val p = Offset(c.x + r * cos(a), c.y + r * sin(a))
-            if (s == 0) path.moveTo(p.x, p.y) else path.lineTo(p.x, p.y)
-            endPoint = p
+fun SoundBars(modifier: Modifier = Modifier, color: Color = SoundColors.Mint) {
+    Canvas(modifier) {
+        val n = MarkBars.size
+        val w = size.width / (n + (n - 1) * 0.6875f)
+        val gap = w * 0.6875f
+        var x = 0f
+        MarkBars.forEach { h ->
+            val bh = (size.height * h).coerceAtLeast(w)
+            drawRoundRect(color, Offset(x, (size.height - bh) / 2), Size(w, bh), CornerRadius(w / 2, w / 2))
+            x += w + gap
         }
-        drawPath(path, color, style = Stroke(width = stroke, cap = StrokeCap.Round, join = StrokeJoin.Round))
-        drawCircle(color, radius = stroke * 0.95f, center = endPoint)
-        drawCircle(color, radius = stroke * 0.55f, center = c)
     }
 }
 
-/** Mark + "sound" wordmark. */
+/** The app mark: mint sound bars on a royal-blue tile. */
 @Composable
-fun SoundWordmark(modifier: Modifier = Modifier, markSize: Dp = 26.dp) {
+fun SoundMark(modifier: Modifier = Modifier, size: Dp = 30.dp) {
+    Box(
+        modifier.size(size).clip(RoundedCornerShape(size * 0.27f)).background(SoundColors.Royal),
+        contentAlignment = Alignment.Center,
+    ) {
+        SoundBars(Modifier.size(size * 0.56f), SoundColors.Mint)
+    }
+}
+
+/** Mark + "Sound" wordmark (the Home header). */
+@Composable
+fun SoundWordmark(modifier: Modifier = Modifier, markSize: Dp = 34.dp) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
         SoundMark(size = markSize)
-        Spacer(Modifier.width(9.dp))
+        Spacer(Modifier.width(10.dp))
         Text(
-            "sound",
-            style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Black, letterSpacing = (-0.04).em, fontSize = 25.sp),
+            "Sound",
+            style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.01).em, fontSize = 29.sp),
             color = SoundColors.Text,
         )
     }

@@ -1,5 +1,7 @@
 package com.villamediana.sound.ui.components
 
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -95,37 +97,21 @@ fun MosaicCover(
 /** Stable pleasant hue for a string. */
 fun seedColor(seed: String): Color {
     val palette = listOf(
-        Color(0xFFFF6B35), Color(0xFFE4B363), Color(0xFF7FB7A4), Color(0xFF8E9BFF),
-        Color(0xFFD98BB5), Color(0xFF6FA8DC), Color(0xFFB5C267), Color(0xFFE07A5F),
+        Color(0xFF2341C9), Color(0xFF5B3FD6), Color(0xFF0E8C8C), Color(0xFFB0397A),
+        Color(0xFF2F7BE0), Color(0xFF7A3FC2), Color(0xFF1E9E6E), Color(0xFFC2563A),
     )
     return palette[abs(seed.hashCode()) % palette.size]
 }
 
 @Composable
 private fun CoverPlaceholder(seed: String, modifier: Modifier) {
+    // A colored tile with the Sound bars: every song without art still gets its own, stable look.
     val tint = seedColor(seed)
-    Box(modifier.background(SoundColors.Surface2), contentAlignment = Alignment.Center) {
-        Canvas(Modifier.fillMaxSize()) {
-            val c = Offset(size.width / 2, size.height / 2)
-            val maxR = size.minDimension * 0.42f
-            // concentric grooves
-            for (i in 1..5) {
-                drawCircle(tint.copy(alpha = 0.10f + i * 0.02f), radius = maxR * i / 5f, center = c, style = Stroke(width = size.minDimension * 0.006f))
-            }
-            // the spiral groove
-            val turns = 2.6f
-            val steps = 140
-            var prev = c
-            for (s in 1..steps) {
-                val t = s / steps.toFloat()
-                val a = t * turns * 2 * Math.PI.toFloat()
-                val r = maxR * (0.18f + 0.82f * t)
-                val p = Offset(c.x + r * cos(a), c.y + r * sin(a))
-                drawLine(tint.copy(alpha = 0.85f), prev, p, strokeWidth = size.minDimension * 0.022f)
-                prev = p
-            }
-            drawCircle(tint, radius = size.minDimension * 0.035f, center = c)
-        }
+    Box(
+        modifier.background(Brush.linearGradient(listOf(tint, lerp(tint, Color.Black, 0.45f)))),
+        contentAlignment = Alignment.Center,
+    ) {
+        SoundBars(Modifier.fillMaxSize(0.34f), color = Color.White.copy(alpha = 0.85f))
     }
 }
 

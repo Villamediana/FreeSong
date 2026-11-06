@@ -512,9 +512,8 @@ private fun IdleContent(
             }
             item(key = "recent-gap") { Spacer(Modifier.height(Dimens.SectionGap - 8.dp).animateItem()) }
         }
-        item(key = "hint") { LinkHintCard(Modifier.animateItem()) }
         if (genres.isNotEmpty()) {
-            item(key = "genres-gap") { Spacer(Modifier.height(Dimens.SectionGap)) }
+            if (recents.isEmpty()) item(key = "genres-gap") { Spacer(Modifier.height(8.dp)) }
             item(key = "genres-header") {
                 SectionHeader(title = stringResource(R.string.search_genres_title), subtitle = stringResource(R.string.search_genres_overline), modifier = Modifier.animateItem())
             }

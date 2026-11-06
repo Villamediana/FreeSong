@@ -300,7 +300,7 @@ private fun PlaylistContent(detail: PlaylistDetail, vm: PlaylistViewModel) {
             description = playlist.description,
             meta = if (entries.isEmpty()) countText else MetaFormat.countAndDuration(countText, summary.durationMs),
             wash = wash,
-            badge = if (playlist.sourceUrl != null) stringResource(R.string.detail_imported_youtube) else null,
+            badge = null,
             badgeIcon = Icons.Rounded.Download,
         ),
         art = art,

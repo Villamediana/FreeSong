@@ -95,7 +95,7 @@ class HomeScreensSmokeTest {
     @Test
     fun emptyHomeWelcomes() {
         compose.setContent { Host { HomeScreen() } }
-        waitForText("Busque, baixe e ouça sem internet")
+        waitForText("Sua música começa aqui")
         compose.onAllNodesWithText("Buscar músicas").fetchSemanticsNodes().let { check(it.isNotEmpty()) }
         shot("home-empty")
     }

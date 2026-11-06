@@ -23,17 +23,18 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.ui.unit.dp
 import com.villamediana.sound.data.db.Track
 import com.villamediana.sound.data.isOnline
 import com.villamediana.sound.ui.theme.SoundColors
 import kotlin.math.abs
 
-internal val MiniCoverSize = 48.dp
+internal val MiniCoverSize = 54.dp
 internal val MiniCoverInset = 8.dp
-internal val MiniCoverCorner = 6.dp
-internal val MiniCardCorner = 12.dp
-internal val MiniSideMargin = 8.dp
+internal val MiniCoverCorner = 14.dp
+internal val MiniCardCorner = 22.dp
+internal val MiniSideMargin = 12.dp
 
 /**
  * The mini player's content (the card itself and the cover are drawn by the host, so the cover
@@ -50,8 +51,7 @@ internal fun MiniPlayerBar(
     swipeOffset: () -> Float,
     swipeWidth: Float,
     onTogglePlay: () -> Unit,
-    onLike: (Boolean) -> Unit,
-    onDownload: () -> Unit,
+    onNext: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -59,17 +59,17 @@ internal fun MiniPlayerBar(
             .fillMaxSize()
             .drawWithContent {
                 drawContent()
-                val inset = 10.dp.toPx()
-                val y = size.height - 1.dp.toPx()
-                val stroke = 2.dp.toPx()
+                val inset = MiniCardCorner.toPx() * 0.9f
+                val y = size.height - 1.5.dp.toPx()
+                val stroke = 2.5.dp.toPx()
                 val end = size.width - inset
-                drawLine(SoundColors.Text.copy(alpha = 0.14f), Offset(inset, y), Offset(end, y), strokeWidth = stroke, cap = StrokeCap.Round)
+                drawLine(SoundColors.Text.copy(alpha = 0.18f), Offset(inset, y), Offset(end, y), strokeWidth = stroke, cap = StrokeCap.Round)
                 val f = PlayerMath.fraction(clock.positionMs, durationMs)
                 if (f > 0f) drawLine(SoundColors.Text, Offset(inset, y), Offset(inset + (end - inset) * f, y), strokeWidth = stroke, cap = StrokeCap.Round)
             },
     ) {
         Row(
-            Modifier.fillMaxSize().padding(start = MiniCoverInset + MiniCoverSize + 12.dp, end = 4.dp),
+            Modifier.fillMaxSize().padding(start = MiniCoverInset + MiniCoverSize + 14.dp, end = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
@@ -90,7 +90,7 @@ internal fun MiniPlayerBar(
                     Column {
                         Text(
                             t.title,
-                            style = MaterialTheme.typography.titleSmall,
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
                             color = SoundColors.Text,
                             maxLines = 1,
                             modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 2_000, repeatDelayMillis = 3_000),
@@ -98,22 +98,20 @@ internal fun MiniPlayerBar(
                         Spacer(Modifier.height(1.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             StreamedMark(visible = t.isOnline, size = 13.dp, gap = 4.dp)
-                            Text(t.artist, style = MaterialTheme.typography.bodySmall, color = SoundColors.Text.copy(alpha = 0.66f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(t.artist, style = MaterialTheme.typography.bodyMedium, color = SoundColors.Text.copy(alpha = 0.7f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
                 }
             }
-            HeartOrDownload(
-                stream = stream,
-                liked = liked,
-                onLike = onLike,
-                onDownload = onDownload,
-                size = 40.dp,
-                iconSize = 22.dp,
-                ringSize = 22.dp,
-                idleTint = SoundColors.Text.copy(alpha = 0.8f),
+            MorphPlayPauseIcon(playing = playing, onClick = onTogglePlay, size = 46.dp)
+            PlayerIconButton(
+                androidx.compose.material.icons.Icons.Rounded.FastForward,
+                androidx.compose.ui.res.stringResource(com.villamediana.sound.R.string.player_next),
+                onNext,
+                size = 46.dp,
+                iconSize = 30.dp,
+                tint = SoundColors.Text,
             )
-            MorphPlayPauseIcon(playing = playing, onClick = onTogglePlay, size = 44.dp)
         }
     }
 }

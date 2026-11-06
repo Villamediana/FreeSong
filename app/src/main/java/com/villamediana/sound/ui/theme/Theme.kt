@@ -47,10 +47,10 @@ private val SoundScheme = darkColorScheme(
 
 val SoundShapes = Shapes(
     extraSmall = RoundedCornerShape(4.dp),
-    small = RoundedCornerShape(8.dp),
-    medium = RoundedCornerShape(14.dp),
-    large = RoundedCornerShape(22.dp),
-    extraLarge = RoundedCornerShape(28.dp),
+    small = RoundedCornerShape(10.dp),
+    medium = RoundedCornerShape(16.dp),
+    large = RoundedCornerShape(24.dp),
+    extraLarge = RoundedCornerShape(30.dp),
 )
 
 /** Spacing / sizes shared by every screen. */
@@ -58,12 +58,12 @@ object Dimens {
     val Gutter = 20.dp            // screen side padding
     val Gap = 12.dp
     val SectionGap = 28.dp
-    val RowHeight = 64.dp
-    val RowCover = 48.dp
-    val CardCover = 148.dp        // home carousels
-    val MiniPlayerHeight = 64.dp
-    val BottomBarHeight = 64.dp
-    val CoverCorner = 6.dp        // album art corners (small, like a real sleeve)
+    val RowHeight = 70.dp
+    val RowCover = 54.dp
+    val CardCover = 150.dp        // home carousels
+    val MiniPlayerHeight = 70.dp
+    val BottomBarHeight = 66.dp
+    val CoverCorner = 13.dp       // album art corners (soft, rounded)
 }
 
 /** Motion vocabulary — springy but calm. */

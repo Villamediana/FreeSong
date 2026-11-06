@@ -1,5 +1,6 @@
 package com.villamediana.sound.ui.home
 
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -67,6 +68,7 @@ import com.villamediana.sound.ui.components.PillButton
 import com.villamediana.sound.ui.components.PlayPauseButton
 import com.villamediana.sound.ui.components.SectionHeader
 import com.villamediana.sound.ui.components.SoundMark
+import com.villamediana.sound.ui.components.SoundWordmark
 import com.villamediana.sound.ui.library.CollectionMenuSheet
 import com.villamediana.sound.ui.library.CollectionTarget
 import com.villamediana.sound.ui.nav.Navigator
@@ -195,24 +197,25 @@ private fun HomeFeed(
 
         val headerIndex = order++
         item(key = "header", contentType = "header") {
+          Column(Modifier.animateItem().staggerIn(headerIndex, intro).fillMaxWidth()) {
             Row(
                 Modifier
-                    .animateItem()
-                    .staggerIn(headerIndex, intro)
                     .fillMaxWidth()
-                    .padding(start = Dimens.Gutter, end = 8.dp, bottom = 18.dp),
+                    .padding(start = Dimens.Gutter, end = 8.dp, bottom = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    greetingText(),
-                    style = MaterialTheme.typography.displaySmall,
-                    color = SoundColors.Text,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
+                SoundWordmark(Modifier.weight(1f))
                 HeaderActions(downloads, nav)
             }
+            Text(
+                greetingText(),
+                style = MaterialTheme.typography.headlineMedium,
+                color = SoundColors.Text,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth().padding(start = Dimens.Gutter, end = Dimens.Gutter, bottom = 14.dp),
+            )
+          }
         }
 
         if (state.quick.isNotEmpty()) {
@@ -407,19 +410,19 @@ private fun SmartShuffleHero(cover: String?, playing: Boolean, onClick: () -> Un
         Row(
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(14.dp))
-                .background(SoundColors.Surface1)
+                .clip(RoundedCornerShape(24.dp))
+                .background(Brush.linearGradient(listOf(SoundColors.Royal, SoundColors.RoyalDeep)))
                 .pressable(onClick, pressed = 0.98f)
-                .padding(start = 18.dp, top = 18.dp, bottom = 18.dp, end = 14.dp),
+                .padding(start = 22.dp, top = 22.dp, bottom = 22.dp, end = 18.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.home_smart_title), style = MaterialTheme.typography.headlineSmall, color = SoundColors.Text)
+                Text(stringResource(R.string.home_smart_title), style = MaterialTheme.typography.headlineMedium, color = SoundColors.Text)
                 Spacer(Modifier.height(5.dp))
                 Text(
                     stringResource(R.string.home_smart_subtitle),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = SoundColors.TextMuted,
+                    color = SoundColors.Text.copy(alpha = 0.75f),
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -427,12 +430,14 @@ private fun SmartShuffleHero(cover: String?, playing: Boolean, onClick: () -> Un
                 PlayPauseButton(
                     playing = playing,
                     onClick = onClick,
-                    size = 48.dp,
+                    size = 52.dp,
+                    container = SoundColors.Mint,
+                    content = SoundColors.OnMint,
                     contentDescription = stringResource(if (playing) R.string.pause else R.string.play),
                 )
             }
             Spacer(Modifier.size(12.dp))
-            SleeveWithRecord(cover = cover, seed = "sound", spinning = playing, sleeve = 88.dp)
+            com.villamediana.sound.ui.components.SoundBars(Modifier.size(96.dp), color = SoundColors.Mint)
         }
     }
 }
@@ -442,8 +447,6 @@ private fun SmartShuffleHero(cover: String?, playing: Boolean, onClick: () -> Un
 @Composable
 private fun EmptyHome(downloads: DownloadSummary, nav: Navigator, intro: Boolean) {
     val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    val spin = rememberInfiniteTransition(label = "mark")
-    val angle by spin.animateFloat(0f, 360f, infiniteRepeatable(tween(14_000, easing = LinearEasing), RepeatMode.Restart), label = "angle")
 
     Box(Modifier.fillMaxSize().padding(bottom = LocalBottomInset.current)) {
         Row(Modifier.align(Alignment.TopEnd).padding(top = top + 6.dp, end = 8.dp)) {
@@ -455,8 +458,8 @@ private fun EmptyHome(downloads: DownloadSummary, nav: Navigator, intro: Boolean
             verticalArrangement = Arrangement.Center,
         ) {
             SoundMark(
-                size = 96.dp,
-                modifier = Modifier.staggerIn(0, intro).graphicsLayer { rotationZ = angle },
+                size = 88.dp,
+                modifier = Modifier.staggerIn(0, intro),
             )
             Spacer(Modifier.height(32.dp))
             Text(

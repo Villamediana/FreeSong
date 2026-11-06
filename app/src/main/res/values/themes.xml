@@ -8,7 +8,7 @@
     </style>
 
     <style name="Theme.Sound.Splash" parent="Theme.SplashScreen">
-        <item name="windowSplashScreenBackground">@color/ink</item>
+        <item name="windowSplashScreenBackground">@color/royal</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash</item>
         <item name="postSplashScreenTheme">@style/Theme.Sound</item>
     </style>

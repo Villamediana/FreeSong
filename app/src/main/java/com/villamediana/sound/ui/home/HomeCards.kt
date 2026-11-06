@@ -178,7 +178,7 @@ fun SleeveWithRecord(cover: String?, seed: String, spinning: Boolean, modifier: 
                 }
                 drawCircle(SoundColors.Accent, radius = r * 0.32f, center = c)
             }
-            SoundMark(size = sleeve * 0.94f * 0.26f, color = SoundColors.OnAccent)
+            com.villamediana.sound.ui.components.SoundBars(Modifier.size(sleeve * 0.94f * 0.2f), color = SoundColors.OnAccent)
         }
         Cover(cover, Modifier.size(sleeve).align(Alignment.CenterStart), seed = seed)
     }

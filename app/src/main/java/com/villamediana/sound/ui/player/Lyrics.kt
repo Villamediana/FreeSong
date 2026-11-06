@@ -172,10 +172,10 @@ internal object LyricsFiles {
 internal data class LyricColors(val active: Color, val past: Color, val future: Color) {
     companion object {
         fun over(background: Color): LyricColors = LyricColors(
-            active = SoundColors.Text,
-            past = SoundColors.Text.copy(alpha = 0.58f),
-            // Like a printed sleeve: upcoming lines in ink when the color is light enough to carry it.
-            future = if (background.luminance() > 0.11f) SoundColors.Ink.copy(alpha = 0.72f) else SoundColors.Text.copy(alpha = 0.34f),
+            // The sung line in yellow (as in karaoke screens), the rest in soft white.
+            active = SoundColors.Lyric,
+            past = SoundColors.Text.copy(alpha = 0.5f),
+            future = SoundColors.Text.copy(alpha = if (background.luminance() > 0.2f) 0.75f else 0.6f),
         )
     }
 }

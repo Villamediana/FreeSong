@@ -1,5 +1,30 @@
 package com.villamediana.sound.ui.equalizer
 
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.material.icons.rounded.Bedtime
+import androidx.compose.material.icons.rounded.Nature
+import androidx.compose.material.icons.rounded.LibraryMusic
+import androidx.compose.material.icons.rounded.Piano
+import androidx.compose.material.icons.rounded.Celebration
+import androidx.compose.material.icons.rounded.Headphones
+import androidx.compose.material.icons.rounded.Equalizer
+import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material.icons.rounded.Bolt
+import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material.icons.rounded.SurroundSound
+import androidx.compose.material.icons.rounded.Speaker
+import androidx.compose.material.icons.rounded.SentimentSatisfied
+import androidx.compose.runtime.remember
+import com.villamediana.sound.ui.components.pressScale
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -103,24 +128,23 @@ internal fun EqualizerContent(
     Column(
         Modifier
             .fillMaxSize()
-            .background(SoundColors.Ink)
+            .background(Brush.verticalGradient(listOf(SoundColors.Royal, SoundColors.RoyalDeep)))
             .verticalScroll(rememberScrollState())
             .padding(top = top),
     ) {
         TopBar(enabled = state.enabled, onBack = onBack, onEnabled = onEnabled)
-        Hero(state, onReset)
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(18.dp))
 
         if (state.available) {
-            EqCurveGraph(
+            EqBars(
                 bands = state.bands,
                 minMb = state.minLevelMb,
                 maxMb = state.maxLevelMb,
                 enabled = active,
                 onBandChange = onBand,
             )
-            Spacer(Modifier.height(18.dp))
-            PresetRow(
+            Spacer(Modifier.height(30.dp))
+            PresetGrid(
                 selected = state.preset,
                 hasCustom = state.hasCustomCurve,
                 enabled = active,
@@ -132,14 +156,7 @@ internal fun EqualizerContent(
         }
 
         if (state.bassBoostAvailable || state.virtualizerAvailable) {
-            Spacer(Modifier.height(Dimens.SectionGap + 4.dp))
-            Text(
-                stringResource(R.string.eq_effects).uppercase(),
-                style = MaterialTheme.typography.labelSmall,
-                color = SoundColors.TextFaint,
-                modifier = Modifier.padding(horizontal = Dimens.Gutter),
-            )
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(Dimens.SectionGap))
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = Dimens.Gutter),
                 horizontalArrangement = Arrangement.SpaceEvenly,
@@ -165,6 +182,20 @@ internal fun EqualizerContent(
             }
         }
 
+        if (state.available) {
+            Spacer(Modifier.height(22.dp))
+            Text(
+                stringResource(R.string.eq_reset),
+                style = MaterialTheme.typography.labelLarge,
+                color = SoundColors.Text.copy(alpha = if (state.enabled && canReset(state)) 0.85f else 0.35f),
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .clip(CircleShape)
+                    .clickable(enabled = state.enabled && canReset(state), onClick = onReset)
+                    .padding(horizontal = 18.dp, vertical = 10.dp),
+            )
+        }
+
         Spacer(Modifier.height(LocalBottomInset.current))
     }
 }
@@ -182,7 +213,7 @@ private fun TopBar(enabled: Boolean, onBack: () -> Unit, onEnabled: (Boolean) ->
         }
         Text(
             stringResource(R.string.eq_title),
-            style = MaterialTheme.typography.titleLarge,
+            style = MaterialTheme.typography.headlineMedium,
             color = SoundColors.Text,
             modifier = Modifier.weight(1f).padding(start = 4.dp),
         )
@@ -194,12 +225,12 @@ private fun TopBar(enabled: Boolean, onBack: () -> Unit, onEnabled: (Boolean) ->
             },
             modifier = Modifier.testTag("eq_switch").semantics { contentDescription = switchLabel },
             colors = SwitchDefaults.colors(
-                checkedThumbColor = SoundColors.OnAccent,
-                checkedTrackColor = SoundColors.Accent,
-                checkedBorderColor = SoundColors.Accent,
-                uncheckedThumbColor = SoundColors.TextMuted,
-                uncheckedTrackColor = SoundColors.Surface3,
-                uncheckedBorderColor = SoundColors.Hairline,
+                checkedThumbColor = SoundColors.RoyalDeep,
+                checkedTrackColor = SoundColors.Mint,
+                checkedBorderColor = SoundColors.Mint,
+                uncheckedThumbColor = SoundColors.Text.copy(alpha = 0.7f),
+                uncheckedTrackColor = SoundColors.Text.copy(alpha = 0.12f),
+                uncheckedBorderColor = SoundColors.Text.copy(alpha = 0.3f),
             ),
         )
     }
@@ -246,12 +277,9 @@ private fun Hero(state: EqState, onReset: () -> Unit) {
     }
 }
 
-/**
- * The presets, led by "Personalizado" whenever a custom curve exists: selected while it plays, and
- * the way back to it after trying a preset.
- */
+/** Presets as cards (two per row), "Personalizado" first when a custom curve exists. */
 @Composable
-private fun PresetRow(
+private fun PresetGrid(
     selected: EqPreset?,
     hasCustom: Boolean,
     enabled: Boolean,
@@ -259,51 +287,72 @@ private fun PresetRow(
     onCustom: () -> Unit,
 ) {
     val haptic = LocalHapticFeedback.current
-    val list = rememberLazyListState()
     val dim by animateFloatAsState(if (enabled) 1f else 0.4f, Motion.enter(), label = "presets")
     val showCustom = selected == null || hasCustom
-    // Open with the current preset in view (with its neighbour on the left as context).
-    LaunchedEffect(Unit) {
-        val index = if (selected == null) 0 else EqPreset.entries.indexOf(selected) + (if (showCustom) 1 else 0)
-        if (index > 1) list.scrollToItem(index - 1)
-    }
-    LazyRow(
-        state = list,
-        modifier = Modifier.fillMaxWidth().alpha(dim),
-        contentPadding = PaddingValues(horizontal = Dimens.Gutter),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    val cards: List<EqPreset?> = (if (showCustom) listOf<EqPreset?>(null) else emptyList()) + EqPreset.entries
+    Column(
+        Modifier.fillMaxWidth().padding(horizontal = Dimens.Gutter).alpha(dim),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        if (showCustom) {
-            item(key = "custom") {
-                FilterPill(
-                    text = stringResource(R.string.eq_preset_custom),
-                    selected = selected == null,
-                    enabled = enabled,
-                    onClick = {
-                        if (selected != null) {
-                            haptic.performHapticFeedback(HapticFeedbackType.SegmentTick)
-                            onCustom()
-                        }
-                    },
-                    modifier = Modifier.animateItem(),
-                )
+        cards.chunked(2).forEach { pair ->
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                pair.forEach { preset ->
+                    val on = preset == selected
+                    PresetCard(
+                        preset = preset,
+                        selected = on,
+                        enabled = enabled,
+                        onClick = {
+                            if (!on) {
+                                haptic.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                                if (preset == null) onCustom() else onPreset(preset)
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                if (pair.size == 1) Spacer(Modifier.weight(1f))
             }
         }
-        items(EqPreset.entries, key = { it.name }) { preset ->
-            FilterPill(
-                text = stringResource(presetLabel(preset)),
-                selected = preset == selected,
-                enabled = enabled,
-                onClick = {
-                    if (preset != selected) {
-                        haptic.performHapticFeedback(HapticFeedbackType.SegmentTick)
-                        onPreset(preset)
-                    }
-                },
-                modifier = Modifier.animateItem(),
-            )
-        }
     }
+}
+
+@Composable
+private fun PresetCard(preset: EqPreset?, selected: Boolean, enabled: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val interaction = remember { MutableInteractionSource() }
+    val bg by animateColorAsState(if (selected) SoundColors.Mint else SoundColors.Text.copy(alpha = 0f), Motion.enter(), label = "presetBg")
+    val fg = if (selected) SoundColors.OnMint else SoundColors.Text
+    Column(
+        modifier
+            .height(104.dp)
+            .pressScale(interaction, 0.96f)
+            .clip(RoundedCornerShape(22.dp))
+            .background(bg)
+            .then(if (selected) Modifier else Modifier.border(1.dp, SoundColors.Text.copy(alpha = 0.22f), RoundedCornerShape(22.dp)))
+            .selectable(selected = selected, interactionSource = interaction, indication = null, enabled = enabled, role = Role.RadioButton, onClick = onClick)
+            .padding(horizontal = 18.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Icon(presetIcon(preset), null, tint = if (selected) SoundColors.OnMint else SoundColors.Text.copy(alpha = 0.85f), modifier = Modifier.size(26.dp))
+        Text(stringResource(presetLabel(preset)), style = MaterialTheme.typography.titleMedium, color = fg, maxLines = 2)
+    }
+}
+
+private fun presetIcon(preset: EqPreset?): ImageVector = when (preset) {
+    null -> Icons.Rounded.GraphicEq
+    EqPreset.FLAT -> Icons.Rounded.SentimentSatisfied
+    EqPreset.BASS -> Icons.Rounded.Speaker
+    EqPreset.TREBLE -> Icons.Rounded.SurroundSound
+    EqPreset.VOCAL -> Icons.Rounded.Mic
+    EqPreset.ROCK -> Icons.Rounded.Bolt
+    EqPreset.POP -> Icons.Rounded.MusicNote
+    EqPreset.ELECTRONIC -> Icons.Rounded.Equalizer
+    EqPreset.HIPHOP -> Icons.Rounded.Headphones
+    EqPreset.LATIN -> Icons.Rounded.Celebration
+    EqPreset.JAZZ -> Icons.Rounded.Piano
+    EqPreset.CLASSICAL -> Icons.Rounded.LibraryMusic
+    EqPreset.ACOUSTIC -> Icons.Rounded.Nature
+    EqPreset.LATE_NIGHT -> Icons.Rounded.Bedtime
 }
 
 @Composable

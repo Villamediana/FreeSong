@@ -1,5 +1,14 @@
 package com.villamediana.sound.ui.detail
 
+import androidx.compose.ui.state.ToggleableState
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PlayArrow
+import com.villamediana.sound.ui.components.PillButton
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
@@ -181,8 +190,8 @@ internal fun CollectionScaffold(
                                 .matchParentSize()
                                 .background(
                                     Brush.verticalGradient(
-                                        0f to header.wash.copy(alpha = 0.82f),
-                                        0.45f to header.wash.copy(alpha = 0.34f),
+                                        0f to header.wash,
+                                        0.5f to header.wash.copy(alpha = 0.55f),
                                         1f to header.wash.copy(alpha = 0f),
                                     ),
                                 ),
@@ -216,23 +225,39 @@ internal fun CollectionScaffold(
                             }
                             HeaderTexts(header, onTitlePlaced = { geometry.title = it; geometry.update() })
                             if (showActionRow) {
+                                Spacer(Modifier.height(8.dp))
+                                Row(
+                                    Modifier.align(Alignment.CenterHorizontally),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) { actions() }
                                 Spacer(Modifier.height(10.dp))
                                 Row(
-                                    Modifier.fillMaxWidth().padding(start = Dimens.Gutter - 10.dp, end = Dimens.Gutter),
-                                    verticalAlignment = Alignment.CenterVertically,
+                                    Modifier.fillMaxWidth().padding(horizontal = Dimens.Gutter),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                                 ) {
-                                    actions()
-                                    Spacer(Modifier.weight(1f))
-                                    if (shuffle != null) {
-                                        ShuffleToggle(shuffle, onShuffle)
-                                        Spacer(Modifier.width(10.dp))
-                                    }
                                     if (onPlay != null) {
-                                        PlayPauseButton(
-                                            playing = playing,
+                                        PillButton(
+                                            text = stringResource(if (playing) R.string.pause else R.string.play),
                                             onClick = onPlay,
-                                            size = 56.dp,
-                                            contentDescription = stringResource(if (playing) R.string.pause else R.string.play),
+                                            icon = if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                                            big = true,
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                    }
+                                    if (shuffle != null) {
+                                        val shuffleLabel = stringResource(R.string.shuffle)
+                                        PillButton(
+                                            text = shuffleLabel,
+                                            onClick = onShuffle,
+                                            icon = Icons.Rounded.Shuffle,
+                                            filled = shuffle,
+                                            big = true,
+                                            // TalkBack hears it as a switch (on / off).
+                                            modifier = Modifier.weight(1f).semantics(mergeDescendants = true) {
+                                                contentDescription = shuffleLabel
+                                                role = Role.Switch
+                                                toggleableState = ToggleableState(shuffle)
+                                            },
                                         )
                                     }
                                 }
@@ -304,20 +329,19 @@ internal fun rememberDetailSnackbar(): DetailSnackbar {
 
 @Composable
 private fun HeaderTexts(header: HeaderSpec, onTitlePlaced: (LayoutCoordinates) -> Unit) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = Dimens.Gutter)) {
-        Text(header.overline.uppercase(), style = MaterialTheme.typography.labelSmall, color = SoundColors.TextMuted)
-        Spacer(Modifier.height(6.dp))
+    Column(Modifier.fillMaxWidth().padding(horizontal = Dimens.Gutter), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             header.title,
             style = headerTitleStyle(header.title),
             color = SoundColors.Text,
             maxLines = 3,
             overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
             modifier = Modifier.onGloballyPositioned(onTitlePlaced),
         )
         header.description?.takeIf { it.isNotBlank() }?.let {
             Spacer(Modifier.height(6.dp))
-            Text(it, style = MaterialTheme.typography.bodyMedium, color = SoundColors.TextMuted, maxLines = 3, overflow = TextOverflow.Ellipsis)
+            Text(it, style = MaterialTheme.typography.bodyMedium, color = SoundColors.TextMuted, maxLines = 3, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
         }
         Spacer(Modifier.height(8.dp))
         MetaLine(header.owner, header.onOwnerClick, header.meta)
@@ -350,7 +374,7 @@ private fun MetaLine(owner: String?, onOwnerClick: (() -> Unit)?, meta: String) 
         }
         append(meta)
     }
-    Text(text, style = MaterialTheme.typography.bodyMedium, color = SoundColors.TextMuted, maxLines = 2, overflow = TextOverflow.Ellipsis)
+    Text(text, style = MaterialTheme.typography.bodyLarge, color = SoundColors.TextMuted, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
 }
 
 @Composable

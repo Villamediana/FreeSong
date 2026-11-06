@@ -118,7 +118,6 @@ class SearchScreensSmokeTest {
         harness.show { SearchScreen() }
 
         rule.onNodeWithText(s(R.string.search_title)).assertExists()
-        rule.onNodeWithText(s(R.string.search_hint_body)).assertExists()
         rule.waitUntil(20_000) { rule.onAllNodes(hasText("Rock en español")).fetchSemanticsNodes().isNotEmpty() }
         harness.screenshot("search_idle")
 

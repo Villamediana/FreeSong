@@ -151,6 +151,40 @@ private fun SeekTimes(clock: PlaybackClock, durationMs: Long, drag: State<Float?
     }
 }
 
+/**
+ * Decorative sound wave above the seek bar: bar heights are stable per song (from [seed]); the
+ * played part is lit. Drawn from the clock in the draw phase (no recomposition per tick).
+ */
+@Composable
+internal fun Waveform(seed: String, clock: PlaybackClock, durationMs: Long, modifier: Modifier = Modifier) {
+    val heights = remember(seed) {
+        val r = java.util.Random(seed.hashCode().toLong())
+        FloatArray(34) { i ->
+            val wave = (kotlin.math.sin(i * 0.55) * 0.5 + 0.5).toFloat()
+            (0.18f + 0.82f * (0.55f * wave + 0.45f * r.nextFloat())).coerceIn(0.12f, 1f)
+        }
+    }
+    Spacer(
+        modifier.drawBehind {
+            val n = heights.size
+            val gap = 4.dp.toPx()
+            val w = (size.width - gap * (n - 1)) / n
+            val f = PlayerMath.fraction(clock.positionMs, durationMs)
+            for (i in 0 until n) {
+                val h = size.height * heights[i]
+                val x = i * (w + gap)
+                val lit = (i + 0.5f) / n <= f
+                drawRoundRect(
+                    if (lit) SoundColors.Text else SoundColors.Text.copy(alpha = 0.28f),
+                    topLeft = Offset(x, size.height - h),
+                    size = androidx.compose.ui.geometry.Size(w, h),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(w / 2, w / 2),
+                )
+            }
+        },
+    )
+}
+
 /** Round play/pause whose icon morphs (triangle halves ↔ bars) instead of swapping. */
 @Composable
 internal fun MorphPlayPause(

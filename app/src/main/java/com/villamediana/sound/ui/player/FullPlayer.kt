@@ -1,5 +1,8 @@
 package com.villamediana.sound.ui.player
 
+import androidx.compose.material.icons.rounded.FastForward
+import androidx.compose.material.icons.rounded.FastRewind
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -137,6 +140,7 @@ internal class PlayerActions(
     val download: () -> Unit = {},
     /** "Ver vídeo" (needs network). */
     val openVideo: () -> Unit = {},
+    val openEqualizer: () -> Unit = {},
 )
 
 /**
@@ -395,11 +399,12 @@ private fun Controls(
     actions: PlayerActions,
 ) {
     TrackHeader(track, stream, liked, actions)
-    Spacer(Modifier.height(14.dp))
-    SeekBar(clock = clock, durationMs = durationMs, onSeek = actions.seek, timeColor = SoundColors.Text.copy(alpha = 0.66f))
-    Spacer(Modifier.height(4.dp))
+    Spacer(Modifier.height(18.dp))
+    Waveform(seed = track.videoId ?: track.id.toString(), clock = clock, durationMs = durationMs, modifier = Modifier.fillMaxWidth().height(34.dp))
+    SeekBar(clock = clock, durationMs = durationMs, onSeek = actions.seek, timeColor = SoundColors.Text.copy(alpha = 0.7f))
+    Spacer(Modifier.height(6.dp))
     Transport(state, playing, actions)
-    Spacer(Modifier.height(10.dp))
+    Spacer(Modifier.height(14.dp))
     BottomRow(state.outputName, output, sleep, lyrics, actions)
 }
 
@@ -419,8 +424,8 @@ private fun TrackHeader(track: Track, stream: StreamUi, liked: Boolean, actions:
             Column {
                 Text(
                     t.title,
-                    style = MaterialTheme.typography.headlineSmall.copy(fontSize = 23.sp, lineHeight = 28.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.015).em),
-                    color = SoundColors.Text,
+                    style = MaterialTheme.typography.headlineSmall.copy(fontSize = 28.sp, lineHeight = 33.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.01).em),
+                    color = SoundColors.Mint,
                     maxLines = 1,
                     modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1_800, repeatDelayMillis = 2_600),
                 )
@@ -479,12 +484,12 @@ private fun Transport(state: PlaybackState, playing: Boolean, actions: PlayerAct
             actions.toggleShuffle,
             modifier = Modifier.padding(start = 0.dp),
             iconSize = 24.dp,
-            tint = if (state.shuffle) SoundColors.Accent else SoundColors.Text.copy(alpha = 0.85f),
+            tint = if (state.shuffle) SoundColors.Mint else SoundColors.Text.copy(alpha = 0.7f),
             dot = state.shuffle,
         )
-        PlayerIconButton(Icons.Rounded.SkipPrevious, stringResource(R.string.player_previous), actions.previous, size = 56.dp, iconSize = 40.dp)
-        MorphPlayPause(playing = playing, onClick = actions.togglePlay, size = 68.dp, buffering = state.isBuffering)
-        PlayerIconButton(Icons.Rounded.SkipNext, stringResource(R.string.player_next), actions.next, size = 56.dp, iconSize = 40.dp)
+        PlayerIconButton(Icons.Rounded.FastRewind, stringResource(R.string.player_previous), actions.previous, size = 64.dp, iconSize = 50.dp, tint = SoundColors.Mint)
+        MorphPlayPause(playing = playing, onClick = actions.togglePlay, size = 84.dp, container = Color.Transparent, content = SoundColors.Mint, buffering = state.isBuffering)
+        PlayerIconButton(Icons.Rounded.FastForward, stringResource(R.string.player_next), actions.next, size = 64.dp, iconSize = 50.dp, tint = SoundColors.Mint)
         PlayerIconButton(
             Icons.Rounded.Repeat,
             stringResource(
@@ -496,7 +501,7 @@ private fun Transport(state: PlaybackState, playing: Boolean, actions: PlayerAct
             ),
             actions.cycleRepeat,
             iconSize = 24.dp,
-            tint = if (state.repeat != RepeatMode.OFF) SoundColors.Accent else SoundColors.Text.copy(alpha = 0.85f),
+            tint = if (state.repeat != RepeatMode.OFF) SoundColors.Mint else SoundColors.Text.copy(alpha = 0.7f),
             dot = state.repeat != RepeatMode.OFF,
             badge = if (state.repeat == RepeatMode.ONE) "1" else null,
         )
@@ -505,20 +510,28 @@ private fun Transport(state: PlaybackState, playing: Boolean, actions: PlayerAct
 
 @Composable
 private fun BottomRow(outputName: String?, output: OutputRoute, sleep: SleepTimer, lyrics: LyricsState, actions: PlayerActions) {
-    // The chip takes what it needs (up to all the free space); the buttons stay pinned to the end.
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-        OutputChip(outputName, output, actions.openOutput, Modifier.weight(1f, fill = false).padding(end = 12.dp))
-        BottomButtons(sleep, lyrics, actions)
-    }
-}
-
-@Composable
-private fun BottomButtons(sleep: SleepTimer, lyrics: LyricsState, actions: PlayerActions) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        LyricsPill(lyrics, actions.openLyrics)
-        Spacer(Modifier.width(4.dp))
-        SleepButton(sleep, actions.openSleep)
-        PlayerIconButton(Icons.AutoMirrored.Rounded.QueueMusic, stringResource(R.string.player_queue), actions.openQueue, size = 44.dp, iconSize = 24.dp, tint = SoundColors.Text.copy(alpha = 0.85f))
+    // Equalizer · "Letra" in the middle · timer and queue; the output line only for headphones/car.
+    Column(Modifier.fillMaxWidth()) {
+        Box(Modifier.fillMaxWidth()) {
+            PlayerIconButton(
+                Icons.Rounded.Tune,
+                stringResource(R.string.player_equalizer),
+                actions.openEqualizer,
+                Modifier.align(Alignment.CenterStart),
+                size = 48.dp,
+                iconSize = 26.dp,
+                tint = SoundColors.Text.copy(alpha = 0.85f),
+            )
+            LyricsPill(lyrics, actions.openLyrics, Modifier.align(Alignment.Center))
+            Row(Modifier.align(Alignment.CenterEnd), verticalAlignment = Alignment.CenterVertically) {
+                SleepButton(sleep, actions.openSleep)
+                PlayerIconButton(Icons.AutoMirrored.Rounded.QueueMusic, stringResource(R.string.player_queue), actions.openQueue, size = 48.dp, iconSize = 26.dp, tint = SoundColors.Text.copy(alpha = 0.85f))
+            }
+        }
+        if (output.kind != OutputKind.PHONE) {
+            Spacer(Modifier.height(10.dp))
+            OutputChip(outputName, output, actions.openOutput, Modifier.align(Alignment.CenterHorizontally))
+        }
     }
 }
 
@@ -527,31 +540,31 @@ private fun BottomButtons(sleep: SleepTimer, lyrics: LyricsState, actions: Playe
  * they follow the song), quiet otherwise; the screen itself explains when there are none.
  */
 @Composable
-private fun LyricsPill(lyrics: LyricsState, onClick: () -> Unit) {
+private fun LyricsPill(lyrics: LyricsState, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val ready = lyrics as? LyricsState.Ready
-    val tint by animateColorAsState(SoundColors.Text.copy(alpha = if (ready != null) 0.95f else 0.5f), tween(240), label = "lyricsPill")
-    val fill by animateColorAsState(SoundColors.Text.copy(alpha = if (ready != null) 0.12f else 0.06f), tween(240), label = "lyricsPillBg")
+    val tint by animateColorAsState(SoundColors.Text.copy(alpha = if (ready != null) 1f else 0.55f), tween(240), label = "lyricsPill")
+    val fill by animateColorAsState(SoundColors.Text.copy(alpha = if (ready != null) 0.14f else 0.07f), tween(240), label = "lyricsPillBg")
     val interaction = remember { MutableInteractionSource() }
     val label = stringResource(R.string.player_lyrics_open)
     Row(
-        Modifier
-            .height(34.dp)
+        modifier
+            .height(44.dp)
             .pressScale(interaction, 0.94f)
             .clip(CircleShape)
             .background(fill)
             .clickable(interactionSource = interaction, indication = null, onClickLabel = label, role = Role.Button, onClick = onClick)
             .semantics { contentDescription = label }
-            .padding(start = 10.dp, end = 13.dp),
+            .padding(start = 16.dp, end = 20.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box {
-            Icon(Icons.Rounded.Lyrics, null, tint = tint, modifier = Modifier.size(18.dp))
+            Icon(Icons.Rounded.Lyrics, null, tint = if (ready != null) SoundColors.Mint else tint, modifier = Modifier.size(22.dp))
             if (ready?.lyrics?.synced == true) {
-                Box(Modifier.align(Alignment.TopEnd).offset(x = 2.dp, y = (-1).dp).size(6.dp).clip(CircleShape).background(SoundColors.Accent))
+                Box(Modifier.align(Alignment.TopEnd).offset(x = 2.dp, y = (-1).dp).size(6.dp).clip(CircleShape).background(SoundColors.Lyric))
             }
         }
-        Spacer(Modifier.width(7.dp))
-        Text(stringResource(R.string.player_lyrics), style = MaterialTheme.typography.labelLarge, color = tint, maxLines = 1)
+        Spacer(Modifier.width(9.dp))
+        Text(stringResource(R.string.player_lyrics), style = MaterialTheme.typography.titleMedium, color = tint, maxLines = 1)
     }
 }
 

@@ -4,17 +4,17 @@
     <string name="search_title">Buscar</string>
     <string name="search_field_hint">Canciones, artistas, álbumes o enlaces</string>
     <string name="search_clear_field">Borrar búsqueda</string>
-    <string name="search_paste_link">Pegar enlace de YouTube</string>
+    <string name="search_paste_link">Pegar enlace</string>
     <string name="search_paste_link_dismiss">Ignorar enlace copiado</string>
     <string name="search_recent_title">Búsquedas recientes</string>
     <string name="search_recent_clear">Borrar</string>
     <string name="search_recent_remove">Quitar “%1$s”</string>
-    <string name="search_hint_overline">De YouTube a tu teléfono</string>
-    <string name="search_hint_body">Pega un enlace de YouTube o YouTube Music para descargar una canción, un álbum o una playlist entera</string>
+    <string name="search_hint_overline">Enlace</string>
+    <string name="search_hint_body">Pega el enlace de una canción, álbum o playlist.</string>
     <string name="search_genres_overline">Explorar</string>
     <string name="search_genres_title">Tus géneros</string>
     <string name="search_suggestion_fill">Completar con “%1$s”</string>
-    <string name="search_open_link">Abrir enlace de YouTube</string>
+    <string name="search_open_link">Abrir enlace</string>
     <string name="search_in_library">En tu biblioteca</string>
     <string name="search_typing_offline">Sin conexión. Solo se muestra lo que ya está en el teléfono.</string>
     <string name="search_downloads">Descargas</string>
@@ -39,8 +39,8 @@
     <string name="search_offline_body_empty">La búsqueda en línea vuelve con internet. Por ahora no hay nada con ese nombre en tu teléfono.</string>
     <string name="search_error_title">No se pudo buscar</string>
     <string name="search_error_details">Ver detalles</string>
-    <string name="search_error_body">YouTube no respondió ahora. Inténtalo de nuevo en un momento.</string>
-    <string name="search_error_rate_limited">YouTube pidió una pausa. Inténtalo de nuevo en unos minutos.</string>
+    <string name="search_error_body">Inténtalo de nuevo en un momento.</string>
+    <string name="search_error_rate_limited">Demasiadas solicitudes. Inténtalo en unos minutos.</string>
     <string name="search_retry">Reintentar</string>
     <string name="search_empty_title">No se encontró nada</string>
     <string name="search_empty_body">Prueba con otras palabras u otro filtro.</string>
@@ -61,7 +61,7 @@
     <string name="search_select_hint">Toca las canciones para elegirlas</string>
 
     <!-- Enlace pegado / compartido -->
-    <string name="search_link_overline">Enlace de YouTube</string>
+    <string name="search_link_overline">Enlace</string>
     <string name="search_link_resolving">Abriendo enlace…</string>
     <string name="search_link_download">Descargar</string>
     <string name="search_link_downloading">Descargando… %1$d%%</string>
@@ -114,7 +114,7 @@
     <string name="search_remote_popular">Populares</string>
     <string name="search_remote_albums">Álbumes y sencillos</string>
     <string name="search_remote_error_title">No se pudo abrir</string>
-    <string name="search_remote_error_body">YouTube no respondió ahora. Inténtalo de nuevo en un momento.</string>
+    <string name="search_remote_error_body">Inténtalo de nuevo en un momento.</string>
     <string name="search_remote_offline_body">Conéctate a internet para ver y descargar las canciones.</string>
     <string name="search_remote_not_found_body">Esta página ya no existe o es privada.</string>
     <string name="search_remote_empty_title">Nada para descargar</string>
@@ -178,7 +178,7 @@
     <string name="dl_redownload">Descargar de nuevo</string>
     <string name="dl_swipe_cancel">Cancelar</string>
     <string name="dl_empty_title">Nada descargándose</string>
-    <string name="dl_empty_body">Busca una canción o pega un enlace de YouTube para empezar.</string>
+    <string name="dl_empty_body">Busca una canción para empezar.</string>
     <string name="dl_empty_action">Buscar música</string>
     <string name="dl_play_missing">Esa canción ya no está en el teléfono.</string>
     <string name="dl_action_error">No se pudo hacer eso ahora.</string>

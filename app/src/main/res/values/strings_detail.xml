@@ -24,7 +24,7 @@
     <string name="detail_pinned">Fixado na Biblioteca</string>
     <string name="detail_unpinned">Removido dos fixados</string>
     <string name="detail_artists_and_more">%s e outros</string>
-    <string name="detail_imported_youtube">Importada do YouTube</string>
+    <string name="detail_imported_youtube">Importada</string>
     <string name="detail_done">Concluir</string>
     <plurals name="detail_n_albums">
         <item quantity="one">%d álbum</item>
@@ -77,7 +77,7 @@
     <string name="detail_liked_empty_body">Toque no coração de uma música e ela aparece aqui.</string>
     <string name="detail_songs_title">Todas as músicas</string>
     <string name="detail_songs_empty_title">Nenhuma música ainda</string>
-    <string name="detail_songs_empty_body">Busque e baixe músicas para ouvir sem internet.</string>
+    <string name="detail_songs_empty_body">Busque músicas para começar.</string>
     <string name="detail_sort_by">Ordenar por</string>
     <string name="detail_sort_title">Título</string>
     <string name="detail_sort_artist">Artista</string>

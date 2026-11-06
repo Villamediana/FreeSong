@@ -65,4 +65,5 @@
     <string name="player_lyrics_none_online">No encontramos la letra de esta canción.</string>
     <string name="player_lyrics_offline_title">Sin internet</string>
     <string name="player_lyrics_offline_body">La letra aparece cuando vuelva la conexión.</string>
+    <string name="player_equalizer">Ecualizador</string>
 </resources>

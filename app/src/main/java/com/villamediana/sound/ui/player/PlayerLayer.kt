@@ -63,6 +63,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
@@ -234,7 +235,7 @@ internal fun PlayerHost(deps: PlayerDeps, bottomBarHeight: Dp, modifier: Modifie
     val liked = likeOverrides[track.id] ?: track.liked
 
     val seed = track.album ?: track.title
-    val fallbackColor = remember(seed) { CoverColors.tune(seedColor(seed)) }
+    val fallbackColor = SoundColors.Royal
     // Streamed songs have an http cover: extract its color through the network image cache.
     val washTarget = if (track.coverPath?.startsWith("http") == true) {
         com.villamediana.sound.ui.search.rememberRemoteCoverColor(track.coverPath, fallbackColor)
@@ -296,6 +297,7 @@ internal fun PlayerHost(deps: PlayerDeps, bottomBarHeight: Dp, modifier: Modifie
                     }
                 }
             },
+            openEqualizer = { navigator.openEqualizer() },
             openVideo = {
                 val t = latestTrack
                 val videoId = t.videoId
@@ -417,17 +419,19 @@ internal fun PlayerHost(deps: PlayerDeps, bottomBarHeight: Dp, modifier: Modifie
                             val p = expand.progress
                             val f = frame(p)
                             val c = wash.value
-                            val miniBg = lerp(SoundColors.Surface1, c, 0.26f)
-                            val base = lerp(miniBg, SoundColors.Ink, PlayerMath.segment(p, 0f, 0.6f))
+                            val miniBg = lerp(SoundColors.Royal, c, 0.38f)
+                            // The full player is the cover's color, deep and saturated (not black).
+                            val fullBg = lerp(c, Color.Black, 0.28f)
+                            val base = lerp(miniBg, fullBg, PlayerMath.segment(p, 0f, 0.6f))
                             val topLeft = Offset(f.left, f.top)
                             val frameSize = Size(f.width, f.height)
                             val corner = CornerRadius(f.corner)
                             drawRoundRect(base, topLeft, frameSize, corner)
                             if (p > 0f) {
                                 val veil = Brush.verticalGradient(
-                                    0f to c.copy(alpha = 0.92f),
-                                    0.42f to c.copy(alpha = 0.38f),
-                                    0.82f to c.copy(alpha = 0f),
+                                    0f to c.copy(alpha = 0.95f),
+                                    0.55f to c.copy(alpha = 0.35f),
+                                    1f to c.copy(alpha = 0f),
                                     startY = f.top,
                                     endY = f.top + size.height,
                                 )
@@ -469,8 +473,7 @@ internal fun PlayerHost(deps: PlayerDeps, bottomBarHeight: Dp, modifier: Modifie
                             swipeOffset = { swipe.value },
                             swipeWidth = swipeWidth,
                             onTogglePlay = actions.togglePlay,
-                            onLike = actions.like,
-                            onDownload = actions.download,
+                            onNext = actions.next,
                             modifier = miniGestures,
                         )
                     }

@@ -5,7 +5,7 @@
     <string name="eq_profile">Perfil</string>
     <string name="eq_reset">Restablecer</string>
     <string name="eq_effects">Efectos</string>
-    <string name="eq_bass_boost">Refuerzo de graves</string>
+    <string name="eq_bass_boost">Graves</string>
     <string name="eq_virtualizer">Espacial</string>
     <string name="eq_unavailable_idle">Reproduce una canción para ajustar el ecualizador.</string>
     <string name="eq_unavailable_device">Este dispositivo no ofrece ecualizador.</string>
@@ -13,10 +13,10 @@
     <string name="eq_hz">%1$s Hz</string>
     <string name="eq_percent">%1$d%%</string>
     <string name="eq_preset_custom">Personalizado</string>
-    <string name="eq_preset_flat">Plano</string>
-    <string name="eq_preset_bass">Graves</string>
-    <string name="eq_preset_treble">Agudos</string>
-    <string name="eq_preset_vocal">Voz</string>
+    <string name="eq_preset_flat">Normal</string>
+    <string name="eq_preset_bass">Refuerzo de graves</string>
+    <string name="eq_preset_treble">Refuerzo de agudos</string>
+    <string name="eq_preset_vocal">Refuerzo vocal</string>
     <string name="eq_preset_rock">Rock</string>
     <string name="eq_preset_pop">Pop</string>
     <string name="eq_preset_electronic">Electrónica</string>

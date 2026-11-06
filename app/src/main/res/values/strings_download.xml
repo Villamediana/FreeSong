@@ -30,11 +30,11 @@
     <string name="download_error_network">Sem conexão com a internet</string>
     <string name="download_error_timeout">A conexão demorou demais</string>
     <string name="download_error_http">O servidor respondeu com erro %d</string>
-    <string name="download_error_forbidden">O YouTube recusou o download</string>
+    <string name="download_error_forbidden">Download recusado. Tente de novo</string>
     <string name="download_error_unavailable">Vídeo indisponível</string>
     <string name="download_error_age">Restrito por idade</string>
     <string name="download_error_geo">Indisponível no seu país</string>
-    <string name="download_error_rate_limited">O YouTube pediu uma pausa. Tente mais tarde</string>
+    <string name="download_error_rate_limited">Muitos pedidos agora. Tente mais tarde</string>
     <string name="download_error_storage">Sem espaço no aparelho</string>
     <string name="download_error_incomplete">O arquivo chegou incompleto</string>
     <string name="download_error_unknown">Não foi possível baixar</string>

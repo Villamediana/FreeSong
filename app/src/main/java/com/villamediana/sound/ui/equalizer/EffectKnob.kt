@@ -86,7 +86,7 @@ internal fun EffectKnob(
     }
     val shown = if (dragging) dragValue.toFloat() else animated.value
 
-    val accent by animateColorAsState(if (enabled) SoundColors.Accent else SoundColors.TextFaint, Motion.enter(), label = "knob")
+    val accent by animateColorAsState(if (enabled) SoundColors.Mint else SoundColors.Text.copy(alpha = 0.35f), Motion.enter(), label = "knob")
     val grip by animateFloatAsState(if (dragging) 1.04f else 1f, Motion.bouncy(), label = "grip")
     val percent = strengthPercent(shown.roundToInt())
     val percentText = resources.getString(R.string.eq_percent, percent)
@@ -172,13 +172,13 @@ internal fun EffectKnob(
                         cap = StrokeCap.Round,
                     )
                 }
-                drawArc(SoundColors.Surface3, START_DEG, SWEEP_DEG, useCenter = false, topLeft = arcTopLeft, size = arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
+                drawArc(SoundColors.Text.copy(alpha = 0.15f), START_DEG, SWEEP_DEG, useCenter = false, topLeft = arcTopLeft, size = arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
                 if (fraction > 0f) {
                     drawArc(accent, START_DEG, SWEEP_DEG * fraction, useCenter = false, topLeft = arcTopLeft, size = arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
                 }
                 // The knob itself, with its pointer.
                 val disc = arcSize.width / 2 - stroke - 5.dp.toPx()
-                drawCircle(SoundColors.Surface1, radius = disc, center = c)
+                drawCircle(SoundColors.RoyalDeep, radius = disc, center = c)
                 drawCircle(SoundColors.Hairline, radius = disc, center = c, style = Stroke(1.dp.toPx()))
                 val rad = (START_DEG + SWEEP_DEG * fraction) * PI.toFloat() / 180f
                 val pr = disc - 6.dp.toPx()

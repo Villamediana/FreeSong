@@ -285,6 +285,7 @@ class PlayerLayerComposeTest {
     fun aStreamedSongOffersDownloadInsteadOfTheHeartUntilItIsInTheLibrary() {
         setUpStreaming()
         compose.onAllNodesWithContentDescription("Tocando online").onFirst().assertExists()
+        expand()
         compose.onNodeWithContentDescription("Curtir").assertDoesNotExist()
         compose.onNodeWithContentDescription("Baixar").performClick()
         compose.waitForIdle()
@@ -329,6 +330,7 @@ class PlayerLayerComposeTest {
     @Test
     fun theHeartLikesAtOnce() {
         setUp()
+        expand()
         compose.onNodeWithContentDescription("Curtir").performClick()
         compose.waitForIdle()
         assertEquals(listOf(1L to true), likes)

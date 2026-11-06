@@ -121,7 +121,6 @@ class DetailScreensSmokeTest {
         seed()
         compose.setContent { Host { AlbumScreen(AlbumRoute("Soda Stereo", "Canción Animal")) } }
         waitForText("De Música Ligera")
-        assertShown("ÁLBUM")
         assertShown("1990")
         assertShown("3 músicas")
         shot("album")
@@ -133,6 +132,7 @@ class DetailScreensSmokeTest {
         shuffle.assertIsOn()
 
         compose.onAllNodes(hasScrollAction()).onFirst().performScrollToNode(hasText("Mais de Soda Stereo"))
+        compose.onAllNodes(hasScrollAction()).onFirst().performScrollToNode(hasText("Signos"))
         assertShown("Signos")
         shot("album-more")
 
@@ -150,7 +150,6 @@ class DetailScreensSmokeTest {
         seed()
         compose.setContent { Host { ArtistScreen(ArtistRoute("Soda Stereo")) } }
         waitForText("Populares")
-        assertShown("ARTISTA")
         assertShown("6 músicas")
         assertShown("De Música Ligera")
         shot("artist")
@@ -170,7 +169,7 @@ class DetailScreensSmokeTest {
         compose.setContent { Host { PlaylistScreen(PlaylistRoute(id)) } }
         waitForText("Viagem")
         assertShown("Para a estrada")
-        assertShown("Importada do YouTube")
+        check(compose.onAllNodesWithText("Importada do YouTube").fetchSemanticsNodes().isEmpty())
         assertShown("Crimen")
         shot("playlist")
 
@@ -254,8 +253,7 @@ class DetailScreensSmokeTest {
     fun genrePage() {
         seed()
         compose.setContent { Host { GenreScreen(GenreRoute("rock")) } }
-        waitForText("GÊNERO")
-        assertShown("Rock")
+        waitForText("Rock")
         assertShown("Persiana Americana")
         shot("genre")
     }

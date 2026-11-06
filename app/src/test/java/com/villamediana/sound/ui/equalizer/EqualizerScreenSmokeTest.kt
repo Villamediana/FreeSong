@@ -102,11 +102,11 @@ class EqualizerScreenSmokeTest {
         (0 until 5).forEach { rule.onNodeWithTag("eq_band_$it").assertExists() }
 
         // A preset pill.
-        rule.onNodeWithText(str(R.string.eq_preset_bass)).performClick()
+        rule.onNodeWithText(str(R.string.eq_preset_bass)).performScrollTo().performClick()
         assertEquals(listOf(EqPreset.BASS), calls.presets)
 
         // Dragging the 230 Hz band up raises it.
-        rule.onNodeWithTag("eq_band_1").performTouchInput { swipeUp(startY = centerY, endY = centerY - 120f) }
+        rule.onNodeWithTag("eq_band_1").performScrollTo().performTouchInput { swipeUp(startY = centerY, endY = centerY - 120f) }
         rule.waitForIdle()
         assertTrue(calls.bands.isNotEmpty())
         assertTrue(calls.bands.all { it.first == 1 })
@@ -126,23 +126,22 @@ class EqualizerScreenSmokeTest {
         update(full.copy(preset = null, bands = bands.map { it.copy(levelMb = if (it.index == 1) 450 else 0) }))
         rule.waitForIdle()
         assertTrue(rule.onAllNodesWithText(str(R.string.eq_preset_custom)).fetchSemanticsNodes().isNotEmpty())
-        rule.onNodeWithText(str(R.string.eq_reset)).performClick()
+        rule.onNodeWithText(str(R.string.eq_reset)).performScrollTo().performClick()
         assertEquals(1, calls.resets)
 
         // The switch.
-        rule.onNodeWithTag("eq_switch").performClick()
+        rule.onNodeWithTag("eq_switch").performScrollTo().performClick()
         assertEquals(listOf(false), calls.enabled)
     }
 
     @Test
     fun afterAPresetPersonalizadoBringsTheCustomCurveBack() {
         val (calls, update) = show(full.copy(preset = EqPreset.ROCK, hasCustomCurve = true))
-        val row = rule.onNode(hasScrollToKeyAction())
         val custom = rule.onNode(hasText(str(R.string.eq_preset_custom)) and isSelectable())
         val rock = rule.onNode(hasText(str(R.string.eq_preset_rock)) and isSelectable())
         // TalkBack hears which one is on. The row opens on Rock; "Personalizado" leads it.
         rock.assertIsSelected()
-        row.performScrollToKey("custom")
+        custom.performScrollTo()
         custom.assertIsNotSelected()
         custom.performClick()
         assertEquals(1, calls.customs)
@@ -153,13 +152,12 @@ class EqualizerScreenSmokeTest {
         custom.assertIsSelected()
         custom.performClick()
         assertEquals(1, calls.customs)
-        row.performScrollToKey(EqPreset.ROCK.name)
+        rock.performScrollTo()
         rock.assertIsNotSelected()
 
         // Without a saved curve there is no pill to go back to.
         update(full.copy(preset = EqPreset.ROCK, hasCustomCurve = false))
         rule.waitForIdle()
-        row.performScrollToIndex(0)
         rule.onNodeWithText(str(R.string.eq_preset_custom)).assertDoesNotExist()
     }
 
@@ -168,15 +166,14 @@ class EqualizerScreenSmokeTest {
         val (calls, _) = show(full.copy(enabled = false, preset = EqPreset.ROCK, hasCustomCurve = true))
         rule.onNodeWithTag("eq_switch").assertIsOff()
         // Disabled pills: no click (and so no press shrink).
-        rule.onNodeWithText(str(R.string.eq_preset_pop)).assertIsNotEnabled().performClick()
-        rule.onNode(hasScrollToKeyAction()).performScrollToKey("custom")
-        rule.onNodeWithText(str(R.string.eq_preset_custom)).assertIsNotEnabled().performClick()
+        rule.onNodeWithText(str(R.string.eq_preset_pop)).performScrollTo().assertIsNotEnabled().performClick()
+        rule.onNodeWithText(str(R.string.eq_preset_custom)).performScrollTo().assertIsNotEnabled().performClick()
         assertEquals(0, calls.customs)
-        rule.onNodeWithTag("eq_band_2").performTouchInput { swipeUp(startY = centerY, endY = centerY - 120f) }
+        rule.onNodeWithTag("eq_band_2").performScrollTo().performTouchInput { swipeUp(startY = centerY, endY = centerY - 120f) }
         rule.waitForIdle()
         assertTrue(calls.presets.isEmpty())
         assertTrue(calls.bands.isEmpty())
-        rule.onNodeWithTag("eq_switch").performClick()
+        rule.onNodeWithTag("eq_switch").performScrollTo().performClick()
         assertEquals(listOf(true), calls.enabled)
     }
 

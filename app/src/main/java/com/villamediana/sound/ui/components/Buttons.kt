@@ -1,5 +1,6 @@
 package com.villamediana.sound.ui.components
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -82,26 +83,33 @@ fun PillButton(
     icon: ImageVector? = null,
     filled: Boolean = false,
     enabled: Boolean = true,
+    /** Taller, centered, bigger type — the Tocar / Aleatório pair on collection pages. */
+    big: Boolean = false,
 ) {
     val interaction = remember { MutableInteractionSource() }
-    val bg = if (filled) SoundColors.Accent else Color.Transparent
-    val fg = if (filled) SoundColors.OnAccent else SoundColors.Text
+    val bg = if (filled) SoundColors.Accent else SoundColors.Surface1
+    val fg = if (filled) SoundColors.OnAccent else SoundColors.Accent
     Row(
         modifier
-            .height(40.dp)
+            .height(if (big) 54.dp else 44.dp)
             .pressScale(interaction, 0.96f)
             .clip(CircleShape)
             .background(bg)
-            .then(if (filled) Modifier else Modifier.border(1.dp, SoundColors.Hairline, CircleShape))
             .clickable(interactionSource = interaction, indication = null, enabled = enabled, onClick = onClick)
-            .padding(horizontal = 18.dp),
+            .padding(horizontal = if (big) 20.dp else 18.dp),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = if (big) Arrangement.Center else Arrangement.Start,
     ) {
         if (icon != null) {
-            Icon(icon, null, tint = fg.copy(alpha = if (enabled) 1f else 0.4f), modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(8.dp))
+            Icon(icon, null, tint = fg.copy(alpha = if (enabled) 1f else 0.4f), modifier = Modifier.size(if (big) 24.dp else 18.dp))
+            Spacer(Modifier.width(if (big) 10.dp else 8.dp))
         }
-        Text(text, style = MaterialTheme.typography.labelLarge, color = fg.copy(alpha = if (enabled) 1f else 0.4f))
+        Text(
+            text,
+            style = if (big) MaterialTheme.typography.titleLarge.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) else MaterialTheme.typography.labelLarge,
+            color = fg.copy(alpha = if (enabled) 1f else 0.4f),
+            maxLines = 1,
+        )
     }
 }
 
@@ -114,10 +122,10 @@ fun FilterPill(text: String, selected: Boolean, onClick: () -> Unit, modifier: M
     val interaction = remember { MutableInteractionSource() }
     Box(
         modifier
-            .height(34.dp)
+            .height(38.dp)
             .pressScale(interaction, 0.95f)
             .clip(CircleShape)
-            .background(if (selected) SoundColors.Text else SoundColors.Surface2)
+            .background(if (selected) SoundColors.Accent else SoundColors.Surface1)
             .selectable(
                 selected = selected,
                 interactionSource = interaction,
@@ -126,9 +134,9 @@ fun FilterPill(text: String, selected: Boolean, onClick: () -> Unit, modifier: M
                 role = Role.Tab,
                 onClick = onClick,
             )
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 18.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(text, style = MaterialTheme.typography.labelLarge, color = if (selected) SoundColors.Ink else SoundColors.Text)
+        Text(text, style = MaterialTheme.typography.labelLarge, color = if (selected) SoundColors.OnAccent else SoundColors.TextMuted)
     }
 }

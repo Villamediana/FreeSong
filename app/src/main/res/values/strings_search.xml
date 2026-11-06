@@ -4,17 +4,17 @@
     <string name="search_title">Buscar</string>
     <string name="search_field_hint">Músicas, artistas, álbuns ou links</string>
     <string name="search_clear_field">Limpar busca</string>
-    <string name="search_paste_link">Colar link do YouTube</string>
+    <string name="search_paste_link">Colar link</string>
     <string name="search_paste_link_dismiss">Ignorar link copiado</string>
     <string name="search_recent_title">Buscas recentes</string>
     <string name="search_recent_clear">Limpar</string>
     <string name="search_recent_remove">Remover “%1$s”</string>
-    <string name="search_hint_overline">Do YouTube para o celular</string>
-    <string name="search_hint_body">Cole um link do YouTube ou YouTube Music para baixar música, álbum ou playlist inteira</string>
+    <string name="search_hint_overline">Link</string>
+    <string name="search_hint_body">Cole o link de uma música, álbum ou playlist.</string>
     <string name="search_genres_overline">Explorar</string>
     <string name="search_genres_title">Seus gêneros</string>
     <string name="search_suggestion_fill">Completar com “%1$s”</string>
-    <string name="search_open_link">Abrir link do YouTube</string>
+    <string name="search_open_link">Abrir link</string>
     <string name="search_in_library">Na sua biblioteca</string>
     <string name="search_typing_offline">Sem conexão. Mostrando só o que já está no celular.</string>
     <string name="search_downloads">Downloads</string>
@@ -39,8 +39,8 @@
     <string name="search_offline_body_empty">A busca online volta junto com a internet. Nada com esse nome no seu celular por enquanto.</string>
     <string name="search_error_title">Não deu para buscar</string>
     <string name="search_error_details">Ver detalhes</string>
-    <string name="search_error_body">O YouTube não respondeu agora. Tente de novo em instantes.</string>
-    <string name="search_error_rate_limited">O YouTube pediu uma pausa. Tente de novo em alguns minutos.</string>
+    <string name="search_error_body">Tente de novo em instantes.</string>
+    <string name="search_error_rate_limited">Muitos pedidos agora. Tente de novo em alguns minutos.</string>
     <string name="search_retry">Tentar de novo</string>
     <string name="search_empty_title">Nada encontrado</string>
     <string name="search_empty_body">Tente outras palavras ou outro filtro.</string>
@@ -59,7 +59,7 @@
     <string name="search_select_hint">Toque nas músicas para escolher</string>
 
     <!-- Link colado / compartilhado -->
-    <string name="search_link_overline">Link do YouTube</string>
+    <string name="search_link_overline">Link</string>
     <string name="search_link_resolving">Abrindo link…</string>
     <string name="search_link_download">Baixar</string>
     <string name="search_link_downloading">Baixando… %1$d%%</string>
@@ -109,7 +109,7 @@
     <string name="search_remote_popular">Populares</string>
     <string name="search_remote_albums">Álbuns e singles</string>
     <string name="search_remote_error_title">Não deu para abrir</string>
-    <string name="search_remote_error_body">O YouTube não respondeu agora. Tente de novo em instantes.</string>
+    <string name="search_remote_error_body">Tente de novo em instantes.</string>
     <string name="search_remote_offline_body">Conecte-se à internet para ver e baixar as músicas.</string>
     <string name="search_remote_not_found_body">Essa página não existe mais ou é privada.</string>
     <string name="search_remote_empty_title">Nada para baixar</string>
@@ -168,7 +168,7 @@
     <string name="dl_redownload">Baixar de novo</string>
     <string name="dl_swipe_cancel">Cancelar</string>
     <string name="dl_empty_title">Nada baixando</string>
-    <string name="dl_empty_body">Busque uma música ou cole um link do YouTube para começar.</string>
+    <string name="dl_empty_body">Busque uma música para começar.</string>
     <string name="dl_empty_action">Buscar música</string>
     <string name="dl_play_missing">Essa música não está mais no celular.</string>
     <string name="dl_action_error">Não deu para fazer isso agora.</string>

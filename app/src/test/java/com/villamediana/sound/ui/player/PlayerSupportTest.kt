@@ -65,9 +65,10 @@ class PlayerSupportTest {
         assertNull(LyricsFiles.read(tmp.root.absolutePath))
     }
 
-    @Test fun `upcoming lines in ink only when the background can carry it`() {
-        assertEquals(SoundColors.Ink.copy(alpha = 0.72f), LyricColors.over(Color(0xFF8A5A3C)).future)
-        assertEquals(SoundColors.Text.copy(alpha = 0.34f), LyricColors.over(Color(0xFF151515)).future)
+    @Test fun `the sung line is yellow and the rest soft white, a bit stronger on light colors`() {
+        assertEquals(SoundColors.Lyric, LyricColors.over(Color(0xFF151515)).active)
+        assertEquals(SoundColors.Text.copy(alpha = 0.6f), LyricColors.over(Color(0xFF151515)).future)
+        assertEquals(SoundColors.Text.copy(alpha = 0.75f), LyricColors.over(Color(0xFFB8C8FF)).future)
     }
 
     // ---------------------------------------------------------------- expand state
