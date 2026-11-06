@@ -28,6 +28,7 @@ class EqualizerViewModel(
 
     fun setEnabled(enabled: Boolean) = effects.setEnabled(enabled)
     fun selectPreset(preset: EqPreset) = effects.selectPreset(preset)
+    fun selectCustom() = effects.selectCustom()
     fun setBand(band: Int, levelMb: Int) = effects.setBandLevel(band, levelMb)
     fun setBassBoost(strength: Int) = effects.setBassBoost(strength)
     fun setVirtualizer(strength: Int) = effects.setVirtualizer(strength)

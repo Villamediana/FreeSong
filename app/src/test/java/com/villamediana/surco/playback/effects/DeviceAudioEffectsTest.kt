@@ -184,6 +184,60 @@ class DeviceAudioEffectsTest {
     }
 
     @Test
+    fun aPresetKeepsTheCustomCurveToComeBackTo() = runTest {
+        val custom = mapOf(60 to 900, 230 to 300, 910 to -200, 3_600 to 0, 14_000 to 450)
+        val mine = listOf(900, 300, -200, 0, 450)
+        val rock = EqCurves.presetLevels(EqPreset.ROCK, five.centersHz, -1500, 1500)
+        val store = MemoryStore(EffectsSettings(enabled = true, preset = null, customLevels = custom))
+        val factory = FakeFactory(five, five)
+        val fx = effects(store, factory)
+        fx.attach(7)
+        val chain = factory.opened.getValue(7)
+        assertEquals(mine, chain.last.levelsMb)
+        assertTrue(fx.state.value.hasCustomCurve)
+
+        // Trying a preset keeps the custom curve saved, and still offered.
+        fx.selectPreset(EqPreset.ROCK)
+        assertEquals(EqPreset.ROCK, fx.state.value.preset)
+        assertTrue(fx.state.value.hasCustomCurve)
+        assertEquals(rock, chain.last.levelsMb)
+        settle()
+        assertEquals(EqPreset.ROCK, store.saved.preset)
+        assertEquals(custom, store.saved.customLevels)
+
+        // "Personalizado" brings it back on the live effects…
+        fx.selectCustom()
+        assertNull(fx.state.value.preset)
+        assertEquals(mine, fx.state.value.bands.map { it.levelMb })
+        assertEquals(mine, chain.last.levelsMb)
+        settle()
+        assertNull(store.saved.preset)
+        assertEquals(custom, store.saved.customLevels)
+
+        // …and after a restart on a preset, too.
+        val onRock = effects(MemoryStore(store.saved.copy(preset = EqPreset.ROCK)), FakeFactory(five, five))
+        assertTrue(onRock.state.value.hasCustomCurve)
+        onRock.selectCustom()
+        assertEquals(mine, onRock.state.value.bands.map { it.levelMb })
+
+        // "Restaurar" is the way to throw it away.
+        fx.reset()
+        assertFalse(fx.state.value.hasCustomCurve)
+    }
+
+    @Test
+    fun withoutACustomCurveSelectCustomDoesNothing() = runTest {
+        val store = MemoryStore(EffectsSettings(enabled = true, preset = EqPreset.JAZZ))
+        val fx = effects(store, FakeFactory(five, five))
+        assertFalse(fx.state.value.hasCustomCurve)
+        val before = fx.state.value
+        fx.selectCustom()
+        assertEquals(before, fx.state.value)
+        settle()
+        assertEquals(0, store.saves)
+    }
+
+    @Test
     fun valuesAreClampedAndBadBandsIgnored() = runTest {
         val fx = effects(MemoryStore(), FakeFactory(five, five))
         fx.setBandLevel(0, 99_999)

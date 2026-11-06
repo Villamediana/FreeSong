@@ -6,14 +6,22 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasScrollToKeyAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performScrollToKey
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeUp
@@ -52,6 +60,7 @@ class EqualizerScreenSmokeTest {
     private class Calls {
         val enabled = mutableListOf<Boolean>()
         val presets = mutableListOf<EqPreset>()
+        var customs = 0
         val bands = mutableListOf<Pair<Int, Int>>()
         val bass = mutableListOf<Int>()
         val virtualizer = mutableListOf<Int>()
@@ -69,6 +78,7 @@ class EqualizerScreenSmokeTest {
                     onBack = {},
                     onEnabled = { calls.enabled += it },
                     onPreset = { calls.presets += it },
+                    onCustom = { calls.customs++ },
                     onBand = { b, l -> calls.bands += b to l },
                     onBassBoost = { calls.bass += it },
                     onVirtualizer = { calls.virtualizer += it },
@@ -125,10 +135,43 @@ class EqualizerScreenSmokeTest {
     }
 
     @Test
+    fun afterAPresetPersonalizadoBringsTheCustomCurveBack() {
+        val (calls, update) = show(full.copy(preset = EqPreset.ROCK, hasCustomCurve = true))
+        val row = rule.onNode(hasScrollToKeyAction())
+        val custom = rule.onNode(hasText(str(R.string.eq_preset_custom)) and isSelectable())
+        val rock = rule.onNode(hasText(str(R.string.eq_preset_rock)) and isSelectable())
+        // TalkBack hears which one is on. The row opens on Rock; "Personalizado" leads it.
+        rock.assertIsSelected()
+        row.performScrollToKey("custom")
+        custom.assertIsNotSelected()
+        custom.performClick()
+        assertEquals(1, calls.customs)
+
+        // On the custom curve the pill is the selected one, and tapping it again does nothing.
+        update(full.copy(preset = null, hasCustomCurve = true))
+        rule.waitForIdle()
+        custom.assertIsSelected()
+        custom.performClick()
+        assertEquals(1, calls.customs)
+        row.performScrollToKey(EqPreset.ROCK.name)
+        rock.assertIsNotSelected()
+
+        // Without a saved curve there is no pill to go back to.
+        update(full.copy(preset = EqPreset.ROCK, hasCustomCurve = false))
+        rule.waitForIdle()
+        row.performScrollToIndex(0)
+        rule.onNodeWithText(str(R.string.eq_preset_custom)).assertDoesNotExist()
+    }
+
+    @Test
     fun switchedOffNothingMoves() {
-        val (calls, _) = show(full.copy(enabled = false, preset = EqPreset.ROCK))
+        val (calls, _) = show(full.copy(enabled = false, preset = EqPreset.ROCK, hasCustomCurve = true))
         rule.onNodeWithTag("eq_switch").assertIsOff()
-        rule.onNodeWithText(str(R.string.eq_preset_pop)).performClick()
+        // Disabled pills: no click (and so no press shrink).
+        rule.onNodeWithText(str(R.string.eq_preset_pop)).assertIsNotEnabled().performClick()
+        rule.onNode(hasScrollToKeyAction()).performScrollToKey("custom")
+        rule.onNodeWithText(str(R.string.eq_preset_custom)).assertIsNotEnabled().performClick()
+        assertEquals(0, calls.customs)
         rule.onNodeWithTag("eq_band_2").performTouchInput { swipeUp(startY = centerY, endY = centerY - 120f) }
         rule.waitForIdle()
         assertTrue(calls.presets.isEmpty())

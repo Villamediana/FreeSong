@@ -20,6 +20,8 @@ data class EqState(
     val maxLevelMb: Int = 1500,
     /** null = custom curve. */
     val preset: EqPreset? = EqPreset.FLAT,
+    /** A custom curve is saved (kept while a preset is on), so [AudioEffectsController.selectCustom] can bring it back. */
+    val hasCustomCurve: Boolean = false,
     /** 0..1000 */
     val bassBoost: Int = 0,
     val bassBoostAvailable: Boolean = false,
@@ -36,6 +38,8 @@ interface AudioEffectsController {
     val state: StateFlow<EqState>
     fun setEnabled(enabled: Boolean)
     fun selectPreset(preset: EqPreset)
+    /** Back to the last custom curve after a preset; does nothing when none is saved. */
+    fun selectCustom() {}
     fun setBandLevel(band: Int, levelMb: Int)
     fun setBassBoost(strength: Int)
     fun setVirtualizer(strength: Int)
