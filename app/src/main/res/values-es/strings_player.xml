@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Reproductor: mini reproductor, pantalla completa, letra, cola y temporizador -->
+    <string name="player_play">Reproducir</string>
+    <string name="player_pause">Pausar</string>
+    <string name="player_like">Me gusta</string>
+    <string name="player_unlike">Quitar de Me gusta</string>
+    <string name="player_next">Siguiente</string>
+    <string name="player_previous">Anterior</string>
+    <string name="player_shuffle_enable">Activar aleatorio</string>
+    <string name="player_shuffle_disable">Desactivar aleatorio</string>
+    <string name="player_repeat_off">Repetir: desactivado</string>
+    <string name="player_repeat_all">Repetir: todo</string>
+    <string name="player_repeat_one">Repetir: esta canción</string>
+    <string name="player_collapse">Minimizar reproductor</string>
+    <string name="player_expand">Abrir reproductor</string>
+    <string name="player_playing_from">Reproduciendo desde</string>
+    <string name="player_now_playing">Sonando ahora</string>
+    <string name="player_cover">Portada de %1$s</string>
+
+    <string name="player_queue">Cola</string>
+    <string name="player_queue_now">Sonando ahora</string>
+    <string name="player_queue_next">A continuación</string>
+    <string name="player_queue_from">Reproduciendo desde %1$s</string>
+    <string name="player_queue_empty">Nada a continuación</string>
+    <string name="player_queue_empty_body">Cuando termine esta, se acaba la cola.</string>
+    <string name="player_queue_smart">Inteligente</string>
+    <string name="player_queue_smart_hint">La cola sigue sola con canciones parecidas.</string>
+    <string name="player_queue_reorder">Arrastrar para reordenar</string>
+    <string name="player_queue_remove">Quitar de la cola</string>
+
+    <string name="player_lyrics">Letra</string>
+    <string name="player_lyrics_open">Letra en pantalla completa</string>
+    <string name="player_lyrics_close">Cerrar letra</string>
+    <string name="player_lyrics_none_title">Sin letra</string>
+    <string name="player_lyrics_none_body">Esta canción no tiene letra guardada.</string>
+
+    <string name="player_sleep">Temporizador</string>
+    <string name="player_sleep_hint">La música se detiene sola.</string>
+    <string name="player_sleep_ends_in">Se detiene en %1$s</string>
+    <string name="player_sleep_at_end">Se detiene al terminar esta canción</string>
+    <plurals name="player_sleep_minutes">
+        <item quantity="one">%d minuto</item>
+        <item quantity="many">%d minutos</item>
+        <item quantity="other">%d minutos</item>
+    </plurals>
+    <string name="player_sleep_minutes_short">%d min</string>
+    <string name="player_sleep_end_of_track">Fin de la canción</string>
+    <string name="player_sleep_off">Apagar temporizador</string>
+
+    <string name="player_output_phone">Este teléfono</string>
+    <string name="player_output_wired">Auriculares</string>
+    <string name="player_output_bluetooth">Bluetooth</string>
+    <string name="player_output_usb">Audio USB</string>
+    <string name="player_output_choose">Elegir salida de audio</string>
+
+    <string name="player_error_dismiss">Descartar</string>
+</resources>
