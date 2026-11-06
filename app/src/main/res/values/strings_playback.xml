@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Saída de áudio (mostrada no player) -->
+    <string name="playback_output_phone">Este celular</string>
+    <string name="playback_output_headphones">Fones de ouvido</string>
+    <string name="playback_output_bluetooth">Bluetooth</string>
+
+    <!-- Botões da notificação, tela de bloqueio, relógio e carro -->
+    <string name="playback_like">Curtir</string>
+    <string name="playback_unlike">Descurtir</string>
+    <string name="playback_shuffle_on">Ativar aleatório</string>
+    <string name="playback_shuffle_off">Desativar aleatório</string>
+
+    <!-- Navegação pelo carro / Bluetooth -->
+    <string name="playback_browse_smart">Tocar aleatório inteligente</string>
+    <string name="playback_browse_smart_subtitle">Sua biblioteca, no seu gosto</string>
+    <string name="playback_browse_mixes">Mixes</string>
+    <string name="playback_browse_playlists">Playlists</string>
+    <string name="playback_browse_albums">Álbuns</string>
+    <string name="playback_browse_artists">Artistas</string>
+    <string name="playback_browse_liked">Curtidas</string>
+    <string name="playback_browse_recent">Recentes</string>
+
+    <!-- "Tocando de …" -->
+    <string name="playback_source_smart">Aleatório inteligente</string>
+    <string name="playback_source_radio">Rádio de %s</string>
+    <string name="playback_source_liked">Curtidas</string>
+    <string name="playback_source_recent">Recentes</string>
+    <string name="playback_source_search">“%s”</string>
+
+    <!-- Erros de reprodução -->
+    <string name="playback_error_missing">Arquivo não encontrado</string>
+    <string name="playback_error_unreadable">Não deu para ler este arquivo</string>
+    <string name="playback_error_generic">Não deu para tocar esta música</string>
+
+    <!-- Mixes -->
+    <string name="playback_mix_genre">Mix %s</string>
+    <string name="playback_mix_genre_subtitle">%s e mais</string>
+    <string name="playback_mix_liked">Curtidas</string>
+    <string name="playback_mix_liked_subtitle">Tudo o que você curtiu, embaralhado</string>
+    <string name="playback_mix_on_repeat">No repeat</string>
+    <string name="playback_mix_on_repeat_subtitle">O que você mais ouviu no último mês</string>
+    <string name="playback_mix_rediscover">Redescubra</string>
+    <string name="playback_mix_rediscover_subtitle">Faz tempo que você não ouve</string>
+    <string name="playback_mix_fresh">Novidades</string>
+    <string name="playback_mix_fresh_subtitle">Chegaram nos últimos dias</string>
+    <string name="playback_mix_decade">Anos %s</string>
+    <string name="playback_mix_decade_subtitle">Uma volta pela década</string>
+    <string name="playback_mix_artist">Mix de %s</string>
+    <string name="playback_mix_daily">Mix do dia</string>
+    <string name="playback_mix_daily_subtitle">Favoritas e descobertas, novo a cada dia</string>
+</resources>
