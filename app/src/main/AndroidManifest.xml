@@ -23,10 +23,12 @@
 
         <activity
             android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode"
             android:exported="true"
             android:launchMode="singleTask"
             android:theme="@style/Theme.Surco.Splash"
             android:windowSoftInputMode="adjustResize">
+            <!-- configChanges: Compose acompanha giro, tamanho e modo sem recriar a activity (girar no vídeo não refaz a tela) -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
