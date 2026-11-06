@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="video_overline">Videoclipe</string>
+    <string name="video_back">Voltar</string>
+    <string name="video_back_to_audio">Voltar ao áudio</string>
+    <string name="video_play">Tocar vídeo</string>
+    <string name="video_pause">Pausar vídeo</string>
+    <string name="video_replay">Ver de novo</string>
+    <string name="video_seek_back">Voltar 10 segundos</string>
+    <string name="video_seek_forward">Avançar 10 segundos</string>
+    <string name="video_seek_seconds">%1$d s</string>
+    <string name="video_position">Posição do vídeo</string>
+    <string name="video_show_controls">Mostrar controles</string>
+    <string name="video_hide_controls">Ocultar controles</string>
+    <string name="video_loading">Carregando vídeo</string>
+    <string name="video_error_title">Não deu para abrir o vídeo</string>
+    <string name="video_retry">Tentar de novo</string>
+</resources>
