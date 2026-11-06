@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Buscar -->
+    <string name="search_title">Buscar</string>
+    <string name="search_field_hint">Canciones, artistas, álbumes o enlaces</string>
+    <string name="search_clear_field">Borrar búsqueda</string>
+    <string name="search_paste_link">Pegar enlace de YouTube</string>
+    <string name="search_paste_link_dismiss">Ignorar enlace copiado</string>
+    <string name="search_recent_title">Búsquedas recientes</string>
+    <string name="search_recent_clear">Borrar</string>
+    <string name="search_recent_remove">Quitar “%1$s”</string>
+    <string name="search_hint_overline">De YouTube a tu teléfono</string>
+    <string name="search_hint_body">Pega un enlace de YouTube o YouTube Music para descargar una canción, un álbum o una playlist entera</string>
+    <string name="search_genres_overline">Explorar</string>
+    <string name="search_genres_title">Tus géneros</string>
+    <string name="search_suggestion_fill">Completar con “%1$s”</string>
+    <string name="search_open_link">Abrir enlace de YouTube</string>
+    <string name="search_in_library">En tu biblioteca</string>
+    <string name="search_typing_offline">Sin conexión. Solo se muestra lo que ya está en el teléfono.</string>
+    <string name="search_downloads">Descargas</string>
+    <string name="search_downloads_active">Descargas: %1$d en curso</string>
+
+    <string name="search_filter_songs">Canciones</string>
+    <string name="search_filter_albums">Álbumes</string>
+    <string name="search_filter_playlists">Playlists</string>
+    <string name="search_filter_artists">Artistas</string>
+    <string name="search_filter_videos">Videos</string>
+
+    <string name="search_kind_album">Álbum</string>
+    <string name="search_kind_playlist">Playlist</string>
+    <string name="search_kind_artist">Artista</string>
+    <string name="search_kind_album_upper">ÁLBUM</string>
+    <string name="search_kind_playlist_upper">PLAYLIST</string>
+    <string name="search_kind_artist_upper">ARTISTA</string>
+    <string name="search_kind_video">Video</string>
+
+    <string name="search_offline_title">Sin conexión</string>
+    <string name="search_offline_body">La búsqueda en línea vuelve con internet. Mientras tanto, lo que ya está en tu teléfono:</string>
+    <string name="search_offline_body_empty">La búsqueda en línea vuelve con internet. Por ahora no hay nada con ese nombre en tu teléfono.</string>
+    <string name="search_error_title">No se pudo buscar</string>
+    <string name="search_error_body">YouTube no respondió ahora. Inténtalo de nuevo en un momento.</string>
+    <string name="search_error_rate_limited">YouTube pidió una pausa. Inténtalo de nuevo en unos minutos.</string>
+    <string name="search_retry">Reintentar</string>
+    <string name="search_empty_title">No se encontró nada</string>
+    <string name="search_empty_body">Prueba con otras palabras u otro filtro.</string>
+    <string name="search_more_error">No se pudieron cargar más.</string>
+    <string name="search_end_of_results">Fin de los resultados</string>
+
+    <plurals name="search_selected">
+        <item quantity="one">%d seleccionada</item>
+        <item quantity="many">%d seleccionadas</item>
+        <item quantity="other">%d seleccionadas</item>
+    </plurals>
+    <plurals name="search_download_n">
+        <item quantity="one">Descargar %d canción</item>
+        <item quantity="many">Descargar %d canciones</item>
+        <item quantity="other">Descargar %d canciones</item>
+    </plurals>
+    <string name="search_select_cancel">Salir de la selección</string>
+    <string name="search_select_hint">Toca las canciones para elegirlas</string>
+
+    <!-- Enlace pegado / compartido -->
+    <string name="search_link_overline">Enlace de YouTube</string>
+    <string name="search_link_resolving">Abriendo enlace…</string>
+    <string name="search_link_download">Descargar</string>
+    <string name="search_link_downloading">Descargando… %1$d%%</string>
+    <string name="search_link_queued">En cola…</string>
+    <string name="search_link_play">Reproducir</string>
+    <string name="search_link_dismiss">Cerrar</string>
+    <string name="search_link_unsupported">Ese enlace no lleva a una canción, álbum, playlist o artista.</string>
+    <string name="search_link_offline">Sin internet para abrir el enlace.</string>
+    <string name="search_link_error">No se pudo abrir el enlace.</string>
+    <string name="search_link_not_found">Ese video ya no existe o es privado.</string>
+    <string name="search_link_age">Ese video tiene restricción de edad.</string>
+    <string name="search_link_geo">Ese contenido no está disponible en tu país.</string>
+    <string name="search_link_unavailable">Ese contenido no está disponible.</string>
+    <string name="search_download_error">No se pudo iniciar la descarga.</string>
+
+    <!-- Botón de descarga de una canción -->
+    <string name="search_dl_download">Descargar</string>
+    <string name="search_dl_queued">En cola</string>
+    <string name="search_dl_running">Descargando, %1$d%%</string>
+    <string name="search_dl_done">En el teléfono. Reproducir</string>
+    <string name="search_dl_failed">Falló. Reintentar</string>
+    <string name="search_dl_selected">Seleccionada</string>
+    <string name="search_dl_not_selected">No seleccionada</string>
+
+    <!-- Página en línea de álbum / playlist / artista -->
+    <string name="search_remote_download_all">Descargar todo</string>
+    <plurals name="search_remote_download_rest">
+        <item quantity="one">Descargar %d restante</item>
+        <item quantity="many">Descargar %d restantes</item>
+        <item quantity="other">Descargar %d restantes</item>
+    </plurals>
+    <string name="search_remote_download_popular">Descargar populares</string>
+    <string name="search_remote_save_playlist">Guardar playlist</string>
+    <string name="search_remote_progress">Descargando %1$d de %2$d</string>
+    <string name="search_remote_in_library">En tu biblioteca</string>
+    <string name="search_remote_enqueuing">Preparando…</string>
+    <string name="search_remote_playlist_note">Crea la playlist “%1$s” en tu biblioteca</string>
+    <string name="search_remote_playlist_note_existing">Actualiza la playlist “%1$s” de tu biblioteca</string>
+    <plurals name="search_remote_failed">
+        <item quantity="one">%d canción falló</item>
+        <item quantity="many">%d canciones fallaron</item>
+        <item quantity="other">%d canciones fallaron</item>
+    </plurals>
+    <string name="search_remote_retry_failed">Reintentar</string>
+    <plurals name="search_remote_on_phone">
+        <item quantity="one">%d ya está en el teléfono</item>
+        <item quantity="many">%d ya están en el teléfono</item>
+        <item quantity="other">%d ya están en el teléfono</item>
+    </plurals>
+    <string name="search_remote_popular">Populares</string>
+    <string name="search_remote_albums">Álbumes y sencillos</string>
+    <string name="search_remote_error_title">No se pudo abrir</string>
+    <string name="search_remote_error_body">YouTube no respondió ahora. Inténtalo de nuevo en un momento.</string>
+    <string name="search_remote_offline_body">Conéctate a internet para ver y descargar las canciones.</string>
+    <string name="search_remote_not_found_body">Esta página ya no existe o es privada.</string>
+    <string name="search_remote_empty_title">Nada para descargar</string>
+    <string name="search_remote_empty_body">Esta página no tiene canciones disponibles.</string>
+    <string name="search_remote_open_error">No se pudo abrir en la biblioteca.</string>
+
+    <!-- Descargas -->
+    <string name="dl_title">Descargas</string>
+    <string name="dl_overline_active">Descargando</string>
+    <string name="dl_overline_idle">Descargas</string>
+    <string name="dl_of_total">de %1$d</string>
+    <string name="dl_idle_title">Todo al día</string>
+    <string name="dl_idle_title_failed">Algunas fallaron</string>
+    <plurals name="dl_running">
+        <item quantity="one">%d descargando</item>
+        <item quantity="many">%d descargando</item>
+        <item quantity="other">%d descargando</item>
+    </plurals>
+    <plurals name="dl_queued">
+        <item quantity="one">%d en cola</item>
+        <item quantity="many">%d en cola</item>
+        <item quantity="other">%d en cola</item>
+    </plurals>
+    <plurals name="dl_failed">
+        <item quantity="one">%d falló</item>
+        <item quantity="many">%d fallaron</item>
+        <item quantity="other">%d fallaron</item>
+    </plurals>
+    <plurals name="dl_done">
+        <item quantity="one">%d completada</item>
+        <item quantity="many">%d completadas</item>
+        <item quantity="other">%d completadas</item>
+    </plurals>
+    <plurals name="dl_canceled">
+        <item quantity="one">%d cancelada</item>
+        <item quantity="many">%d canceladas</item>
+        <item quantity="other">%d canceladas</item>
+    </plurals>
+    <string name="dl_retry_failed">Reintentar las fallidas</string>
+    <string name="dl_clear_done">Borrar completadas</string>
+    <string name="dl_cancel_all">Cancelar todo</string>
+    <string name="dl_cancel_all_title">¿Cancelar todas las descargas?</string>
+    <string name="dl_cancel_all_body">Las canciones que aún no terminaron salen de la cola. Lo que ya se descargó sigue en el teléfono.</string>
+    <string name="dl_keep">Seguir descargando</string>
+    <string name="dl_state_queued">En cola</string>
+    <string name="dl_state_starting">Iniciando…</string>
+    <string name="dl_state_percent">%1$d%%</string>
+    <string name="dl_state_bytes">%1$s de %2$s</string>
+    <string name="dl_state_done">Completado</string>
+    <string name="dl_state_failed">Falló</string>
+    <string name="dl_state_canceled">Cancelado</string>
+    <string name="dl_loose_title">Canciones</string>
+    <string name="dl_batch_progress">Descargando %1$d de %2$d</string>
+    <string name="dl_batch_untitled">Sin título</string>
+    <string name="dl_batch_open">Abrir en la biblioteca</string>
+    <string name="dl_batch_cancel">Cancelar las descargas de “%1$s”</string>
+    <string name="dl_batch_expand">Mostrar canciones</string>
+    <string name="dl_batch_collapse">Ocultar canciones</string>
+    <string name="dl_cancel">Cancelar descarga</string>
+    <string name="dl_retry">Reintentar</string>
+    <string name="dl_redownload">Descargar de nuevo</string>
+    <string name="dl_swipe_cancel">Cancelar</string>
+    <string name="dl_empty_title">Nada descargándose</string>
+    <string name="dl_empty_body">Busca una canción o pega un enlace de YouTube para empezar.</string>
+    <string name="dl_empty_action">Buscar música</string>
+    <string name="dl_play_missing">Esa canción ya no está en el teléfono.</string>
+    <string name="dl_action_error">No se pudo hacer eso ahora.</string>
+</resources>
