@@ -575,7 +575,8 @@ class PlaybackService : MediaLibraryService() {
         return QueueSnapshot(
             ids = ids,
             index = player.currentMediaItemIndex.coerceIn(0, n - 1),
-            positionMs = player.currentPosition.coerceAtLeast(0),
+            // A queue that ended comes back at the start of its last song, not at its very end (where Play does nothing).
+            positionMs = if (player.playbackState == Player.STATE_ENDED) 0 else player.currentPosition.coerceAtLeast(0),
             shuffle = shuffle,
             order = if (shuffle) playOrder().toList() else emptyList(),
             repeat = player.repeatMode.toRepeatMode(),

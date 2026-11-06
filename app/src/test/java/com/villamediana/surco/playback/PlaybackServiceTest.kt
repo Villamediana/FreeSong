@@ -196,6 +196,13 @@ class PlaybackServiceTest {
         assertEquals(listOf(tracks[0].id, tracks[1].id, tracks[5].id), playOrderIds())
     }
 
+    @Test fun aQueueSavedAfterItEndedComesBackAtTheStartOfItsLastSong() {
+        autoplay(false)
+        start()
+        playToTheEnd(tracks.take(3).map { it.id })
+        idleUntil { QueueSnapshot.decode(savedJson())?.let { it.index == 2 && it.positionMs == 0L } == true }
+    }
+
     // ------------------------------------------------------------------ resuming the saved queue
 
     /** What Media3 does with a resumption result for a play press. */
