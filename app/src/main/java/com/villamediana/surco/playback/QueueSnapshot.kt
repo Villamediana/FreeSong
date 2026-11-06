@@ -10,7 +10,7 @@ import kotlinx.serialization.json.Json
  */
 @Serializable
 data class QueueSnapshot(
-    /** Track ids in timeline (unshuffled) order. */
+    /** Track ids in timeline (unshuffled) order; online songs by their transient (negative) id. */
     val ids: List<Long>,
     /** Timeline index of the current song. */
     val index: Int,
@@ -22,6 +22,8 @@ data class QueueSnapshot(
     val source: SavedSource? = null,
     val smart: Boolean = false,
     val savedAt: Long = 0,
+    /** What each online song in [ids] is (video id + what to show), so it streams again on resume. */
+    val online: List<OnlineItem> = emptyList(),
 ) {
     @Serializable
     data class SavedSource(val type: String, val title: String, val id: String? = null) {
@@ -35,15 +37,22 @@ data class QueueSnapshot(
 
     val isValid: Boolean get() = ids.isNotEmpty() && index in ids.indices
 
+    /** Online songs of the queue by their transient id. */
+    val onlineById: Map<Long, OnlineItem> get() = online.associateBy { it.trackId }
+
     fun encode(): String = json.encodeToString(serializer(), this)
 
     /**
-     * Drops songs that are no longer in the library, remapping the current index (the next
-     * surviving song when the current one is gone, from its start) and the shuffle order.
+     * Drops songs that are no longer in the library (and online ids without their [online] entry),
+     * remapping the current index (the next surviving song when the current one is gone, from its
+     * start) and the shuffle order. [existing] lists the library ids still there; online songs
+     * always survive.
      */
     fun retain(existing: Set<Long>): QueueSnapshot? {
-        if (ids.all { it in existing }) return takeIf { it.isValid }
-        val keep = ids.indices.filter { ids[it] in existing }
+        val streams = online.mapTo(HashSet()) { it.trackId }
+        val alive: (Long) -> Boolean = { id -> if (id < 0) id in streams else id in existing }
+        if (ids.all(alive)) return takeIf { it.isValid }
+        val keep = ids.indices.filter { alive(ids[it]) }
         if (keep.isEmpty()) return null
         val newIndexOf = IntArray(ids.size) { -1 }
         keep.forEachIndexed { newIdx, oldIdx -> newIndexOf[oldIdx] = newIdx }
@@ -53,8 +62,11 @@ data class QueueSnapshot(
             else -> keep.firstOrNull { it > index }?.let { newIndexOf[it] } ?: 0
         }
         val newOrder = if (order.size == ids.size) order.mapNotNull { old -> newIndexOf.getOrNull(old)?.takeIf { it >= 0 } } else emptyList()
+        val keptIds = keep.map { ids[it] }
+        val keptOnline = keptIds.filter { it < 0 }.toSet()
         return copy(
-            ids = keep.map { ids[it] },
+            ids = keptIds,
+            online = online.filter { it.trackId in keptOnline }.distinctBy { it.videoId },
             index = newIndex,
             positionMs = if (currentSurvives) positionMs else 0,
             order = newOrder,

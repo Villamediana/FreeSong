@@ -5,6 +5,7 @@ import android.content.Context
 import android.os.Bundle
 import androidx.core.content.ContextCompat
 import androidx.media3.common.C
+import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
@@ -14,6 +15,10 @@ import com.villamediana.surco.R
 import com.villamediana.surco.data.LibraryRepository
 import com.villamediana.surco.data.SettingsStore
 import com.villamediana.surco.data.db.Track
+import com.villamediana.surco.data.isOnline
+import com.villamediana.surco.online.RemoteTrack
+import com.villamediana.surco.online.messageRes
+import com.villamediana.surco.playback.stream.StreamErrors
 import com.villamediana.surco.smart.loadTaste
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -38,6 +43,10 @@ import kotlinx.coroutines.withContext
  * controller connects are queued and replayed in order. The queue is exposed in play order (the
  * shuffled order while shuffling) and every index the UI passes back is a play-order index; the
  * service does the shuffle-aware edits so a moved or inserted song lands exactly where asked.
+ *
+ * Online songs are transient tracks (data/OnlineTrack.kt) both ways: [playOnline] and any command
+ * given online tracks describe them to the service, and the queue's "yt:" items come back as
+ * transient tracks (or as the library song, once it's downloaded) so every screen keeps working.
  */
 class MediaPlayerConnection(
     context: Context,
@@ -65,6 +74,7 @@ class MediaPlayerConnection(
 
     /** Library tracks by id (from the repository flow) plus tracks handed to us that it doesn't have yet. */
     private var known: Map<Long, Track> = emptyMap()
+    private var knownByVideoId: Map<String, Track> = emptyMap()
     private val extra = HashMap<Long, Track>()
     private val fetching = HashSet<Long>()
 
@@ -84,6 +94,7 @@ class MediaPlayerConnection(
         main.launch {
             library.tracks.collect { all ->
                 known = all.associateBy { it.id }
+                knownByVideoId = all.mapNotNull { t -> t.videoId?.takeIf { it.isNotBlank() }?.let { it to t } }.toMap()
                 extra.keys.removeAll(known.keys)
                 refresh()
             }
@@ -191,6 +202,13 @@ class MediaPlayerConnection(
 
     private fun track(id: Long?): Track? = id?.let { known[it] ?: extra[it] }
 
+    /** The track behind a queue item: a library song, or an online one (the library song once downloaded). */
+    private fun track(item: MediaItem?): Track? {
+        MediaItems.trackId(item)?.let { return track(it) }
+        val videoId = MediaItems.videoId(item) ?: return null
+        return knownByVideoId[videoId] ?: MediaItems.onlineTrack(item)
+    }
+
     private fun refresh() {
         val c = controller ?: return
         val count = c.mediaItemCount
@@ -204,10 +222,10 @@ class MediaPlayerConnection(
         val missing = ArrayList<Long>()
         for (p in 0 until order.size) {
             val t = order.timelineIndexOf(p)
-            val id = MediaItems.trackId(c.getMediaItemAt(t))
-            val track = track(id)
+            val item = c.getMediaItemAt(t)
+            val track = track(item)
             if (track == null) {
-                if (id != null) missing += id
+                MediaItems.trackId(item)?.let { missing += it }
                 continue
             }
             if (t == currentIndex) queueIndex = queue.size
@@ -217,7 +235,7 @@ class MediaPlayerConnection(
         visibleToPlay = playIndexes.toIntArray()
         if (missing.isNotEmpty()) fetch(missing)
 
-        val current = track(MediaItems.trackId(c.currentMediaItem))
+        val current = track(c.currentMediaItem)
         val duration = c.duration.takeIf { it != C.TIME_UNSET && it > 0 } ?: current?.durationMs ?: 0L
         _state.value = PlaybackState(
             current = current,
@@ -270,7 +288,7 @@ class MediaPlayerConnection(
     }
 
     private fun errorMessage(e: PlaybackException): String = app.getString(
-        when (e.errorCode) {
+        StreamErrors.kindOf(e.errorCode)?.messageRes() ?: when (e.errorCode) {
             PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND,
             PlaybackException.ERROR_CODE_IO_NO_PERMISSION,
             -> R.string.playback_error_missing
@@ -289,7 +307,8 @@ class MediaPlayerConnection(
     private fun playIndex(queueIndex: Int): Int = visibleToPlay.getOrElse(queueIndex) { -1 }
 
     private fun remember(tracks: List<Track>) {
-        tracks.forEach { t -> if (t.id !in known) extra[t.id] = t }
+        // Online songs describe themselves in the queue items; only library songs are looked up by id.
+        tracks.forEach { t -> if (!t.isOnline && t.id !in known) extra[t.id] = t }
     }
 
     // ================================================================ commands
@@ -302,6 +321,13 @@ class MediaPlayerConnection(
             clearError()
         }
         send(SessionProtocol.PLAY, playArgs(tracks, start, source, if (shuffle) SessionProtocol.SHUFFLE_ON else SessionProtocol.SHUFFLE_KEEP, smart = false))
+    }
+
+    override fun playOnline(tracks: List<RemoteTrack>, startIndex: Int, source: PlaySource) {
+        val songs = tracks.filter { it.videoId.isNotBlank() }.distinctBy { it.videoId }
+        if (songs.isEmpty()) return
+        val start = tracks.getOrNull(startIndex)?.videoId?.let { id -> songs.indexOfFirst { it.videoId == id } }?.takeIf { it >= 0 } ?: 0
+        play(songs.map { OnlineItem.of(it).toTrack() }, start, source, shuffle = false)
     }
 
     override fun playSmart(seed: SmartSeed) {
@@ -323,6 +349,7 @@ class MediaPlayerConnection(
         putInt(SessionProtocol.ARG_SHUFFLE, shuffle)
         putBoolean(SessionProtocol.ARG_SMART, smart)
         SessionProtocol.putSource(this, source)
+        SessionProtocol.putOnline(this, tracks)
     }
 
     override fun togglePlayPause() = withController { c ->
@@ -387,6 +414,7 @@ class MediaPlayerConnection(
             Bundle().apply {
                 putLongArray(SessionProtocol.ARG_IDS, tracks.map { it.id }.toLongArray())
                 putString(SessionProtocol.ARG_WHERE, where)
+                SessionProtocol.putOnline(this, tracks)
             },
         )
     }

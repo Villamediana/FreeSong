@@ -293,6 +293,48 @@ internal object YouTubeMusicParser {
         return ((h * 60 + m.groupValues[2].toLong()) * 60 + m.groupValues[3].toLong()) * 1000
     }
 
+    // ---------------------------------------------------------------- up next
+
+    /**
+     * Songs of a "next" response (the radio panel after a song). Rows wrapped for the audio/video
+     * switch are unwrapped; unplayable rows are skipped. The seed song is usually the first row.
+     */
+    fun watchNext(json: JsonObject): List<RemoteTrack> {
+        val panel = json.findFirst("playlistPanelRenderer") ?: return emptyList()
+        return panel.arr("contents").objects()
+            .mapNotNull { c ->
+                c.obj("playlistPanelVideoRenderer")
+                    ?: c.at("playlistPanelVideoWrapperRenderer.primaryRenderer.playlistPanelVideoRenderer") as? JsonObject
+            }
+            .mapNotNull(::panelRow)
+            .distinctBy { it.videoId }
+    }
+
+    /** "Artist • Album • 1990" (songs) or "Artist • 1,2 mi de visualizações" (videos). */
+    private fun panelRow(r: JsonObject): RemoteTrack? {
+        if (r["unplayableText"] != null) return null
+        val videoId = r.str("videoId") ?: r.at("navigationEndpoint.watchEndpoint.videoId").asString() ?: return null
+        val title = r.obj("title").text()?.trim()?.ifEmpty { null } ?: return null
+        val groups = groups((r.obj("longBylineText") ?: r.obj("shortBylineText"))?.arr("runs").objects())
+        val artistGroup = groups.firstOrNull { g -> g.any { it.at("navigationEndpoint.browseEndpoint.browseId").asString()?.startsWith("UC") == true } }
+            ?: groups.firstOrNull()
+        val artist = artistGroup?.joinToString("") { it.str("text").orEmpty() }?.trim().orEmpty()
+        val album = groups.flatten().firstOrNull { it.at("navigationEndpoint.browseEndpoint.browseId").asString()?.startsWith("MPREb") == true }
+            ?.str("text")?.trim()?.ifEmpty { null }
+        val videoType = r.at("navigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType").asString()
+        return RemoteTrack(
+            videoId = videoId,
+            url = YouTubeLinks.watchUrl(videoId, music = true),
+            title = title,
+            artist = TitleCleaner.cleanArtist(artist),
+            album = album,
+            durationMs = r.obj("lengthText").text()?.let(::durationMs),
+            thumbnailUrl = Thumbnails.best(thumbnails(r.obj("thumbnail")), Thumbnails.SONG),
+            // User uploads in the radio carry video titles; catalog songs and official videos are clean.
+            fromMusicCatalog = videoType != "MUSIC_VIDEO_TYPE_UGC",
+        )
+    }
+
     // ---------------------------------------------------------------- suggestions
 
     fun suggestions(json: JsonObject): List<String> =

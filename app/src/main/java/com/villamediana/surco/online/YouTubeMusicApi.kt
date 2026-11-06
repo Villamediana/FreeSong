@@ -48,6 +48,26 @@ internal class YouTubeMusicApi(private val http: OkHttpClient) {
         return post("search", buildJsonObject { put("context", context()) }, "ctoken=$t&continuation=$t&type=next")
     }
 
+    /**
+     * The "up next" panel of a song: YouTube Music's radio that starts from it (playlist RDAMVM…),
+     * the same list the web player queues after the song.
+     */
+    fun next(videoId: String): JsonObject =
+        post("next", buildJsonObject {
+            put("context", context())
+            put("videoId", videoId)
+            put("playlistId", "RDAMVM$videoId")
+            put("isAudioOnly", true)
+            put("enablePersistentPlaylistPanel", true)
+            put("tunerSettingValue", "AUTOMIX_SETTING_NORMAL")
+            putJsonObject("watchEndpointMusicSupportedConfigs") {
+                putJsonObject("watchEndpointMusicConfig") {
+                    put("hasPersistentPlaylistPanel", true)
+                    put("musicVideoType", "MUSIC_VIDEO_TYPE_ATV")
+                }
+            }
+        })
+
     fun suggestions(query: String): List<String> =
         YouTubeMusicParser.suggestions(post("music/get_search_suggestions", buildJsonObject {
             put("context", context())
