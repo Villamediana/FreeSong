@@ -28,6 +28,8 @@ import com.villamediana.surco.SurcoApplication
 import com.villamediana.surco.data.db.AlbumKey
 import com.villamediana.surco.data.db.Track
 import com.villamediana.surco.smart.Mix
+import com.villamediana.surco.ui.library.CollectionMenuSheet
+import com.villamediana.surco.ui.library.CollectionTarget
 import com.villamediana.surco.ui.library.LibraryScreen
 import com.villamediana.surco.ui.nav.LocalNavigator
 import com.villamediana.surco.ui.nav.Navigator
@@ -35,6 +37,7 @@ import com.villamediana.surco.ui.settings.SettingsScreen
 import com.villamediana.surco.ui.theme.LocalBottomInset
 import com.villamediana.surco.ui.theme.SurcoColors
 import com.villamediana.surco.ui.theme.SurcoTheme
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Rule
 import org.junit.Test
@@ -155,6 +158,21 @@ class HomeScreensSmokeTest {
         waitForText("Seu MPB")
         waitForText("No repeat")
         shot("mix-cards")
+    }
+
+    @Test
+    fun longPressMenuDeletesAPlaylistLikeItsOwnPage() {
+        seed()
+        val lib = SurcoApplication.graph.library
+        val domingo = runBlocking { lib.playlists.first().single { it.name == "Domingo" } }
+        compose.setContent { Host { CollectionMenuSheet(CollectionTarget.Playlist(domingo), onDismiss = {}) } }
+        waitForText("Apagar playlist")
+        compose.onAllNodesWithText("Apagar playlist")[0].performClick()
+        // The same dialog as the playlist's own ⋮ (detail_delete_playlist_*).
+        waitForText("Apagar playlist?")
+        waitForText("“Domingo” sai da biblioteca")
+        compose.onAllNodesWithText("Apagar", substring = false)[0].performClick()
+        compose.waitUntil(10_000) { runBlocking { lib.playlists.first().none { it.id == domingo.playlist.id } } }
     }
 
     // ------------------------------------------------------------------ data

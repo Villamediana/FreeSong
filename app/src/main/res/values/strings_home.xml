@@ -71,8 +71,6 @@
     <string name="home_lib_pin">Fixar na biblioteca</string>
     <string name="home_lib_unpin">Desafixar</string>
     <string name="home_lib_delete_playlist">Apagar playlist</string>
-    <string name="home_lib_delete_title">Apagar “%1$s”?</string>
-    <string name="home_lib_delete_body">As músicas continuam no celular.</string>
     <string name="home_lib_all_songs">Todas as músicas</string>
     <string name="home_lib_downloads">Downloads</string>
     <plurals name="home_lib_dl_active">

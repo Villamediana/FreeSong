@@ -71,8 +71,6 @@
     <string name="home_lib_pin">Fijar en la biblioteca</string>
     <string name="home_lib_unpin">Dejar de fijar</string>
     <string name="home_lib_delete_playlist">Borrar playlist</string>
-    <string name="home_lib_delete_title">¿Borrar “%1$s”?</string>
-    <string name="home_lib_delete_body">Las canciones siguen en el móvil.</string>
     <string name="home_lib_all_songs">Todas las canciones</string>
     <string name="home_lib_downloads">Descargas</string>
     <plurals name="home_lib_dl_active">

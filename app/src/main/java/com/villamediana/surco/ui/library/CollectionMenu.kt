@@ -1,22 +1,6 @@
 package com.villamediana.surco.ui.library
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsBottomHeight
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.PushPin
@@ -24,14 +8,7 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PushPin
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Shuffle
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -39,16 +16,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import com.villamediana.surco.R
 import com.villamediana.surco.SurcoApplication
 import com.villamediana.surco.data.db.Track
@@ -60,7 +31,11 @@ import com.villamediana.surco.playback.PlaySource
 import com.villamediana.surco.ui.components.Cover
 import com.villamediana.surco.ui.components.MosaicCover
 import com.villamediana.surco.ui.components.Share
-import com.villamediana.surco.ui.theme.Dimens
+import com.villamediana.surco.ui.sheets.ConfirmDialog
+import com.villamediana.surco.ui.sheets.SheetAction
+import com.villamediana.surco.ui.sheets.SheetHeader
+import com.villamediana.surco.ui.sheets.SurcoSheet
+import com.villamediana.surco.ui.sheets.rememberSheetFeedback
 import com.villamediana.surco.ui.theme.SurcoColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -116,13 +91,14 @@ object CollectionCommands {
     }
 }
 
-/** Quick menu for a long-pressed album or playlist. */
+/** Quick menu for a long-pressed album or playlist — same sheet and dialog as the collection's own ⋮. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CollectionMenuSheet(target: CollectionTarget, onDismiss: () -> Unit) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val feedback = rememberSheetFeedback()
     var confirmDelete by remember { mutableStateOf(false) }
 
     fun closeThen(action: () -> Unit) {
@@ -135,44 +111,44 @@ fun CollectionMenuSheet(target: CollectionTarget, onDismiss: () -> Unit) {
         is CollectionTarget.Playlist -> target.summary.pinned
     }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = SurcoColors.Surface2,
-        contentColor = SurcoColors.Text,
-        dragHandle = {
-            Box(Modifier.padding(top = 10.dp, bottom = 6.dp).size(width = 36.dp, height = 4.dp).clip(CircleShape).background(SurcoColors.Hairline))
-        },
-    ) {
+    SurcoSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         CollectionMenuHeader(target)
-        HorizontalDivider(color = SurcoColors.Hairline, modifier = Modifier.padding(vertical = 6.dp))
-        MenuAction(Icons.Rounded.PlayArrow, stringResource(R.string.play)) { closeThen { CollectionCommands.play(target, shuffle = false) } }
-        MenuAction(Icons.Rounded.Shuffle, stringResource(R.string.shuffle)) { closeThen { CollectionCommands.play(target, shuffle = true) } }
-        MenuAction(
+        SheetAction(Icons.Rounded.PlayArrow, stringResource(R.string.play), onClick = { closeThen { CollectionCommands.play(target, shuffle = false) } })
+        SheetAction(Icons.Rounded.Shuffle, stringResource(R.string.shuffle), onClick = { closeThen { CollectionCommands.play(target, shuffle = true) } })
+        SheetAction(
             if (pinned) Icons.Rounded.PushPin else Icons.Outlined.PushPin,
             stringResource(if (pinned) R.string.home_lib_unpin else R.string.home_lib_pin),
-            tint = if (pinned) SurcoColors.Accent else SurcoColors.Text,
-        ) { closeThen { CollectionCommands.setPinned(target, !pinned) } }
+            onClick = { closeThen { CollectionCommands.setPinned(target, !pinned) } },
+            tint = if (pinned) SurcoColors.Accent else SurcoColors.TextMuted,
+        )
         val shareUrl = (target as? CollectionTarget.Playlist)?.summary?.playlist?.sourceUrl?.takeIf { it.startsWith("http") }
         if (target is CollectionTarget.Playlist && shareUrl != null) {
             // Imported from YouTube: the link of the original playlist.
-            MenuAction(Icons.Rounded.Share, stringResource(R.string.home_lib_share)) {
+            SheetAction(Icons.Rounded.Share, stringResource(R.string.home_lib_share), onClick = {
                 closeThen { Share.collection(context, RemoteCollection(CollectionKind.PLAYLIST, shareUrl, target.summary.name)) }
-            }
+            })
         }
         if (target is CollectionTarget.Playlist) {
-            MenuAction(Icons.Outlined.DeleteOutline, stringResource(R.string.home_lib_delete_playlist), tint = SurcoColors.Danger) { confirmDelete = true }
+            SheetAction(
+                Icons.Outlined.DeleteOutline,
+                stringResource(R.string.home_lib_delete_playlist),
+                onClick = { confirmDelete = true },
+                tint = SurcoColors.Danger,
+                labelColor = SurcoColors.Danger,
+            )
         }
-        Spacer(Modifier.height(12.dp))
-        Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
     }
 
     if (confirmDelete && target is CollectionTarget.Playlist) {
-        DeletePlaylistDialog(
-            name = target.summary.name,
+        val name = target.summary.name
+        ConfirmDialog(
+            title = stringResource(R.string.detail_delete_playlist_title),
+            body = stringResource(R.string.detail_delete_playlist_body, name),
+            confirm = stringResource(R.string.delete),
             onConfirm = {
                 confirmDelete = false
                 closeThen { CollectionCommands.deletePlaylist(target.summary.id) }
+                feedback.show(context.getString(R.string.detail_playlist_deleted, name))
             },
             onDismiss = { confirmDelete = false },
         )
@@ -181,62 +157,21 @@ fun CollectionMenuSheet(target: CollectionTarget, onDismiss: () -> Unit) {
 
 @Composable
 private fun CollectionMenuHeader(target: CollectionTarget) {
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = Dimens.Gutter, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
+    val (title, subtitle) = when (target) {
+        is CollectionTarget.Album -> target.summary.title to
+            listOfNotNull(target.summary.artist, target.summary.year?.toString()).joinToString(" · ")
+        is CollectionTarget.Playlist -> target.summary.name to songCount(target.summary.trackCount)
+    }
+    SheetHeader(title = title, subtitle = subtitle, art = {
         when (target) {
-            is CollectionTarget.Album -> Cover(target.summary.coverPath, Modifier.size(52.dp), seed = target.summary.title)
+            is CollectionTarget.Album -> Cover(target.summary.coverPath, Modifier.fillMaxSize(), seed = target.summary.title)
             is CollectionTarget.Playlist -> {
                 val s = target.summary
-                if (s.coverPath != null) Cover(s.coverPath, Modifier.size(52.dp), seed = s.name)
-                else MosaicCover(s.mosaic, Modifier.size(52.dp), seed = s.name)
+                if (s.coverPath != null) Cover(s.coverPath, Modifier.fillMaxSize(), seed = s.name)
+                else MosaicCover(s.mosaic, Modifier.fillMaxSize(), seed = s.name)
             }
         }
-        Spacer(Modifier.width(14.dp))
-        Column(Modifier.weight(1f)) {
-            val (title, subtitle) = when (target) {
-                is CollectionTarget.Album -> target.summary.title to
-                    listOfNotNull(target.summary.artist, target.summary.year?.toString()).joinToString(" · ")
-                is CollectionTarget.Playlist -> target.summary.name to songCount(target.summary.trackCount)
-            }
-            Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Spacer(Modifier.height(2.dp))
-            Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = SurcoColors.TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-    }
-}
-
-@Composable
-private fun MenuAction(icon: ImageVector, label: String, tint: Color = SurcoColors.Text, onClick: () -> Unit) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = Dimens.Gutter, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(18.dp),
-    ) {
-        Icon(icon, null, tint = tint, modifier = Modifier.size(24.dp))
-        Text(label, style = MaterialTheme.typography.bodyLarge, color = if (tint == SurcoColors.Danger) tint else SurcoColors.Text)
-    }
-}
-
-@Composable
-fun DeletePlaylistDialog(name: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = SurcoColors.Surface2,
-        shape = RoundedCornerShape(22.dp),
-        title = { Text(stringResource(R.string.home_lib_delete_title, name), style = MaterialTheme.typography.titleLarge, color = SurcoColors.Text) },
-        text = { Text(stringResource(R.string.home_lib_delete_body), style = MaterialTheme.typography.bodyMedium, color = SurcoColors.TextMuted) },
-        confirmButton = {
-            TextButton(onClick = onConfirm) { Text(stringResource(R.string.delete), color = SurcoColors.Danger, style = MaterialTheme.typography.labelLarge) }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel), color = SurcoColors.TextMuted, style = MaterialTheme.typography.labelLarge) }
-        },
-    )
+    })
 }
 
 @Composable
