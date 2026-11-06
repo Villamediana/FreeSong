@@ -79,6 +79,16 @@ data class AudioStream(
     val codec: String?,
 )
 
+/** A playable music-video stream. [audioUrl] is null when [videoUrl] already carries audio (muxed). */
+data class VideoStream(
+    val videoUrl: String,
+    val audioUrl: String?,
+    val width: Int,
+    val height: Int,
+    val videoMimeType: String,
+    val audioMimeType: String?,
+)
+
 class OnlineException(message: String, cause: Throwable? = null, val kind: Kind = Kind.UNKNOWN) : Exception(message, cause) {
     enum class Kind { NO_NETWORK, NOT_FOUND, AGE_RESTRICTED, GEO_BLOCKED, UNAVAILABLE, RATE_LIMITED, UNKNOWN }
 }
@@ -107,6 +117,14 @@ interface YouTubeSource {
 
     /** Fresh details of one video (title/uploader/duration/thumbnail) — used for shared single links. */
     suspend fun track(videoId: String): RemoteTrack
+
+    /**
+     * Best progressive video stream up to [maxHeight] for "Ver o vídeo" (video-only mp4 + the
+     * audio stream, or a muxed stream). For YouTube Music songs ("Topic" art tracks) this may be
+     * the static-art video; implementations may look up the official music video instead.
+     */
+    suspend fun videoStream(videoId: String, maxHeight: Int = 720): VideoStream =
+        throw OnlineException("Video not supported", kind = OnlineException.Kind.UNAVAILABLE)
 }
 
 /** Clean metadata for a track about to be saved. */

@@ -14,8 +14,12 @@ import com.villamediana.surco.online.MetadataEnricher
 import com.villamediana.surco.online.NewPipeHttp
 import com.villamediana.surco.online.NewPipeYouTubeSource
 import com.villamediana.surco.online.YouTubeSource
+import com.villamediana.surco.playback.AudioEffectsController
 import com.villamediana.surco.playback.MediaPlayerConnection
 import com.villamediana.surco.playback.PlayerConnection
+import com.villamediana.surco.playback.VideoPlayback
+import com.villamediana.surco.playback.effects.DeviceAudioEffects
+import com.villamediana.surco.playback.video.YouTubeVideoPlayback
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -49,4 +53,6 @@ class AppGraph(context: Context) {
 
     val downloads: DownloadController by lazy { WorkDownloadController(appContext, db, library, storage, settings) }
     val player: PlayerConnection by lazy { MediaPlayerConnection(appContext, library, settings, scope) }
+    val effects: AudioEffectsController by lazy { DeviceAudioEffects(appContext, scope) }
+    val video: VideoPlayback by lazy { YouTubeVideoPlayback(appContext, scope) }
 }

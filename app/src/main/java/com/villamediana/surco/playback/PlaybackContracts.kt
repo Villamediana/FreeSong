@@ -1,6 +1,7 @@
 package com.villamediana.surco.playback
 
 import com.villamediana.surco.data.db.Track
+import com.villamediana.surco.online.RemoteTrack
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -61,6 +62,14 @@ interface PlayerConnection {
     val sleepTimer: StateFlow<SleepTimer>
 
     fun play(tracks: List<Track>, startIndex: Int = 0, source: PlaySource, shuffle: Boolean = false)
+
+    /**
+     * Streams songs straight from YouTube without downloading them (the default when tapping a
+     * search result). Each item becomes a transient Track (see data/OnlineTrack.kt, mediaId
+     * "yt:<videoId>"); when a song is already in the library the local file is used instead.
+     */
+    fun playOnline(tracks: List<RemoteTrack>, startIndex: Int = 0, source: PlaySource) {}
+
     fun playSmart(seed: SmartSeed)
     fun togglePlayPause()
     fun pause()

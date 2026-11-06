@@ -29,6 +29,8 @@ class Navigator(val controller: NavHostController) {
     fun openRemote(c: RemoteCollection) = go(RemoteCollectionRoute(c.url, c.kind.name, c.title, c.author, c.thumbnailUrl))
     fun openDownloads() = go(DownloadsRoute)
     fun openSettings() = go(SettingsRoute)
+    fun openEqualizer() = go(EqualizerRoute)
+    fun openVideo(videoId: String, title: String?) = go(VideoRoute(videoId, title))
 
     /** Bottom-bar tab switch: single top, state saved/restored per tab. */
     fun switchTab(route: Any) {

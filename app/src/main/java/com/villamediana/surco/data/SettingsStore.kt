@@ -34,6 +34,8 @@ data class Settings(
     val autoplaySimilar: Boolean = true,
     /** Normalize volume between tracks (ExoPlayer loudness). */
     val normalizeVolume: Boolean = false,
+    /** Tapping a search result streams it right away (true) or downloads it (false). */
+    val playOnlineByDefault: Boolean = true,
     val lastQueueJson: String? = null,
 )
 
@@ -47,6 +49,7 @@ class SettingsStore(private val context: Context) {
         val autoplay = booleanPreferencesKey("autoplay_similar")
         val normalize = booleanPreferencesKey("normalize_volume")
         val lastQueue = stringPreferencesKey("last_queue")
+        val playOnline = booleanPreferencesKey("play_online_default")
     }
 
     val settings: Flow<Settings> = context.dataStore.data.map { p ->
@@ -58,6 +61,7 @@ class SettingsStore(private val context: Context) {
             smartShuffle = p[K.smartShuffle] ?: true,
             autoplaySimilar = p[K.autoplay] ?: true,
             normalizeVolume = p[K.normalize] ?: false,
+            playOnlineByDefault = p[K.playOnline] ?: true,
             lastQueueJson = p[K.lastQueue],
         )
     }
@@ -71,5 +75,6 @@ class SettingsStore(private val context: Context) {
     suspend fun setSmartShuffle(v: Boolean) = context.dataStore.edit { it[K.smartShuffle] = v }
     suspend fun setAutoplaySimilar(v: Boolean) = context.dataStore.edit { it[K.autoplay] = v }
     suspend fun setNormalizeVolume(v: Boolean) = context.dataStore.edit { it[K.normalize] = v }
+    suspend fun setPlayOnlineByDefault(v: Boolean) = context.dataStore.edit { it[K.playOnline] = v }
     suspend fun setLastQueueJson(v: String?) = context.dataStore.edit { if (v == null) it.remove(K.lastQueue) else it[K.lastQueue] = v }
 }

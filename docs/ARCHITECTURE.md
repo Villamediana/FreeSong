@@ -92,3 +92,20 @@ JSON: usar `kotlinx.serialization` (o `org.json` do Android vira stub nos testes
   relógio e carro.
 - Inteligente → `SmartQueue` (aleatório inteligente, rádio, gênero, continuação) e `SmartMixes`
   (mixes da tela inicial). Puro Kotlin, determinístico por semente, testado.
+
+## Segunda leva (pedido do Miguel em 2026-11-06)
+
+- **Tocar online** (padrão ao tocar um resultado da busca; `Settings.playOnlineByDefault`):
+  `PlayerConnection.playOnline(remoteTracks, …)`. Músicas online viajam como `Track` transitória
+  (`data/OnlineTrack.kt`: id negativo, `isOnline`, mediaId `yt:<videoId>`). O serviço resolve o
+  stream na hora (ResolvingDataSource + faixas de 2 MB — requisição aberta ao YouTube cai pra poucos
+  KB/s), usa o arquivo local se a música já estiver baixada, e não grava histórico/fila de online.
+  No player, música online mostra "Baixar" no lugar do coração; letra buscada na hora (LRCLIB).
+- **Equalizador** (`AudioEffectsController` em `playback/FeatureContracts.kt`, `graph.effects`):
+  Equalizer/BassBoost/Virtualizer na sessão de áudio do ExoPlayer, presets próprios (`EqPreset`),
+  persistido. Tela em `ui/equalizer/` (rota `EqualizerRoute`, `navigator.openEqualizer()`).
+- **Ver o vídeo** (`VideoPlayback`, `graph.video`; `YouTubeSource.videoStream`): ExoPlayer próprio
+  com vídeo + áudio, pausa a música e retoma na mesma posição. Tela imersiva `ui/video/`
+  (`VideoRoute`, `navigator.openVideo(videoId, title)`); render com media3-ui-compose `PlayerSurface`.
+- **Compartilhar** (`ui/components/Share.kt`): link (YouTube Music) ou o próprio arquivo de áudio
+  (FileProvider `${applicationId}.files`), álbum/playlist remota.

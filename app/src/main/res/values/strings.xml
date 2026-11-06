@@ -20,4 +20,6 @@
         <item quantity="one">%d música</item>
         <item quantity="other">%d músicas</item>
     </plurals>
+    <string name="share_song">Compartilhar música</string>
+    <string name="share_file">Enviar arquivo de áudio</string>
 </resources>

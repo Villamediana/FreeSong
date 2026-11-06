@@ -63,6 +63,8 @@ import com.villamediana.surco.ui.detail.MixScreen
 import com.villamediana.surco.ui.detail.PlaylistScreen
 import com.villamediana.surco.ui.detail.SongsScreen
 import com.villamediana.surco.ui.downloads.DownloadsScreen
+import com.villamediana.surco.ui.equalizer.EqualizerScreen
+import com.villamediana.surco.ui.video.VideoScreen
 import com.villamediana.surco.ui.home.HomeScreen
 import com.villamediana.surco.ui.library.LibraryScreen
 import com.villamediana.surco.ui.player.PlayerLayer
@@ -132,17 +134,24 @@ fun SurcoRoot(incomingLink: StateFlow<String?>) {
                 composable<RemoteCollectionRoute> { RemoteCollectionScreen(it.toRoute()) }
                 composable<DownloadsRoute> { DownloadsScreen() }
                 composable<SettingsRoute> { SettingsScreen() }
+                composable<EqualizerRoute> { EqualizerScreen() }
+                composable<VideoRoute> { VideoScreen(it.toRoute()) }
             }
 
-            BottomBar(
-                navigator = navigator,
-                modifier = Modifier.align(Alignment.BottomCenter),
-            )
+            // The video screen is immersive: no bottom bar, no mini player over it.
+            val entry by controller.currentBackStackEntryAsState()
+            val immersive = entry?.destination?.hasRoute(VideoRoute::class) == true
+            if (!immersive) {
+                BottomBar(
+                    navigator = navigator,
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                )
 
-            PlayerLayer(
-                bottomBarHeight = bottomBarTotal,
-                modifier = Modifier.fillMaxSize(),
-            )
+                PlayerLayer(
+                    bottomBarHeight = bottomBarTotal,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
         }
     }
 }
