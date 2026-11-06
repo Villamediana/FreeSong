@@ -242,8 +242,13 @@ internal class DownloadEngine(
 
         while (true) {
             // Already on the phone (another task of the same video, or a commit that failed late):
-            // just finish this task with that track.
-            library.trackByVideoId(task.videoId)?.let { return commit(entry, existingId = it.id, newTrack = null) }
+            // just finish this task with that track — which joins the album when this is an album download.
+            library.trackByVideoId(task.videoId)?.let { have ->
+                val outcome = commit(entry, existingId = have.id, newTrack = null)
+                val album = have.inAlbumOf(task)?.albumKey
+                if (outcome is Outcome.Done && album != null) guarded { useAlbumCover(listOf(have.id), album, task.albumCoverUrl) }
+                return outcome
+            }
             val failure: Failure = try {
                 return downloadAndSave(entry, task)
             } catch (ce: CancellationException) {
@@ -400,6 +405,7 @@ internal class DownloadEngine(
         val trackId = when {
             existing != null -> {
                 if (newTrack != null && existing.filePath != newTrack.filePath) File(newTrack.filePath).delete()
+                joinAlbum(existing, cur)
                 existing.id
             }
             newTrack != null -> try {
@@ -425,6 +431,24 @@ internal class DownloadEngine(
         // The .sig, and a .part left by an earlier attempt when the song came from elsewhere.
         deletePartIfUnused(cur.videoId)
         return Outcome.Done(done)
+    }
+
+    /**
+     * A song already on the phone, asked for again from an album page, joins that album: it takes
+     * the page's album, album artist, track number and year, like a fresh download would. Returns
+     * the track as it is now; null (nothing changes) when [task] is not an album download.
+     */
+    suspend fun joinAlbum(track: Track, task: DownloadTask): Track? {
+        val joined = track.inAlbumOf(task) ?: return null
+        if (joined != track) library.setAlbumInfo(joined.id, joined.album, joined.albumArtist, joined.trackNumber, joined.year)
+        return joined
+    }
+
+    /** Gives [trackIds] the cover shared by the songs of [album], fetched from [coverUrl] when it is not on the phone yet. */
+    suspend fun useAlbumCover(trackIds: List<Long>, album: AlbumKey, coverUrl: String?) {
+        val cover = covers.obtain(CoverArt.albumCoverName(album), listOfNotNull(coverUrl)) ?: return
+        val accent = guarded { accentOf(cover.path) }
+        library.setCovers(trackIds, cover.path, accent)
     }
 
     private suspend fun place(task: DownloadTask, trackId: Long) {
@@ -596,6 +620,18 @@ internal class DownloadEngine(
             }
         }
     }
+}
+
+/** [this] track with the album metadata an album-page [task] carries; null for any other task. */
+internal fun Track.inAlbumOf(task: DownloadTask): Track? {
+    if (!task.isFromAlbumPage) return null
+    val album = task.album?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    return copy(
+        album = album,
+        albumArtist = task.albumArtist?.trim()?.takeIf { it.isNotEmpty() } ?: albumArtist,
+        trackNumber = task.trackNumber ?: trackNumber,
+        year = task.year ?: year,
+    )
 }
 
 /** What one [DownloadEngine.runQueue] did. */

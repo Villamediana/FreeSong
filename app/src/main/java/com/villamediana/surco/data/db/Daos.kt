@@ -58,6 +58,12 @@ interface TrackDao {
 
     @Query("UPDATE tracks SET coverPath = :path, accentColor = NULL WHERE id = :id")
     suspend fun setCover(id: Long, path: String?)
+
+    @Query("UPDATE tracks SET coverPath = :path, accentColor = :color WHERE id IN (:ids)")
+    suspend fun setCovers(ids: List<Long>, path: String?, color: Int?)
+
+    @Query("UPDATE tracks SET album = :album, albumArtist = :albumArtist, trackNumber = :trackNumber, year = :year WHERE id = :id")
+    suspend fun setAlbumInfo(id: Long, album: String?, albumArtist: String?, trackNumber: Int?, year: Int?)
 }
 
 @Dao

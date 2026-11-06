@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.graphics.Rect
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import com.villamediana.surco.data.LibraryRepository
 import com.villamediana.surco.data.Settings
 import com.villamediana.surco.data.db.AlbumKey
 import com.villamediana.surco.data.db.DownloadState
@@ -16,10 +17,12 @@ import com.villamediana.surco.online.CollectionKind
 import com.villamediana.surco.online.Lyrics
 import com.villamediana.surco.online.OnlineException
 import com.villamediana.surco.online.RemoteCollection
+import com.villamediana.surco.online.RemoteTrack
 import com.villamediana.surco.online.TrackMeta
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.After
@@ -209,6 +212,72 @@ class DownloadEngineTest {
     @Test fun albumWithoutAuthorFallsBackToTheTrackArtist() = runBlocking {
         h.queue.downloadCollection(albumDetail("n1", author = null))
         assertEquals("Soda Stereo", h.task("n1").albumArtist)
+    }
+
+    private fun yhlqmdlg(vararg tracks: RemoteTrack) = CollectionDetail(
+        collection = RemoteCollection(
+            kind = CollectionKind.ALBUM,
+            url = "https://music.youtube.com/browse/MPREb_yhlqmdlg",
+            title = "YHLQMDLG",
+            author = "Bad Bunny",
+            thumbnailUrl = h.server.url("/img/album"),
+            year = 2020,
+        ),
+        tracks = tracks.toList(),
+    )
+
+    @Test fun anAlbumGathersTheSongAlreadyOnThePhone() = runBlocking {
+        h.server.put("/img/album", png(600, 600, Color.RED))
+        // Downloaded loose first: the catalog gave no album artist nor track number.
+        val loose = h.song("s2", artist = "Bad Bunny, Jhay Cortez").copy(album = "YHLQMDLG")
+        h.queue.download(listOf(loose))
+        h.engine.runQueue()
+        val before = h.library.trackByVideoId("s2")!!
+        assertNull(before.trackNumber)
+
+        h.queue.downloadCollection(yhlqmdlg(h.song("s1", artist = "Bad Bunny"), loose, h.song("s3", artist = "Bad Bunny")))
+        // Not downloaded again, but in the album right away.
+        assertEquals(setOf("s1", "s3"), h.allTasks().filter { it.state == DownloadState.QUEUED }.map { it.videoId }.toSet())
+        val joined = h.library.trackByVideoId("s2")!!
+        assertEquals("YHLQMDLG", joined.album)
+        assertEquals("Bad Bunny", joined.albumArtist)
+        assertEquals(2, joined.trackNumber)
+        assertEquals(2020, joined.year)
+        assertEquals(before.filePath, joined.filePath)
+
+        h.engine.runQueue()
+        h.background.forEach { it() }
+
+        val key = AlbumKey("Bad Bunny", "YHLQMDLG")
+        assertEquals(listOf(key to 3), LibraryRepository.groupAlbums(h.library.allTracks()).map { it.key to it.trackCount })
+        assertEquals(listOf("s1", "s2", "s3"), h.library.album(key).first()!!.tracks.map { it.videoId })
+        // One cover for the whole album, the song that was loose included.
+        val cover = h.storage.coverFile(CoverArt.albumCoverName(key)).path
+        val s2 = h.library.trackByVideoId("s2")!!
+        assertTrue(listOf("s1", "s2", "s3").all { h.library.trackByVideoId(it)!!.coverPath == cover })
+        assertEquals(Harness.ACCENT, s2.accentColor)
+    }
+
+    @Test fun aSongQueuedElsewhereJoinsTheAlbumWhenItLands() = runBlocking {
+        h.server.put("/img/album", png(600, 600, Color.RED))
+        val loose = h.song("q2", artist = "Bad Bunny, Jhay Cortez").copy(album = "YHLQMDLG")
+        h.queue.download(listOf(loose))
+        val album = yhlqmdlg(h.song("q1", artist = "Bad Bunny"), loose)
+        h.queue.downloadCollection(album)
+        // The album keeps its own task for the song; asking for the album again adds nothing.
+        h.queue.downloadCollection(album)
+        assertEquals(listOf("q1", "q2", "q2"), h.allTasks().map { it.videoId }.sorted())
+
+        h.engine.runQueue()
+
+        assertTrue(h.allTasks().all { it.state == DownloadState.DONE })
+        // 200 KB in 64 KB chunks = 4 requests: downloaded once.
+        assertEquals(4, audioHits("q2").size)
+        val q2 = h.library.trackByVideoId("q2")!!
+        assertEquals("Bad Bunny", q2.albumArtist)
+        assertEquals(2, q2.trackNumber)
+        assertEquals(h.storage.coverFile(CoverArt.albumCoverName(AlbumKey("Bad Bunny", "YHLQMDLG"))).path, q2.coverPath)
+        assertEquals(1, LibraryRepository.groupAlbums(h.library.allTracks()).size)
     }
 
     // ------------------------------------------------------------------ playlists
