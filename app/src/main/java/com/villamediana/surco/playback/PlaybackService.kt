@@ -500,7 +500,7 @@ class PlaybackService : MediaLibraryService() {
         val count = player.mediaItemCount
         if (count == 0 || player.repeatMode != Player.REPEAT_MODE_OFF) return
         if (player.currentMediaItemIndex == C.INDEX_UNSET || player.hasNextMediaItem()) return
-        val lastOnline = MediaItems.videoId(player.currentMediaItem)?.takeIf { settings.autoplaySimilar }
+        val lastOnline = MediaItems.videoId(player.currentMediaItem)?.takeIf { settings.autoplaySimilar || smart }
         if (lastOnline == null && !(settings.autoplaySimilar || smart)) return
         if (extendJob?.isActive == true || extendedAtCount == count) return
         extendedAtCount = count

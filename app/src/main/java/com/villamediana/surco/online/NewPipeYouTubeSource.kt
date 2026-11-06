@@ -496,7 +496,7 @@ class NewPipeYouTubeSource(private val http: OkHttpClient) : YouTubeSource {
         val info = StreamInfo.getInfo(service, YouTubeLinks.watchUrl(videoId, music = false))
         if (TitleCleaner.isTopicChannel(info.uploaderName.orEmpty())) {
             val official = runCatching { officialVideo(info) }.getOrNull()
-            official?.let { pickVideo(it, maxHeight) }?.let { return@io it }
+            official?.let { o -> pickVideo(o, maxHeight)?.copy(substituteVideoId = YouTubeLinks.videoIdOf(o.url) ?: o.id) }?.let { return@io it }
         }
         pickVideo(info, maxHeight)
             ?: throw OnlineException("No playable video for $videoId", kind = OnlineException.Kind.UNAVAILABLE)

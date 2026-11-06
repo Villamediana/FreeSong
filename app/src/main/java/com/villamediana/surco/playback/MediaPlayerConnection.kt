@@ -322,21 +322,26 @@ class MediaPlayerConnection(
 
     // ================================================================ commands
 
-    override fun play(tracks: List<Track>, startIndex: Int, source: PlaySource, shuffle: Boolean) {
+    override fun play(tracks: List<Track>, startIndex: Int, source: PlaySource, shuffle: Boolean) =
+        play(tracks, startIndex, source, shuffle, smart = false)
+
+    private fun play(tracks: List<Track>, startIndex: Int, source: PlaySource, shuffle: Boolean, smart: Boolean) {
         if (tracks.isEmpty()) return
         val start = startIndex.coerceIn(0, tracks.lastIndex)
         main.launch {
             remember(tracks)
             clearError()
         }
-        send(SessionProtocol.PLAY, playArgs(tracks, start, source, if (shuffle) SessionProtocol.SHUFFLE_ON else SessionProtocol.SHUFFLE_KEEP, smart = false))
+        send(SessionProtocol.PLAY, playArgs(tracks, start, source, if (shuffle) SessionProtocol.SHUFFLE_ON else SessionProtocol.SHUFFLE_KEEP, smart = smart))
     }
 
     override fun playOnline(tracks: List<RemoteTrack>, startIndex: Int, source: PlaySource) {
         val songs = tracks.filter { it.videoId.isNotBlank() }.distinctBy { it.videoId }
         if (songs.isEmpty()) return
         val start = tracks.getOrNull(startIndex)?.videoId?.let { id -> songs.indexOfFirst { it.videoId == id } }?.takeIf { it >= 0 } ?: 0
-        play(songs.map { OnlineItem.of(it).toTrack() }, start, source, shuffle = false)
+        // An online radio is a smart queue: it keeps going with YouTube Music's "up next" even when
+        // "Continuar com músicas parecidas" is off.
+        play(songs.map { OnlineItem.of(it).toTrack() }, start, source, shuffle = false, smart = source.type == PlaySource.Type.RADIO)
     }
 
     override fun playSmart(seed: SmartSeed) {

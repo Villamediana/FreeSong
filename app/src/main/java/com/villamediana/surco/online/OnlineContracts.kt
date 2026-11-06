@@ -87,6 +87,11 @@ data class VideoStream(
     val height: Int,
     val videoMimeType: String,
     val audioMimeType: String?,
+    /**
+     * The upload actually played when it is not the requested video (e.g. the official clip found
+     * for a YouTube Music art track). Its timeline differs from the song's: no position hand-off.
+     */
+    val substituteVideoId: String? = null,
 )
 
 class OnlineException(message: String, cause: Throwable? = null, val kind: Kind = Kind.UNKNOWN) : Exception(message, cause) {
@@ -119,16 +124,16 @@ interface YouTubeSource {
     suspend fun track(videoId: String): RemoteTrack
 
     /**
-     * Best progressive video stream up to [maxHeight] for "Ver o vídeo" (video-only mp4 + the
-     * audio stream, or a muxed stream). For YouTube Music songs ("Topic" art tracks) this may be
-     * the static-art video; implementations may look up the official music video instead.
-     */
-    /**
      * "Up next" for a song (YouTube Music radio / related videos), used to keep an ONLINE queue
      * going when it ends. Never throws (empty on failure).
      */
     suspend fun related(videoId: String, limit: Int = 25): List<RemoteTrack> = emptyList()
 
+    /**
+     * Best progressive video stream up to [maxHeight] for "Ver o vídeo" (video-only mp4 + the
+     * audio stream, or a muxed stream). For YouTube Music songs ("Topic" art tracks) this may be
+     * the static-art video; implementations may look up the official music video instead.
+     */
     suspend fun videoStream(videoId: String, maxHeight: Int = 720): VideoStream =
         throw OnlineException("Video not supported", kind = OnlineException.Kind.UNAVAILABLE)
 }

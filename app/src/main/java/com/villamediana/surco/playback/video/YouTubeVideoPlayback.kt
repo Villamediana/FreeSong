@@ -70,7 +70,10 @@ class YouTubeVideoPlayback internal constructor(
     override val player: StateFlow<Player?> = _player.asStateFlow()
 
     /** The video being shown, where it was asked to start, and whether the music was playing when it opened. */
-    private class Session(val videoId: String, val startAtMs: Long, val musicWasPlaying: Boolean)
+    private class Session(val videoId: String, val startAtMs: Long, val musicWasPlaying: Boolean) {
+        /** False when the clip played is another upload (official video for an art track). */
+        var sameTimeline: Boolean = true
+    }
 
     private var session: Session? = null
     private var exo: ExoPlayer? = null
@@ -96,7 +99,8 @@ class YouTubeVideoPlayback internal constructor(
     override fun open(videoId: String, title: String?, startAtMs: Long) {
         main.launch {
             // Same video asked again (the screen came back): keep playing where it is.
-            if (session?.videoId == videoId && exo != null) {
+            // (Not after a failure: then "Tentar de novo" must really reload.)
+            if (session?.videoId == videoId && exo != null && _state.value.error == null) {
                 _state.value = _state.value.copy(title = title ?: _state.value.title)
                 return@launch
             }
@@ -128,7 +132,10 @@ class YouTubeVideoPlayback internal constructor(
                 return@launch
             }
             if (exo !== player) return@launch
-            player.setMediaSource(mediaSource(videoId, stream), startAtMs)
+            // Another upload (official clip of an art track) has its own timeline: start it from 0.
+            val substitute = stream.substituteVideoId != null && stream.substituteVideoId != videoId
+            session?.takeIf { it.videoId == videoId }?.sameTimeline = !substitute
+            player.setMediaSource(mediaSource(videoId, stream), if (substitute) 0 else startAtMs)
             player.prepare()
             player.playWhenReady = true
         }
@@ -177,7 +184,7 @@ class YouTubeVideoPlayback internal constructor(
             val music = music()
             val now = music.state.value
             val sameSong = now.current?.videoId == s.videoId
-            if (sameSong && position != null) {
+            if (sameSong && position != null && s.sameTimeline) {
                 val duration = now.durationMs.takeIf { it > 0 } ?: now.current?.durationMs?.takeIf { it > 0 }
                 music.seekTo(if (duration != null) position.coerceAtMost(duration - END_MARGIN_MS).coerceAtLeast(0) else position)
             }

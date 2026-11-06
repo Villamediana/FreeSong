@@ -322,16 +322,19 @@ internal object YouTubeMusicParser {
         val album = groups.flatten().firstOrNull { it.at("navigationEndpoint.browseEndpoint.browseId").asString()?.startsWith("MPREb") == true }
             ?.str("text")?.trim()?.ifEmpty { null }
         val videoType = r.at("navigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType").asString()
+        val catalog = videoType != "MUSIC_VIDEO_TYPE_UGC"
         return RemoteTrack(
             videoId = videoId,
-            url = YouTubeLinks.watchUrl(videoId, music = true),
+            // The url host carries the catalog flag through the player's transient Track
+            // (OnlinePlay.toRemoteTrack reads it back when the song is downloaded).
+            url = YouTubeLinks.watchUrl(videoId, music = catalog),
             title = title,
             artist = TitleCleaner.cleanArtist(artist),
             album = album,
             durationMs = r.obj("lengthText").text()?.let(::durationMs),
             thumbnailUrl = Thumbnails.best(thumbnails(r.obj("thumbnail")), Thumbnails.SONG),
             // User uploads in the radio carry video titles; catalog songs and official videos are clean.
-            fromMusicCatalog = videoType != "MUSIC_VIDEO_TYPE_UGC",
+            fromMusicCatalog = catalog,
         )
     }
 
