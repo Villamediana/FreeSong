@@ -11,7 +11,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,6 +24,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.LibraryMusic
@@ -46,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.compose.NavHost
@@ -159,20 +161,15 @@ fun SurcoRoot(incomingLink: StateFlow<String?>) {
 private data class Tab(val route: Any, val label: Int, val icon: ImageVector, val selectedIcon: ImageVector)
 
 @Composable
-private fun BottomBar(navigator: Navigator, modifier: Modifier = Modifier) {
+internal fun BottomBar(navigator: Navigator, modifier: Modifier = Modifier) {
     val tabs = listOf(
         Tab(HomeRoute, R.string.tab_home, Icons.Outlined.Home, Icons.Rounded.Home),
         Tab(SearchRoute, R.string.tab_search, Icons.Outlined.Search, Icons.Rounded.Search),
         Tab(LibraryRoute, R.string.tab_library, Icons.Outlined.LibraryMusic, Icons.Rounded.LibraryMusic),
     )
+    // The tab whose stack is showing (an album opened from Biblioteca keeps Biblioteca lit).
     val entry by navigator.controller.currentBackStackEntryAsState()
-    val dest = entry?.destination
-    val selectedIndex = when {
-        dest?.hasRoute(SearchRoute::class) == true || dest?.hasRoute(RemoteCollectionRoute::class) == true || dest?.hasRoute(DownloadsRoute::class) == true -> 1
-        dest?.hasRoute(LibraryRoute::class) == true || dest?.hasRoute(PlaylistRoute::class) == true ||
-            dest?.hasRoute(LikedRoute::class) == true || dest?.hasRoute(SongsRoute::class) == true -> 2
-        else -> 0
-    }
+    val currentTab = remember(entry) { navigator.currentTab() }
     val navBarInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     Column(
         modifier
@@ -180,13 +177,18 @@ private fun BottomBar(navigator: Navigator, modifier: Modifier = Modifier) {
             .background(Brush.verticalGradient(0f to SurcoColors.Ink.copy(alpha = 0f), 0.38f to SurcoColors.Ink.copy(alpha = 0.92f), 1f to SurcoColors.Ink)),
     ) {
         Spacer(Modifier.height(18.dp))
-        Row(Modifier.fillMaxWidth().height(Dimens.BottomBarHeight - 18.dp), verticalAlignment = Alignment.CenterVertically) {
-            tabs.forEachIndexed { index, tab ->
-                val selected = index == selectedIndex
+        Row(Modifier.fillMaxWidth().height(Dimens.BottomBarHeight - 18.dp).selectableGroup(), verticalAlignment = Alignment.CenterVertically) {
+            tabs.forEach { tab ->
+                val selected = tab.route == currentTab
                 Column(
                     Modifier
                         .weight(1f)
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { navigator.switchTab(tab.route) },
+                        .selectable(
+                            selected = selected,
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            role = Role.Tab,
+                        ) { navigator.switchTab(tab.route) },
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Icon(

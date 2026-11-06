@@ -54,6 +54,18 @@ class Navigator(val controller: NavHostController) {
         }
     }
 
+    /**
+     * The bottom-bar tab whose stack is on screen. switchTab keeps the stack as
+     * [Home, <tab root>, pages…], so the tab root under the current page tells (Home when none).
+     */
+    fun currentTab(): Any = when {
+        isOnStack<SearchRoute>() -> SearchRoute
+        isOnStack<LibraryRoute>() -> LibraryRoute
+        else -> HomeRoute
+    }
+
+    private inline fun <reified T : Any> isOnStack(): Boolean = runCatching { controller.getBackStackEntry<T>() }.isSuccess
+
     fun back() {
         controller.popBackStack()
     }

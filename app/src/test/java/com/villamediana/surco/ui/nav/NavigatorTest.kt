@@ -5,6 +5,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.Text
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.lifecycle.ViewModel
@@ -61,6 +67,7 @@ class NavigatorTest {
                             composable<DownloadsRoute> { Text("downloads") }
                             composable<RemoteCollectionRoute> { Text("remote ${it.toRoute<RemoteCollectionRoute>().title}") }
                         }
+                        BottomBar(navigator)
                     }
                 }
             }
@@ -107,5 +114,47 @@ class NavigatorTest {
         compose.onNodeWithText("artist Gustavo Cerati").assertExists()
         nav { back() }
         compose.onNodeWithText("artist Soda Stereo").assertExists()
+    }
+
+    private fun tab(label: String) = compose.onNodeWithText(label)
+
+    private fun assertTab(selected: String) {
+        listOf("Início", "Buscar", "Biblioteca").forEach { label ->
+            if (label == selected) tab(label).assertIsSelected() else tab(label).assertIsNotSelected()
+        }
+    }
+
+    @Test
+    fun theBottomBarLightsTheTabWhosePagesAreShowing() {
+        setUp()
+        assertTab("Início")
+        tab("Biblioteca").assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Tab))
+
+        // Album → artist from Biblioteca: still Biblioteca (it used to jump to Início).
+        nav { switchTab(LibraryRoute) }
+        nav { openAlbum(AlbumKey("Soda Stereo", "Signos")) }
+        nav { openArtist("Soda Stereo") }
+        assertTab("Biblioteca")
+
+        // Curtidas and Downloads from Início stay in Início (they used to light Biblioteca / Buscar).
+        nav { switchTab(HomeRoute) }
+        nav { openLiked() }
+        assertTab("Início")
+        nav { openDownloads() }
+        assertTab("Início")
+
+        nav { switchTab(SearchRoute) }
+        nav { openDownloads() }
+        assertTab("Buscar")
+
+        // Back to Biblioteca's saved stack, then all the way out of it.
+        nav { switchTab(LibraryRoute) }
+        compose.onNodeWithText("artist Soda Stereo").assertExists()
+        assertTab("Biblioteca")
+        nav { back() }
+        nav { back() }
+        nav { back() }
+        compose.onNodeWithText("home").assertExists()
+        assertTab("Início")
     }
 }
