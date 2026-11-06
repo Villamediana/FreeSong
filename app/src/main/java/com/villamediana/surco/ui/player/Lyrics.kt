@@ -9,8 +9,8 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -20,6 +20,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -197,7 +198,8 @@ internal fun LyricsLines(
     horizontalPadding: Dp = 20.dp,
     lineGap: Dp = 10.dp,
 ) {
-    val listState = rememberLazyListState()
+    // One scroll per song's lyrics: the next song starts at its first line, not where the last one was.
+    val listState = rememberSaveable(lyrics, saver = LazyListState.Saver) { LazyListState() }
     val current by remember(lyrics, clock) {
         derivedStateOf { if (lyrics.synced) lyrics.indexAt(clock.positionMs + PlayerMath.LYRICS_LEAD_MS) else -1 }
     }
