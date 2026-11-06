@@ -7,14 +7,18 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.lifecycleScope
 import com.villamediana.surco.ui.nav.ExternalRequest
+import com.villamediana.surco.ui.nav.Inbound
 import com.villamediana.surco.ui.nav.SurcoRoot
+import com.villamediana.surco.ui.nav.VoiceSearch
 import com.villamediana.surco.ui.theme.SurcoTheme
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
-    /** Links shared to Surco (YouTube / YouTube Music) waiting to be opened by the UI. */
-    private val incomingLink = MutableStateFlow<String?>(null)
+    /** Shared links (YouTube / YouTube Music) and online voice searches waiting for the Search screen. */
+    private val incoming = MutableStateFlow<Inbound?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
@@ -26,7 +30,7 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) handle(intent)
         setContent {
             SurcoTheme {
-                SurcoRoot(incomingLink = incomingLink)
+                SurcoRoot(incoming = incoming)
             }
         }
     }
@@ -38,8 +42,18 @@ class MainActivity : ComponentActivity() {
 
     private fun handle(intent: Intent?) {
         when (val request = ExternalRequest.of(intent)) {
-            is ExternalRequest.OpenLink -> incomingLink.value = request.text
+            is ExternalRequest.OpenLink -> incoming.value = Inbound.Link(request.text)
+            is ExternalRequest.PlayFromSearch -> playFromSearch(request.query)
             null -> Unit
+        }
+    }
+
+    /** Voice search: the library plays it where the app is; with nothing there, Search looks online. */
+    private fun playFromSearch(query: String) {
+        val graph = SurcoApplication.graph
+        lifecycleScope.launch {
+            val played = VoiceSearch.play(query, graph.library, graph.player) { q -> getString(R.string.playback_source_search, q) }
+            if (!played) incoming.value = Inbound.Query(query)
         }
     }
 }

@@ -77,14 +77,14 @@ import com.villamediana.surco.ui.theme.Dimens
 import com.villamediana.surco.ui.theme.LocalBottomInset
 import com.villamediana.surco.ui.theme.Motion
 import com.villamediana.surco.ui.theme.SurcoColors
-import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
  * App shell: NavHost, the floating bottom bar and the player layer (mini player that expands
  * into the full-screen player) on top of everything.
  */
 @Composable
-fun SurcoRoot(incomingLink: StateFlow<String?>) {
+fun SurcoRoot(incoming: MutableStateFlow<Inbound?>) {
     val controller = rememberNavController()
     val navigator = remember(controller) { Navigator(controller) }
     val player = SurcoApplication.graph.player
@@ -96,12 +96,12 @@ fun SurcoRoot(incomingLink: StateFlow<String?>) {
         if (Build.VERSION.SDK_INT >= 33) notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
 
-    // Shared YouTube links → Search tab resolves them.
-    val link by incomingLink.collectAsState()
-    LaunchedEffect(link) {
-        val l = link ?: return@LaunchedEffect
-        LinkInbox.post(l)
-        (incomingLink as? kotlinx.coroutines.flow.MutableStateFlow<String?>)?.value = null
+    // Shared YouTube links and voice requests the library can't play → the Search screen takes them.
+    val inbound by incoming.collectAsState()
+    LaunchedEffect(inbound) {
+        val item = inbound ?: return@LaunchedEffect
+        LinkInbox.post(item)
+        incoming.value = null
         navigator.openSearchScreen()
     }
 

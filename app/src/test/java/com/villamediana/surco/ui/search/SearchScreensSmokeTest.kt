@@ -35,6 +35,7 @@ import com.villamediana.surco.online.RemoteCollection
 import com.villamediana.surco.online.ResolvedLink
 import com.villamediana.surco.online.SearchItem
 import com.villamediana.surco.online.SearchPage
+import com.villamediana.surco.ui.nav.Inbound
 import com.villamediana.surco.ui.nav.LinkInbox
 import com.villamediana.surco.ui.nav.RemoteCollectionRoute
 import kotlinx.coroutines.CoroutineScope
@@ -154,7 +155,7 @@ class SearchScreensSmokeTest {
     fun sharedSongLinkShowsTheLinkCard() {
         val song = remoteTrack("dQw4w9WgXcQ", "Té para Tres", artist = "Soda Stereo")
         youTube.onResolve = { ResolvedLink.Track(song) }
-        LinkInbox.post("Olha essa https://music.youtube.com/watch?v=dQw4w9WgXcQ")
+        LinkInbox.post(Inbound.Link("Olha essa https://music.youtube.com/watch?v=dQw4w9WgXcQ"))
         harness.put(searchViewModel())
         harness.show { SearchScreen() }
 
@@ -173,6 +174,19 @@ class SearchScreensSmokeTest {
         rule.waitUntil(20_000) { rule.onAllNodes(hasText(s(R.string.search_link_percent, 40))).fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText(s(R.string.search_link_listen)).assertExists()
         harness.screenshot("search_link_card_downloading")
+    }
+
+    @Test
+    fun aVoiceRequestTheLibraryCannotPlayIsSearchedOnline() {
+        youTube.onSearch = { q, f -> songPage(q, f, listOf("aaaaaaaaaaa")) }
+        LinkInbox.post(Inbound.Query("cerati crimen"))
+        harness.put(searchViewModel())
+        harness.show { SearchScreen() }
+
+        rule.waitUntil(20_000) { rule.onAllNodes(hasText("Song aaaaaaaaaaa")).fetchSemanticsNodes().isNotEmpty() }
+        assertNull(LinkInbox.pending.value)
+        assertEquals("cerati crimen", youTube.searches.first().first)
+        rule.onNode(hasSetTextAction() and hasText("cerati crimen")).assertExists()
     }
 
     @Test

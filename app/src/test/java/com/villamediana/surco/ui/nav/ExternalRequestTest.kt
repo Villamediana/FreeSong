@@ -1,8 +1,10 @@
 package com.villamediana.surco.ui.nav
 
 import android.app.Application
+import android.app.SearchManager
 import android.content.Intent
 import android.net.Uri
+import android.provider.MediaStore
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -37,5 +39,15 @@ class ExternalRequestTest {
     fun reopeningFromRecentsDoesNotReplayTheOldShare() {
         // Android 8–11: the task's first intent (the share) comes back with this flag.
         assertNull(ExternalRequest.of(share(shared).addFlags(Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY)))
+        assertNull(ExternalRequest.of(voice("Soda Stereo").addFlags(Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY)))
+    }
+
+    private fun voice(query: String?) = Intent(MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH).putExtra(SearchManager.QUERY, query)
+
+    @Test
+    fun aVoiceRequestCarriesItsQuery() {
+        assertEquals(ExternalRequest.PlayFromSearch("Soda Stereo"), ExternalRequest.of(voice(" Soda Stereo ")))
+        // "Ok Google, tocar música no Surco": no query → play something.
+        assertEquals(ExternalRequest.PlayFromSearch(""), ExternalRequest.of(voice(null)))
     }
 }

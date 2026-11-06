@@ -113,6 +113,7 @@ import com.villamediana.surco.ui.components.SectionHeader
 import com.villamediana.surco.ui.components.TrackRow
 import com.villamediana.surco.ui.components.pressScale
 import com.villamediana.surco.ui.downloads.DownloadOverview
+import com.villamediana.surco.ui.nav.Inbound
 import com.villamediana.surco.ui.nav.LinkInbox
 import com.villamediana.surco.ui.nav.navigator
 import com.villamediana.surco.ui.sheets.TrackActionsSheet
@@ -154,10 +155,14 @@ fun SearchScreen() {
         focusManager.clearFocus()
     }
 
-    // Links shared to Surco (or opened from the browser) land here.
+    // Links shared to Surco (or opened from the browser) and voice requests the library can't play land here.
     val pending by LinkInbox.pending.collectAsStateWithLifecycle()
     LaunchedEffect(pending) {
-        if (pending != null) LinkInbox.consume()?.let { vm.resolveLink(it) }
+        when (val item = if (pending != null) LinkInbox.consume() else null) {
+            is Inbound.Link -> vm.resolveLink(item.text)
+            is Inbound.Query -> vm.submit(item.text)
+            null -> Unit
+        }
     }
 
     LaunchedEffect(vm) {
