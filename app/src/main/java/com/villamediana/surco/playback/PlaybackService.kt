@@ -104,6 +104,7 @@ class PlaybackService : MediaLibraryService() {
     private var extendJob: Job? = null
     private var extendedAtCount = -1
     private var saveJob: Job? = null
+    private var persistJob: Job? = null
     private var positionSaver: Job? = null
     private var consecutiveErrors = 0
     private var buttonsKey: String? = null
@@ -289,6 +290,15 @@ class PlaybackService : MediaLibraryService() {
 
     private suspend fun libraryTracks(): List<Track> =
         if (libraryLoaded) allTracks else withContext(Dispatchers.IO) { library.allTracks() }
+
+    /** The whole library, smart-shuffled — what plays when there's no queue to go back to; null when it's empty. */
+    private suspend fun libraryPlan(): QueuePlan? {
+        val lib = libraryTracks()
+        if (lib.isEmpty()) return null
+        val taste = taste()
+        val seed = Random.nextLong()
+        return withContext(Dispatchers.Default) { SmartPlans.plan(SmartSeed.Library, lib, taste, strings, seed) }
+    }
 
     private suspend fun tracksFor(ids: List<Long>): List<Track> =
         if (libraryLoaded) ids.mapNotNull(tracksById::get)
@@ -577,15 +587,36 @@ class PlaybackService : MediaLibraryService() {
     private fun saveNow() {
         saveJob?.cancel()
         val json = snapshot()?.encode() ?: return
+        ResumableQueue.set(this, true)
+        persist(json)
+    }
+
+    /** The queue is gone (emptied, or every song of the saved one deleted): nothing for the headset to resume. */
+    private fun forgetSavedQueue() {
+        saveJob?.cancel()
+        ResumableQueue.set(this, false)
+        persist(null)
+    }
+
+    /** Writes the saved queue in call order (a save launched just before a "forget" must not land after it). */
+    private fun persist(json: String?) {
         val store = graph.settings
-        graph.scope.launch { runCatching { store.setLastQueueJson(json) } }
+        val previous = persistJob
+        persistJob = graph.scope.launch {
+            previous?.join()
+            runCatching { store.setLastQueueJson(json) }
+        }
     }
 
     /** The saved queue, without songs deleted meanwhile; online songs stream again (or play from the file if downloaded since). */
     private suspend fun loadSnapshot(): Pair<QueueSnapshot, List<Track>>? {
-        val raw = QueueSnapshot.decode(graph.settings.current().lastQueueJson) ?: return null
-        val found = tracksFor(raw.ids.filter { it >= 0 }.distinct())
-        val snap = raw.retain(found.mapTo(HashSet()) { it.id }) ?: return null
+        val raw = QueueSnapshot.decode(graph.settings.current().lastQueueJson)
+        val found = raw?.let { tracksFor(it.ids.filter { id -> id >= 0 }.distinct()) }.orEmpty()
+        val snap = raw?.retain(found.mapTo(HashSet()) { it.id }) ?: run {
+            // Nothing (left) to resume; unless a new queue started meanwhile, drop what's saved.
+            if (player.mediaItemCount == 0) forgetSavedQueue()
+            return null
+        }
         val byId = found.associateBy { it.id }
         val online = snap.onlineById
         val byVideo = localByVideoId(online.values.map { it.videoId })
@@ -720,6 +751,7 @@ class PlaybackService : MediaLibraryService() {
             updateWakeMode()
             if (timeline.isEmpty) {
                 finishListen()
+                forgetSavedQueue()
                 return
             }
             pendingRestore?.let { snap ->
@@ -892,7 +924,15 @@ class PlaybackService : MediaLibraryService() {
             scope.launch {
                 try {
                     val (snap, tracks) = loadSnapshot() ?: run {
-                        result.setException(IllegalStateException("No saved queue"))
+                        // Nothing saved (or all of it deleted since). A play press must still play
+                        // something: the service may have been started in the foreground for it.
+                        val plan = if (isForPlayback) libraryPlan() else null
+                        if (plan == null) {
+                            result.setException(IllegalStateException("Nothing to resume"))
+                        } else {
+                            applyExternalContext(plan.source, plan.smart)
+                            result.set(MediaSession.MediaItemsWithStartPosition(plan.tracks.map(::mediaItemOf), plan.startIndex, 0))
+                        }
                         return@launch
                     }
                     source = snap.source?.toPlaySource()

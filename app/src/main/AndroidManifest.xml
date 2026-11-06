@@ -71,9 +71,9 @@
             </intent-filter>
         </service>
 
-        <!-- Botão play do fone com o app fechado → retoma a última fila -->
+        <!-- Botão play do fone com o app fechado → retoma a última fila (só se houver uma salva) -->
         <receiver
-            android:name="androidx.media3.session.MediaButtonReceiver"
+            android:name=".playback.SurcoMediaButtonReceiver"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MEDIA_BUTTON" />
