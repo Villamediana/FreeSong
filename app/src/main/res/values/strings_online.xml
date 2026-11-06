@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="online_error_no_network">Sem conexão. Confira a internet e tente de novo.</string>
+    <string name="online_error_not_found">Não encontramos isso no YouTube.</string>
+    <string name="online_error_age_restricted">Conteúdo com restrição de idade — não dá para baixar.</string>
+    <string name="online_error_geo_blocked">Indisponível no seu país.</string>
+    <string name="online_error_unavailable">Esse conteúdo não está disponível.</string>
+    <string name="online_error_rate_limited">O YouTube pediu uma pausa. Tente daqui a pouco.</string>
+    <string name="online_error_unknown">Algo deu errado. Tente de novo.</string>
+</resources>
