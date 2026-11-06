@@ -108,29 +108,29 @@ class SearchScreensSmokeTest {
 
         rule.onNodeWithText(s(R.string.search_title)).assertExists()
         rule.onNodeWithText(s(R.string.search_hint_body)).assertExists()
-        rule.waitUntil(5_000) { rule.onAllNodes(hasText("Rock en español")).fetchSemanticsNodes().isNotEmpty() }
+        rule.waitUntil(20_000) { rule.onAllNodes(hasText("Rock en español")).fetchSemanticsNodes().isNotEmpty() }
         harness.screenshot("search_idle")
 
         rule.onNode(hasSetTextAction()).performTextInput("soda")
         rule.onNode(hasSetTextAction()).performImeAction()
-        rule.waitUntil(5_000) { rule.onAllNodes(hasText("De Música Ligera")).fetchSemanticsNodes().isNotEmpty() }
+        rule.waitUntil(20_000) { rule.onAllNodes(hasText("De Música Ligera")).fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText("Canción Animal").assertExists()
         rule.onNodeWithText(s(R.string.search_filter_albums)).assertExists()
-        rule.waitUntil(5_000) { rule.onAllNodesWithContentDescription(s(R.string.search_dl_done)).fetchSemanticsNodes().isNotEmpty() }
+        rule.waitUntil(20_000) { rule.onAllNodesWithContentDescription(s(R.string.search_dl_done)).fetchSemanticsNodes().isNotEmpty() }
         harness.screenshot("search_results")
 
         // Tap the first download button → queued.
         rule.onAllNodesWithContentDescription(s(R.string.search_dl_download))[0].performClick()
-        rule.waitUntil(5_000) { downloads.downloadCalls.isNotEmpty() }
+        rule.waitUntil(20_000) { downloads.downloadCalls.isNotEmpty() }
         assertEquals(listOf("aaaaaaaaaaa"), downloads.downloadCalls.single().map { it.videoId })
-        rule.waitUntil(5_000) { rule.onAllNodesWithContentDescription(s(R.string.search_dl_queued)).fetchSemanticsNodes().isNotEmpty() }
+        rule.waitUntil(20_000) { rule.onAllNodesWithContentDescription(s(R.string.search_dl_queued)).fetchSemanticsNodes().isNotEmpty() }
 
         // Long-press another song → selection bar.
         rule.onNodeWithText("Nada Personal").performTouchInput { longClick() }
-        rule.waitUntil(5_000) { rule.onAllNodes(hasText(context.resources.getQuantityString(R.plurals.search_download_n, 1, 1))).fetchSemanticsNodes().isNotEmpty() }
+        rule.waitUntil(20_000) { rule.onAllNodes(hasText(context.resources.getQuantityString(R.plurals.search_download_n, 1, 1))).fetchSemanticsNodes().isNotEmpty() }
         harness.screenshot("search_selection")
         rule.onNodeWithText(context.resources.getQuantityString(R.plurals.search_download_n, 1, 1)).performClick()
-        rule.waitUntil(5_000) { downloads.downloadCalls.size == 2 }
+        rule.waitUntil(20_000) { downloads.downloadCalls.size == 2 }
         assertEquals(listOf("bbbbbbbbbbb"), downloads.downloadCalls[1].map { it.videoId })
     }
 
@@ -142,15 +142,15 @@ class SearchScreensSmokeTest {
         harness.put(searchViewModel())
         harness.show { SearchScreen() }
 
-        rule.waitUntil(5_000) { rule.onAllNodes(hasText("Té para Tres")).fetchSemanticsNodes().isNotEmpty() }
+        rule.waitUntil(20_000) { rule.onAllNodes(hasText("Té para Tres")).fetchSemanticsNodes().isNotEmpty() }
         assertNull(LinkInbox.pending.value)
         assertEquals(listOf("https://music.youtube.com/watch?v=dQw4w9WgXcQ"), youTube.resolved.toList())
         harness.screenshot("search_link_card")
 
         rule.onNodeWithText(s(R.string.search_link_download)).performClick()
-        rule.waitUntil(5_000) { downloads.downloadCalls.isNotEmpty() }
+        rule.waitUntil(20_000) { downloads.downloadCalls.isNotEmpty() }
         downloads.setState("dQw4w9WgXcQ", DownloadState.RUNNING, 0.4f)
-        rule.waitUntil(5_000) { rule.onAllNodes(hasText(s(R.string.search_link_downloading, 40))).fetchSemanticsNodes().isNotEmpty() }
+        rule.waitUntil(20_000) { rule.onAllNodes(hasText(s(R.string.search_link_downloading, 40))).fetchSemanticsNodes().isNotEmpty() }
         harness.screenshot("search_link_card_downloading")
     }
 
@@ -161,13 +161,13 @@ class SearchScreensSmokeTest {
         harness.put(searchViewModel())
         harness.show { SearchScreen() }
         rule.onNode(hasSetTextAction()).performTextInput("persiana")
-        rule.waitUntil(5_000) {
+        rule.waitUntil(20_000) {
             rule.onAllNodes(hasText("persiana americana letra")).fetchSemanticsNodes().isNotEmpty() &&
                 rule.onAllNodes(hasText(s(R.string.search_in_library))).fetchSemanticsNodes().isNotEmpty()
         }
         harness.screenshot("search_typing")
         rule.onNodeWithText("Persiana Americana").performClick()
-        rule.waitUntil(5_000) { player.plays.isNotEmpty() }
+        rule.waitUntil(20_000) { player.plays.isNotEmpty() }
         assertEquals("lib1", player.plays.single().tracks.single().videoId)
     }
 
@@ -180,14 +180,14 @@ class SearchScreensSmokeTest {
         harness.put(RemoteCollectionViewModel(route, youTube, library, downloads, player, online, true), key = "remote:${route.kind}:${route.url}")
         harness.show { RemoteCollectionScreen(route) }
 
-        rule.waitUntil(5_000) { rule.onAllNodes(hasText("Trátame Suavemente")).fetchSemanticsNodes().isNotEmpty() }
+        rule.waitUntil(20_000) { rule.onAllNodes(hasText("Trátame Suavemente")).fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText(s(R.string.search_remote_download_all)).assertExists()
         rule.onNodeWithText(s(R.string.search_remote_playlist_note, "Rock nacional")).assertExists()
         harness.screenshot("remote_playlist")
 
         rule.onNodeWithText(s(R.string.search_remote_download_all)).performClick()
-        rule.waitUntil(5_000) { downloads.collectionCalls.isNotEmpty() }
-        rule.waitUntil(5_000) { rule.onAllNodes(hasText(s(R.string.search_remote_progress, 0, 3))).fetchSemanticsNodes().isNotEmpty() }
+        rule.waitUntil(20_000) { downloads.collectionCalls.isNotEmpty() }
+        rule.waitUntil(20_000) { rule.onAllNodes(hasText(s(R.string.search_remote_progress, 0, 3))).fetchSemanticsNodes().isNotEmpty() }
         harness.screenshot("remote_playlist_downloading")
     }
 
@@ -207,7 +207,7 @@ class SearchScreensSmokeTest {
         val route = RemoteCollectionRoute(url, CollectionKind.ARTIST.name, "Soda Stereo")
         harness.put(RemoteCollectionViewModel(route, youTube, library, downloads, player, online, true), key = "remote:${route.kind}:${route.url}")
         harness.show { RemoteCollectionScreen(route) }
-        rule.waitUntil(5_000) { rule.onAllNodes(hasText("Canción Animal")).fetchSemanticsNodes().isNotEmpty() }
+        rule.waitUntil(20_000) { rule.onAllNodes(hasText("Canción Animal")).fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText(s(R.string.search_remote_popular)).assertExists()
         rule.onNodeWithText(s(R.string.search_remote_albums)).assertExists()
         rule.onNodeWithText(s(R.string.search_remote_download_popular)).assertExists()

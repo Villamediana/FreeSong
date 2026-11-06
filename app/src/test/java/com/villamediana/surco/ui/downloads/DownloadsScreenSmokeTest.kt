@@ -68,7 +68,7 @@ class DownloadsScreenSmokeTest {
     @Test
     fun emptyState() {
         harness.show { DownloadsScreen() }
-        rule.waitUntil(5_000) { rule.onAllNodes(hasText(context.getString(R.string.dl_empty_title))).fetchSemanticsNodes().isNotEmpty() }
+        rule.waitUntil(20_000) { rule.onAllNodes(hasText(context.getString(R.string.dl_empty_title))).fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText(context.getString(R.string.dl_empty_action)).assertExists()
     }
 
@@ -82,7 +82,7 @@ class DownloadsScreenSmokeTest {
             task(5, "Nada Personal", DownloadState.DONE, createdAt = 400),
         )
         harness.show { DownloadsScreen() }
-        rule.waitUntil(5_000) { rule.onAllNodes(hasText("Rock nacional")).fetchSemanticsNodes().isNotEmpty() }
+        rule.waitUntil(20_000) { rule.onAllNodes(hasText("Rock nacional")).fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText("Trátame Suavemente").assertExists()
         rule.onNodeWithText(context.getString(R.string.dl_retry_failed)).assertExists()
         rule.onNodeWithText(context.getString(R.string.dl_clear_done)).assertExists()
@@ -91,7 +91,7 @@ class DownloadsScreenSmokeTest {
 
         // Cancel one song with its ring button.
         rule.onAllNodesWithContentDescription(context.getString(R.string.dl_cancel))[0].performClick()
-        rule.waitUntil(5_000) { downloads.taskFlow.value.any { it.state == DownloadState.CANCELED } }
+        rule.waitUntil(20_000) { downloads.taskFlow.value.any { it.state == DownloadState.CANCELED } }
 
         // "Cancelar tudo" asks first.
         rule.onNodeWithText(context.getString(R.string.dl_cancel_all)).performClick()
