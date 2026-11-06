@@ -62,6 +62,7 @@ import com.villamediana.surco.R
 import com.villamediana.surco.data.db.Track
 import com.villamediana.surco.download.DownloadSummary
 import com.villamediana.surco.playback.PlaybackState
+import com.villamediana.surco.ui.components.LikedArt
 import com.villamediana.surco.ui.components.PillButton
 import com.villamediana.surco.ui.components.PlayPauseButton
 import com.villamediana.surco.ui.components.SectionHeader

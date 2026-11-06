@@ -1,6 +1,23 @@
 package com.villamediana.surco.ui.components
 
+import android.content.res.Resources
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
+import com.villamediana.surco.R
 import java.util.Locale
+
+/**
+ * "1 música" · "12 músicas" · "Nenhuma música". Zero has its own text: Portuguese plural rules put
+ * 0 in "one", so the plural alone reads "0 música" (and a "zero" item is ignored for pt).
+ */
+@Composable
+fun songCount(n: Int): String =
+    if (n == 0) stringResource(R.string.n_songs_none) else pluralStringResource(R.plurals.n_songs, n, n)
+
+/** [songCount] outside composition. */
+fun songCount(res: Resources, n: Int): String =
+    if (n == 0) res.getString(R.string.n_songs_none) else res.getQuantityString(R.plurals.n_songs, n, n)
 
 /** 3:07 · 1:02:33 */
 fun formatDuration(ms: Long): String {

@@ -16,7 +16,14 @@ import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasScrollToKeyAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isSelectable
+import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
@@ -28,6 +35,8 @@ import com.villamediana.surco.SurcoApplication
 import com.villamediana.surco.data.db.AlbumKey
 import com.villamediana.surco.data.db.Track
 import com.villamediana.surco.smart.Mix
+import com.villamediana.surco.ui.library.CollectionMenuSheet
+import com.villamediana.surco.ui.library.CollectionTarget
 import com.villamediana.surco.ui.library.LibraryScreen
 import com.villamediana.surco.ui.nav.LocalNavigator
 import com.villamediana.surco.ui.nav.Navigator
@@ -35,6 +44,7 @@ import com.villamediana.surco.ui.settings.SettingsScreen
 import com.villamediana.surco.ui.theme.LocalBottomInset
 import com.villamediana.surco.ui.theme.SurcoColors
 import com.villamediana.surco.ui.theme.SurcoTheme
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Rule
 import org.junit.Test
@@ -118,6 +128,9 @@ class HomeScreensSmokeTest {
         compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription("Ver em grade").fetchSemanticsNodes().isNotEmpty() }
         compose.onAllNodesWithText("Álbuns")[0].performClick()
         waitForText("Canción Animal")
+        // TalkBack hears which filter is on.
+        compose.onNode(hasText("Álbuns") and isSelectable()).assertIsSelected()
+        compose.onNode(hasText("Playlists") and isSelectable()).assertIsNotSelected()
         shot("library-albums")
         compose.onAllNodesWithText("Músicas")[0].performClick()
         waitForText("Todas as músicas")
@@ -130,6 +143,10 @@ class HomeScreensSmokeTest {
         compose.setContent { Host { SettingsScreen() } }
         waitForText("Qualidade do áudio")
         waitForText("Máxima")
+        // Choices and switches carry their state for TalkBack (the whole row is the control).
+        compose.onNode(hasText("Máxima") and isSelectable()).assertIsSelected()
+        compose.onNode(hasText("Buscar letras") and isToggleable()).assertIsOn()
+        compose.onNode(hasText("Baixar só no Wi-Fi") and isToggleable()).assertIsOff()
         shot("settings")
         compose.onAllNodes(hasScrollToKeyAction())[0].performScrollToKey("about")
         waitForText("NewPipeExtractor")
@@ -155,6 +172,21 @@ class HomeScreensSmokeTest {
         waitForText("Seu MPB")
         waitForText("No repeat")
         shot("mix-cards")
+    }
+
+    @Test
+    fun longPressMenuDeletesAPlaylistLikeItsOwnPage() {
+        seed()
+        val lib = SurcoApplication.graph.library
+        val domingo = runBlocking { lib.playlists.first().single { it.name == "Domingo" } }
+        compose.setContent { Host { CollectionMenuSheet(CollectionTarget.Playlist(domingo), onDismiss = {}) } }
+        waitForText("Apagar playlist")
+        compose.onAllNodesWithText("Apagar playlist")[0].performClick()
+        // The same dialog as the playlist's own ⋮ (detail_delete_playlist_*).
+        waitForText("Apagar playlist?")
+        waitForText("“Domingo” sai da biblioteca")
+        compose.onAllNodesWithText("Apagar", substring = false)[0].performClick()
+        compose.waitUntil(10_000) { runBlocking { lib.playlists.first().none { it.id == domingo.playlist.id } } }
     }
 
     // ------------------------------------------------------------------ data

@@ -71,8 +71,6 @@
     <string name="home_lib_pin">Fijar en la biblioteca</string>
     <string name="home_lib_unpin">Dejar de fijar</string>
     <string name="home_lib_delete_playlist">Borrar playlist</string>
-    <string name="home_lib_delete_title">¿Borrar “%1$s”?</string>
-    <string name="home_lib_delete_body">Las canciones siguen en el móvil.</string>
     <string name="home_lib_all_songs">Todas las canciones</string>
     <string name="home_lib_downloads">Descargas</string>
     <plurals name="home_lib_dl_active">
@@ -125,7 +123,7 @@
     <string name="home_settings_smart_shuffle_sub">Mezcla según tu gusto y evita el mismo artista seguido.</string>
     <string name="home_settings_autoplay">Seguir con canciones parecidas</string>
     <string name="home_settings_autoplay_sub">Cuando la cola termina, sigue con canciones parecidas de tu biblioteca.</string>
-    <string name="home_settings_storage_used">usados en el móvil</string>
+    <string name="home_settings_storage_used">usados en el teléfono</string>
     <plurals name="home_settings_stat_songs">
         <item quantity="one">canción</item>
         <item quantity="many">canciones</item>
@@ -146,7 +144,7 @@
     <string name="home_settings_clear_history_sub">Reinicia las reproducciones que alimentan los mixes.</string>
     <string name="home_settings_history_cleared">Historial borrado</string>
     <string name="home_settings_clear_title">¿Borrar historial?</string>
-    <string name="home_settings_clear_body">El registro de reproducciones que usan los mixes y el aleatorio inteligente empieza de cero. Tus canciones siguen en el móvil.</string>
+    <string name="home_settings_clear_body">El registro de reproducciones que usan los mixes y el aleatorio inteligente empieza de cero. Tus canciones siguen en el teléfono.</string>
     <string name="home_settings_clear_confirm">Borrar</string>
     <string name="home_settings_version">Versión %1$s</string>
     <string name="home_settings_credits">Hecho con</string>

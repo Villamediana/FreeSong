@@ -38,6 +38,7 @@ import com.villamediana.surco.data.model.ArtistDetail
 import com.villamediana.surco.playback.PlaybackState
 import com.villamediana.surco.playback.SmartSeed
 import com.villamediana.surco.ui.components.PillButton
+import com.villamediana.surco.ui.components.songCount
 import com.villamediana.surco.ui.nav.ArtistRoute
 import com.villamediana.surco.ui.nav.LocalNavigator
 import com.villamediana.surco.ui.theme.Dimens
@@ -83,7 +84,7 @@ private fun ArtistContent(detail: ArtistDetail) {
     val top = detail.topTracks.take(if (expanded) 10 else TOP_COLLAPSED)
     val single = stringResource(R.string.detail_single)
 
-    val countText = pluralStringResource(R.plurals.n_songs, s.trackCount, s.trackCount)
+    val countText = songCount(s.trackCount)
     val albumsText = if (s.albumCount > 0) pluralStringResource(R.plurals.detail_n_albums, s.albumCount, s.albumCount) else null
 
     CollectionScaffold(
@@ -170,7 +171,7 @@ private fun ArtistContent(detail: ArtistDetail) {
             item(key = "albums", contentType = "carousel") {
                 AlbumCarousel(
                     albums = detail.albums,
-                    caption = { a -> a.year?.toString() ?: res.getQuantityString(R.plurals.n_songs, a.trackCount, a.trackCount) },
+                    caption = { a -> a.year?.toString() ?: songCount(res, a.trackCount) },
                     onOpen = { a -> navigator.openAlbum(a.key) },
                 )
             }

@@ -12,7 +12,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -20,6 +19,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.villamediana.surco.R
 import com.villamediana.surco.data.db.Track
 import com.villamediana.surco.ui.components.EmptyState
+import com.villamediana.surco.ui.components.LikedArt
+import com.villamediana.surco.ui.components.songCount
 import com.villamediana.surco.ui.theme.SurcoColors
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -54,7 +55,7 @@ private fun LikedContent(tracks: List<Track>) {
     val status = playback.statusOf(source)
     val shuffleOn = if (status.isSource) playback.shuffle else shuffleLocal
     val duration = remember(tracks) { tracks.sumOf { it.durationMs } }
-    val countText = pluralStringResource(R.plurals.n_songs, tracks.size, tracks.size)
+    val countText = songCount(tracks.size)
 
     CollectionScaffold(
         header = HeaderSpec(

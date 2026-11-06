@@ -20,6 +20,8 @@
         <item quantity="one">%d música</item>
         <item quantity="other">%d músicas</item>
     </plurals>
+    <!-- pt conta 0 como singular ("0 música"): zero tem texto próprio. -->
+    <string name="n_songs_none">Nenhuma música</string>
     <string name="share_song">Compartilhar música</string>
     <string name="share_file">Enviar arquivo de áudio</string>
 </resources>

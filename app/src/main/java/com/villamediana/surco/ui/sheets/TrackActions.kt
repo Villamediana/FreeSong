@@ -67,7 +67,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -86,6 +85,7 @@ import com.villamediana.surco.ui.components.Cover
 import com.villamediana.surco.ui.components.MosaicCover
 import com.villamediana.surco.ui.components.PillButton
 import com.villamediana.surco.ui.components.Share
+import com.villamediana.surco.ui.components.songCount
 import com.villamediana.surco.ui.nav.LocalNavigator
 import com.villamediana.surco.ui.search.Connectivity
 import com.villamediana.surco.ui.search.DownloadLookup
@@ -431,7 +431,7 @@ fun AddToPlaylistSheet(trackIds: List<Long>, onDismiss: () -> Unit) {
     SurcoSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         SheetTitle(
             title = stringResource(R.string.sheet_add_title),
-            subtitle = pluralStringResource(R.plurals.n_songs, ids.size, ids.size),
+            subtitle = songCount(ids.size),
         )
         AnimatedContent(
             targetState = creating,
@@ -528,7 +528,7 @@ private fun PlaylistPickRow(playlist: PlaylistSummary, checked: Boolean, onClick
             Text(playlist.name, style = MaterialTheme.typography.titleMedium, color = SurcoColors.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(2.dp))
             Text(
-                pluralStringResource(R.plurals.n_songs, playlist.trackCount, playlist.trackCount),
+                songCount(playlist.trackCount),
                 style = MaterialTheme.typography.bodyMedium,
                 color = SurcoColors.TextMuted,
             )

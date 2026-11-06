@@ -1,6 +1,5 @@
 package com.villamediana.surco.ui.detail
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -21,9 +20,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Favorite
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -33,9 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -45,6 +39,7 @@ import com.villamediana.surco.data.db.Track
 import com.villamediana.surco.data.model.AlbumSummary
 import com.villamediana.surco.ui.components.Cover
 import com.villamediana.surco.ui.components.CoverColors
+import com.villamediana.surco.ui.components.Grooves
 import com.villamediana.surco.ui.components.pressScale
 import com.villamediana.surco.ui.components.rememberCoverColor
 import com.villamediana.surco.ui.components.seedColor
@@ -52,27 +47,6 @@ import com.villamediana.surco.ui.theme.Dimens
 import com.villamediana.surco.ui.theme.SurcoColors
 
 private val SleeveShape = RoundedCornerShape(Dimens.CoverCorner)
-
-/** Concentric grooves (the record) drawn faintly over a flat color. */
-@Composable
-private fun Grooves(color: Color, modifier: Modifier = Modifier, rings: Int = 7) {
-    Canvas(modifier) {
-        val c = Offset(size.width * 0.5f, size.height * 0.5f)
-        val maxR = size.minDimension * 0.62f
-        for (i in 1..rings) {
-            drawCircle(color, radius = maxR * i / rings, center = c, style = Stroke(width = size.minDimension * 0.004f))
-        }
-    }
-}
-
-/** "Curtidas": a tangerine sleeve with grooves and a big ink heart. */
-@Composable
-internal fun LikedArt(modifier: Modifier = Modifier) {
-    Box(modifier.clip(SleeveShape).background(SurcoColors.Accent), contentAlignment = Alignment.Center) {
-        Grooves(SurcoColors.OnAccent.copy(alpha = 0.10f), Modifier.fillMaxSize())
-        Icon(Icons.Rounded.Favorite, null, tint = SurcoColors.OnAccent, modifier = Modifier.fillMaxSize(0.42f))
-    }
-}
 
 /** Tint for generated art: cached cover color of the songs, else a stable color for the name. */
 internal fun artTint(tracks: List<Track>, name: String): Color =

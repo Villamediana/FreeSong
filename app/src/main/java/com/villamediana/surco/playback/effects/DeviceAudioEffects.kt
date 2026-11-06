@@ -74,7 +74,10 @@ class DeviceAudioEffects internal constructor(
 
     override fun setEnabled(enabled: Boolean) = mutate { s, _ -> s.copy(enabled = enabled) }
 
+    /** Presets leave [EffectsSettings.customLevels] alone, so the custom curve is still there to return to. */
     override fun selectPreset(preset: EqPreset) = mutate { s, _ -> s.copy(preset = preset) }
+
+    override fun selectCustom() = mutate { s, _ -> if (s.customLevels.isEmpty()) s else s.copy(preset = null) }
 
     override fun setBandLevel(band: Int, levelMb: Int) = mutate { s, caps ->
         if (caps == null || band !in caps.centersHz.indices) return@mutate s
@@ -170,6 +173,7 @@ class DeviceAudioEffects internal constructor(
                 minLevelMb = eq?.minMb ?: EqState().minLevelMb,
                 maxLevelMb = eq?.maxMb ?: EqState().maxLevelMb,
                 preset = s.preset,
+                hasCustomCurve = s.customLevels.isNotEmpty(),
                 bassBoost = s.bassBoost,
                 bassBoostAvailable = caps?.bassBoost == true,
                 virtualizer = s.virtualizer,

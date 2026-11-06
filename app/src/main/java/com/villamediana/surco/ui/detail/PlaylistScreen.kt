@@ -5,7 +5,6 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,6 +24,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -66,8 +66,8 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
@@ -88,6 +88,7 @@ import com.villamediana.surco.ui.components.Cover
 import com.villamediana.surco.ui.components.EmptyState
 import com.villamediana.surco.ui.components.MosaicCover
 import com.villamediana.surco.ui.components.Share
+import com.villamediana.surco.ui.components.songCount
 import com.villamediana.surco.ui.nav.PlaylistRoute
 import com.villamediana.surco.ui.sheets.ConfirmDialog
 import com.villamediana.surco.ui.sheets.PlaylistContext
@@ -251,7 +252,7 @@ private fun PlaylistContent(detail: PlaylistDetail, vm: PlaylistViewModel) {
     val source = Sources.playlist(summary.id, summary.name)
     val status = playback.statusOf(source)
     val shuffleOn = if (status.isSource) playback.shuffle else shuffleLocal
-    val countText = pluralStringResource(R.plurals.n_songs, summary.trackCount, summary.trackCount)
+    val countText = songCount(summary.trackCount)
     val wash = rememberWash(summary.coverPath ?: summary.mosaic.firstOrNull(), null, seed = summary.name)
     val art: @Composable (Modifier) -> Unit = { m ->
         val custom = summary.coverPath
@@ -578,7 +579,7 @@ private fun CoverChoice(selected: Boolean, label: String?, onClick: () -> Unit, 
                 .aspectRatio(1f)
                 .clip(shape)
                 .then(if (selected) Modifier.border(2.dp, SurcoColors.Accent, shape) else Modifier)
-                .clickable(onClick = onClick)
+                .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
                 .padding(if (selected) 5.dp else 0.dp),
         ) {
             art(Modifier.fillMaxSize())

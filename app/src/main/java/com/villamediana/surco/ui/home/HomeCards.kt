@@ -35,7 +35,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowDownward
-import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -52,7 +51,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.pluralStringResource
@@ -74,6 +72,7 @@ import com.villamediana.surco.ui.components.PlayingBars
 import com.villamediana.surco.ui.components.SurcoMark
 import com.villamediana.surco.ui.components.pressScale
 import com.villamediana.surco.ui.components.seedColor
+import com.villamediana.surco.ui.components.songCount
 import com.villamediana.surco.ui.theme.Dimens
 import com.villamediana.surco.ui.theme.Motion
 import com.villamediana.surco.ui.theme.SurcoColors
@@ -116,17 +115,6 @@ fun Modifier.staggerIn(index: Int, play: Boolean): Modifier {
 }
 
 // ---------------------------------------------------------------------------- art
-
-/** Curtidas art: a tangerine-washed sleeve with a heart. */
-@Composable
-fun LikedArt(modifier: Modifier = Modifier, shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(Dimens.CoverCorner)) {
-    Box(
-        modifier.clip(shape).background(SurcoColors.Accent.copy(alpha = 0.22f).compositeOver(SurcoColors.Surface2)),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(Icons.Rounded.Favorite, null, tint = SurcoColors.Accent, modifier = Modifier.fillMaxSize(0.42f))
-    }
-}
 
 /** Genre color: the genre's cover tint, else a stable hue from its name — always readable under paper text. */
 fun genreTint(genre: GenreSummary): Color =
@@ -287,7 +275,7 @@ fun GenreCard(genre: GenreSummary, onClick: () -> Unit, modifier: Modifier = Mod
             )
             Spacer(Modifier.height(2.dp))
             Text(
-                pluralStringResource(R.plurals.n_songs, genre.trackCount, genre.trackCount),
+                songCount(genre.trackCount),
                 style = MaterialTheme.typography.labelMedium,
                 color = SurcoColors.Text.copy(alpha = 0.72f),
                 maxLines = 1,

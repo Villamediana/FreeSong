@@ -78,6 +78,8 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -90,12 +92,13 @@ import com.villamediana.surco.playback.PlaybackState
 import com.villamediana.surco.ui.components.Cover
 import com.villamediana.surco.ui.components.EmptyState
 import com.villamediana.surco.ui.components.FilterPill
+import com.villamediana.surco.ui.components.LikedArt
 import com.villamediana.surco.ui.components.MosaicCover
 import com.villamediana.surco.ui.components.PillButton
 import com.villamediana.surco.ui.components.PlayingBars
 import com.villamediana.surco.ui.components.TrackRow
+import com.villamediana.surco.ui.components.songCount
 import com.villamediana.surco.ui.home.GenreArt
-import com.villamediana.surco.ui.home.LikedArt
 import com.villamediana.surco.ui.home.LiveBadge
 import com.villamediana.surco.ui.home.isFromAlbum
 import com.villamediana.surco.ui.home.isFromLiked
@@ -622,6 +625,7 @@ private fun SortBar(
                             open = false
                             onSort(option)
                         },
+                        modifier = Modifier.semantics { selected = option == sort },
                         colors = MenuDefaults.itemColors(textColor = SurcoColors.Text),
                     )
                 }

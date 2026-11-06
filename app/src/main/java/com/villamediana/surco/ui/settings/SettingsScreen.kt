@@ -26,6 +26,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -53,6 +56,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -309,10 +313,16 @@ private fun SettingRow(
 
 @Composable
 private fun SwitchRow(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    SettingRow(title = title, subtitle = subtitle, onClick = { onChange(!checked) }) {
+    // The whole row is the switch: TalkBack reads title, subtitle and on/off as one control.
+    SettingRow(
+        title = title,
+        subtitle = subtitle,
+        onClick = null,
+        modifier = Modifier.toggleable(value = checked, role = Role.Switch, onValueChange = onChange),
+    ) {
         Switch(
             checked = checked,
-            onCheckedChange = onChange,
+            onCheckedChange = null,
             colors = SwitchDefaults.colors(
                 checkedThumbColor = SurcoColors.OnAccent,
                 checkedTrackColor = SurcoColors.Accent,
@@ -327,7 +337,7 @@ private fun SwitchRow(title: String, subtitle: String, checked: Boolean, onChang
 
 @Composable
 private fun QualityPicker(current: AudioQuality, onPick: (AudioQuality) -> Unit) {
-    Column(Modifier.padding(top = 14.dp, bottom = 6.dp)) {
+    Column(Modifier.padding(top = 14.dp, bottom = 6.dp).selectableGroup()) {
         Text(stringResource(R.string.home_settings_quality), style = MaterialTheme.typography.titleMedium, color = SurcoColors.Text, modifier = Modifier.padding(horizontal = 16.dp))
         Spacer(Modifier.height(3.dp))
         Text(stringResource(R.string.home_settings_quality_sub), style = MaterialTheme.typography.bodyMedium, color = SurcoColors.TextMuted, modifier = Modifier.padding(horizontal = 16.dp))
@@ -342,7 +352,7 @@ private fun QualityPicker(current: AudioQuality, onPick: (AudioQuality) -> Unit)
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .clickable { onPick(q) }
+                    .selectable(selected = selected, role = Role.RadioButton, onClick = { onPick(q) })
                     .padding(horizontal = 16.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -384,7 +394,7 @@ private fun ParallelRow(current: Int, onPick: (Int) -> Unit) {
         Text(stringResource(R.string.home_settings_parallel_sub), style = MaterialTheme.typography.bodyMedium, color = SurcoColors.TextMuted)
         Spacer(Modifier.height(12.dp))
         Row(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(SurcoColors.Surface3).padding(3.dp),
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(SurcoColors.Surface3).padding(3.dp).selectableGroup(),
             horizontalArrangement = Arrangement.spacedBy(3.dp),
         ) {
             (1..4).forEach { n ->
@@ -397,7 +407,7 @@ private fun ParallelRow(current: Int, onPick: (Int) -> Unit) {
                         .height(36.dp)
                         .clip(RoundedCornerShape(9.dp))
                         .background(bg)
-                        .clickable { onPick(n) },
+                        .selectable(selected = selected, role = Role.RadioButton, onClick = { onPick(n) }),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text("$n", style = MaterialTheme.typography.labelLarge, color = fg)
@@ -427,9 +437,9 @@ private fun StorageBlock(usedBytes: Long?, stats: LibraryStats?) {
         Spacer(Modifier.height(18.dp))
         Row(Modifier.fillMaxWidth()) {
             val st = stats ?: LibraryStats(0, 0, 0, 0, 0)
-            Stat(st.trackCount.toString(), pluralStringResource(R.plurals.home_settings_stat_songs, st.trackCount), Modifier.weight(1f))
-            Stat(st.albumCount.toString(), pluralStringResource(R.plurals.home_settings_stat_albums, st.albumCount), Modifier.weight(1f))
-            Stat(st.artistCount.toString(), pluralStringResource(R.plurals.home_settings_stat_artists, st.artistCount), Modifier.weight(1f))
+            Stat(st.trackCount.toString(), pluralStringResource(R.plurals.home_settings_stat_songs, labelQuantity(st.trackCount)), Modifier.weight(1f))
+            Stat(st.albumCount.toString(), pluralStringResource(R.plurals.home_settings_stat_albums, labelQuantity(st.albumCount)), Modifier.weight(1f))
+            Stat(st.artistCount.toString(), pluralStringResource(R.plurals.home_settings_stat_artists, labelQuantity(st.artistCount)), Modifier.weight(1f))
             Stat(formatHours(st.durationMs), stringResource(R.string.home_settings_stat_hours), Modifier.weight(1f))
         }
     }

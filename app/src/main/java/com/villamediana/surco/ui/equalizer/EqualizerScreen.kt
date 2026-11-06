@@ -76,6 +76,7 @@ fun EqualizerScreen() {
         onBack = nav::back,
         onEnabled = vm::setEnabled,
         onPreset = vm::selectPreset,
+        onCustom = vm::selectCustom,
         onBand = vm::setBand,
         onBassBoost = vm::setBassBoost,
         onVirtualizer = vm::setVirtualizer,
@@ -90,6 +91,7 @@ internal fun EqualizerContent(
     onBack: () -> Unit,
     onEnabled: (Boolean) -> Unit,
     onPreset: (EqPreset) -> Unit,
+    onCustom: () -> Unit,
     onBand: (Int, Int) -> Unit,
     onBassBoost: (Int) -> Unit,
     onVirtualizer: (Int) -> Unit,
@@ -118,7 +120,13 @@ internal fun EqualizerContent(
                 onBandChange = onBand,
             )
             Spacer(Modifier.height(18.dp))
-            PresetRow(selected = state.preset, enabled = active, onPreset = onPreset)
+            PresetRow(
+                selected = state.preset,
+                hasCustom = state.hasCustomCurve,
+                enabled = active,
+                onPreset = onPreset,
+                onCustom = onCustom,
+            )
         } else {
             Unavailable(stringResource(if (hasMedia) R.string.eq_unavailable_device else R.string.eq_unavailable_idle))
         }
@@ -238,14 +246,25 @@ private fun Hero(state: EqState, onReset: () -> Unit) {
     }
 }
 
+/**
+ * The presets, led by "Personalizado" whenever a custom curve exists: selected while it plays, and
+ * the way back to it after trying a preset.
+ */
 @Composable
-private fun PresetRow(selected: EqPreset?, enabled: Boolean, onPreset: (EqPreset) -> Unit) {
+private fun PresetRow(
+    selected: EqPreset?,
+    hasCustom: Boolean,
+    enabled: Boolean,
+    onPreset: (EqPreset) -> Unit,
+    onCustom: () -> Unit,
+) {
     val haptic = LocalHapticFeedback.current
     val list = rememberLazyListState()
     val dim by animateFloatAsState(if (enabled) 1f else 0.4f, Motion.enter(), label = "presets")
+    val showCustom = selected == null || hasCustom
     // Open with the current preset in view (with its neighbour on the left as context).
     LaunchedEffect(Unit) {
-        val index = if (selected == null) 0 else EqPreset.entries.indexOf(selected)
+        val index = if (selected == null) 0 else EqPreset.entries.indexOf(selected) + (if (showCustom) 1 else 0)
         if (index > 1) list.scrollToItem(index - 1)
     }
     LazyRow(
@@ -254,17 +273,29 @@ private fun PresetRow(selected: EqPreset?, enabled: Boolean, onPreset: (EqPreset
         contentPadding = PaddingValues(horizontal = Dimens.Gutter),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        if (selected == null) {
+        if (showCustom) {
             item(key = "custom") {
-                FilterPill(stringResource(R.string.eq_preset_custom), selected = true, onClick = {}, modifier = Modifier.animateItem())
+                FilterPill(
+                    text = stringResource(R.string.eq_preset_custom),
+                    selected = selected == null,
+                    enabled = enabled,
+                    onClick = {
+                        if (selected != null) {
+                            haptic.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                            onCustom()
+                        }
+                    },
+                    modifier = Modifier.animateItem(),
+                )
             }
         }
         items(EqPreset.entries, key = { it.name }) { preset ->
             FilterPill(
                 text = stringResource(presetLabel(preset)),
                 selected = preset == selected,
+                enabled = enabled,
                 onClick = {
-                    if (enabled && preset != selected) {
+                    if (preset != selected) {
                         haptic.performHapticFeedback(HapticFeedbackType.SegmentTick)
                         onPreset(preset)
                     }

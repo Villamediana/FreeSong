@@ -10,6 +10,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -123,6 +126,27 @@ private fun CoverPlaceholder(seed: String, modifier: Modifier) {
             }
             drawCircle(tint, radius = size.minDimension * 0.035f, center = c)
         }
+    }
+}
+
+/** Concentric grooves (the record) drawn faintly over a flat color. */
+@Composable
+fun Grooves(color: Color, modifier: Modifier = Modifier, rings: Int = 7) {
+    Canvas(modifier) {
+        val c = Offset(size.width * 0.5f, size.height * 0.5f)
+        val maxR = size.minDimension * 0.62f
+        for (i in 1..rings) {
+            drawCircle(color, radius = maxR * i / rings, center = c, style = Stroke(width = size.minDimension * 0.004f))
+        }
+    }
+}
+
+/** "Curtidas" everywhere (Home, Library, its page): a tangerine sleeve with grooves and a big ink heart. */
+@Composable
+fun LikedArt(modifier: Modifier = Modifier, shape: Shape = RoundedCornerShape(Dimens.CoverCorner)) {
+    Box(modifier.clip(shape).background(SurcoColors.Accent), contentAlignment = Alignment.Center) {
+        Grooves(SurcoColors.OnAccent.copy(alpha = 0.10f), Modifier.fillMaxSize())
+        Icon(Icons.Rounded.Favorite, null, tint = SurcoColors.OnAccent, modifier = Modifier.fillMaxSize(0.42f))
     }
 }
 

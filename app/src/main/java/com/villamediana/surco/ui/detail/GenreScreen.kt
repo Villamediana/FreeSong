@@ -9,7 +9,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -18,6 +17,7 @@ import com.villamediana.surco.R
 import com.villamediana.surco.data.db.Track
 import com.villamediana.surco.playback.SmartSeed
 import com.villamediana.surco.ui.nav.GenreRoute
+import com.villamediana.surco.ui.components.songCount
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 
@@ -57,7 +57,7 @@ private fun GenreContent(routeName: String, tracks: List<Track>) {
     val duration = remember(tracks) { tracks.sumOf { it.durationMs } }
     val source = Sources.genre(name)
     val status = playback.statusOf(source)
-    val countText = pluralStringResource(R.plurals.n_songs, tracks.size, tracks.size)
+    val countText = songCount(tracks.size)
     val artistsText = when {
         artists.isEmpty() -> null
         artists.size == 1 -> artists.first()
