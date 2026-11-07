@@ -119,11 +119,8 @@
     <string name="home_settings_parallel_sub">Cuántas canciones descargar a la vez.</string>
     <string name="home_settings_lyrics">Buscar letras</string>
     <string name="home_settings_lyrics_sub">Descarga la letra junto, sincronizada cuando la hay.</string>
-    <string name="home_settings_smart_shuffle">Aleatorio inteligente</string>
-    <string name="home_settings_smart_shuffle_sub">Mezcla según tu gusto y evita el mismo artista seguido.</string>
-    <string name="home_settings_autoplay">Seguir con canciones parecidas</string>
-    <string name="home_settings_autoplay_sub">Cuando la cola termina, sigue con canciones parecidas de tu biblioteca.</string>
     <string name="home_settings_storage_used">usados en el teléfono</string>
+    <string name="home_settings_storage_free">%1$s libres en el teléfono</string>
     <plurals name="home_settings_stat_songs">
         <item quantity="one">canción</item>
         <item quantity="many">canciones</item>
@@ -147,18 +144,12 @@
     <string name="home_settings_clear_body">El registro de reproducciones que usan los mixes y el aleatorio inteligente empieza de cero. Tus canciones siguen en el teléfono.</string>
     <string name="home_settings_clear_confirm">Borrar</string>
     <string name="home_settings_version">Versión %1$s</string>
-    <string name="home_settings_credits">Hecho con</string>
-    <string name="home_settings_credit_newpipe">Código abierto · GPL-3.0</string>
-    <string name="home_settings_credit_itunes">Portadas e información de los álbumes</string>
-    <string name="home_settings_credit_lrclib">Letras sincronizadas</string>
 
     <!-- Ajustes: reproducir online, ecualizador; compartir playlist (segunda tanda) -->
-    <string name="home_settings_play_online">Reproducir online al tocar resultados de búsqueda</string>
-    <string name="home_settings_play_online_sub">Suena al instante, sin descargar. Apagado, el toque descarga la canción.</string>
     <string name="home_settings_like_downloads">Me gusta ya descarga</string>
-    <string name="home_settings_like_downloads_sub">Al darle me gusta, la canción se descarga en segundo plano y solo el corazón aparece en las listas. Vale desde ahora: lo que ya está en Me gusta no se descarga.</string>
+    <string name="home_settings_like_downloads_sub">Me gusta también descarga la canción.</string>
     <string name="home_settings_show_home">Pestaña Inicio</string>
-    <string name="home_settings_show_home_sub">Sugerencias y descubrimientos. Apagada, la app abre directo en tus canciones.</string>
+    <string name="home_settings_show_home_sub">Apagada, la app abre directo en tus canciones.</string>
     <string name="home_settings_equalizer">Ecualizador</string>
     <string name="home_settings_equalizer_sub">Graves, agudos y presets para tus auriculares.</string>
     <string name="home_settings_equalizer_on">Encendido</string>

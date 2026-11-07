@@ -119,11 +119,8 @@
     <string name="home_settings_parallel_sub">Quantas músicas baixar ao mesmo tempo.</string>
     <string name="home_settings_lyrics">Buscar letras</string>
     <string name="home_settings_lyrics_sub">Baixa a letra junto, sincronizada quando houver.</string>
-    <string name="home_settings_smart_shuffle">Aleatório inteligente</string>
-    <string name="home_settings_smart_shuffle_sub">Mistura pelo seu gosto e evita o mesmo artista em seguida.</string>
-    <string name="home_settings_autoplay">Continuar com músicas parecidas</string>
-    <string name="home_settings_autoplay_sub">Quando a fila acaba, segue com músicas parecidas da sua biblioteca.</string>
     <string name="home_settings_storage_used">usados no celular</string>
+    <string name="home_settings_storage_free">%1$s livres no celular</string>
     <plurals name="home_settings_stat_songs">
         <item quantity="one">música</item>
         <item quantity="many">músicas</item>
@@ -147,18 +144,12 @@
     <string name="home_settings_clear_body">O registro de reproduções usado pelos mixes e pelo aleatório inteligente recomeça do zero. Suas músicas continuam no celular.</string>
     <string name="home_settings_clear_confirm">Limpar</string>
     <string name="home_settings_version">Versão %1$s</string>
-    <string name="home_settings_credits">Feito com</string>
-    <string name="home_settings_credit_newpipe">Código aberto · GPL-3.0</string>
-    <string name="home_settings_credit_itunes">Capas e informações dos álbuns</string>
-    <string name="home_settings_credit_lrclib">Letras sincronizadas</string>
 
     <!-- Ajustes: tocar online, equalizador; compartilhar playlist (segunda leva) -->
-    <string name="home_settings_play_online">Tocar online ao tocar resultados da busca</string>
-    <string name="home_settings_play_online_sub">Toca na hora, sem baixar. Desligado, o toque baixa a música.</string>
     <string name="home_settings_like_downloads">Curtir já baixa</string>
-    <string name="home_settings_like_downloads_sub">Ao curtir, a música é baixada em segundo plano e só o coração aparece nas listas. Vale a partir de agora: o que já está nas Curtidas não é baixado.</string>
+    <string name="home_settings_like_downloads_sub">Curtir também baixa a música.</string>
     <string name="home_settings_show_home">Aba Início</string>
-    <string name="home_settings_show_home_sub">Sugestões e descobertas. Desligada, o app abre direto nas suas músicas.</string>
+    <string name="home_settings_show_home_sub">Desligada, o app abre direto nas suas músicas.</string>
     <string name="home_settings_equalizer">Equalizador</string>
     <string name="home_settings_equalizer_sub">Graves, agudos e presets para o seu fone.</string>
     <string name="home_settings_equalizer_on">Ligado</string>

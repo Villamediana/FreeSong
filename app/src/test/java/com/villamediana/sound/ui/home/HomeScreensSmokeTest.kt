@@ -152,7 +152,7 @@ class HomeScreensSmokeTest {
         compose.onNode(hasText("Baixar só no Wi-Fi") and isToggleable()).assertIsOff()
         shot("settings")
         compose.onAllNodes(hasScrollToKeyAction())[0].performScrollToKey("about")
-        waitForText("NewPipeExtractor")
+        waitForText("Limpar histórico")
         waitForText("músicas")
         shot("settings-bottom")
     }

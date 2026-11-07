@@ -1,5 +1,11 @@
 package com.villamediana.sound.ui.settings
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.Album
+import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Contrast
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.LightMode
@@ -38,7 +44,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
-import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -57,7 +62,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -78,9 +82,6 @@ import com.villamediana.sound.ui.theme.LocalBottomInset
 import com.villamediana.sound.ui.theme.Motion
 import com.villamediana.sound.ui.theme.SoundColors
 
-private const val URL_NEWPIPE = "https://github.com/TeamNewPipe/NewPipeExtractor"
-private const val URL_ITUNES = "https://performance-partners.apple.com/search-api"
-private const val URL_LRCLIB = "https://lrclib.net"
 
 @Composable
 fun SettingsScreen() {
@@ -88,6 +89,7 @@ fun SettingsScreen() {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val stats by vm.stats.collectAsStateWithLifecycle()
     val usedBytes by vm.usedBytes.collectAsStateWithLifecycle()
+    val freeBytes by vm.freeBytes.collectAsStateWithLifecycle()
     val cleared by vm.historyCleared.collectAsStateWithLifecycle()
     val nav = navigator()
     var confirmClear by rememberSaveable { mutableStateOf(false) }
@@ -128,13 +130,6 @@ fun SettingsScreen() {
                         ),
                         onClick = nav::openTheme,
                         trailing = { Box(Modifier.size(26.dp).clip(CircleShape).background(SoundColors.Accent)) },
-                    )
-                    Hairline()
-                    SwitchRow(
-                        title = stringResource(R.string.home_settings_show_home),
-                        subtitle = stringResource(R.string.home_settings_show_home_sub),
-                        checked = s.showHome,
-                        onChange = vm::setShowHome,
                     )
                 }
             }
@@ -178,27 +173,9 @@ fun SettingsScreen() {
             Column {
                 GroupLabel(stringResource(R.string.home_settings_group_storage))
                 Group {
-                    StorageBlock(usedBytes, stats)
+                    StorageBlock(usedBytes, freeBytes, stats)
                     Hairline()
-                    SettingRow(
-                        title = stringResource(R.string.home_settings_clear_history),
-                        subtitle = null,
-                        onClick = { confirmClear = true },
-                        titleColor = SoundColors.Danger,
-                        subtitleContent = {
-                            AnimatedContent(
-                                targetState = cleared,
-                                transitionSpec = { fadeIn(Motion.enter()) togetherWith fadeOut(Motion.exit()) },
-                                label = "cleared",
-                            ) { done ->
-                                Text(
-                                    stringResource(if (done) R.string.home_settings_history_cleared else R.string.home_settings_clear_history_sub),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = if (done) SoundColors.Success else SoundColors.TextMuted,
-                                )
-                            }
-                        },
-                    )
+                    ClearHistoryRow(cleared, onClick = { confirmClear = true })
                 }
             }
         }
@@ -236,12 +213,13 @@ fun SettingsScreen() {
 @Composable
 private fun PlaybackGroup(s: Settings, vm: SettingsViewModel, onEqualizer: () -> Unit) {
     val equalizerOn by vm.equalizerOn.collectAsStateWithLifecycle()
+    // Online play, smart shuffle and "similar songs" stay on and out of sight.
     Group {
         SwitchRow(
-            title = stringResource(R.string.home_settings_play_online),
-            subtitle = stringResource(R.string.home_settings_play_online_sub),
-            checked = s.playOnlineByDefault,
-            onChange = vm::setPlayOnline,
+            title = stringResource(R.string.home_settings_show_home),
+            subtitle = stringResource(R.string.home_settings_show_home_sub),
+            checked = s.showHome,
+            onChange = vm::setShowHome,
         )
         Hairline()
         SwitchRow(
@@ -271,20 +249,6 @@ private fun PlaybackGroup(s: Settings, vm: SettingsViewModel, onEqualizer: () ->
         ) {
             Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = SoundColors.TextFaint, modifier = Modifier.size(22.dp))
         }
-        Hairline()
-        SwitchRow(
-            title = stringResource(R.string.home_settings_smart_shuffle),
-            subtitle = stringResource(R.string.home_settings_smart_shuffle_sub),
-            checked = s.smartShuffle,
-            onChange = vm::setSmartShuffle,
-        )
-        Hairline()
-        SwitchRow(
-            title = stringResource(R.string.home_settings_autoplay),
-            subtitle = stringResource(R.string.home_settings_autoplay_sub),
-            checked = s.autoplaySimilar,
-            onChange = vm::setAutoplay,
-        )
     }
 }
 
@@ -492,8 +456,9 @@ private fun ParallelRow(current: Int, onPick: (Int) -> Unit) {
     }
 }
 
+/** What the app keeps on the phone: the size up top, what is left free, the library in four tiles. */
 @Composable
-private fun StorageBlock(usedBytes: Long?, stats: LibraryStats?) {
+private fun StorageBlock(usedBytes: Long?, freeBytes: Long?, stats: LibraryStats?) {
     Column(Modifier.fillMaxWidth().padding(16.dp)) {
         Row(verticalAlignment = Alignment.Bottom) {
             Text(
@@ -509,29 +474,77 @@ private fun StorageBlock(usedBytes: Long?, stats: LibraryStats?) {
                 modifier = Modifier.padding(bottom = 5.dp),
             )
         }
-        Spacer(Modifier.height(18.dp))
-        Row(Modifier.fillMaxWidth()) {
-            val st = stats ?: LibraryStats(0, 0, 0, 0, 0)
-            Stat(st.trackCount.toString(), pluralStringResource(R.plurals.home_settings_stat_songs, labelQuantity(st.trackCount)), Modifier.weight(1f))
-            Stat(st.albumCount.toString(), pluralStringResource(R.plurals.home_settings_stat_albums, labelQuantity(st.albumCount)), Modifier.weight(1f))
-            Stat(st.artistCount.toString(), pluralStringResource(R.plurals.home_settings_stat_artists, labelQuantity(st.artistCount)), Modifier.weight(1f))
-            Stat(formatHours(st.durationMs), stringResource(R.string.home_settings_stat_hours), Modifier.weight(1f))
+        if (freeBytes != null && freeBytes > 0) {
+            Spacer(Modifier.height(2.dp))
+            Text(
+                stringResource(R.string.home_settings_storage_free, formatBytes(freeBytes)),
+                style = MaterialTheme.typography.bodySmall,
+                color = SoundColors.TextFaint,
+            )
+        }
+        Spacer(Modifier.height(16.dp))
+        val st = stats ?: LibraryStats(0, 0, 0, 0, 0)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            StatTile(Icons.Rounded.MusicNote, st.trackCount.toString(), pluralStringResource(R.plurals.home_settings_stat_songs, labelQuantity(st.trackCount)), Modifier.weight(1f))
+            StatTile(Icons.Rounded.Album, st.albumCount.toString(), pluralStringResource(R.plurals.home_settings_stat_albums, labelQuantity(st.albumCount)), Modifier.weight(1f))
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            StatTile(Icons.Rounded.Person, st.artistCount.toString(), pluralStringResource(R.plurals.home_settings_stat_artists, labelQuantity(st.artistCount)), Modifier.weight(1f))
+            StatTile(Icons.Rounded.Schedule, formatHours(st.durationMs), stringResource(R.string.home_settings_stat_hours), Modifier.weight(1f))
         }
     }
 }
 
 @Composable
-private fun Stat(value: String, label: String, modifier: Modifier = Modifier) {
-    Column(modifier) {
-        Text(value, style = MaterialTheme.typography.titleLarge, color = SoundColors.Text, maxLines = 1)
-        Text(label, style = MaterialTheme.typography.bodySmall, color = SoundColors.TextMuted, maxLines = 1)
+private fun StatTile(icon: ImageVector, value: String, label: String, modifier: Modifier = Modifier) {
+    Row(
+        modifier.clip(RoundedCornerShape(12.dp)).background(SoundColors.Surface2).padding(horizontal = 12.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(34.dp).clip(CircleShape).background(SoundColors.AccentSoft), contentAlignment = Alignment.Center) {
+            Icon(icon, null, tint = SoundColors.Accent, modifier = Modifier.size(18.dp))
+        }
+        Spacer(Modifier.width(10.dp))
+        Column {
+            Text(value, style = MaterialTheme.typography.titleMedium, color = SoundColors.Text, maxLines = 1)
+            Text(label, style = MaterialTheme.typography.bodySmall, color = SoundColors.TextMuted, maxLines = 1)
+        }
+    }
+}
+
+/** "Limpar histórico": a quiet row with its icon; the line under it says when it is done. */
+@Composable
+private fun ClearHistoryRow(cleared: Boolean, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(34.dp).clip(CircleShape).background(SoundColors.Danger.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
+            Icon(Icons.Rounded.History, null, tint = SoundColors.Danger, modifier = Modifier.size(18.dp))
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(stringResource(R.string.home_settings_clear_history), style = MaterialTheme.typography.titleSmall, color = SoundColors.Danger)
+            Spacer(Modifier.height(2.dp))
+            AnimatedContent(
+                targetState = cleared,
+                transitionSpec = { fadeIn(Motion.enter()) togetherWith fadeOut(Motion.exit()) },
+                label = "cleared",
+            ) { done ->
+                Text(
+                    stringResource(if (done) R.string.home_settings_history_cleared else R.string.home_settings_clear_history_sub),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (done) SoundColors.Success else SoundColors.TextMuted,
+                )
+            }
+        }
     }
 }
 
 @Composable
 private fun About() {
-    val uri = LocalUriHandler.current
-    Column(Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 6.dp)) {
+    Column(Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 18.dp)) {
         SoundWordmark(Modifier.padding(horizontal = 16.dp))
         Spacer(Modifier.height(8.dp))
         Text(
@@ -540,23 +553,6 @@ private fun About() {
             color = SoundColors.TextMuted,
             modifier = Modifier.padding(horizontal = 16.dp),
         )
-        Spacer(Modifier.height(18.dp))
-        Text(
-            stringResource(R.string.home_settings_credits).uppercase(),
-            style = MaterialTheme.typography.labelSmall,
-            color = SoundColors.TextFaint,
-            modifier = Modifier.padding(horizontal = 16.dp),
-        )
-        Spacer(Modifier.height(4.dp))
-        Credit("NewPipeExtractor", stringResource(R.string.home_settings_credit_newpipe)) { runCatching { uri.openUri(URL_NEWPIPE) } }
-        Credit("iTunes Search API", stringResource(R.string.home_settings_credit_itunes)) { runCatching { uri.openUri(URL_ITUNES) } }
-        Credit("LRCLIB", stringResource(R.string.home_settings_credit_lrclib)) { runCatching { uri.openUri(URL_LRCLIB) } }
     }
 }
 
-@Composable
-private fun Credit(name: String, role: String, onClick: () -> Unit) {
-    SettingRow(title = name, subtitle = role, onClick = onClick) {
-        Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, tint = SoundColors.TextFaint, modifier = Modifier.size(18.dp))
-    }
-}

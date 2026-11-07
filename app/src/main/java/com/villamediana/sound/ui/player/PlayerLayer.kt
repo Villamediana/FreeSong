@@ -136,6 +136,12 @@ internal class PlayerDeps(
     /** Lyrics of streamed songs (LRCLIB on demand); null = none. */
     val lyrics: OnlineLyricsCache? = null,
     val online: StateFlow<Boolean> = MutableStateFlow(true),
+    /** Video ids in Curtidas: the heart of a streamed song. */
+    val likedVideoIds: Flow<Set<String>> = flowOf(emptySet()),
+    /** "Curtir já baixa": the heart alone stands for both, as on the rows. */
+    val likeDownloads: Flow<Boolean> = flowOf(false),
+    /** The heart of a streamed song (AppGraph.likeOnline). */
+    val likeOnline: (RemoteTrack, Boolean) -> Unit = { _, _ -> },
 )
 
 /** One lyrics cache for the whole process: reopening the player doesn't ask LRCLIB again. */
@@ -169,6 +175,9 @@ fun PlayerLayer(
             lyrics = PlayerLyrics.cache,
             online = Connectivity.online(graph.appContext)
                 .stateIn(graph.scope, SharingStarted.WhileSubscribed(5_000), Connectivity.isOnline(graph.appContext)),
+            likedVideoIds = graph.library.likedVideoIds,
+            likeDownloads = graph.settings.settings.map { it.likeDownloads }.distinctUntilChanged(),
+            likeOnline = graph::likeOnline,
         )
     }
     PlayerHost(deps, bottomBarHeight, modifier, expandedMemory, active)
@@ -270,10 +279,14 @@ internal fun PlayerHost(
         val videoId = track.videoId
         if (track.isOnline && videoId != null) deps.downloads.map { it.stateOf(videoId) }.distinctUntilChanged() else flowOf(ItemDownload.None)
     }.collectAsState(initial = ItemDownload.None)
-    val stream = StreamUi(streamed = track.isOnline, download = download, online = online)
+    val likeDownloads by deps.likeDownloads.collectAsState(initial = false)
+    val stream = StreamUi(streamed = track.isOnline, download = download, online = online, likeDownloads = likeDownloads)
+    // A streamed song is liked by its video id (Curtidas keeps it without a library row).
+    val likedIds by deps.likedVideoIds.collectAsState(initial = emptySet())
+    val baseLiked = if (track.isOnline) track.videoId in likedIds else track.liked
     val likeOverrides = remember { mutableStateMapOf<Long, Boolean>() }
-    LaunchedEffect(track.id, track.liked) { if (likeOverrides[track.id] == track.liked) likeOverrides.remove(track.id) }
-    val liked = likeOverrides[track.id] ?: track.liked
+    LaunchedEffect(track.id, baseLiked) { if (likeOverrides[track.id] == baseLiked) likeOverrides.remove(track.id) }
+    val liked = likeOverrides[track.id] ?: baseLiked
 
     val seed = track.album ?: track.title
     val fallbackColor = SoundColors.Accent
@@ -317,8 +330,10 @@ internal fun PlayerHost(
             toggleShuffle = { player.setShuffle(!latestState.shuffle) },
             cycleRepeat = { player.cycleRepeat() },
             like = { value ->
-                likeOverrides[latestTrack.id] = value
-                deps.setLiked(latestTrack.id, value)
+                val t = latestTrack
+                likeOverrides[t.id] = value
+                val remote = if (t.isOnline) t.toRemoteTrack() else null
+                if (remote != null) deps.likeOnline(remote, value) else deps.setLiked(t.id, value)
             },
             collapse = { expand.animateTo(0f) },
             openQueue = { queueOpen = true },

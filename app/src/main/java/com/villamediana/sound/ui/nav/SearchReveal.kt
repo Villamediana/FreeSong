@@ -1,5 +1,7 @@
 package com.villamediana.sound.ui.nav
 
+import com.villamediana.sound.ui.theme.SoundColors
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.core.animateFloat
@@ -78,8 +80,16 @@ fun AnimatedVisibilityScope.CircularReveal(entry: NavBackStackEntry, navigator: 
                 val far = max(max(hypot(o.x, o.y), hypot(size.width - o.x, o.y)), max(hypot(o.x, size.height - o.y), hypot(size.width - o.x, size.height - o.y)))
                 val r = far * progress
                 if (r <= 0f) return@drawWithContent
+                // The page has the same background as the one beneath: the circle comes in the accent
+                // color and dissolves into the page as it grows (and fills with it again on the way back).
+                val accent = SoundColors.Accent
+                val tint = (1f - progress).coerceIn(0f, 1f)
                 val circle = Path().apply { addOval(Rect(o, r)) }
-                clipPath(circle) { this@drawWithContent.drawContent() }
+                clipPath(circle) {
+                    this@drawWithContent.drawContent()
+                    drawRect(accent, alpha = 0.92f * tint)
+                }
+                drawCircle(accent, radius = r, center = o, alpha = 0.55f * tint, style = Stroke(width = 2.dp.toPx()))
             },
     ) { content() }
 }

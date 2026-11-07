@@ -306,6 +306,10 @@ class PlayerLayerComposeTest {
     private val lookup = MutableStateFlow(DownloadLookup.Empty)
     private val lyricsAsked = mutableListOf<LyricsQuery>()
 
+    /** Streamed likes the player asked for (AppGraph.likeOnline in the app). */
+    private val onlineLikes = mutableListOf<Pair<String, Boolean>>()
+    private val likeDownloadsFlow = MutableStateFlow(false)
+
     private fun setUpStreaming(online: Boolean = true): FakePlayer {
         val streamed = remote.asTransientTrack()
         val player = FakePlayer(PlaybackState(current = streamed, isPlaying = true, durationMs = 140_000, queue = listOf(streamed), queueIndex = 0, source = PlaySource(PlaySource.Type.SEARCH, "soda")))
@@ -321,6 +325,8 @@ class PlayerLayerComposeTest {
                 Lyrics("[00:01.00]Una verdad sin fin\n[00:40.00]Té para tres", synced = true)
             }),
             online = MutableStateFlow(online),
+            likeDownloads = likeDownloadsFlow,
+            likeOnline = { r, v -> onlineLikes += r.videoId to v },
         )
         compose.setContent {
             SoundTheme {
@@ -334,11 +340,15 @@ class PlayerLayerComposeTest {
     }
 
     @Test
-    fun aStreamedSongOffersDownloadInsteadOfTheHeartUntilItIsInTheLibrary() {
+    fun aStreamedSongHasTheHeartAndTheDownloadUntilItIsInTheLibrary() {
         setUpStreaming()
         compose.onAllNodesWithContentDescription("Tocando online").onFirst().assertExists()
         expand()
-        compose.onNodeWithContentDescription("Curtir").assertDoesNotExist()
+        // The heart of a streamed song goes to Curtidas without downloading it.
+        compose.onNodeWithContentDescription("Curtir").performClick()
+        compose.waitForIdle()
+        assertEquals(listOf(remote.videoId to true), onlineLikes)
+        assertTrue(likes.isEmpty())
         compose.onNodeWithContentDescription("Baixar").performClick()
         compose.waitForIdle()
         assertEquals(listOf(remote), downloadsAsked)
@@ -353,9 +363,19 @@ class PlayerLayerComposeTest {
         lookup.value = DownloadLookup.build(setOf(remote.videoId), emptyList())
         compose.waitForIdle()
         compose.onNodeWithContentDescription("Tocando online").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Baixar").assertDoesNotExist()
         compose.onNodeWithContentDescription("Curtir").performClick()
         compose.waitForIdle()
         assertEquals(listOf(50L to true), likes)
+    }
+
+    @Test
+    fun withCurtirJaBaixaTheStreamedSongShowsTheHeartAlone() {
+        likeDownloadsFlow.value = true
+        setUpStreaming()
+        expand()
+        compose.onNodeWithContentDescription("Curtir").assertExists()
+        compose.onNodeWithContentDescription("Baixar").assertDoesNotExist()
     }
 
     @Test

@@ -36,6 +36,13 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
         .mapLatest { withContext(Dispatchers.IO) { graph.storage.usedBytes() } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    /** Room left on the phone where the app keeps its files (re-measured with [usedBytes]). */
+    val freeBytes: StateFlow<Long?> = library.stats
+        .map { it.trackCount to it.bytes }
+        .distinctUntilChanged()
+        .mapLatest { withContext(Dispatchers.IO) { runCatching { android.os.StatFs(graph.appContext.filesDir.path).availableBytes }.getOrNull() } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
     /** Whether the equalizer is shaping the sound (the "Equalizador" row says so). */
     val equalizerOn: StateFlow<Boolean> = graph.effects.state
         .map { it.available && it.enabled }
@@ -49,9 +56,6 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     fun setWifiOnly(v: Boolean) = launch { store.setWifiOnly(v) }
     fun setParallel(n: Int) = launch { store.setParallelDownloads(n) }
     fun setFetchLyrics(v: Boolean) = launch { store.setFetchLyrics(v) }
-    fun setSmartShuffle(v: Boolean) = launch { store.setSmartShuffle(v) }
-    fun setAutoplay(v: Boolean) = launch { store.setAutoplaySimilar(v) }
-    fun setPlayOnline(v: Boolean) = launch { store.setPlayOnlineByDefault(v) }
     fun setLikeDownloads(v: Boolean) = launch { store.setLikeDownloads(v) }
     fun setShowHome(v: Boolean) = launch { store.setShowHome(v) }
     fun setTheme(v: com.villamediana.sound.data.ThemeMode) = launch { store.setTheme(v) }

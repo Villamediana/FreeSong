@@ -389,8 +389,9 @@ internal fun RowScope.StreamedMark(visible: Boolean, size: Dp, gap: Dp) {
 }
 
 /**
- * The heart — or, for a streamed song, the download button in its place (arrow → queue → filling
- * ring). When the download lands the song is in the library and the heart springs back.
+ * The heart, and for a streamed song the download button beside it (arrow → queue → filling
+ * ring), as on the rows. With "Curtir já baixa" on the heart alone stands for both. When the
+ * download lands the song is in the library and the heart stays alone.
  */
 @Composable
 internal fun HeartOrDownload(
@@ -404,16 +405,13 @@ internal fun HeartOrDownload(
     idleTint: Color,
 ) {
     val haptic = LocalHapticFeedback.current
-    AnimatedContent(
-        targetState = stream.streamed,
-        transitionSpec = {
-            (fadeIn(tween(180)) + scaleIn(Motion.bouncy(), initialScale = 0.6f)) togetherWith
-                (fadeOut(tween(120)) + scaleOut(tween(140), targetScale = 0.6f))
-        },
-        contentAlignment = Alignment.Center,
-        label = "heartOrDownload",
-    ) { streamed ->
-        if (streamed) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        LikeButton(liked = liked, onToggle = onLike, size = size, iconSize = iconSize, idleTint = idleTint)
+        AnimatedVisibility(
+            visible = stream.streamed && !stream.likeDownloads,
+            enter = fadeIn(tween(180)) + scaleIn(Motion.bouncy(), initialScale = 0.6f),
+            exit = fadeOut(tween(120)) + scaleOut(tween(140), targetScale = 0.6f),
+        ) {
             val d = stream.download
             val canStart = d == ItemDownload.None || d is ItemDownload.Failed
             Box(Modifier.size(size), contentAlignment = Alignment.Center) {
@@ -431,8 +429,6 @@ internal fun HeartOrDownload(
                     idleTint = idleTint,
                 )
             }
-        } else {
-            LikeButton(liked = liked, onToggle = onLike, size = size, iconSize = iconSize, idleTint = idleTint)
         }
     }
 }

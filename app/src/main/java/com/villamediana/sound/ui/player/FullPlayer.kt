@@ -153,7 +153,7 @@ internal class PlayerActions(
  * the heart, following the download until the song is in the library.
  */
 @Immutable
-internal data class StreamUi(val streamed: Boolean, val download: ItemDownload, val online: Boolean) {
+internal data class StreamUi(val streamed: Boolean, val download: ItemDownload, val online: Boolean, val likeDownloads: Boolean = false) {
     companion object {
         val Local = StreamUi(streamed = false, download = ItemDownload.None, online = true)
     }
@@ -290,13 +290,14 @@ private fun TopBar(source: PlaySource?, actions: PlayerActions, hasVideo: Boolea
             )
             if (source != null) {
                 Spacer(Modifier.height(1.dp))
+                // Long sources ("Porque você ouviu …") scroll instead of being cut.
                 Text(
                     source.title,
                     style = MaterialTheme.typography.titleSmall,
                     color = SoundColors.Text,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                     textAlign = TextAlign.Center,
+                    modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1_800, repeatDelayMillis = 2_600),
                 )
             }
         }
