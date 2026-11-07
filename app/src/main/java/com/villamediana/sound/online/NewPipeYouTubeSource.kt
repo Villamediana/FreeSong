@@ -379,10 +379,10 @@ class NewPipeYouTubeSource(private val http: OkHttpClient) : YouTubeSource {
                 val id = page.songsPlaylistId ?: return@async null
                 runCatching { onlineCall("artist songs") { loadPlaylist(id, limit) } }.getOrNull()
             }
-            val releasesJobs = page.releaseShelves.map { (items, more) ->
+            val releasesJobs = page.releaseShelves.mapIndexed { i, (items, more) ->
                 async {
                     if (more == null) items
-                    else runCatching { YouTubeMusicParser.releasesGrid(music.browse(more.browseId, more.params), page.name) }
+                    else runCatching { YouTubeMusicParser.releasesGrid(music.browse(more.browseId, more.params), page.name, singles = i > 0) }
                         .getOrNull()?.takeIf { it.isNotEmpty() } ?: items
                 }
             }

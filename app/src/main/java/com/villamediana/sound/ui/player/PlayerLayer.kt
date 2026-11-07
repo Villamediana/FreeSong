@@ -153,6 +153,10 @@ internal class PlayerDeps(
     val canvas: PlayerCanvas? = null,
     /** "Vídeo no player" (Settings): off, the plain cover — no clip, no video from the cover. */
     val videoOn: Flow<Boolean> = flowOf(true),
+    /** Loads the artist's page ahead (ArtistPrefetch, only that one); no-op in tests. */
+    val prefetchArtist: (String) -> Unit = {},
+    /** The artist's picture when it was found before (no waiting), for their page's first frame. */
+    val artistPicture: (String) -> String? = { null },
 )
 
 /** One lyrics cache for the whole process: reopening the player doesn't ask LRCLIB again. */
@@ -195,6 +199,8 @@ fun PlayerLayer(
             downloadWait = graph.downloads.wait,
             canvas = graph.canvas,
             videoOn = graph.settings.settings.map { it.playerVideo }.distinctUntilChanged(),
+            prefetchArtist = graph.artistPrefetch::prefetch,
+            artistPicture = { name -> graph.discover.peekArtist(name)?.thumbnailUrl },
         )
     }
     PlayerHost(deps, bottomBarHeight, modifier, expandedMemory, active)
@@ -202,6 +208,9 @@ fun PlayerLayer(
 
 /** How far the mini card sinks into the bottom bar's faded top edge. */
 private val MiniDockOverlap = 0.dp
+
+/** A song kept on screen this long gets its artist page loaded ahead (not every skip). */
+private const val ARTIST_PREFETCH_DELAY_MS = 1_200L
 
 /** How long a tap on a song waits for the player to have it before opening it expanded. */
 private const val OPEN_REQUEST_TTL_MS = 5_000L
@@ -371,7 +380,8 @@ internal fun PlayerHost(
             // The artist's page with all their songs, as in the search; offline, a song of yours
             // opens its artist in the library.
             openArtist = { t ->
-                if (latestOnline || t.isOnline) navigator.findArtist(com.villamediana.sound.stats.Recaps.mainArtist(t.artist)) else navigator.openArtist(t.artist)
+                val name = com.villamediana.sound.stats.Recaps.mainArtist(t.artist)
+                if (latestOnline || t.isOnline) navigator.findArtist(name, deps.artistPicture(name)) else navigator.openArtist(t.artist)
             },
             // A song of yours: its album in the library, which shows the rest of the album too.
             // A streamed one: the album's online page.
@@ -415,6 +425,15 @@ internal fun PlayerHost(
     }
 
     val expandedNow by remember { derivedStateOf { expand.target == 1f } }
+
+    // While the full player is open, the song's artist page loads ahead: a tap on the name opens
+    // it at once (it took a few seconds to find and load).
+    LaunchedEffect(expandedNow, online, track.artist) {
+        if (expandedNow && online && track.artist.isNotBlank()) {
+            kotlinx.coroutines.delay(ARTIST_PREFETCH_DELAY_MS)
+            deps.prefetchArtist(track.artist)
+        }
+    }
 
     // The clip behind the cover: only while the full player is open and on screen (not under a
     // full page, not with the lyrics over it, not in the background), online, for a YouTube song.

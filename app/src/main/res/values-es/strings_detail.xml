@@ -187,4 +187,5 @@
     <string name="sheet_edit_info_title">Editar información</string>
     <string name="sheet_cover_label">Portada</string>
     <string name="sheet_cover_gallery">De la galería</string>
+    <string name="detail_genre_recommended">Recomendadas</string>
 </resources>

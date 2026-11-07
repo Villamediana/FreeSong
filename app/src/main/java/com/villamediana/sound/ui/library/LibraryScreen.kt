@@ -1,5 +1,6 @@
 package com.villamediana.sound.ui.library
 
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
@@ -378,6 +379,17 @@ private fun CollectionEntry(
     modifier: Modifier,
 ) {
     val all = filter == null
+    val context = LocalContext.current
+    val photos = com.villamediana.sound.ui.components.LocalArtistPhotos.current
+    // An artist opens their profile (the page with all their songs, as in the search); offline,
+    // their songs on the phone.
+    val openArtistProfile: (String) -> Unit = { name ->
+        if (com.villamediana.sound.ui.search.Connectivity.isOnline(context)) {
+            nav.findArtist(com.villamediana.sound.stats.Recaps.mainArtist(name), photos?.peek(name))
+        } else {
+            nav.openArtist(name)
+        }
+    }
     var circle = false
     var current = false
     var onLongClick: (() -> Unit)? = null
@@ -414,9 +426,10 @@ private fun CollectionEntry(
         is LibItem.ArtistItem -> {
             val r = item.summary
             circle = true
-            art = { m -> Cover(r.coverPath, m, seed = r.name, shape = CircleShape) }
+            // The artist's own picture (the album cover until it is found), and their profile.
+            art = { m -> com.villamediana.sound.ui.components.ArtistPhoto(r.name, r.coverPath, m) }
             subtitle = if (all) stringResource(R.string.home_lib_artist_sub) else songCount(r.trackCount)
-            onClick = { nav.openArtist(r.name) }
+            onClick = { openArtistProfile(r.name) }
         }
         is LibItem.GenreItem -> {
             val g = item.summary

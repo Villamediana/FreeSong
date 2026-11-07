@@ -152,6 +152,20 @@ class AppGraph(context: Context) {
     val effects: AudioEffectsController by lazy { DeviceAudioEffects(appContext, scope) }
     val video: VideoPlayback by lazy { YouTubeVideoPlayback(appContext, scope) }
     /** Album covers for songs that came as video uploads (their thumbnail is a video frame). */
+    /** The artist of the song in the open player, loaded ahead (only that one). */
+    val artistPrefetch: com.villamediana.sound.ui.search.ArtistPrefetch by lazy {
+        com.villamediana.sound.ui.search.ArtistPrefetch(
+            scope = scope,
+            find = { kind, title, author -> com.villamediana.sound.ui.search.findPage(kind, title, author, discover) },
+            load = { url, kind -> youTube.collection(url, kind) },
+        )
+    }
+
+    /** Artists' own pictures for the Artistas tab (found once by name, kept with the artist page). */
+    val artistPhotos: com.villamediana.sound.ui.components.ArtistPhotos by lazy {
+        com.villamediana.sound.ui.components.ArtistPhotos(discover, scope)
+    }
+
     val covers: com.villamediana.sound.online.SongCovers by lazy {
         com.villamediana.sound.online.SongCovers({ youTube }, appContext.filesDir.resolve("covers.json"), scope)
     }

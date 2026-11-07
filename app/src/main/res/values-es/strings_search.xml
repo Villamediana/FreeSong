@@ -109,7 +109,6 @@
         <item quantity="other">%d ya están en el teléfono</item>
     </plurals>
     <string name="search_remote_popular">Populares</string>
-    <string name="search_remote_albums">Álbumes y sencillos</string>
     <string name="search_remote_error_title">No se pudo abrir</string>
     <string name="search_remote_error_body">Inténtalo de nuevo en un momento.</string>
     <string name="search_remote_offline_body">Conéctate a internet para ver y descargar las canciones.</string>
@@ -202,4 +201,9 @@
     <string name="hear_retry">Intentar de nuevo</string>
     <string name="hear_cancel">Parar</string>
     <string name="hear_need_mic">Para reconocer por el sonido, FreeSong necesita el micrófono</string>
+    <string name="search_artist_albums">Álbumes</string>
+    <string name="search_artist_singles">Sencillos y EP</string>
+    <string name="search_artist_playlists">Playlists</string>
+    <string name="search_artist_all_songs">Ver todas (%1$d)</string>
+    <string name="search_artist_fewer_songs">Mostrar menos</string>
 </resources>

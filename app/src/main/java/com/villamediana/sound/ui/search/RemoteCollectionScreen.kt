@@ -1,5 +1,8 @@
 package com.villamediana.sound.ui.search
 
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import com.villamediana.sound.ui.components.keepHorizontalDrags
+import androidx.compose.runtime.saveable.rememberSaveable
 import com.villamediana.sound.data.asTransientTrack
 import com.villamediana.sound.SoundApplication
 import com.villamediana.sound.ui.sheets.PlaylistInfoSheet
@@ -143,12 +146,15 @@ fun RemoteCollectionScreen(route: RemoteCollectionRoute) {
     val playOnline by vm.playOnline.collectAsStateWithLifecycle()
     var menuOpen by remember { mutableStateOf(false) }
     var editingInfo by remember { mutableStateOf(false) }
+    var allSongs by rememberSaveable { mutableStateOf(false) }
     var actionsFor by remember { mutableStateOf<com.villamediana.sound.data.db.Track?>(null) }
     val detail = (load as? RemoteLoad.Loaded)?.detail
     val kind = vm.kind
     val title = detail?.collection?.title?.takeIf { it.isNotBlank() } ?: route.title
     val author = (detail?.collection?.author ?: route.author)?.takeIf { it.isNotBlank() && kind != CollectionKind.ARTIST }
-    val thumbnail = detail?.collection?.thumbnailUrl ?: route.thumbnailUrl
+    // Opened by name: the picture shows as soon as the page is found, before its songs arrive.
+    val found by SoundApplication.graph.artistPrefetch.found.collectAsStateWithLifecycle()
+    val thumbnail = detail?.collection?.thumbnailUrl ?: route.thumbnailUrl ?: found?.takeIf { it.first == route.url }?.second?.thumbnailUrl
     val wash = rememberRemoteCoverColor(thumbnail)
 
     LaunchedEffect(vm) {
@@ -240,7 +246,9 @@ fun RemoteCollectionScreen(route: RemoteCollectionRoute) {
                     RemoteErrorState(l.error, onRetry = vm::load)
                 }
                 is RemoteLoad.Loaded -> {
-                    val tracks = l.detail.tracks
+                    // An artist: a few popular songs (all on demand), then albums by date, singles, playlists.
+                    val sections = if (kind == CollectionKind.ARTIST) ArtistSections.of(l.detail, allSongs) else null
+                    val tracks = sections?.popular ?: l.detail.tracks
                     if (tracks.isEmpty() && l.detail.related.isEmpty()) {
                         item(key = "empty") {
                             EmptyState(Icons.Rounded.MusicOff, stringResource(R.string.search_remote_empty_title), stringResource(R.string.search_remote_empty_body))
@@ -282,17 +290,49 @@ fun RemoteCollectionScreen(route: RemoteCollectionRoute) {
                         )
                         }
                     }
-                    if (kind == CollectionKind.ARTIST && l.detail.related.isNotEmpty()) {
-                        item(key = "related-header") {
-                            SectionHeader(stringResource(R.string.search_remote_albums), Modifier.padding(top = Dimens.SectionGap - 8.dp))
+                    if (sections != null && sections.moreSongs > 0) {
+                        item(key = "all-songs") {
+                            Box(Modifier.fillMaxWidth().padding(top = 8.dp), contentAlignment = Alignment.Center) {
+                                PillButton(
+                                    if (allSongs) stringResource(R.string.search_artist_fewer_songs)
+                                    else stringResource(R.string.search_artist_all_songs, l.detail.tracks.size),
+                                    onClick = { allSongs = !allSongs },
+                                )
+                            }
                         }
-                        item(key = "related") {
-                            LazyRow(
-                                contentPadding = PaddingValues(horizontal = Dimens.Gutter),
-                                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                            ) {
-                                items(l.detail.related, key = { it.kind.name + it.url }) { c ->
-                                    RelatedCard(c, onClick = { navigator.openRemote(c) })
+                    }
+                    if (sections != null && sections.albums.isNotEmpty()) {
+                        item(key = "albums-header") {
+                            SectionHeader(stringResource(R.string.search_artist_albums), Modifier.padding(top = Dimens.SectionGap - 8.dp))
+                        }
+                        items(sections.albums, key = { "album:" + it.url }, contentType = { "release" }) { c ->
+                            ReleaseRow(c, onClick = { navigator.openRemote(c) })
+                        }
+                    }
+                    if (sections != null && sections.singles.isNotEmpty()) {
+                        item(key = "singles") {
+                            Column {
+                                SectionHeader(stringResource(R.string.search_artist_singles), Modifier.padding(top = Dimens.SectionGap - 8.dp))
+                                LazyRow(
+                                    modifier = Modifier.keepHorizontalDrags(),
+                                    contentPadding = PaddingValues(horizontal = Dimens.Gutter),
+                                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                ) {
+                                    items(sections.singles, key = { it.url }) { c -> RelatedCard(c, onClick = { navigator.openRemote(c) }) }
+                                }
+                            }
+                        }
+                    }
+                    if (sections != null && sections.playlists.isNotEmpty()) {
+                        item(key = "playlists") {
+                            Column {
+                                SectionHeader(stringResource(R.string.search_artist_playlists), Modifier.padding(top = Dimens.SectionGap - 8.dp))
+                                LazyRow(
+                                    modifier = Modifier.keepHorizontalDrags(),
+                                    contentPadding = PaddingValues(horizontal = Dimens.Gutter),
+                                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                ) {
+                                    items(sections.playlists, key = { it.url }) { c -> RelatedCard(c, onClick = { navigator.openRemote(c) }) }
                                 }
                             }
                         }
@@ -573,13 +613,37 @@ private fun RelatedCard(collection: RemoteCollection, onClick: () -> Unit) {
         Text(collection.title, style = MaterialTheme.typography.titleSmall, color = SoundColors.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(
             listOfNotNull(
-                stringResource(if (collection.kind == CollectionKind.PLAYLIST) R.string.search_kind_playlist else R.string.search_kind_album),
+                // Under "Singles e EPs" the year says enough.
+                if (collection.single) null else stringResource(if (collection.kind == CollectionKind.PLAYLIST) R.string.search_kind_playlist else R.string.search_kind_album),
                 collection.year?.toString(),
             ).joinToString(" · "),
             style = MaterialTheme.typography.bodySmall,
             color = SoundColors.TextMuted,
             maxLines = 1,
         )
+    }
+}
+
+/** An album in the artist's list: cover, name and year; a tap opens it. */
+@Composable
+private fun ReleaseRow(collection: RemoteCollection, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = Dimens.Gutter, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Cover(collection.thumbnailUrl, Modifier.size(64.dp), seed = collection.title)
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(collection.title, style = MaterialTheme.typography.titleMedium, color = SoundColors.Text, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            collection.year?.let {
+                Spacer(Modifier.height(2.dp))
+                Text(it.toString(), style = MaterialTheme.typography.bodyMedium, color = SoundColors.TextMuted)
+            }
+        }
+        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = SoundColors.TextFaint)
     }
 }
 

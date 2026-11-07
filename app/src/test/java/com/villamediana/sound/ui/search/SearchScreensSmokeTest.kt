@@ -306,7 +306,7 @@ class SearchScreensSmokeTest {
         harness.show { RemoteCollectionScreen(route) }
         rule.waitUntil(20_000) { rule.onAllNodes(hasText("Canción Animal")).fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText(s(R.string.search_remote_popular)).assertExists()
-        rule.onNodeWithText(s(R.string.search_remote_albums)).assertExists()
+        rule.onNodeWithText(s(R.string.search_artist_albums)).assertExists()
         // No "Baixar populares": an artist's songs are kept one by one (heart / arrow on each row).
         rule.onNodeWithText(s(R.string.search_remote_download_all)).assertDoesNotExist()
         rule.onNodeWithContentDescription(s(R.string.search_remote_play)).assertExists()

@@ -34,6 +34,8 @@ data class RemoteCollection(
     val thumbnailUrl: String? = null,
     val itemCount: Long? = null,
     val year: Int? = null,
+    /** An artist's release that is a single or an EP (not a full album). */
+    val single: Boolean = false,
 )
 
 sealed interface SearchItem {

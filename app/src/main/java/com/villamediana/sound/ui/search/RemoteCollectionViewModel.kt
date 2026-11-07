@@ -456,7 +456,8 @@ class RemoteCollectionViewModel(
                 loader = if (SpotifyLinks.isImported(route.url)) {
                     { url, _ -> g.library.importedDetail(url) ?: throw OnlineException("Imported playlist removed", kind = OnlineException.Kind.NOT_FOUND) }
                 } else if (RemoteFind.isFind(route.url)) {
-                    { _, k -> g.youTube.collection(findPage(route, k, g.discover).url, k) }
+                    // Found by name (the player's artist / album): maybe loaded ahead already.
+                    { _, k -> g.artistPrefetch.open(route.url, k, route.title, route.author) }
                 } else {
                     { url, k -> g.youTube.collection(url, k) }
                 },
@@ -466,11 +467,14 @@ class RemoteCollectionViewModel(
 }
 
 /** The real page behind a route opened by name; "not found" when YouTube Music has none. */
-internal suspend fun findPage(route: RemoteCollectionRoute, kind: CollectionKind, discover: DiscoverRepository): RemoteCollection {
+internal suspend fun findPage(route: RemoteCollectionRoute, kind: CollectionKind, discover: DiscoverRepository): RemoteCollection =
+    findPage(kind, route.title, route.author, discover)
+
+internal suspend fun findPage(kind: CollectionKind, title: String, author: String?, discover: DiscoverRepository): RemoteCollection {
     val page = when (kind) {
-        CollectionKind.ARTIST -> discover.findArtist(route.title)
-        CollectionKind.ALBUM -> discover.findAlbum(route.title, route.author.orEmpty())
+        CollectionKind.ARTIST -> discover.findArtist(title)
+        CollectionKind.ALBUM -> discover.findAlbum(title, author.orEmpty())
         CollectionKind.PLAYLIST -> null
     }
-    return page ?: throw OnlineException("No ${kind.name.lowercase()} named ${route.title}", kind = OnlineException.Kind.NOT_FOUND)
+    return page ?: throw OnlineException("No ${kind.name.lowercase()} named $title", kind = OnlineException.Kind.NOT_FOUND)
 }

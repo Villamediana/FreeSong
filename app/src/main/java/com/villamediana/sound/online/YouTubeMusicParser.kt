@@ -146,7 +146,9 @@ internal object YouTubeMusicParser {
                 val more = header.obj("title")?.arr("runs").objects().firstNotNullOfOrNull { browseRef(it.obj("navigationEndpoint")) }
                     ?: browseRef(header.at("moreContentButton.buttonRenderer.navigationEndpoint"))
                 val items = carousel.arr("contents").objects().mapNotNull { it.obj("musicTwoRowItemRenderer") }
-                val albums = items.filter { pageType(it) == "MUSIC_PAGE_TYPE_ALBUM" }.mapNotNull { twoRowAlbum(it, name) }
+                // The artist page lists "Álbuns" first, then "Singles e EPs".
+                val singlesShelf = releaseShelves.isNotEmpty()
+                val albums = items.filter { pageType(it) == "MUSIC_PAGE_TYPE_ALBUM" }.mapNotNull { twoRowAlbum(it, name, singlesShelf) }
                 val lists = items.filter { pageType(it) == "MUSIC_PAGE_TYPE_PLAYLIST" }.mapNotNull { twoRowPlaylist(it) }
                 if (albums.isNotEmpty()) releaseShelves += albums to more?.takeIf { it.browseId.startsWith("MPAD") || it.params != null }
                 playlists += lists
@@ -183,12 +185,12 @@ internal object YouTubeMusicParser {
         }.getOrNull()
     }
 
-    /** "See all" grid of albums/singles (discography page). */
-    fun releasesGrid(json: JsonObject, artistName: String): List<RemoteCollection> {
+    /** "See all" grid of albums/singles (discography page); [singles] = the grid behind "Singles e EPs". */
+    fun releasesGrid(json: JsonObject, artistName: String, singles: Boolean = false): List<RemoteCollection> {
         val grid = json.findFirst("gridRenderer") ?: return emptyList()
         return grid.arr("items").objects().mapNotNull { it.obj("musicTwoRowItemRenderer") }
             .filter { pageType(it) == "MUSIC_PAGE_TYPE_ALBUM" }
-            .mapNotNull { twoRowAlbum(it, artistName) }
+            .mapNotNull { twoRowAlbum(it, artistName, singles) }
     }
 
     // ---------------------------------------------------------------- search
@@ -377,7 +379,10 @@ internal object YouTubeMusicParser {
         )
     }
 
-    private fun twoRowAlbum(item: JsonObject, artistName: String): RemoteCollection? {
+    private val singleWords = setOf("single", "ep", "sencillo")
+    private val albumWords = setOf("álbum", "album")
+
+    private fun twoRowAlbum(item: JsonObject, artistName: String, singleShelf: Boolean = false): RemoteCollection? {
         val title = item.obj("title").text()?.trim()?.ifEmpty { null } ?: return null
         val browseId = item.at("navigationEndpoint.browseEndpoint.browseId").asString()
         val playlistId = (item.findFirst("watchPlaylistEndpoint")?.let { it.str("playlistId") })
@@ -389,6 +394,13 @@ internal object YouTubeMusicParser {
         }
         val subtitle = item.obj("subtitle")?.arr("runs").objects().mapNotNull { it.str("text") }
         val year = subtitle.firstNotNullOfOrNull { yearRe.matchEntire(it.trim())?.value?.toIntOrNull() }
+        // "Single • 2024" / "EP • 2023" / "Álbum • 2009"; the albums shelf often says only the year.
+        val type = subtitle.map { it.trim().lowercase() }.firstOrNull { it.isNotEmpty() && it != "•" && yearRe.matchEntire(it) == null }
+        val single = when (type) {
+            in singleWords -> true
+            in albumWords -> false
+            else -> singleShelf
+        }
         return RemoteCollection(
             kind = CollectionKind.ALBUM,
             url = url,
@@ -396,6 +408,7 @@ internal object YouTubeMusicParser {
             author = artistName,
             thumbnailUrl = Thumbnails.best(thumbnails(item.obj("thumbnailRenderer")), Thumbnails.COLLECTION),
             year = year,
+            single = single,
         )
     }
 

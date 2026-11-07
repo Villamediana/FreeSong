@@ -153,6 +153,9 @@ class DiscoverRepository(
             Entry(slot(), cols = found.map { it.toCol() })
         }
 
+    /** The artist's page if it was found before, from memory (no waiting): their picture shows at once. */
+    fun peekArtist(name: String): RemoteCollection? = cache?.artists?.get(name.trim().lowercase())?.toRemote()
+
     /** The page of an artist by name (searched once, then kept). */
     suspend fun artist(name: String): RemoteCollection? = runCatching { findArtist(name) }.getOrNull()
 
@@ -247,9 +250,24 @@ class DiscoverRepository(
 
     @Volatile private var draws = 0L
 
+    /** The seed of this session's draws under [key]: new at every app start, every half hour and after a pull to refresh. */
+    fun drawSeed(key: String): Long = session * 31 + (clock() / SESSION_MS) * 17 + draws * 1_000_003 + key.hashCode()
+
+    /**
+     * New songs to recommend next to some of yours ([seeds], video ids): their radios compared, the
+     * ones they agree on first (the same pick as the made-for-you mixes), none you have.
+     */
+    suspend fun recommend(seeds: List<String>, inLibrary: Set<String>, count: Int): List<RemoteTrack> {
+        if (seeds.isEmpty()) return emptyList()
+        val radios = coroutineScope {
+            seeds.map { id -> async { runCatching { related(id, RECOMMEND_RADIO) }.getOrDefault(emptyList()) } }.awaitAll()
+        }
+        return com.villamediana.sound.smart.MadeForYou.pickNew(radios, inLibrary + seeds, count)
+    }
+
     /** [size] items: half from [fresh], the rest from the [pool] around it, mixed — another draw each session. */
     private fun <T> draw(fresh: List<T>, pool: List<T>, size: Int, key: String, id: (T) -> String): List<T> {
-        val rnd = kotlin.random.Random(session * 31 + (clock() / SESSION_MS) * 17 + draws * 1_000_003 + key.hashCode())
+        val rnd = kotlin.random.Random(drawSeed(key))
         val freshIds = fresh.mapTo(HashSet(), id)
         val now = fresh.shuffled(rnd).take((size + 1) / 2)
         val before = pool.filter { id(it) !in freshIds }.shuffled(rnd).take(size - now.size)
@@ -291,6 +309,8 @@ class DiscoverRepository(
         /** Songs asked per wording of a genre (two wordings a slot). */
         const val SHELF_FETCH = 24
         const val PLAYLIST_FETCH = 10
+        /** Songs asked of each radio behind a page's recommendations. */
+        const val RECOMMEND_RADIO = 30
         const val POOL_SONGS = 120
         const val POOL_COLS = 40
         /** A new draw of the Home's shelves at most this often (and at every app start). */

@@ -143,6 +143,7 @@ fun SoundRoot(incoming: MutableStateFlow<Inbound?>) {
     CompositionLocalProvider(
         LocalNavigator provides navigator,
         com.villamediana.sound.ui.components.LocalSongCovers provides SoundApplication.graph.covers,
+        com.villamediana.sound.ui.components.LocalArtistPhotos provides SoundApplication.graph.artistPhotos,
         com.villamediana.sound.ui.player.LocalLyricsTranslator provides SoundApplication.graph.lyricsTranslator,
         LocalBottomInset provides barSpace + miniPlayerSpace + 16.dp,
     ) {

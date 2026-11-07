@@ -163,12 +163,14 @@ class YouTubeMusicParserTest {
         assertEquals(CollectionKind.ALBUM, sueno.kind)
         assertEquals("https://music.youtube.com/playlist?list=OLAK5uy_lqFiSiZrrWzJcqFIqQ6VI9LFURooEFFD4", sueno.url)
         assertEquals(1995, sueno.year)
+        assertEquals(false, sueno.single) // the "Álbuns" shelf
         assertEquals("Soda Stereo", sueno.author)
         val (singles, noMore) = p.releaseShelves[1]
         assertNull(noMore)
         // No play overlay: falls back to the album page link, resolved later.
         assertEquals("https://music.youtube.com/browse/MPREb_lc1XfxpYzzM", singles.single().url)
         assertEquals(1989, singles.single().year)
+        assertEquals(true, singles.single().single) // the "Singles e EPs" shelf
 
         // Videos and related artists aren't collections to download; playlists are.
         val playlist = p.playlists.single()

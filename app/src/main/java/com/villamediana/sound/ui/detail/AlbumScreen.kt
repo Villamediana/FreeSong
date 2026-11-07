@@ -5,7 +5,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import com.villamediana.sound.ui.search.SkeletonRow
+import com.villamediana.sound.ui.search.skeletonWidth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.rounded.Album
@@ -70,13 +73,16 @@ internal class AlbumViewModel(artist: String, title: String) : ViewModel() {
     /** The album on YouTube Music (empty offline, until found, or when it isn't the same album). */
     private val remote = MutableStateFlow(memo[key.normalized].orEmpty())
 
+    /** Looking for the rest of the album right now: the page shows placeholders for it meanwhile. */
+    private val lookingUp = MutableStateFlow(remote.value.isEmpty() && Connectivity.isOnline(graph.appContext))
+
     /**
      * The album's songs: yours, and the rest of the album streamed, in the album's order. Only
      * when the online album has one of your songs (otherwise it is another album of that name).
      */
-    val songs: StateFlow<AlbumSongs?> = combine(library.album(key), remote, library.likedVideoIds) { detail, online, likedIds ->
+    val songs: StateFlow<AlbumSongs?> = combine(library.album(key), remote, library.likedVideoIds, lookingUp) { detail, online, likedIds, looking ->
         detail ?: return@combine null
-        if (online.isEmpty() || !AlbumMerge.overlaps(detail.tracks, online)) return@combine AlbumSongs(detail.tracks, complete = false)
+        if (online.isEmpty() || !AlbumMerge.overlaps(detail.tracks, online)) return@combine AlbumSongs(detail.tracks, complete = false, pending = looking)
         val merged = AlbumMerge.merge(detail.tracks, online).map { t -> if (t.isOnline && t.videoId in likedIds) t.copy(liked = true) else t }
         AlbumSongs(merged, complete = true)
     }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
@@ -86,13 +92,18 @@ internal class AlbumViewModel(artist: String, title: String) : ViewModel() {
             viewModelScope.launch {
                 // Waits for the network when the page opens without it.
                 Connectivity.online(graph.appContext).first { it }
-                val page = runCatching {
-                    graph.discover.findAlbum(key.title, Recaps.mainArtist(key.artist), sameArtist = true)
-                }.getOrNull() ?: return@launch
-                val tracks = runCatching { graph.youTube.collection(page.url, CollectionKind.ALBUM).tracks }.getOrNull().orEmpty()
-                if (tracks.isNotEmpty()) {
-                    memo[key.normalized] = tracks
-                    remote.value = tracks
+                lookingUp.value = true
+                try {
+                    val page = runCatching {
+                        graph.discover.findAlbum(key.title, Recaps.mainArtist(key.artist), sameArtist = true)
+                    }.getOrNull() ?: return@launch
+                    val tracks = runCatching { graph.youTube.collection(page.url, CollectionKind.ALBUM).tracks }.getOrNull().orEmpty()
+                    if (tracks.isNotEmpty()) {
+                        memo[key.normalized] = tracks
+                        remote.value = tracks
+                    }
+                } finally {
+                    lookingUp.value = false
                 }
             }
         }
@@ -119,8 +130,11 @@ internal class AlbumViewModel(artist: String, title: String) : ViewModel() {
     }
 }
 
-/** [tracks] of the album page; [complete] when the online album filled in the songs you don't have. */
-internal data class AlbumSongs(val tracks: List<Track>, val complete: Boolean)
+/**
+ * [tracks] of the album page; [complete] when the online album filled in the songs you don't
+ * have; [pending] while it is being looked up (placeholders stand for the rest).
+ */
+internal data class AlbumSongs(val tracks: List<Track>, val complete: Boolean, val pending: Boolean = false)
 
 @Composable
 fun AlbumScreen(route: AlbumRoute) {
@@ -141,6 +155,8 @@ private fun AlbumContent(detail: AlbumDetail, vm: AlbumViewModel) {
     // Your songs at once; the rest of the album joins when it is found.
     val tracks = songs?.tracks ?: detail.tracks
     val complete = songs?.complete == true
+    // Until the rest of the album arrives: placeholders, and no song count yet (it would say "1 música").
+    val pending = songs?.pending ?: false
     val durationMs = if (complete) tracks.sumOf { it.durationMs } else s.durationMs
     val navigator = LocalNavigator.current
     val context = LocalContext.current
@@ -167,7 +183,7 @@ private fun AlbumContent(detail: AlbumDetail, vm: AlbumViewModel) {
             title = s.title,
             owner = s.artist,
             onOwnerClick = { navigator.openArtist(s.artist) },
-            meta = MetaFormat.join(s.year?.toString(), MetaFormat.countAndDuration(countText, durationMs)),
+            meta = MetaFormat.join(s.year?.toString(), if (pending) null else MetaFormat.countAndDuration(countText, durationMs)),
             wash = wash,
         ),
         art = { m -> Cover(s.coverPath, m, seed = s.title) },
@@ -222,7 +238,12 @@ private fun AlbumContent(detail: AlbumDetail, vm: AlbumViewModel) {
                 modifier = Modifier.animateItem(),
             )
         }
-        item(key = "footer", contentType = "footer") {
+        if (pending) {
+            items(PLACEHOLDERS, key = { "pending-$it" }, contentType = { "pending" }) { i ->
+                SkeletonRow(widthFraction = skeletonWidth(i), coverSize = 24.dp, modifier = Modifier.animateItem())
+            }
+        }
+        if (!pending) item(key = "footer", contentType = "footer") {
             Column(Modifier.fillMaxWidth().padding(horizontal = Dimens.Gutter).padding(top = 18.dp, bottom = 4.dp)) {
                 s.year?.let {
                     Text(it.toString(), style = MaterialTheme.typography.titleSmall, color = SoundColors.Text)
@@ -249,3 +270,6 @@ private fun AlbumContent(detail: AlbumDetail, vm: AlbumViewModel) {
         }
     }
 }
+
+/** Placeholder rows while the rest of the album is on its way. */
+private const val PLACEHOLDERS = 8

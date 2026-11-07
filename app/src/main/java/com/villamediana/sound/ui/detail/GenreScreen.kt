@@ -1,6 +1,19 @@
 package com.villamediana.sound.ui.detail
 
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewModelScope
+import com.villamediana.sound.data.asTransientTrack
+import com.villamediana.sound.online.RemoteTrack
+import com.villamediana.sound.playback.PlaySource
+import com.villamediana.sound.ui.components.SectionRule
+import com.villamediana.sound.ui.search.Connectivity
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlin.random.Random
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Category
 import androidx.compose.material.icons.rounded.MoreVert
@@ -24,6 +37,30 @@ import kotlinx.coroutines.flow.map
 internal class GenreViewModel(name: String) : ViewModel() {
     val tracks: StateFlow<Load<List<Track>>> =
         graph.library.genreTracks(name).map { it.ifEmpty { null } }.asLoad().stateIn(this)
+
+    /**
+     * "Recomendadas": new songs in the style of this genre, from the radios of a few of your songs
+     * in it — other ones on each visit (a new draw at every app start and every half hour).
+     */
+    val recommended = MutableStateFlow<List<RemoteTrack>>(emptyList())
+
+    init {
+        viewModelScope.launch {
+            val mine = graph.library.genreTracks(name).first().filter { !it.videoId.isNullOrBlank() }
+            if (mine.isEmpty()) return@launch
+            // Waits for the network when the page opens without it.
+            Connectivity.online(graph.appContext).first { it }
+            val rnd = Random(graph.discover.drawSeed("genre:" + name.trim().lowercase()))
+            val seeds = mine.shuffled(rnd).take(SEEDS).mapNotNull { it.videoId }
+            val inLibrary = graph.library.allTracks().mapNotNullTo(HashSet()) { it.videoId } + graph.library.likedVideoIds.first()
+            recommended.value = runCatching { graph.discover.recommend(seeds, inLibrary, RECOMMENDED) }.getOrDefault(emptyList())
+        }
+    }
+
+    private companion object {
+        const val SEEDS = 3
+        const val RECOMMENDED = 25
+    }
 }
 
 @Composable
@@ -34,18 +71,20 @@ fun GenreScreen(route: GenreRoute) {
     when (val l = load) {
         Load.Loading -> DetailLoading()
         Load.Missing -> NotFound(Icons.Rounded.Category, stringResource(R.string.detail_genre_missing), stringResource(R.string.detail_missing_body))
-        is Load.Ready -> GenreContent(route.name, l.value)
+        is Load.Ready -> GenreContent(route.name, l.value, vm)
     }
 }
 
 @Composable
-private fun GenreContent(routeName: String, tracks: List<Track>) {
+private fun GenreContent(routeName: String, tracks: List<Track>, vm: GenreViewModel) {
     val res = LocalContext.current.resources
     val player = graph.player
     val playback by rememberPlaybackState()
     val snackbar = rememberDetailSnackbar()
     val sheet = rememberTrackSheetState()
     val sheets = rememberCollectionSheets()
+    val recommended by vm.recommended.collectAsStateWithLifecycle()
+    val likedIds by graph.library.likedVideoIds.collectAsStateWithLifecycle(emptySet())
 
     // The spelling most songs use ("Rock" even if the route said "rock").
     val name = remember(tracks, routeName) {
@@ -102,6 +141,35 @@ private fun GenreContent(routeName: String, tracks: List<Track>) {
                 sheet = sheet,
                 modifier = Modifier.animateItem(),
             )
+        }
+        // A line, then new songs of the same style to discover (the heart adds one to your songs).
+        if (recommended.isNotEmpty()) {
+            item(key = "recommended-header", contentType = "section") {
+                Column(Modifier.animateItem().padding(top = 20.dp)) {
+                    SectionRule()
+                    DetailSection(title = stringResource(R.string.detail_genre_recommended))
+                }
+            }
+            itemsIndexed(recommended, key = { _, r -> "rec:" + r.videoId }, contentType = { _, _ -> "track" }) { i, r ->
+                val t = remember(r) { r.asTransientTrack() }
+                SongRow(
+                    track = t,
+                    playback = playback,
+                    // Plays the recommendations from this one, and keeps going in the same style.
+                    onClick = { player.playOnline(recommended, i, PlaySource(PlaySource.Type.RADIO, name, "genre-recs:$name")) },
+                    sheet = sheet,
+                    modifier = Modifier.animateItem(),
+                    trailing = {
+                        com.villamediana.sound.ui.player.LikeButton(
+                            liked = r.videoId in likedIds,
+                            onToggle = { v -> graph.likeOnline(r, v) },
+                            size = 40.dp,
+                            iconSize = 22.dp,
+                        )
+                    },
+                    likedMark = false,
+                )
+            }
         }
     }
 }

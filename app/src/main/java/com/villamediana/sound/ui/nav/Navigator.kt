@@ -69,7 +69,8 @@ class Navigator(val controller: NavHostController) {
     fun openRemote(c: RemoteCollection) = go(RemoteCollectionRoute(c.url, c.kind.name, c.title, c.author, c.thumbnailUrl))
 
     /** The artist's online page, found by name (it opens at once and finds itself). */
-    fun findArtist(name: String) = go(RemoteCollectionRoute(RemoteFind.url(CollectionKind.ARTIST, name, null), CollectionKind.ARTIST.name, name))
+    fun findArtist(name: String, picture: String? = null) =
+        go(RemoteCollectionRoute(RemoteFind.url(CollectionKind.ARTIST, name, null), CollectionKind.ARTIST.name, name, thumbnailUrl = picture))
 
     /** The album's online page with every song, found by its name and artist. */
     fun findAlbum(album: String, artist: String) = go(RemoteCollectionRoute(RemoteFind.url(CollectionKind.ALBUM, album, artist), CollectionKind.ALBUM.name, album, artist))

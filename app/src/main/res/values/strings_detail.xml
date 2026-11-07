@@ -182,4 +182,5 @@
     <string name="sheet_edit_info_title">Editar informações</string>
     <string name="sheet_cover_label">Capa</string>
     <string name="sheet_cover_gallery">Da galeria</string>
+    <string name="detail_genre_recommended">Recomendadas</string>
 </resources>
