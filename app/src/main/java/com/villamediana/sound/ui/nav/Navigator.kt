@@ -62,8 +62,12 @@ class Navigator(val controller: NavHostController) {
      * wait unseen.
      */
     fun openSearchScreen() {
-        switchTab(SearchRoute)
-        controller.popBackStack<SearchRoute>(inclusive = false)
+        collapsePlayer()
+        when {
+            controller.currentBackStackEntry?.destination?.hasRoute(SearchRoute::class) == true -> Unit
+            isOnStack<SearchRoute>() -> controller.popBackStack<SearchRoute>(inclusive = false)
+            else -> controller.navigate(SearchRoute) { launchSingleTop = true }
+        }
     }
 
     /**

@@ -110,7 +110,7 @@ fun SoundRoot(incoming: MutableStateFlow<Inbound?>) {
     }
 
     val navBarInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    val bottomBarTotal = Dimens.BottomBarHeight + navBarInset
+    val bottomBarTotal = navBarInset + 14.dp
 
     // Full pages (video, settings, equalizer) and the genre intro: no bottom bar, no mini player.
     val entry by controller.currentBackStackEntryAsState()
@@ -118,7 +118,8 @@ fun SoundRoot(incoming: MutableStateFlow<Inbound?>) {
     val fullPage = dest != null && (dest.hasRoute(VideoRoute::class) || dest.hasRoute(SettingsRoute::class) || dest.hasRoute(EqualizerRoute::class) || dest.hasRoute(ThemeRoute::class))
     val chromeHidden = fullPage || Chrome.hideMiniPlayer
     val miniPlayerSpace by animateDpAsState(if (playback.hasMedia && !chromeHidden) Dimens.MiniPlayerHeight + 8.dp else 0.dp, label = "mini")
-    val barSpace = if (chromeHidden) navBarInset else bottomBarTotal
+    // No bottom bar: the mini player sits at the bottom, just above the system navigation.
+    val barSpace = navBarInset
 
     CompositionLocalProvider(
         LocalNavigator provides navigator,
@@ -149,7 +150,7 @@ fun SoundRoot(incoming: MutableStateFlow<Inbound?>) {
                     else slideOutHorizontally(tween(PAGE_MS, easing = Motion.Emphasized)) { it }
                 },
             ) {
-                composable<HomeRoute> { Page { HomeScreen() } }
+                composable<HomeRoute> { Page { com.villamediana.sound.ui.library.MainScreen() } }
                 composable<SearchRoute> { Page { SearchScreen() } }
                 composable<LibraryRoute> { Page { LibraryScreen() } }
                 composable<AlbumRoute> { Page { AlbumScreen(it.toRoute()) } }
@@ -171,14 +172,6 @@ fun SoundRoot(incoming: MutableStateFlow<Inbound?>) {
                 visible = !chromeHidden,
                 enter = fadeIn(tween(220)),
                 exit = fadeOut(tween(160)),
-                modifier = Modifier.align(Alignment.BottomCenter),
-            ) {
-                BottomBar(navigator = navigator)
-            }
-            AnimatedVisibility(
-                visible = !chromeHidden,
-                enter = fadeIn(tween(220)),
-                exit = fadeOut(tween(160)),
             ) {
                 PlayerLayer(
                     bottomBarHeight = bottomBarTotal,
@@ -192,63 +185,10 @@ fun SoundRoot(incoming: MutableStateFlow<Inbound?>) {
 private const val PAGE_MS = 340
 
 private fun NavDestination.isTab(): Boolean =
-    hasRoute(HomeRoute::class) || hasRoute(SearchRoute::class) || hasRoute(LibraryRoute::class)
+    hasRoute(HomeRoute::class) || hasRoute(LibraryRoute::class)
 
 /** Every page is opaque, so a page sliding over another never shows both at once. */
 @Composable
 private fun Page(content: @Composable () -> Unit) {
     Box(Modifier.fillMaxSize().background(SoundColors.Ink)) { content() }
-}
-
-private data class Tab(val route: Any, val label: Int, val icon: ImageVector, val selectedIcon: ImageVector)
-
-@Composable
-internal fun BottomBar(navigator: Navigator, modifier: Modifier = Modifier) {
-    val tabs = listOf(
-        Tab(HomeRoute, R.string.tab_home, Icons.Outlined.Home, Icons.Rounded.Home),
-        Tab(SearchRoute, R.string.tab_search, Icons.Outlined.Search, Icons.Rounded.Search),
-        Tab(LibraryRoute, R.string.tab_library, Icons.Outlined.LibraryMusic, Icons.Rounded.LibraryMusic),
-    )
-    // The tab whose stack is showing (an album opened from Biblioteca keeps Biblioteca lit).
-    val entry by navigator.controller.currentBackStackEntryAsState()
-    val currentTab = remember(entry) { navigator.currentTab() }
-    val navBarInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    Column(
-        modifier
-            .fillMaxWidth()
-            // A defined bar: solid surface with a hairline on top (no fade showing the page through).
-            .background(SoundColors.Surface2)
-            .drawBehind { drawLine(SoundColors.Hairline, Offset(0f, 0f), Offset(size.width, 0f), strokeWidth = 1.dp.toPx()) },
-    ) {
-        Row(Modifier.fillMaxWidth().height(Dimens.BottomBarHeight).selectableGroup(), verticalAlignment = Alignment.CenterVertically) {
-            tabs.forEach { tab ->
-                val selected = tab.route == currentTab
-                Column(
-                    Modifier
-                        .weight(1f)
-                        .selectable(
-                            selected = selected,
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            role = Role.Tab,
-                        ) { navigator.switchTab(tab.route) },
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Icon(
-                        if (selected) tab.selectedIcon else tab.icon,
-                        null,
-                        tint = if (selected) SoundColors.Text else SoundColors.TextFaint,
-                        modifier = Modifier.size(25.dp),
-                    )
-                    Spacer(Modifier.height(3.dp))
-                    Text(
-                        stringResource(tab.label),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (selected) SoundColors.Text else SoundColors.TextFaint,
-                    )
-                }
-            }
-        }
-        Spacer(Modifier.height(navBarInset))
-    }
 }

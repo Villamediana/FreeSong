@@ -70,7 +70,6 @@ class NavigatorTest {
                             composable<DownloadsRoute> { Text("downloads") }
                             composable<RemoteCollectionRoute> { Text("remote ${it.toRoute<RemoteCollectionRoute>().title}") }
                         }
-                        BottomBar(navigator)
                     }
                 }
             }
@@ -119,48 +118,6 @@ class NavigatorTest {
         compose.onNodeWithText("artist Soda Stereo").assertExists()
     }
 
-    private fun tab(label: String) = compose.onNodeWithText(label)
-
-    private fun assertTab(selected: String) {
-        listOf("Início", "Buscar", "Biblioteca").forEach { label ->
-            if (label == selected) tab(label).assertIsSelected() else tab(label).assertIsNotSelected()
-        }
-    }
-
-    @Test
-    fun theBottomBarLightsTheTabWhosePagesAreShowing() {
-        setUp()
-        assertTab("Início")
-        tab("Biblioteca").assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Tab))
-
-        // Album → artist from Biblioteca: still Biblioteca (it used to jump to Início).
-        nav { switchTab(LibraryRoute) }
-        nav { openAlbum(AlbumKey("Soda Stereo", "Signos")) }
-        nav { openArtist("Soda Stereo") }
-        assertTab("Biblioteca")
-
-        // Curtidas and Downloads from Início stay in Início (they used to light Biblioteca / Buscar).
-        nav { switchTab(HomeRoute) }
-        nav { openLiked() }
-        assertTab("Início")
-        nav { openDownloads() }
-        assertTab("Início")
-
-        nav { switchTab(SearchRoute) }
-        nav { openDownloads() }
-        assertTab("Buscar")
-
-        // Back to Biblioteca's saved stack, then all the way out of it.
-        nav { switchTab(LibraryRoute) }
-        compose.onNodeWithText("artist Soda Stereo").assertExists()
-        assertTab("Biblioteca")
-        nav { back() }
-        nav { back() }
-        nav { back() }
-        compose.onNodeWithText("home").assertExists()
-        assertTab("Início")
-    }
-
     private fun remote(title: String) = RemoteCollection(CollectionKind.ALBUM, "https://music.youtube.com/browse/$title", title, "Soda Stereo")
 
     @Test
@@ -171,8 +128,7 @@ class NavigatorTest {
         nav { openRemote(remote("A")) }
         compose.onNodeWithText("remote A").assertExists()
 
-        // Later, from Biblioteca: the next link must reach the Search screen, not album A again.
-        nav { switchTab(LibraryRoute) }
+        // The next link must reach the Search screen, not album A again.
         nav { openSearchScreen() }
         compose.onNodeWithText("search").assertExists()
         assertTrue(controller.currentBackStackEntry!!.destination.hasRoute(SearchRoute::class))

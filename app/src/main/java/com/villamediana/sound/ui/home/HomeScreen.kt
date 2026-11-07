@@ -198,6 +198,9 @@ internal fun HeaderActions(downloads: DownloadSummary, nav: Navigator) {
 
 // ---------------------------------------------------------------------------- feed
 
+/** Inside the main screen (which has its own header): no brand row, no status-bar inset. */
+val LocalHomeEmbedded = androidx.compose.runtime.staticCompositionLocalOf { false }
+
 @Composable
 private fun HomeFeed(
     state: HomeUiState,
@@ -210,7 +213,8 @@ private fun HomeFeed(
     onMenu: (CollectionTarget) -> Unit,
     extra: LazyListScope.() -> Unit = {},
 ) {
-    val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val embedded = LocalHomeEmbedded.current
+    val top = if (embedded) 0.dp else WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val listState = rememberLazyListState()
     val playedTitle = stringResource(R.string.home_recently_played)
     val addedTitle = stringResource(R.string.home_recently_added)
@@ -225,7 +229,7 @@ private fun HomeFeed(
         val headerIndex = order++
         item(key = "header", contentType = "header") {
           Column(Modifier.animateItem().staggerIn(headerIndex, intro).fillMaxWidth()) {
-            Row(
+            if (!embedded) Row(
                 Modifier
                     .fillMaxWidth()
                     .padding(start = Dimens.Gutter, end = 8.dp, bottom = 16.dp),
@@ -475,10 +479,11 @@ private fun SmartShuffleHero(cover: String?, playing: Boolean, onClick: () -> Un
 
 @Composable
 private fun EmptyHome(downloads: DownloadSummary, nav: Navigator, intro: Boolean) {
-    val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val embedded = LocalHomeEmbedded.current
+    val top = if (embedded) 0.dp else WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
     Box(Modifier.fillMaxSize().padding(bottom = LocalBottomInset.current)) {
-        Row(Modifier.align(Alignment.TopEnd).padding(top = top + 6.dp, end = 8.dp)) {
+        if (!embedded) Row(Modifier.align(Alignment.TopEnd).padding(top = top + 6.dp, end = 8.dp)) {
             HeaderActions(downloads, nav)
         }
         Column(
@@ -501,7 +506,7 @@ private fun EmptyHome(downloads: DownloadSummary, nav: Navigator, intro: Boolean
             Spacer(Modifier.height(28.dp))
             PillButton(
                 text = stringResource(R.string.home_empty_action),
-                onClick = { nav.switchTab(SearchRoute) },
+                onClick = { nav.openSearchScreen() },
                 icon = Icons.Rounded.Search,
                 filled = true,
                 modifier = Modifier.staggerIn(2, intro),

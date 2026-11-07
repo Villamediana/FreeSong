@@ -1,5 +1,6 @@
 package com.villamediana.sound.ui.library
 
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
@@ -114,8 +115,10 @@ import com.villamediana.sound.ui.theme.Motion
 import com.villamediana.sound.ui.theme.SoundColors
 
 @Composable
-fun LibraryScreen() {
+fun LibraryScreen(embeddedFilter: LibFilter? = null) {
     val vm: LibraryViewModel = viewModel()
+    // Inside the main screen: the filter comes from its pills, and its header replaces ours.
+    if (embeddedFilter != null) LaunchedEffect(embeddedFilter) { vm.selectFilter(embeddedFilter) }
     val state by vm.state.collectAsStateWithLifecycle()
     val selected by vm.filter.collectAsStateWithLifecycle()
     val playback by vm.playback.collectAsStateWithLifecycle()
@@ -126,6 +129,7 @@ fun LibraryScreen() {
     var menuTarget by remember { mutableStateOf<CollectionTarget?>(null) }
 
     Column(Modifier.fillMaxSize().background(SoundColors.Ink)) {
+      if (embeddedFilter == null) {
         Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
         Row(
             Modifier.fillMaxWidth().padding(start = Dimens.Gutter, end = 8.dp, top = 10.dp, bottom = 10.dp),
@@ -145,6 +149,7 @@ fun LibraryScreen() {
         }
         FilterBar(selected, onSelect = vm::selectFilter)
         Spacer(Modifier.height(4.dp))
+      }
 
         if (state.loaded) {
             AnimatedContent(
@@ -650,7 +655,7 @@ private fun LibraryEmpty(filter: LibFilter?, nav: Navigator, onCreate: () -> Uni
     val search: @Composable () -> Unit = {
         PillButton(
             text = stringResource(R.string.home_empty_action),
-            onClick = { nav.switchTab(SearchRoute) },
+            onClick = { nav.openSearchScreen() },
             icon = Icons.Rounded.Search,
             filled = true,
         )

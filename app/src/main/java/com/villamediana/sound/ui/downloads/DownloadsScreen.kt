@@ -167,7 +167,7 @@ fun DownloadsScreen() {
                         title = stringResource(R.string.dl_empty_title),
                         body = stringResource(R.string.dl_empty_body),
                         modifier = Modifier.padding(top = 40.dp),
-                        action = { PillButton(stringResource(R.string.dl_empty_action), { navigator.switchTab(SearchRoute) }, icon = Icons.Rounded.Search, filled = true) },
+                        action = { PillButton(stringResource(R.string.dl_empty_action), { navigator.openSearchScreen() }, icon = Icons.Rounded.Search, filled = true) },
                     )
                 }
                 else -> {

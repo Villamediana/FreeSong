@@ -1,5 +1,7 @@
 package com.villamediana.sound.ui.search
 
+import androidx.compose.foundation.layout.offset
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -204,6 +206,12 @@ fun SearchScreen() {
                     Modifier.fillMaxWidth().padding(start = Dimens.Gutter, end = Dimens.Gutter - 8.dp, top = 18.dp, bottom = 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    val back = navigator()
+                    if (back.controller.previousBackStackEntry != null) {
+                        IconButton(onClick = { back.back() }, modifier = Modifier.padding(end = 4.dp).offset(x = (-12).dp)) {
+                            Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.back), tint = SoundColors.Text)
+                        }
+                    }
                     Text(stringResource(R.string.search_title), style = MaterialTheme.typography.displaySmall, color = SoundColors.Text, modifier = Modifier.weight(1f))
                     DownloadsButton(overview, onClick = navigator::openDownloads)
                 }

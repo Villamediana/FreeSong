@@ -341,11 +341,12 @@ internal fun DiscoverHome(
     onPlaylist: (RemoteCollection) -> Unit,
     onEdit: () -> Unit,
 ) {
-    val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val embedded = LocalHomeEmbedded.current
+    val top = if (embedded) 0.dp else WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(top = top + 10.dp, bottom = LocalBottomInset.current)) {
         item(key = "header") {
             Column {
-                Row(Modifier.fillMaxWidth().padding(start = Dimens.Gutter, end = 8.dp, bottom = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (!embedded) Row(Modifier.fillMaxWidth().padding(start = Dimens.Gutter, end = 8.dp, bottom = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                     SoundWordmark(Modifier.weight(1f))
                     HeaderActions(downloads, nav)
                 }
