@@ -59,7 +59,6 @@ import com.villamediana.sound.discover.GenreDef
 import com.villamediana.sound.download.DownloadSummary
 import com.villamediana.sound.playback.PlaybackState
 import com.villamediana.sound.ui.components.Cover
-import com.villamediana.sound.ui.components.MosaicCover
 import com.villamediana.sound.ui.components.PillButton
 import com.villamediana.sound.ui.components.PlayingBars
 import com.villamediana.sound.ui.components.SectionHeader
@@ -150,7 +149,8 @@ private fun GenreCard(genre: GenreDef, covers: List<String>, selected: Boolean, 
             .border(3.dp, border, shape)
             .toggleable(value = selected, interactionSource = interaction, indication = null, role = Role.Checkbox, onValueChange = { onToggle() }),
     ) {
-        if (covers.isNotEmpty()) MosaicCover(covers, Modifier.fillMaxSize(), seed = genre.id, shape = RoundedCornerShape(0.dp))
+        // One cover per genre: cleaner than a mosaic.
+        covers.firstOrNull()?.let { Cover(it, Modifier.fillMaxSize(), seed = genre.id, shape = RoundedCornerShape(0.dp)) }
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.35f to Color.Black.copy(alpha = 0f), 1f to Color.Black.copy(alpha = 0.72f))))
         Text(
             stringResource(genre.label),
