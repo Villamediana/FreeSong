@@ -204,7 +204,7 @@ fun SoundRoot(incoming: MutableStateFlow<Inbound?>) {
                 composable<RemoteCollectionRoute> { Page { RemoteCollectionScreen(it.toRoute()) } }
                 composable<DownloadsRoute> { Page { DownloadsScreen() } }
                 composable<SettingsRoute> { Page { SettingsScreen() } }
-                composable<RecapRoute> { Page { com.villamediana.sound.ui.recap.RecapScreen() } }
+                composable<RecapRoute> { entry -> Page { com.villamediana.sound.ui.recap.RecapScreen(entry.toRoute<RecapRoute>().year) } }
                 composable<EqualizerRoute> { Page { EqualizerScreen() } }
                 composable<ThemeRoute> { Page { com.villamediana.sound.ui.settings.ThemeScreen() } }
                 composable<VideoRoute> { Page { VideoScreen(it.toRoute()) } }

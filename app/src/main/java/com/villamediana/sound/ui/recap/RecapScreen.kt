@@ -54,12 +54,10 @@ import com.villamediana.sound.data.asTransientTrack
 import com.villamediana.sound.playback.PlaySource
 import com.villamediana.sound.stats.Recap
 import com.villamediana.sound.stats.RecapArtist
-import com.villamediana.sound.stats.RecapPeriod
 import com.villamediana.sound.stats.RecapSong
 import com.villamediana.sound.stats.Recaps
 import com.villamediana.sound.ui.components.Cover
 import com.villamediana.sound.ui.components.EmptyState
-import com.villamediana.sound.ui.components.FilterPill
 import com.villamediana.sound.ui.components.PlayingBars
 import com.villamediana.sound.ui.components.SectionHeader
 import com.villamediana.sound.ui.components.formatLongDuration
@@ -68,29 +66,22 @@ import com.villamediana.sound.ui.nav.navigator
 import com.villamediana.sound.ui.theme.Dimens
 import com.villamediana.sound.ui.theme.LocalBottomInset
 import com.villamediana.sound.ui.theme.SoundColors
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
-import java.time.LocalDate
 import java.time.format.TextStyle
 import java.util.Locale
 
-@OptIn(ExperimentalCoroutinesApi::class)
-class RecapViewModel : ViewModel() {
+class RecapViewModel(val year: Int) : ViewModel() {
     private val graph = SoundApplication.graph
 
-    val period = MutableStateFlow(RecapPeriod.MONTH)
-
-    val recap: StateFlow<Recap?> = period.flatMapLatest { p ->
-        val since = Recaps.since(p, System.currentTimeMillis())
+    val recap: StateFlow<Recap?> = run {
+        val since = Recaps.span(year).first
         combine(graph.library.playEventsSince(since), graph.library.tracks, graph.library.onlinePlaysSince(since)) { events, tracks, online ->
-            Recaps.build(p, events, tracks.associateBy { it.id }, online)
+            Recaps.build(year, events, tracks.associateBy { it.id }, online)
         }
     }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
@@ -104,13 +95,12 @@ class RecapViewModel : ViewModel() {
 }
 
 @Composable
-fun RecapScreen() {
-    val vm: RecapViewModel = viewModel()
-    val period by vm.period.collectAsStateWithLifecycle()
+fun RecapScreen(year: Int) {
+    val vm: RecapViewModel = viewModel(key = "recap:$year") { RecapViewModel(year) }
     val recap by vm.recap.collectAsStateWithLifecycle()
     val playback by SoundApplication.graph.player.state.collectAsStateWithLifecycle()
     val nav = navigator()
-    val title = stringResource(R.string.recap_title)
+    val title = stringResource(R.string.recap_title_year, year)
 
     LazyColumn(
         Modifier.fillMaxSize().background(SoundColors.Ink),
@@ -130,28 +120,19 @@ fun RecapScreen() {
                     color = SoundColors.Text,
                     modifier = Modifier.padding(horizontal = Dimens.Gutter),
                 )
-                Spacer(Modifier.height(14.dp))
-                Row(
-                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = Dimens.Gutter),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    RecapPeriod.entries.forEach { p ->
-                        FilterPill(stringResource(periodLabel(p)), selected = p == period, onClick = { vm.period.value = p })
-                    }
-                }
                 Spacer(Modifier.height(20.dp))
             }
         }
 
         val r = recap
-        if (r != null && r.period == period) {
+        if (r != null) {
             if (r.empty) {
                 item(key = "empty") {
                     EmptyState(Icons.Outlined.Insights, stringResource(R.string.recap_empty_title), stringResource(R.string.recap_empty_body))
                 }
             } else {
-                item(key = "hero:${r.period}") { Hero(r) }
-                item(key = "facts:${r.period}") { Facts(r) }
+                item(key = "hero") { Hero(r) }
+                item(key = "facts") { Facts(r) }
                 if (r.topSongs.isNotEmpty()) {
                     item(key = "songs-title") {
                         Column { Spacer(Modifier.height(Dimens.SectionGap - 6.dp)); SectionHeader(stringResource(R.string.recap_top_songs)) }
@@ -174,27 +155,6 @@ fun RecapScreen() {
     }
 }
 
-private fun periodLabel(p: RecapPeriod): Int = when (p) {
-    RecapPeriod.MONTH -> R.string.recap_this_month
-    RecapPeriod.YEAR -> R.string.recap_this_year
-    RecapPeriod.ALL -> R.string.recap_all_time
-}
-
-/** "Novembro de 2026" / "2026" / "Desde o começo". */
-@Composable
-private fun periodName(p: RecapPeriod): String {
-    val today = LocalDate.now()
-    return when (p) {
-        RecapPeriod.MONTH -> stringResource(
-            R.string.recap_month_of,
-            today.month.getDisplayName(TextStyle.FULL_STANDALONE, Locale.getDefault()).replaceFirstChar { it.titlecase(Locale.getDefault()) },
-            today.year,
-        )
-        RecapPeriod.YEAR -> today.year.toString()
-        RecapPeriod.ALL -> stringResource(R.string.recap_since_start)
-    }
-}
-
 /** The big number: how long you listened, and to how many songs and artists. */
 @Composable
 private fun Hero(r: Recap) {
@@ -209,7 +169,7 @@ private fun Hero(r: Recap) {
             .background(Brush.linearGradient(listOf(accent, deep)))
             .padding(horizontal = 24.dp, vertical = 26.dp),
     ) {
-        Text(periodName(r.period), style = MaterialTheme.typography.labelLarge, color = on.copy(alpha = 0.8f))
+        Text(stringResource(R.string.recap_hero_label), style = MaterialTheme.typography.labelLarge, color = on.copy(alpha = 0.8f))
         Spacer(Modifier.height(10.dp))
         Text(
             formatLongDuration(r.listenedMs),
@@ -316,9 +276,9 @@ private fun ArtistLine(rank: Int, a: RecapArtist, onClick: () -> Unit) {
     }
 }
 
-/** The Início's way in: this month so far. Shown once there is something to tell. */
+/** The Início's way in, all through January: the year that ended. */
 @Composable
-fun RecapEntry(listenedMs: Long, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun RecapEntry(year: Int, listenedMs: Long, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Row(
         modifier
             .fillMaxWidth()
@@ -334,9 +294,9 @@ fun RecapEntry(listenedMs: Long, onClick: () -> Unit, modifier: Modifier = Modif
         }
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
-            Text(stringResource(R.string.recap_title), style = MaterialTheme.typography.titleMedium, color = SoundColors.Text)
+            Text(stringResource(R.string.recap_title_year, year), style = MaterialTheme.typography.titleMedium, color = SoundColors.Text)
             Text(
-                "${periodName(RecapPeriod.MONTH)} · ${formatLongDuration(listenedMs)}",
+                stringResource(R.string.recap_entry_sub, formatLongDuration(listenedMs)),
                 style = MaterialTheme.typography.bodyMedium,
                 color = SoundColors.TextMuted,
                 maxLines = 1,

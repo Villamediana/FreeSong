@@ -8,10 +8,9 @@ import com.villamediana.sound.online.YouTubeLinks
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
+import java.time.Month
 import java.time.ZoneId
 
-/** The retrospective's window: this month, this year, or everything. */
-enum class RecapPeriod { MONTH, YEAR, ALL }
 
 /** A song of the ranking: a library one ([track]) or one heard online ([remote]). */
 data class RecapSong(
@@ -28,7 +27,8 @@ data class RecapSong(
 data class RecapArtist(val name: String, val cover: String?, val plays: Int, val listenedMs: Long)
 
 data class Recap(
-    val period: RecapPeriod,
+    /** The year it sums up. */
+    val year: Int,
     val listenedMs: Long = 0,
     /** Listens that were not skipped. */
     val plays: Int = 0,
@@ -46,21 +46,24 @@ data class Recap(
 }
 
 /**
- * Your listening, summed up: library listens (play_events) and online ones (online_plays) together.
- * A song heard online and later downloaded counts as one (same YouTube id).
+ * Your year in music, once a year: all through January, the year that just ended. Library listens
+ * (play_events) and online ones (online_plays) together; a song heard online and later downloaded
+ * counts as one (same YouTube id).
  */
 object Recaps {
     const val TOP = 5
 
-    /** Where [period] starts (local time): the 1st of this month, Jan 1st, or the beginning. */
-    fun since(period: RecapPeriod, now: Long, zone: ZoneId = ZoneId.systemDefault()): Long {
+    /** The year the retrospective shows at [now]: last year during January, none the rest of the year. */
+    fun yearShown(now: Long, zone: ZoneId = ZoneId.systemDefault()): Int? {
         val today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
-        val start: LocalDate = when (period) {
-            RecapPeriod.MONTH -> today.withDayOfMonth(1)
-            RecapPeriod.YEAR -> today.withDayOfYear(1)
-            RecapPeriod.ALL -> return 0L
-        }
-        return start.atStartOfDay(zone).toInstant().toEpochMilli()
+        return if (today.month == Month.JANUARY) today.year - 1 else null
+    }
+
+    /** [year]'s span in local time: Jan 1st (inclusive) to the next Jan 1st (exclusive). */
+    fun span(year: Int, zone: ZoneId = ZoneId.systemDefault()): LongRange {
+        val start = LocalDate.of(year, 1, 1).atStartOfDay(zone).toInstant().toEpochMilli()
+        val end = LocalDate.of(year + 1, 1, 1).atStartOfDay(zone).toInstant().toEpochMilli()
+        return start until end
     }
 
     /** "A, B & C feat. D" → "A": rankings go by the main artist. */
@@ -80,12 +83,13 @@ object Recaps {
     }
 
     fun build(
-        period: RecapPeriod,
+        year: Int,
         events: List<PlayEvent>,
         tracksById: Map<Long, Track>,
         online: List<OnlinePlay>,
         zone: ZoneId = ZoneId.systemDefault(),
     ): Recap {
+        val span = span(year, zone)
         val songs = LinkedHashMap<String, Acc>()
         val hours = LongArray(24)
         val days = HashMap<DayOfWeek, Long>()
@@ -100,6 +104,7 @@ object Recaps {
         }
 
         for (e in events) {
+            if (e.playedAt !in span) continue
             val t = tracksById[e.trackId] ?: continue
             val key = t.videoId ?: "t:${t.id}"
             val acc = songs.getOrPut(key) { Acc(t.title, t.artist, t.coverPath, t, null) }
@@ -118,6 +123,7 @@ object Recaps {
             }
         }
         for (p in online) {
+            if (p.playedAt !in span) continue
             val acc = songs.getOrPut(p.videoId) {
                 Acc(p.title, p.artist, p.thumbnailUrl, null, null)
             }
@@ -169,7 +175,7 @@ object Recaps {
             .map { RecapArtist(it.name, it.cover, it.plays, it.listened) }
 
         return Recap(
-            period = period,
+            year = year,
             listenedMs = total,
             plays = plays,
             songs = songs.values.count { it.listened > 0 },

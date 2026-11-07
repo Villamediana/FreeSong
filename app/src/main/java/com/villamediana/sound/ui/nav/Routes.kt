@@ -27,7 +27,7 @@ import kotlinx.serialization.Serializable
 @Serializable data class VideoRoute(val videoId: String, val title: String? = null)
 @Serializable data object EqualizerRoute
 @Serializable data object ThemeRoute
-@Serializable data object RecapRoute
+@Serializable data class RecapRoute(val year: Int)
 
 /** Pages that take the whole screen: no mini player over them, the player layer is hidden. */
 fun isFullPage(route: Any): Boolean = route is VideoRoute || route == SettingsRoute || route == EqualizerRoute || route == ThemeRoute

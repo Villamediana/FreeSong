@@ -222,10 +222,10 @@ class HomeScreensSmokeTest {
             val online = com.villamediana.sound.online.RemoteTrack("zz1", "https://music.youtube.com/watch?v=zz1", "Streamed Love", "Online Artist")
             repeat(3) { lib.recordOnlinePlay(online, 180_000, 190_000, "RADIO") }
         }
-        var recap by androidx.compose.runtime.mutableStateOf(false)
-        compose.setContent { Host { if (recap) com.villamediana.sound.ui.recap.RecapScreen() else HomeScreen() } }
-        waitForText("Sua retrospectiva")
-        recap = true
+        // Outside January the Início has no way in (the retrospective is once a year).
+        val year = java.time.LocalDate.now().year
+        compose.setContent { Host { com.villamediana.sound.ui.recap.RecapScreen(year) } }
+        waitForText("Sua retrospectiva $year")
         waitForText("Mais tocadas")
         waitForText("De Música Ligera")
         waitForText("Streamed Love")

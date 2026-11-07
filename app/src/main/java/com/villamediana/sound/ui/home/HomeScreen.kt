@@ -93,7 +93,7 @@ fun HomeScreen() {
     val state by vm.state.collectAsStateWithLifecycle()
     val playback by vm.playback.collectAsStateWithLifecycle()
     val downloads by vm.downloads.collectAsStateWithLifecycle()
-    val monthListened by vm.monthListenedMs.collectAsStateWithLifecycle()
+    val recap by vm.recap.collectAsStateWithLifecycle()
     val nav = navigator()
 
     // Staggered entrance only on the first load; items composed later (scrolling, returning) just appear.
@@ -151,7 +151,7 @@ fun HomeScreen() {
                     vm = vm,
                     nav = nav,
                     intro = intro,
-                    monthListenedMs = monthListened,
+                    recap = recap,
                     onSong = { songSheet = it },
                     onMenu = { menuTarget = it },
                     extra = { discoverSections(discover, playback, playDiscover, openArtist, openPlaylist, discoverVm::edit) },
@@ -213,7 +213,8 @@ private fun HomeFeed(
     onSong: (Track) -> Unit,
     onMenu: (CollectionTarget) -> Unit,
     extra: LazyListScope.() -> Unit = {},
-    monthListenedMs: Long = 0,
+    /** January: last year's retrospective (year, time listened). */
+    recap: Pair<Int, Long>? = null,
 ) {
     val embedded = LocalHomeEmbedded.current
     val top = if (embedded) 0.dp else WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
@@ -260,13 +261,14 @@ private fun HomeFeed(
             )
         }
 
-        // This month in music (once there is a minute to tell).
-        if (monthListenedMs >= 60_000) {
+        // January: the year that ended, in music (once there is a minute to tell).
+        if (recap != null && recap.second >= 60_000) {
             val idx = order++
             item(key = "recap", contentType = "recap") {
                 com.villamediana.sound.ui.recap.RecapEntry(
-                    listenedMs = monthListenedMs,
-                    onClick = { nav.openRecap() },
+                    year = recap.first,
+                    listenedMs = recap.second,
+                    onClick = { nav.openRecap(recap.first) },
                     modifier = Modifier.animateItem().staggerIn(idx, intro).padding(top = 12.dp),
                 )
             }

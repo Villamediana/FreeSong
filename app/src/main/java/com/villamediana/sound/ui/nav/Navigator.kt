@@ -70,7 +70,7 @@ class Navigator(val controller: NavHostController) {
     fun openSettings() = go(SettingsRoute)
     fun openEqualizer() = go(EqualizerRoute)
     fun openTheme() = go(ThemeRoute)
-    fun openRecap() = go(RecapRoute)
+    fun openRecap(year: Int) = go(RecapRoute(year))
     fun openVideo(videoId: String, title: String?) = go(VideoRoute(videoId, title))
 
     /** Bottom-bar tab switch: single top, state saved/restored per tab. */

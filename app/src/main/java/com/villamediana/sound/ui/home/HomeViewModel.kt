@@ -40,12 +40,15 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     val downloads: StateFlow<DownloadSummary> =
         graph.downloads.summary.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DownloadSummary())
 
-    /** Listened this month (library + online): the way into the retrospective shows when > 0. */
-    val monthListenedMs: StateFlow<Long> = run {
-        val since = com.villamediana.sound.stats.Recaps.since(com.villamediana.sound.stats.RecapPeriod.MONTH, System.currentTimeMillis())
-        combine(library.playEventsSince(since), library.onlinePlaysSince(since)) { local, online ->
-            local.sumOf { it.listenedMs } + online.sumOf { it.listenedMs }
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0L)
+    /** The retrospective's year (all through January: last year) and how long it was listened; null otherwise. */
+    val recap: StateFlow<Pair<Int, Long>?> = run {
+        val year = com.villamediana.sound.stats.Recaps.yearShown(System.currentTimeMillis())
+            ?: return@run kotlinx.coroutines.flow.MutableStateFlow<Pair<Int, Long>?>(null)
+        val span = com.villamediana.sound.stats.Recaps.span(year)
+        combine(library.playEventsSince(span.first), library.onlinePlaysSince(span.first)) { local, online ->
+            val ms = local.filter { it.playedAt in span }.sumOf { it.listenedMs } + online.filter { it.playedAt in span }.sumOf { it.listenedMs }
+            year to ms
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
     }
 
     /** The staggered fade-in runs once per screen lifetime, not on every return to the tab. */

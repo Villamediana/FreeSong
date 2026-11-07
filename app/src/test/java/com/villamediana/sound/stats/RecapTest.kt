@@ -26,11 +26,22 @@ class RecapTest {
     private fun online(videoId: String, title: String, artist: String, at: Long, ms: Long = 180_000, skipped: Boolean = false) =
         OnlinePlay(videoId = videoId, title = title, artist = artist, thumbnailUrl = "https://i/$videoId", playedAt = at, listenedMs = ms, completed = !skipped, skipped = skipped)
 
-    @Test fun periodsStartAtTheMonthTheYearOrTheBeginning() {
-        val now = at(2026, 11, 7, 15)
-        assertEquals(at(2026, 11, 1, 0), Recaps.since(RecapPeriod.MONTH, now, zone))
-        assertEquals(at(2026, 1, 1, 0), Recaps.since(RecapPeriod.YEAR, now, zone))
-        assertEquals(0L, Recaps.since(RecapPeriod.ALL, now, zone))
+    @Test fun onceAYearAllThroughJanuaryWithTheYearThatEnded() {
+        assertEquals(null, Recaps.yearShown(at(2026, 11, 7, 15), zone))
+        assertEquals(null, Recaps.yearShown(at(2026, 12, 31, 23), zone))
+        assertEquals(2026, Recaps.yearShown(at(2027, 1, 1, 0), zone))
+        assertEquals(2026, Recaps.yearShown(at(2027, 1, 31, 23), zone))
+        assertEquals(null, Recaps.yearShown(at(2027, 2, 1, 0), zone))
+        assertEquals(at(2026, 1, 1, 0) until at(2027, 1, 1, 0), Recaps.span(2026, zone))
+    }
+
+    @Test fun onlyTheYearCounts() {
+        val online = listOf(
+            online("a", "A", "X", at(2025, 12, 31, 23)),
+            online("b", "B", "Y", at(2026, 6, 1, 12)),
+            online("c", "C", "Z", at(2027, 1, 2, 10)),
+        )
+        assertEquals(listOf("B"), Recaps.build(2026, emptyList(), emptyMap(), online, zone).topSongs.map { it.title })
     }
 
     @Test fun libraryAndOnlineListensAddUpAndTheSameSongCountsOnce() {
@@ -48,7 +59,7 @@ class RecapTest {
             online("bad", "Bad Guy", "Billie Eilish, Finneas", at(2026, 11, 6, 23)),
             online("bad", "Bad Guy", "Billie Eilish, Finneas", at(2026, 11, 7, 1), ms = 10_000, skipped = true),
         )
-        val r = Recaps.build(RecapPeriod.MONTH, events, mapOf(1L to iris, 2L to slide), online, zone)
+        val r = Recaps.build(2026, events, mapOf(1L to iris, 2L to slide), online, zone)
 
         assertEquals(200_000L * 2 + 20_000 + 180_000 * 3 + 10_000, r.listenedMs)
         assertEquals(5, r.plays)
@@ -66,7 +77,7 @@ class RecapTest {
     }
 
     @Test fun nothingHeardIsEmpty() {
-        val r = Recaps.build(RecapPeriod.YEAR, emptyList(), emptyMap(), emptyList(), zone)
+        val r = Recaps.build(2026, emptyList(), emptyMap(), emptyList(), zone)
         assertTrue(r.empty)
         assertNull(r.favoriteHour)
         assertTrue(r.topSongs.isEmpty())
@@ -75,7 +86,7 @@ class RecapTest {
     @Test fun favoriteDayIsWhereMostTimeWent() {
         val friday = at(2026, 11, 6, 20) // a Friday
         val online = listOf(online("a", "A", "X", friday, ms = 600_000), online("b", "B", "Y", at(2026, 11, 3, 20), ms = 100_000))
-        assertEquals(DayOfWeek.FRIDAY, Recaps.build(RecapPeriod.MONTH, emptyList(), emptyMap(), online, zone).favoriteDay)
+        assertEquals(DayOfWeek.FRIDAY, Recaps.build(2026, emptyList(), emptyMap(), online, zone).favoriteDay)
     }
 
     @Test fun mainArtistDropsTheGuests() {

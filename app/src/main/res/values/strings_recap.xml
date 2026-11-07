@@ -1,11 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="recap_title">Sua retrospectiva</string>
-    <string name="recap_this_month">Este mês</string>
-    <string name="recap_this_year">Este ano</string>
-    <string name="recap_all_time">Sempre</string>
-    <string name="recap_month_of">%1$s de %2$d</string>
-    <string name="recap_since_start">Desde o começo</string>
     <string name="recap_listening">ouvindo música</string>
     <plurals name="recap_songs">
         <item quantity="one">música</item>
@@ -31,4 +26,7 @@
     <string name="recap_fact_genre">Gênero</string>
     <string name="recap_empty_title">Ainda sem história</string>
     <string name="recap_empty_body">Ouça umas músicas e volte aqui.</string>
+    <string name="recap_title_year">Sua retrospectiva %1$d</string>
+    <string name="recap_entry_sub">Seu ano em música · %1$s</string>
+    <string name="recap_hero_label">Seu ano em música</string>
 </resources>
