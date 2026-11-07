@@ -12,6 +12,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.google.common.util.concurrent.ListenableFuture
 import com.villamediana.sound.SoundApplication
 import com.villamediana.sound.data.Settings
+import com.villamediana.sound.data.asTransientTrack
 import com.villamediana.sound.data.db.Track
 import com.villamediana.sound.online.OnlineException
 import com.villamediana.sound.playback.stream.StreamErrors
@@ -42,7 +43,7 @@ import java.util.concurrent.ExecutionException
 /**
  * The real [PlaybackService] (ExoPlayer, session, Room library of short WAV files) driven the way
  * the app drives it: queue commands from a [MediaController], resumption the way Media3 asks for
- * it. Robolectric's controller only gets the custom commands, so the player is checked directly.
+ * it. The app's controller must see the queue too (the mini player reads it).
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -412,5 +413,38 @@ class PlaybackServiceTest {
         val error = runCatching { await(callback.onPlaybackResumption(session, appController, false)) }.exceptionOrNull()
         assertTrue(error is ExecutionException)
         assertNull(currentId())
+    }
+
+    @Test fun anOnlineQueueIsVisibleToTheAppController() {
+        start()
+        val remote = listOf(
+            com.villamediana.sound.online.RemoteTrack("dQw4w9WgXcQ", "https://music.youtube.com/watch?v=dQw4w9WgXcQ", "Song A", "Artist A", durationMs = 200_000, thumbnailUrl = "https://i.ytimg.com/vi/x/hqdefault.jpg", fromMusicCatalog = true),
+            com.villamediana.sound.online.RemoteTrack("9bZkp7q19f0", "https://music.youtube.com/watch?v=9bZkp7q19f0", "Song B", "Artist B", durationMs = 180_000, fromMusicCatalog = true),
+        )
+        val transient = remote.map { it.asTransientTrack() }
+        val args = Bundle().apply {
+            putLongArray(SessionProtocol.ARG_IDS, transient.map { it.id }.toLongArray())
+            putInt(SessionProtocol.ARG_START, 0)
+            putInt(SessionProtocol.ARG_SHUFFLE, SessionProtocol.SHUFFLE_KEEP)
+            SessionProtocol.putSource(this, PlaySource(PlaySource.Type.SEARCH, "q"))
+            SessionProtocol.putOnline(this, transient)
+        }
+        send(SessionProtocol.PLAY, args)
+        idleUntil { player.mediaItemCount == 2 }
+        // What MediaPlayerConnection reads to fill PlaybackState.current (the mini player needs it).
+        idleUntil { controller.mediaItemCount == 2 }
+        val item = controller.currentMediaItem
+        val track = MediaItems.onlineTrack(item)
+        assertTrue("controller sees no current online track (mini player stays hidden)", track != null)
+        assertEquals("Song A", track!!.title)
+    }
+
+    @Test fun theAppControllerSeesTheQueueAndCanControlIt() {
+        start()
+        play(tracks.map { it.id }, 0)
+        idleUntil { controller.mediaItemCount == tracks.size }
+        assertTrue(controller.availableCommands.contains(Player.COMMAND_GET_TIMELINE))
+        assertTrue(controller.availableCommands.contains(Player.COMMAND_PLAY_PAUSE))
+        assertEquals(tracks.first().id.toString(), controller.currentMediaItem?.mediaId)
     }
 }

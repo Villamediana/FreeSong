@@ -882,7 +882,9 @@ class PlaybackService : MediaLibraryService() {
             else artwork.grantCovers(controller.packageName, graph.storage.coversDir)
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session, controller)
                 .setAvailableSessionCommands(commands.build())
-                .setAvailablePlayerCommands(base.availablePlayerCommands)
+                // Explicit: Media3 1.11's default result handed controllers a single player command, so
+                // the app (mini player, queue, lyrics) never saw the current song or the queue.
+                .setAvailablePlayerCommands(MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS)
                 .build()
         }
 
