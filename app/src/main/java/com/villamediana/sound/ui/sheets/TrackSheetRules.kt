@@ -20,25 +20,27 @@ object TrackSheetRules {
      *
      * @param fileExists the audio file is on the phone (needed to send the file itself)
      * @param inPlaylist the sheet was opened from a playlist row
-     * @param fromPlayer the sheet was opened from the player (adds the equalizer)
+     * @param fromPlayer the sheet was opened from the player (adds the sleep timer; drops what the
+     *   player already shows: heart, download, equalizer, "play next")
      */
     fun actionsFor(track: Track, fileExists: Boolean, inPlaylist: Boolean, fromPlayer: Boolean): List<TrackSheetAction> = buildList {
         val hasVideo = track.videoId != null
         val canShare = track.shareUrl != null
+        // From the player the heart and the download sit beside the title, the equalizer has its
+        // own button, and "play next" of the song playing makes no sense: none of them here.
         if (track.isOnline) {
-            if (hasVideo) add(TrackSheetAction.LIKE)
-            add(TrackSheetAction.DOWNLOAD)
-            add(TrackSheetAction.PLAY_NEXT)
+            if (hasVideo && !fromPlayer) add(TrackSheetAction.LIKE)
+            if (!fromPlayer) add(TrackSheetAction.DOWNLOAD)
+            if (!fromPlayer) add(TrackSheetAction.PLAY_NEXT)
             add(TrackSheetAction.ENQUEUE)
             if (hasVideo) add(TrackSheetAction.RADIO)
             if (hasVideo) add(TrackSheetAction.VIDEO)
             if (canShare) add(TrackSheetAction.SHARE)
-            if (fromPlayer) add(TrackSheetAction.EQUALIZER)
             if (fromPlayer) add(TrackSheetAction.SLEEP_TIMER)
             return@buildList
         }
-        add(TrackSheetAction.LIKE)
-        add(TrackSheetAction.PLAY_NEXT)
+        if (!fromPlayer) add(TrackSheetAction.LIKE)
+        if (!fromPlayer) add(TrackSheetAction.PLAY_NEXT)
         add(TrackSheetAction.ENQUEUE)
         add(TrackSheetAction.ADD_TO_PLAYLIST)
         add(TrackSheetAction.RADIO)
@@ -47,7 +49,6 @@ object TrackSheetRules {
         if (hasVideo) add(TrackSheetAction.VIDEO)
         if (canShare) add(TrackSheetAction.SHARE)
         if (fileExists) add(TrackSheetAction.SEND_FILE)
-        if (fromPlayer) add(TrackSheetAction.EQUALIZER)
         if (fromPlayer) add(TrackSheetAction.SLEEP_TIMER)
         add(TrackSheetAction.EDIT)
         if (inPlaylist) add(TrackSheetAction.REMOVE_FROM_PLAYLIST)

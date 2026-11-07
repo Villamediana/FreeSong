@@ -1,5 +1,11 @@
 package com.villamediana.sound.ui.player
 
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.foundation.MarqueeSpacing
 import com.villamediana.sound.download.DownloadWait
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.withLink
@@ -7,8 +13,8 @@ import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.material.icons.rounded.FastForward
-import androidx.compose.material.icons.rounded.FastRewind
+import androidx.compose.material.icons.rounded.SkipNext
+import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -298,15 +304,17 @@ private fun TopBar(source: PlaySource?, actions: PlayerActions, hasVideo: Boolea
             )
             if (source != null) {
                 Spacer(Modifier.height(1.dp))
-                // Long sources ("Porque você ouviu …") scroll instead of being cut.
-                Text(
-                    source.title,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = SoundColors.Text,
-                    maxLines = 1,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1_800, repeatDelayMillis = 2_600),
-                )
+                // Long sources ("Porque você ouviu …") scroll instead of being cut, fading at the edges.
+                Box(Modifier.fillMaxWidth().fadedEdges(), contentAlignment = Alignment.Center) {
+                    Text(
+                        source.title,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = SoundColors.Text,
+                        maxLines = 1,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1_800, repeatDelayMillis = 2_600, spacing = MarqueeSpacing(36.dp)),
+                    )
+                }
             }
         }
         Row(Modifier.align(Alignment.CenterEnd), verticalAlignment = Alignment.CenterVertically) {
@@ -407,8 +415,10 @@ private fun Controls(
 ) {
     TrackHeader(track, stream, liked, actions)
     Spacer(Modifier.height(18.dp))
-    Waveform(seed = track.videoId ?: track.id.toString(), clock = clock, durationMs = durationMs, modifier = Modifier.fillMaxWidth().height(34.dp))
-    SeekBar(clock = clock, durationMs = durationMs, onSeek = actions.seek, timeColor = SoundColors.Text.copy(alpha = 0.7f))
+    // The wave follows the finger while the seek bar is dragged, not only once it is let go.
+    val scrub = remember { mutableStateOf<Float?>(null) }
+    Waveform(seed = track.videoId ?: track.id.toString(), clock = clock, durationMs = durationMs, modifier = Modifier.fillMaxWidth().height(34.dp), scrub = scrub)
+    SeekBar(clock = clock, durationMs = durationMs, onSeek = actions.seek, timeColor = SoundColors.Text.copy(alpha = 0.7f), drag = scrub)
     Spacer(Modifier.height(6.dp))
     Transport(state, playing, actions)
     Spacer(Modifier.height(14.dp))
@@ -485,9 +495,9 @@ private fun Transport(state: PlaybackState, playing: Boolean, actions: PlayerAct
             tint = if (state.shuffle) SoundColors.Mint else SoundColors.Text.copy(alpha = 0.7f),
             dot = state.shuffle,
         )
-        PlayerIconButton(Icons.Rounded.FastRewind, stringResource(R.string.player_previous), actions.previous, size = 64.dp, iconSize = 50.dp, tint = SoundColors.Mint)
+        PlayerIconButton(Icons.Rounded.SkipPrevious, stringResource(R.string.player_previous), actions.previous, size = 64.dp, iconSize = 50.dp, tint = SoundColors.Mint)
         MorphPlayPause(playing = playing, onClick = actions.togglePlay, size = 84.dp, container = Color.Transparent, content = SoundColors.Mint, buffering = state.isBuffering)
-        PlayerIconButton(Icons.Rounded.FastForward, stringResource(R.string.player_next), actions.next, size = 64.dp, iconSize = 50.dp, tint = SoundColors.Mint)
+        PlayerIconButton(Icons.Rounded.SkipNext, stringResource(R.string.player_next), actions.next, size = 64.dp, iconSize = 50.dp, tint = SoundColors.Mint)
         PlayerIconButton(
             Icons.Rounded.Repeat,
             stringResource(
@@ -625,3 +635,14 @@ private fun SleepButton(timer: SleepTimer, onClick: () -> Unit) {
         }
     }
 }
+
+/** Fades the left and right edges of what is drawn (a scrolling line comes and goes softly). */
+private fun Modifier.fadedEdges(edge: Float = 0.1f): Modifier = this
+    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+    .drawWithContent {
+        drawContent()
+        drawRect(
+            Brush.horizontalGradient(0f to Color.Transparent, edge to Color.Black, 1f - edge to Color.Black, 1f to Color.Transparent),
+            blendMode = BlendMode.DstIn,
+        )
+    }

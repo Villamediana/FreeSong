@@ -216,7 +216,7 @@ class SearchScreensSmokeTest {
 
         rule.waitUntil(20_000) { rule.onAllNodes(hasText("Trátame Suavemente")).fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText(s(R.string.search_remote_download_all)).assertExists()
-        rule.onNodeWithText(s(R.string.search_remote_playlist_note, "Rock nacional")).assertExists()
+        // No "Cria a playlist … na sua biblioteca" line under the buttons.
         harness.screenshot("remote_playlist")
 
         // Play streams the whole playlist from the first song.
@@ -259,7 +259,9 @@ class SearchScreensSmokeTest {
         rule.waitUntil(20_000) { rule.onAllNodes(hasText("Canción Animal")).fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText(s(R.string.search_remote_popular)).assertExists()
         rule.onNodeWithText(s(R.string.search_remote_albums)).assertExists()
-        rule.onNodeWithText(s(R.string.search_remote_download_popular)).assertExists()
+        // No "Baixar populares": an artist's songs are kept one by one (heart / arrow on each row).
+        rule.onNodeWithText(s(R.string.search_remote_download_all)).assertDoesNotExist()
+        rule.onNodeWithContentDescription(s(R.string.search_remote_play)).assertExists()
         harness.screenshot("remote_artist")
     }
 

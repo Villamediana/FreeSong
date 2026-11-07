@@ -50,7 +50,7 @@ class DownloadsViewModel(
     val ui: StateFlow<DownloadsUi?> = downloads.tasks
         .map { tasks -> DownloadsUi(DownloadGrouping.overview(tasks), DownloadGrouping.groups(tasks)) }
         .flowOn(Dispatchers.Default)
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     /** What queued downloads wait for: the banner on top says it. */
     val wait: StateFlow<DownloadWait> = downloads.wait.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DownloadWait.NONE)

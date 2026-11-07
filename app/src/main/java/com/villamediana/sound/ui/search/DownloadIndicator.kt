@@ -1,5 +1,6 @@
 package com.villamediana.sound.ui.search
 
+import androidx.compose.material3.ripple
 import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.Wifi
 import com.villamediana.sound.download.DownloadWait
@@ -102,7 +103,7 @@ fun DownloadIndicator(
             .clip(CircleShape)
             .clickable(
                 interactionSource = interaction,
-                indication = null,
+                indication = ripple(bounded = false, radius = 22.dp, color = idleTint),
                 enabled = onClick != null,
                 role = Role.Button,
                 onClickLabel = removeLabel.takeIf { state == ItemDownload.Done || state == ItemDownload.Queued || state is ItemDownload.Running },

@@ -24,8 +24,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.material.icons.rounded.FastForward
-import androidx.compose.material.icons.rounded.FastRewind
+import androidx.compose.material.icons.rounded.SkipNext
+import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.ui.unit.dp
 import com.villamediana.sound.data.db.Track
 import com.villamediana.sound.data.isOnline
@@ -108,7 +108,7 @@ internal fun MiniPlayerBar(
             }
             Spacer(Modifier.width(6.dp))
             PlayerIconButton(
-                androidx.compose.material.icons.Icons.Rounded.FastRewind,
+                androidx.compose.material.icons.Icons.Rounded.SkipPrevious,
                 androidx.compose.ui.res.stringResource(com.villamediana.sound.R.string.player_previous),
                 onPrevious,
                 size = 42.dp,
@@ -117,7 +117,7 @@ internal fun MiniPlayerBar(
             )
             MorphPlayPauseIcon(playing = playing, onClick = onTogglePlay, size = 46.dp)
             PlayerIconButton(
-                androidx.compose.material.icons.Icons.Rounded.FastForward,
+                androidx.compose.material.icons.Icons.Rounded.SkipNext,
                 androidx.compose.ui.res.stringResource(com.villamediana.sound.R.string.player_next),
                 onNext,
                 size = 42.dp,

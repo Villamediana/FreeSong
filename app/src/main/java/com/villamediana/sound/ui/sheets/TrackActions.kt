@@ -1,5 +1,7 @@
 package com.villamediana.sound.ui.sheets
 
+import androidx.compose.material.icons.rounded.MusicVideo
+import androidx.compose.material.icons.rounded.Sensors
 import androidx.compose.runtime.collectAsState
 import androidx.compose.material.icons.rounded.Bedtime
 import android.content.res.Resources
@@ -253,7 +255,7 @@ fun TrackActionsSheet(
                         TrackSheetAction.ADD_TO_PLAYLIST -> SheetAction(Icons.AutoMirrored.Rounded.PlaylistAdd, stringResource(R.string.sheet_add_to_playlist), onClick = {
                             closeThen { stage = TrackSheetStage.AddToPlaylist }
                         })
-                        TrackSheetAction.RADIO -> SheetAction(Icons.Rounded.Radio, stringResource(R.string.sheet_start_radio), dimmed = dimmed, onClick = {
+                        TrackSheetAction.RADIO -> SheetAction(Icons.Rounded.Sensors, stringResource(R.string.sheet_start_radio), dimmed = dimmed, onClick = {
                             when {
                                 dimmed -> offline()
                                 t.isOnline -> {
@@ -276,7 +278,7 @@ fun TrackActionsSheet(
                             closeThen { onDismiss(); navigator.openArtist(t.artist) }
                         })
                         TrackSheetAction.VIDEO -> t.videoId?.let { videoId ->
-                            SheetAction(Icons.Rounded.SmartDisplay, stringResource(R.string.sheet_video), dimmed = dimmed, onClick = {
+                            SheetAction(Icons.Rounded.MusicVideo, stringResource(R.string.sheet_video), dimmed = dimmed, onClick = {
                                 if (dimmed) offline() else closeThen { onDismiss(); navigator.openVideo(videoId, t.title) }
                             })
                         }

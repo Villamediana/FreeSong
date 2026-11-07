@@ -1,5 +1,14 @@
 package com.villamediana.sound.ui.player
 
+import androidx.compose.material3.ripple
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.runtime.MutableState
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -92,8 +101,9 @@ internal fun SeekBar(
     active: Color = SoundColors.Text,
     inactive: Color = SoundColors.Text.copy(alpha = 0.2f),
     timeColor: Color = SoundColors.TextMuted,
+    /** Where the finger is (0..1) while dragging; shared so the wave above follows it live. */
+    drag: MutableState<Float?> = remember { mutableStateOf(null) },
 ) {
-    val drag = remember { mutableStateOf<Float?>(null) }
     val dragging by remember { derivedStateOf { drag.value != null } }
     val grow = animateFloatAsState(if (dragging) 1f else 0f, spring(dampingRatio = 0.62f, stiffness = 700f), label = "thumb")
     val duration by rememberUpdatedState(durationMs)
@@ -156,7 +166,14 @@ private fun SeekTimes(clock: PlaybackClock, durationMs: Long, drag: State<Float?
  * played part is lit. Drawn from the clock in the draw phase (no recomposition per tick).
  */
 @Composable
-internal fun Waveform(seed: String, clock: PlaybackClock, durationMs: Long, modifier: Modifier = Modifier) {
+internal fun Waveform(
+    seed: String,
+    clock: PlaybackClock,
+    durationMs: Long,
+    modifier: Modifier = Modifier,
+    /** The seek bar's drag (0..1): the wave lights up to the finger while it moves. */
+    scrub: State<Float?>? = null,
+) {
     val heights = remember(seed) {
         val r = java.util.Random(seed.hashCode().toLong())
         FloatArray(34) { i ->
@@ -169,7 +186,7 @@ internal fun Waveform(seed: String, clock: PlaybackClock, durationMs: Long, modi
             val n = heights.size
             val gap = 4.dp.toPx()
             val w = (size.width - gap * (n - 1)) / n
-            val f = PlayerMath.fraction(clock.positionMs, durationMs)
+            val f = scrub?.value ?: PlayerMath.fraction(clock.positionMs, durationMs)
             for (i in 0 until n) {
                 val h = size.height * heights[i]
                 val x = i * (w + gap)
@@ -198,16 +215,17 @@ internal fun MorphPlayPause(
 ) {
     val t = animateFloatAsState(if (playing) 1f else 0f, spring(dampingRatio = 0.82f, stiffness = 650f), label = "morph")
     val interaction = remember { MutableInteractionSource() }
+    val haptic = LocalHapticFeedback.current
     val label = stringResource(if (playing) R.string.player_pause else R.string.player_play)
     Box(modifier.size(size + 10.dp), contentAlignment = Alignment.Center) {
-        if (buffering) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(size + 10.dp),
-                color = container.copy(alpha = 0.7f),
-                strokeWidth = 2.dp,
-                trackColor = Color.Transparent,
-                strokeCap = StrokeCap.Round,
-            )
+        // Loading: a soft halo with a comet-tailed arc going round, in the button's own color (the
+        // player's button is see-through, so the ring takes the glyph's color, never black).
+        androidx.compose.animation.AnimatedVisibility(
+            visible = buffering,
+            enter = androidx.compose.animation.fadeIn(tween(220)) + androidx.compose.animation.scaleIn(tween(260), initialScale = 0.85f),
+            exit = androidx.compose.animation.fadeOut(tween(200)),
+        ) {
+            BufferingRing(color = if (container.alpha > 0.5f) container else content, modifier = Modifier.size(size + 10.dp))
         }
         Box(
             Modifier
@@ -215,7 +233,10 @@ internal fun MorphPlayPause(
                 .pressScale(interaction, 0.9f)
                 .clip(CircleShape)
                 .background(container)
-                .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+                .clickable(interactionSource = interaction, indication = ripple(bounded = false, radius = size / 2 + 6.dp, color = content)) {
+                    haptic.performHapticFeedback(HapticFeedbackType.ContextClick)
+                    onClick()
+                }
                 .semantics {
                     contentDescription = label
                     role = Role.Button
@@ -227,18 +248,47 @@ internal fun MorphPlayPause(
     }
 }
 
+/** Loading ring: a faint full circle and a rotating arc that fades into its tail. */
+@Composable
+internal fun BufferingRing(color: Color, modifier: Modifier = Modifier, stroke: Dp = 3.5.dp) {
+    val spin = rememberInfiniteTransition(label = "buffering")
+    val angle by spin.animateFloat(0f, 360f, infiniteRepeatable(tween(950, easing = LinearEasing)), label = "angle")
+    Canvas(modifier) {
+        val w = stroke.toPx()
+        val inset = w / 2f
+        val arc = androidx.compose.ui.geometry.Size(size.width - w, size.height - w)
+        val topLeft = Offset(inset, inset)
+        drawCircle(color.copy(alpha = 0.14f), radius = (size.minDimension - w) / 2f, style = Stroke(w))
+        rotate(angle) {
+            drawArc(
+                brush = Brush.sweepGradient(0f to color.copy(alpha = 0f), 0.62f to color.copy(alpha = 0.35f), 0.86f to color, 0.9f to color, 0.901f to color.copy(alpha = 0f)),
+                startAngle = 0f,
+                sweepAngle = 310f,
+                useCenter = false,
+                topLeft = topLeft,
+                size = arc,
+                style = Stroke(w, cap = StrokeCap.Round),
+            )
+        }
+    }
+}
+
 /** Just the morphing glyph, no container (mini player). */
 @Composable
 internal fun MorphPlayPauseIcon(playing: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, size: Dp = 44.dp, tint: Color = SoundColors.Text) {
     val t = animateFloatAsState(if (playing) 1f else 0f, spring(dampingRatio = 0.82f, stiffness = 650f), label = "morph")
     val interaction = remember { MutableInteractionSource() }
+    val haptic = LocalHapticFeedback.current
     val label = stringResource(if (playing) R.string.player_pause else R.string.player_play)
     Box(
         modifier
             .size(size)
             .pressScale(interaction, 0.86f)
             .clip(CircleShape)
-            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+            .clickable(interactionSource = interaction, indication = ripple(bounded = false, radius = size / 2, color = tint)) {
+                haptic.performHapticFeedback(HapticFeedbackType.ContextClick)
+                onClick()
+            }
             .semantics {
                 contentDescription = label
                 role = Role.Button
@@ -280,12 +330,17 @@ internal fun PlayerIconButton(
 ) {
     val interaction = remember { MutableInteractionSource() }
     val color by animateColorAsState(tint, tween(220), label = "tint")
+    val haptic = LocalHapticFeedback.current
     Box(
         modifier
             .size(size)
             .pressScale(interaction, 0.86f)
             .clip(CircleShape)
-            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+            // A light tick and a ripple ring in the icon's color: every tap answers.
+            .clickable(interactionSource = interaction, indication = ripple(bounded = false, radius = size / 2, color = tint)) {
+                haptic.performHapticFeedback(HapticFeedbackType.ContextClick)
+                onClick()
+            }
             .semantics {
                 this.contentDescription = contentDescription
                 role = Role.Button
@@ -340,7 +395,7 @@ internal fun LikeButton(
         modifier
             .size(size)
             .clip(CircleShape)
-            .clickable(interactionSource = interaction, indication = null) {
+            .clickable(interactionSource = interaction, indication = ripple(bounded = false, radius = size / 2, color = likedTint)) {
                 val next = !liked
                 haptic.performHapticFeedback(if (next) HapticFeedbackType.ToggleOn else HapticFeedbackType.ToggleOff)
                 onToggle(next)

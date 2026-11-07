@@ -93,13 +93,10 @@
         <item quantity="many">Descargar %d restantes</item>
         <item quantity="other">Descargar %d restantes</item>
     </plurals>
-    <string name="search_remote_download_popular">Descargar populares</string>
     <string name="search_remote_save_playlist">Guardar playlist</string>
     <string name="search_remote_progress">Descargando %1$d de %2$d</string>
     <string name="search_remote_in_library">En tu biblioteca</string>
     <string name="search_remote_enqueuing">Preparando…</string>
-    <string name="search_remote_playlist_note">Crea la playlist “%1$s” en tu biblioteca</string>
-    <string name="search_remote_playlist_note_existing">Actualiza la playlist “%1$s” de tu biblioteca</string>
     <plurals name="search_remote_failed">
         <item quantity="one">%d canción falló</item>
         <item quantity="many">%d canciones fallaron</item>

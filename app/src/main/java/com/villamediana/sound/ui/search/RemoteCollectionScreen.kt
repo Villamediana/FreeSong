@@ -471,7 +471,8 @@ private fun RemoteHeader(
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.weight(1f)) {
                         // With Play beside it, downloading is the quiet (outlined) action: one accent per screen.
-                        PrimaryActionView(kind, action, onDownloadAll, onOpenLibrary, onOpenDownloads, filled = !playable)
+                        // An artist page has none: its songs are downloaded one by one (heart / arrow).
+                        if (kind != CollectionKind.ARTIST) PrimaryActionView(kind, action, onDownloadAll, onOpenLibrary, onOpenDownloads, filled = !playable)
                     }
                     if (playable) {
                         Spacer(Modifier.width(12.dp))
@@ -482,17 +483,11 @@ private fun RemoteHeader(
                 }
             }
 
-            val note = when {
-                kind != CollectionKind.PLAYLIST -> null
-                action is PrimaryAction.Download || action == PrimaryAction.SavePlaylist ->
-                    stringResource(if (hasLocalPlaylist) R.string.search_remote_playlist_note_existing else R.string.search_remote_playlist_note, title)
-                else -> null
-            }
             val onPhone = (action as? PrimaryAction.Download)?.takeIf { it.partial }?.let { it.total - it.remaining }
-            if (note != null || onPhone != null) {
+            if (onPhone != null) {
                 Spacer(Modifier.height(10.dp))
                 Text(
-                    listOfNotNull(note, onPhone?.let { pluralStringResource(R.plurals.search_remote_on_phone, it, it) }).joinToString(" · "),
+                    pluralStringResource(R.plurals.search_remote_on_phone, onPhone, onPhone),
                     style = MaterialTheme.typography.bodySmall,
                     color = SoundColors.TextMuted,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
@@ -540,7 +535,6 @@ private fun PrimaryActionView(
             is PrimaryAction.Download -> BigButton(
                 text = when {
                     a.partial -> pluralStringResource(R.plurals.search_remote_download_rest, a.remaining, a.remaining)
-                    kind == CollectionKind.ARTIST -> stringResource(R.string.search_remote_download_popular)
                     else -> stringResource(R.string.search_remote_download_all)
                 },
                 onClick = onDownloadAll,
