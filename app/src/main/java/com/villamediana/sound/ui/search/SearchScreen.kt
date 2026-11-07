@@ -147,7 +147,6 @@ fun SearchScreen() {
     val mode = vm.mode
     val lookup by vm.lookup.collectAsStateWithLifecycle()
     val online by vm.online.collectAsStateWithLifecycle()
-    val overview by vm.overview.collectAsStateWithLifecycle()
     val clipLink = rememberClipboardYouTubeLink()
     val pasteLink = clipLink?.takeIf { it != vm.handledClip && vm.link == null }
     var sheetTrack by remember { mutableStateOf<Track?>(null) }
@@ -213,7 +212,6 @@ fun SearchScreen() {
                         }
                     }
                     Text(stringResource(R.string.search_title), style = MaterialTheme.typography.displaySmall, color = SoundColors.Text, modifier = Modifier.weight(1f))
-                    DownloadsButton(overview, onClick = navigator::openDownloads)
                 }
             }
             if (mode != SearchMode.Idle) Spacer(Modifier.height(10.dp))
@@ -413,41 +411,6 @@ private fun SearchField(
 }
 
 /** Opens the downloads screen; a ring shows progress while something is downloading. */
-@Composable
-private fun DownloadsButton(overview: DownloadOverview, onClick: () -> Unit) {
-    val interaction = remember { MutableInteractionSource() }
-    val description = if (overview.isActive) stringResource(R.string.search_downloads_active, overview.active) else stringResource(R.string.search_downloads)
-    val fraction by animateFloatAsState(overview.fraction ?: 0f, tween(450), label = "dlButton")
-    Box(
-        Modifier
-            .size(46.dp)
-            .pressScale(interaction, 0.9f)
-            .clip(CircleShape)
-            .background(SoundColors.Surface2)
-            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
-            .semantics { contentDescription = description },
-        contentAlignment = Alignment.Center,
-    ) {
-        if (overview.isActive) {
-            Canvas(Modifier.size(46.dp)) {
-                val stroke = 2.4.dp.toPx()
-                val arc = Size(size.width - stroke, size.height - stroke)
-                val topLeft = Offset(stroke / 2, stroke / 2)
-                drawArc(SoundColors.AccentSoft, 0f, 360f, false, topLeft, arc, style = Stroke(stroke))
-                drawArc(SoundColors.Accent, -90f, 360f * fraction.coerceAtLeast(0.03f), false, topLeft, arc, style = Stroke(stroke, cap = StrokeCap.Round))
-            }
-        }
-        Icon(
-            Icons.Rounded.Download,
-            null,
-            tint = if (overview.isActive) SoundColors.Accent else SoundColors.Text,
-            modifier = Modifier.size(22.dp),
-        )
-        if (!overview.isActive && overview.failed > 0) {
-            Box(Modifier.align(Alignment.TopEnd).padding(top = 9.dp, end = 9.dp).size(8.dp).clip(CircleShape).background(SoundColors.Danger))
-        }
-    }
-}
 
 @Composable
 private fun SelectionBar(count: Int, onDownload: () -> Unit, onCancel: () -> Unit) {

@@ -1,5 +1,6 @@
 package com.villamediana.sound.ui.nav
 
+import androidx.compose.ui.graphics.Color
 import com.villamediana.sound.ui.theme.SoundColors
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.animation.AnimatedVisibilityScope
@@ -80,16 +81,14 @@ fun AnimatedVisibilityScope.CircularReveal(entry: NavBackStackEntry, navigator: 
                 val far = max(max(hypot(o.x, o.y), hypot(size.width - o.x, o.y)), max(hypot(o.x, size.height - o.y), hypot(size.width - o.x, size.height - o.y)))
                 val r = far * progress
                 if (r <= 0f) return@drawWithContent
-                // The page has the same background as the one beneath: the circle comes in the accent
-                // color and dissolves into the page as it grows (and fills with it again on the way back).
-                val accent = SoundColors.Accent
-                val tint = (1f - progress).coerceIn(0f, 1f)
+                // What grows is the search page itself, in its own colors from start to end (no color
+                // that switches at the end). It reads as a circle because the page beneath dims as
+                // it grows and a thin accent ring runs along its edge, fading out as it fills.
+                drawRect(Color.Black, alpha = 0.42f * progress)
                 val circle = Path().apply { addOval(Rect(o, r)) }
-                clipPath(circle) {
-                    this@drawWithContent.drawContent()
-                    drawRect(accent, alpha = 0.92f * tint)
-                }
-                drawCircle(accent, radius = r, center = o, alpha = 0.55f * tint, style = Stroke(width = 2.dp.toPx()))
+                clipPath(circle) { this@drawWithContent.drawContent() }
+                val ring = (1f - progress * progress * progress).coerceIn(0f, 1f)
+                drawCircle(SoundColors.Accent, radius = r, center = o, alpha = 0.9f * ring, style = Stroke(width = 2.5.dp.toPx()))
             },
     ) { content() }
 }

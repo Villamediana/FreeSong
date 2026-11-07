@@ -32,7 +32,7 @@ import org.robolectric.annotation.GraphicsMode
 import java.io.File
 import kotlin.math.abs
 
-/** The search circle shows over a page of the same background: it comes in the accent color. */
+/** The search circle is the page itself (no color switching at the end), over a dimming screen. */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [35])
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -40,7 +40,7 @@ class SearchRevealTest {
     @get:Rule val compose = createComposeRule()
 
     @Test
-    fun midwayTheCircleIsTheAccentColorNotTheBackground() {
+    fun midwayThePageGrowsInItsOwnColorOverADimmedScreen() {
         lateinit var navigator: Navigator
         compose.setContent {
             SoundTheme {
@@ -65,12 +65,14 @@ class SearchRevealTest {
         runCatching {
             File("build/screenshots").apply { mkdirs() }.resolve("search_reveal_mid.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
         }
-        val px = bmp.getPixel(240, 90)
         val ink = SoundColors.Ink.toArgb()
-        val diff = abs(android.graphics.Color.red(px) - android.graphics.Color.red(ink)) +
-            abs(android.graphics.Color.green(px) - android.graphics.Color.green(ink)) +
-            abs(android.graphics.Color.blue(px) - android.graphics.Color.blue(ink))
-        assertTrue("inside the circle the color shows (diff $diff)", diff > 60)
+        fun diff(p: Int) = abs(android.graphics.Color.red(p) - android.graphics.Color.red(ink)) +
+            abs(android.graphics.Color.green(p) - android.graphics.Color.green(ink)) +
+            abs(android.graphics.Color.blue(p) - android.graphics.Color.blue(ink))
+        // Inside: the search page in its own color (nothing tinting it that would switch at the end).
+        assertTrue("inside is the page itself (diff ${diff(bmp.getPixel(240, 90))})", diff(bmp.getPixel(240, 90)) < 12)
+        // Outside: the page beneath dims while the circle grows, so the circle reads.
+        assertTrue("outside is dimmed (diff ${diff(bmp.getPixel(8, bmp.height - 8))})", diff(bmp.getPixel(8, bmp.height - 8)) > 30)
         compose.mainClock.autoAdvance = true
     }
 }
