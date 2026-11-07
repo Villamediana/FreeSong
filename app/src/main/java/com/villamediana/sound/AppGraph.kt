@@ -62,7 +62,7 @@ class AppGraph(context: Context) {
                 youTube.search(q, com.villamediana.sound.online.SearchFilter.SONGS).items
                     .filterIsInstance<com.villamediana.sound.online.SearchItem.Song>().map { it.track }
             },
-            save = { downloads.downloadCollection(it) },
+            save = { p, tracks -> library.saveImported(p.url, p.name, p.owner, p.coverUrl, tracks) },
             scope = scope,
         )
     }

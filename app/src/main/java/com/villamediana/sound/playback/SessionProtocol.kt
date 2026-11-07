@@ -38,7 +38,11 @@ internal object SessionProtocol {
     const val SET_SHUFFLE = "sound.SET_SHUFFLE"
 
     val publicCommands = listOf(LIKE, SHUFFLE)
-    val appCommands = listOf(PLAY, QUEUE_ADD, QUEUE_MOVE, QUEUE_REMOVE, SLEEP, RESTORE, SET_SHUFFLE)
+    /** Resolves the streams of these songs ([ARG_VIDEO_IDS]) ahead of a likely Play (a page just opened). */
+    const val PREFETCH = "sound.PREFETCH"
+    const val ARG_VIDEO_IDS = "video_ids"
+
+    val appCommands = listOf(PLAY, QUEUE_ADD, QUEUE_MOVE, QUEUE_REMOVE, SLEEP, RESTORE, SET_SHUFFLE, PREFETCH)
 
     fun command(action: String) = SessionCommand(action, Bundle.EMPTY)
 

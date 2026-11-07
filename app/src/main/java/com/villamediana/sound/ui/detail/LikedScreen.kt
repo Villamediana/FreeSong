@@ -70,6 +70,7 @@ private fun LikedContent(tracks: List<Track>) {
         art = { m -> LikedArt(m) },
         snackbar = snackbar,
         playing = status.isPlaying,
+        loading = status.isLoading,
         onPlay = if (tracks.isEmpty()) null else ({ playOrToggle(tracks, source, status, shuffleOn) }),
         shuffle = if (tracks.isEmpty()) null else shuffleOn,
         onShuffle = { toggleShuffle(status, shuffleOn) { shuffleLocal = it } },

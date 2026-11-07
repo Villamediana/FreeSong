@@ -90,6 +90,8 @@ import com.villamediana.sound.R
 import com.villamediana.sound.data.db.Track
 import com.villamediana.sound.playback.PlaybackState
 import com.villamediana.sound.playback.PlaySource
+import com.villamediana.sound.online.CollectionKind
+import com.villamediana.sound.online.RemoteCollection
 import com.villamediana.sound.data.isOnline
 import com.villamediana.sound.ui.search.DownloadIndicator
 import com.villamediana.sound.ui.components.PagePlayButton
@@ -283,7 +285,7 @@ private fun LibraryContent(
         verticalArrangement = Arrangement.spacedBy(if (grid) 18.dp else 0.dp),
     ) {
         item(key = "sortbar", span = { GridItemSpan(maxLineSpan) }, contentType = "sortbar") {
-            val listPlaying = playback.isPlaying && playback.isFromLiked()
+            val listHere = playback.hasMedia && playback.isFromLiked()
             SortBar(
                 filter = s.filter,
                 sort = s.sort,
@@ -293,7 +295,14 @@ private fun LibraryContent(
                 modifier = Modifier.padding(horizontal = rowPad),
                 // Músicas: play them all, in the order on screen (pauses when it is what plays).
                 play = if (s.filter == LibFilter.SONGS && songs.isNotEmpty()) {
-                    { PagePlayButton(playing = listPlaying, onClick = { vm.playAll(songs, songsSource, playback.hasMedia && playback.isFromLiked()) }, size = 44.dp) }
+                    {
+                        PagePlayButton(
+                            playing = listHere && (playback.isPlaying || playback.isBuffering),
+                            onClick = { vm.playAll(songs, songsSource, listHere) },
+                            size = 44.dp,
+                            loading = listHere && playback.isBuffering,
+                        )
+                    }
                 } else {
                     null
                 },
@@ -393,6 +402,14 @@ private fun CollectionEntry(
             current = playback.isFromAlbum(a.key.normalized)
             onClick = { nav.openAlbum(a.key) }
             onLongClick = { onMenu(CollectionTarget.Album(a)) }
+        }
+        is LibItem.ImportedItem -> {
+            val p = item.playlist
+            art = { m -> Cover(p.coverUrl, m, seed = p.name) }
+            subtitle = if (all) stringResource(R.string.home_lib_playlist_sub, songCount(p.trackCount)) else songCount(p.trackCount)
+            current = playback.hasMedia && playback.source?.id == p.url
+            onClick = { nav.openRemote(RemoteCollection(CollectionKind.PLAYLIST, p.url, p.name, p.owner, p.coverUrl, p.trackCount.toLong())) }
+            onLongClick = { onMenu(CollectionTarget.Imported(p)) }
         }
         is LibItem.ArtistItem -> {
             val r = item.summary

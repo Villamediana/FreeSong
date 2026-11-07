@@ -149,6 +149,8 @@ internal fun CollectionScaffold(
     artShape: ArtShape = ArtShape.Square,
     listState: LazyListState = rememberLazyListState(),
     playing: Boolean = false,
+    /** The play is starting (its song still loading). */
+    loading: Boolean = false,
     onPlay: (() -> Unit)? = null,
     shuffle: Boolean? = null,
     onShuffle: () -> Unit = {},
@@ -239,7 +241,7 @@ internal fun CollectionScaffold(
                                         PageShuffleButton(active = shuffle, onClick = onShuffle, toggle = true)
                                         Spacer(Modifier.width(10.dp))
                                     }
-                                    if (onPlay != null) PagePlayButton(playing = playing, onClick = onPlay)
+                                    if (onPlay != null) PagePlayButton(playing = playing, onClick = onPlay, loading = loading)
                                 }
                                 Spacer(Modifier.height(6.dp))
                             }

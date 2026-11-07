@@ -105,22 +105,23 @@ class SpotifyImportTest {
     )
 
     @Test fun importKeepsTheOrderAndSaysWhatWasMissing() = runBlocking {
-        var saved: CollectionDetail? = null
+        var saved: Pair<SpotifyPlaylist, List<RemoteTrack>>? = null
         val importer = SpotifyImporter(
             search = { q -> listOf(rt(q.substringBefore(" ").lowercase(), q.substringBefore(" "), "Banda")).filter { !q.startsWith("Sumiu") } },
-            save = { saved = it; 42L },
+            save = { p, tracks -> saved = p to tracks },
             scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
         )
         importer.start(playlist)
         val done = withTimeout(5_000) { importer.state.first { it is SpotifyImporter.State.Done } } as SpotifyImporter.State.Done
-        assertEquals(42L, done.playlistId)
         assertEquals(3, done.found)
         assertEquals(listOf("Sumiu"), done.missing.map { it.title })
-        val detail = saved!!
-        assertEquals(listOf("um", "dois", "tres"), detail.tracks.map { it.videoId })
-        assertEquals(CollectionKind.PLAYLIST, detail.collection.kind)
-        assertEquals("Domingo", detail.collection.title)
-        assertEquals(playlist.url, detail.collection.url)
+        val (p, tracks) = saved!!
+        assertEquals(playlist, p)
+        assertEquals(listOf("um", "dois", "tres"), tracks.map { it.videoId })
+        // It opens on the online playlist page.
+        assertEquals(CollectionKind.PLAYLIST, done.collection.kind)
+        assertEquals("Domingo", done.collection.title)
+        assertEquals(playlist.url, done.collection.url)
         importer.reset()
         assertEquals(SpotifyImporter.State.Idle, importer.state.value)
     }
@@ -129,7 +130,7 @@ class SpotifyImportTest {
         var saves = 0
         val importer = SpotifyImporter(
             search = { throw java.io.IOException("offline") },
-            save = { saves++; 1L },
+            save = { _, _ -> saves++ },
             scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
         )
         importer.start(playlist)

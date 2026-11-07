@@ -76,7 +76,8 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
         library.pinned,
         index,
         likedSongs,
-    ) { part, pinned, index, liked -> LibrarySource(part.tracks, part.albums, part.artists, part.genres, part.playlists, pinned, index, liked) }
+        library.imported,
+    ) { part, pinned, index, liked, imported -> LibrarySource(part.tracks, part.albums, part.artists, part.genres, part.playlists, pinned, index, liked, imported) }
 
     private data class Partial(
         val tracks: List<Track>,
@@ -100,7 +101,7 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
         Built(
             view = v,
             sections = buildSections(src, v.filter, v.sort),
-            empty = src.tracks.isEmpty() && src.playlists.isEmpty() && liked == 0,
+            empty = src.tracks.isEmpty() && src.playlists.isEmpty() && src.imported.isEmpty() && liked == 0,
             likedCount = liked,
         )
     }.flowOn(Dispatchers.Default)

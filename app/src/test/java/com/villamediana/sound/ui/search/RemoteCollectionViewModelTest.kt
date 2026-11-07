@@ -252,6 +252,22 @@ class RemoteCollectionViewModelTest {
     }
 
     @Test
+    fun playShowsPauseWhileTheSongLoadsAndTheFirstSongIsReadyAhead() {
+        val vm = viewModel(CollectionKind.PLAYLIST)
+        awaitUntil { vm.load.value is RemoteLoad.Loaded }
+        // Opening the page already resolves the first song's stream: Play starts fast.
+        assertEquals(listOf(tracks.first().videoId), player.prefetched.toList())
+
+        vm.playAll(shuffle = false)
+        val first = player.onlinePlays.single()
+        // Still loading: the button is Pause at once (with its ring), so a second tap pauses instead of looking dead.
+        player.stateFlow.value = PlaybackState(current = first.tracks[0].asTransientTrack(), isBuffering = true, source = first.source)
+        awaitUntil { vm.here.value == HerePlaying(playing = true, shuffle = false, loading = true) }
+        player.stateFlow.value = PlaybackState(current = first.tracks[0].asTransientTrack(), isPlaying = true, source = first.source)
+        awaitUntil { vm.here.value == HerePlaying(playing = true, shuffle = false, loading = false) }
+    }
+
+    @Test
     fun withoutNetworkPlayUsesWhatIsOnThePhone() {
         insertTrack("b")
         val vm = viewModel(CollectionKind.PLAYLIST)

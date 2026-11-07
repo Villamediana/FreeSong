@@ -142,6 +142,7 @@ private fun SongsContent(songs: SortedSongs, vm: SongsViewModel) {
         listState = listState,
         snackbar = snackbar,
         playing = status.isPlaying,
+        loading = status.isLoading,
         onPlay = if (tracks.isEmpty()) null else ({ playOrToggle(tracks, source, status, shuffleOn) }),
         shuffle = if (tracks.isEmpty()) null else shuffleOn,
         onShuffle = { toggleShuffle(status, shuffleOn) { shuffleLocal = it } },

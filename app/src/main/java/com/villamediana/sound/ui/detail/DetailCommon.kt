@@ -75,11 +75,12 @@ internal fun <T> Flow<Load<T>>.stateIn(vm: ViewModel): StateFlow<Load<T>> =
 internal fun rememberPlaybackState(): State<PlaybackState> = graph.player.state.collectAsStateWithLifecycle()
 
 /** Whether [source] is what the player is on, and whether it is actually sounding. */
-internal data class SourceStatus(val isSource: Boolean, val isPlaying: Boolean)
+/** [isPlaying] counts a song that is loading to play ([isLoading]): the button shows Pause at once. */
+internal data class SourceStatus(val isSource: Boolean, val isPlaying: Boolean, val isLoading: Boolean = false)
 
 internal fun PlaybackState.statusOf(source: PlaySource): SourceStatus {
     val mine = Sources.matches(this.source, source)
-    return SourceStatus(mine, mine && isPlaying)
+    return SourceStatus(mine, mine && (isPlaying || isBuffering), mine && isBuffering)
 }
 
 /**

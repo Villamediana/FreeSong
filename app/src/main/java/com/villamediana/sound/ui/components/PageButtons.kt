@@ -1,6 +1,11 @@
 package com.villamediana.sound.ui.components
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -46,10 +51,22 @@ fun PagePlayButton(
     enabled: Boolean = true,
     size: Dp = 56.dp,
     label: String = stringResource(if (playing) R.string.pause else R.string.play),
+    /** Starting (the song is still loading): Pause shows at once, with a ring turning around it. */
+    loading: Boolean = false,
 ) {
     val interaction = remember { MutableInteractionSource() }
+    Box(modifier.size(size), contentAlignment = Alignment.Center) {
+        AnimatedVisibility(loading, enter = fadeIn(tween(200)), exit = fadeOut(tween(200))) {
+            CircularProgressIndicator(
+                modifier = Modifier.requiredSize(size + 10.dp),
+                color = sc.Accent,
+                strokeWidth = 2.5.dp,
+                strokeCap = StrokeCap.Round,
+                trackColor = Color.Transparent,
+            )
+        }
     Box(
-        modifier
+        Modifier
             .size(size)
             .pressScale(interaction, 0.9f)
             .clip(CircleShape)
@@ -70,6 +87,7 @@ fun PagePlayButton(
                 modifier = Modifier.size(size * 0.54f),
             )
         }
+    }
     }
 }
 

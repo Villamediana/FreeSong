@@ -139,6 +139,12 @@ class FakePlayer : PlayerConnection {
         onlinePlays += OnlinePlay(tracks, startIndex, source)
     }
 
+    val prefetched: MutableList<String> = Collections.synchronizedList(mutableListOf())
+
+    override fun prefetch(videoIds: List<String>) {
+        prefetched += videoIds
+    }
+
     val smartPlays: MutableList<SmartSeed> = Collections.synchronizedList(mutableListOf())
 
     override fun playSmart(seed: SmartSeed) {

@@ -177,24 +177,32 @@ class HomeScreensSmokeTest {
     @Test
     fun playlistsPlusImportsFromSpotify() {
         seed()
+        // An imported playlist sits with the others (online: nothing downloaded).
+        runBlocking {
+            SoundApplication.graph.library.saveImported(
+                "https://open.spotify.com/playlist/abcdefghijklmnopqrstuv", "Do Spotify", "Miguel", null,
+                listOf(com.villamediana.sound.online.RemoteTrack("zz1", "https://music.youtube.com/watch?v=zz1", "Streamed Love", "Online Artist")),
+            )
+        }
         compose.setContent { Host { com.villamediana.sound.ui.library.MainScreen() } }
         compose.onAllNodesWithText("Playlists")[0].performClick()
         waitForText("Domingo")
+        waitForText("Do Spotify")
         compose.onNodeWithContentDescription("Nova playlist").performClick()
         waitForText("Importar do Spotify")
         compose.onAllNodesWithText("Importar do Spotify")[0].performClick()
-        waitForText("Cole o link de uma playlist pública do Spotify.")
+        waitForText("Link da playlist")
         val live = System.getProperty("sound.live") == "1"
         compose.onNode(androidx.compose.ui.test.hasSetTextAction()).performTextInput(
             if (live) "https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M?si=x" else "minha playlist",
         )
-        compose.onAllNodesWithText("Buscar playlist")[0].performClick()
+        compose.onAllNodesWithText("Buscar")[0].performClick()
         if (live) {
             waitForText("Today’s Top Hits", 30_000)
             waitForText("Importar")
             shot("spotify-preview")
         } else {
-            waitForText("Isso não é um link de playlist do Spotify.")
+            waitForText("Não é um link de playlist do Spotify.")
             shot("spotify-input")
         }
         com.villamediana.sound.ui.library.SpotifyImportRequest.open = false

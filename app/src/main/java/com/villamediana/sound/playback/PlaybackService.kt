@@ -947,6 +947,9 @@ class PlaybackService : MediaLibraryService() {
                     return serialized { player.shuffleModeEnabled = enabled }
                 }
                 SessionProtocol.SLEEP -> sleep.set(SessionProtocol.getSleep(args))
+                SessionProtocol.PREFETCH -> args.getStringArray(SessionProtocol.ARG_VIDEO_IDS)?.forEach { id ->
+                    streams.prefetch(com.villamediana.sound.playback.stream.StreamUris.audio(id, settings.audioQuality))
+                }
                 SessionProtocol.RESTORE -> return serialized { restore() }
                 else -> return Futures.immediateFuture(SessionResult(SessionResult.RESULT_ERROR_NOT_SUPPORTED))
             }

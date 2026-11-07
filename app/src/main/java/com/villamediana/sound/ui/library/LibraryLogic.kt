@@ -3,6 +3,7 @@ package com.villamediana.sound.ui.library
 import com.villamediana.sound.data.db.DownloadState
 import com.villamediana.sound.data.db.DownloadTask
 import com.villamediana.sound.data.db.Track
+import com.villamediana.sound.data.db.ImportedPlaylist
 import com.villamediana.sound.data.model.AlbumSummary
 import com.villamediana.sound.data.model.ArtistSummary
 import com.villamediana.sound.data.model.GenreSummary
@@ -64,6 +65,15 @@ sealed interface LibItem {
     }
 
     /** [likedAt]: in Músicas a song counts as added when it was liked. */
+    /** A playlist imported from Spotify: streams, opens on the online playlist page. */
+    data class ImportedItem(val playlist: ImportedPlaylist) : LibItem {
+        override val key get() = "i:" + playlist.url
+        override val title get() = playlist.name
+        override val artist get() = ""
+        override val activity get() = CollectionActivity(addedAt = playlist.importedAt)
+        override val pinned get() = false
+    }
+
     data class SongItem(val track: Track, val likedAt: Long? = null) : LibItem {
         override val key get() = "t:${track.id}"
         override val title get() = track.title
@@ -103,6 +113,8 @@ data class LibrarySource(
     val index: LibraryIndex,
     /** Músicas: the liked songs, on the phone or streamed. */
     val liked: List<LikedSong> = emptyList(),
+    /** Playlists imported from Spotify (the ones downloaded into a library playlist show as that one). */
+    val imported: List<ImportedPlaylist> = emptyList(),
 )
 
 /** A liked song and when it was liked. */
@@ -127,7 +139,11 @@ fun buildSections(src: LibrarySource, filter: LibFilter?, sort: LibSort): Librar
     val pinnedKeys = pinned.mapTo(HashSet()) { it.key }
 
     val all: List<LibItem> = buildList {
-        if (showsPlaylists) src.playlists.forEach { add(playlist(it)) }
+        if (showsPlaylists) {
+            src.playlists.forEach { add(playlist(it)) }
+            val local = src.playlists.mapNotNullTo(HashSet()) { it.playlist.sourceUrl }
+            src.imported.filter { it.url !in local }.forEach { add(LibItem.ImportedItem(it)) }
+        }
         if (showsAlbums) src.albums.forEach { add(album(it)) }
         if (filter == null || filter == LibFilter.ARTISTS) src.artists.forEach { add(LibItem.ArtistItem(it, src.index.artist(it.name))) }
         if (filter == LibFilter.GENRES) src.genres.forEach { add(LibItem.GenreItem(it, src.index.genre(it.name))) }

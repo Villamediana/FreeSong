@@ -98,6 +98,7 @@ private fun ArtistContent(detail: ArtistDetail) {
         artShape = ArtShape.Circle,
         snackbar = snackbar,
         playing = status.isPlaying,
+        loading = status.isLoading,
         onPlay = { playOrToggle(playOrder, source, status, shuffleOn) },
         shuffle = shuffleOn,
         onShuffle = { toggleShuffle(status, shuffleOn) { shuffleLocal = it } },

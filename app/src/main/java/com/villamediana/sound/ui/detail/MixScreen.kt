@@ -96,6 +96,7 @@ private fun MixContent(mix: Mix) {
         art = { m -> GeneratedArt(mix.covers, tint, mix.title, m) },
         snackbar = snackbar,
         playing = status.isPlaying,
+        loading = status.isLoading,
         onPlay = if (tracks.isEmpty()) null else {
             { if (status.isSource) player.togglePlayPause() else player.playSmart(SmartSeed.Mix(mix.id)) }
         },

@@ -195,3 +195,19 @@ data class PlaylistEntry(
 )
 
 data class TrackPlays(val trackId: Long, val plays: Int)
+
+/**
+ * A playlist brought from Spotify: its songs as found on YouTube Music (JSON, in the Spotify order).
+ * It streams like any online playlist; nothing is downloaded until the listener asks.
+ */
+@Entity(tableName = "imported_playlists")
+data class ImportedPlaylist(
+    /** The Spotify playlist url. */
+    @PrimaryKey val url: String,
+    val name: String,
+    val owner: String? = null,
+    val coverUrl: String? = null,
+    val tracksJson: String,
+    val trackCount: Int,
+    val importedAt: Long = System.currentTimeMillis(),
+)

@@ -118,6 +118,7 @@ private fun AlbumContent(detail: AlbumDetail, vm: AlbumViewModel) {
         art = { m -> Cover(s.coverPath, m, seed = s.title) },
         snackbar = snackbar,
         playing = status.isPlaying,
+        loading = status.isLoading,
         onPlay = { playOrToggle(tracks, source, status, shuffleOn) },
         shuffle = shuffleOn,
         onShuffle = { toggleShuffle(status, shuffleOn) { shuffleLocal = it } },

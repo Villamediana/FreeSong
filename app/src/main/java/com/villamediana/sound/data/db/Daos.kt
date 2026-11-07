@@ -228,3 +228,18 @@ interface DownloadDao {
     @Query("DELETE FROM downloads WHERE id = :id")
     suspend fun delete(id: Long)
 }
+
+@Dao
+interface ImportedPlaylistDao {
+    @Query("SELECT * FROM imported_playlists ORDER BY importedAt DESC")
+    fun observeAll(): Flow<List<ImportedPlaylist>>
+
+    @Query("SELECT * FROM imported_playlists WHERE url = :url")
+    suspend fun get(url: String): ImportedPlaylist?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(playlist: ImportedPlaylist)
+
+    @Query("DELETE FROM imported_playlists WHERE url = :url")
+    suspend fun delete(url: String)
+}

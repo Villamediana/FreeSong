@@ -41,6 +41,7 @@ import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.MusicOff
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -335,6 +336,15 @@ fun RemoteCollectionScreen(route: RemoteCollectionRoute) {
                 )
             }
             add(MenuItem(Icons.Rounded.Share, res.getString(R.string.search_remote_share)) { Share.collection(context, loaded.collection) })
+            // Imported from Spotify: it can leave the library.
+            if (com.villamediana.sound.online.SpotifyLinks.playlistId(vm.route.url) != null) {
+                add(
+                    MenuItem(Icons.Rounded.DeleteOutline, res.getString(R.string.spotify_import_remove), destructive = true) {
+                        com.villamediana.sound.ui.library.CollectionCommands.removeImported(vm.route.url)
+                        navigator.back()
+                    },
+                )
+            }
         }
         CollectionMenuSheet(
             title = title,
@@ -473,8 +483,8 @@ private fun RemoteHeader(
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.weight(1f)) {
                         // With Play beside it, downloading is the quiet (outlined) action: one accent per screen.
-                        // An artist page has none: its songs are downloaded one by one (heart / arrow).
-                        if (kind != CollectionKind.ARTIST) PrimaryActionView(kind, action, onDownloadAll, onOpenLibrary, onOpenDownloads, filled = !playable)
+                        // Artists and playlists have none: their songs are downloaded one by one (heart / arrow).
+                        if (kind == CollectionKind.ALBUM) PrimaryActionView(kind, action, onDownloadAll, onOpenLibrary, onOpenDownloads, filled = !playable)
                     }
                     if (playable) {
                         Spacer(Modifier.width(12.dp))
@@ -490,13 +500,14 @@ private fun RemoteHeader(
                             playing = playing,
                             onClick = onPlay,
                             enabled = canPlay,
+                            loading = here?.loading == true,
                             label = stringResource(if (playing) R.string.pause else R.string.search_remote_play),
                         )
                     }
                 }
             }
 
-            val onPhone = (action as? PrimaryAction.Download)?.takeIf { it.partial }?.let { it.total - it.remaining }
+            val onPhone = (action as? PrimaryAction.Download)?.takeIf { it.partial && kind == CollectionKind.ALBUM }?.let { it.total - it.remaining }
             if (onPhone != null) {
                 Spacer(Modifier.height(10.dp))
                 Text(

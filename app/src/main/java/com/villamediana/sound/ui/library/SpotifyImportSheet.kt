@@ -5,6 +5,8 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.os.Build
 import android.view.textclassifier.TextClassifier
+import android.widget.Toast
+import com.villamediana.sound.online.RemoteCollection
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -82,12 +84,12 @@ object SpotifyImportRequest {
 
 /**
  * "Importar do Spotify": paste a public playlist link → see it → import. Each song is looked up on
- * YouTube Music and the found ones are downloaded into a playlist with the same name. The work
- * goes on with the sheet closed.
+ * YouTube Music; the playlist then opens like any online one (streams, nothing downloaded). The
+ * work goes on with the sheet closed.
  */
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
-fun SpotifyImportSheet(onDismiss: () -> Unit, onOpenPlaylist: (Long) -> Unit) {
+fun SpotifyImportSheet(onDismiss: () -> Unit, onOpen: (RemoteCollection) -> Unit) {
     val graph = SoundApplication.graph
     val importer = graph.spotifyImport
     val run by importer.state.collectAsState()
@@ -137,16 +139,15 @@ fun SpotifyImportSheet(onDismiss: () -> Unit, onOpenPlaylist: (Long) -> Unit) {
                 when (s) {
                     is SpotifyPlaylist -> Preview(s, onImport = { importer.start(s) }, onOther = { preview = null })
                     is SpotifyImporter.State.Matching -> Matching(s)
-                    is SpotifyImporter.State.Done -> Done(
-                        s,
-                        onOpen = {
-                            s.playlistId?.let(onOpenPlaylist)
-                            importer.reset()
-                            preview = null
-                            onDismiss()
-                        },
-                        onAnother = { importer.reset(); preview = null; text = "" },
-                    )
+                    // Found: the sheet gives way to the playlist's page.
+                    is SpotifyImporter.State.Done -> LaunchedEffect(s) {
+                        if (s.missing.isNotEmpty()) {
+                            Toast.makeText(context, context.resources.getQuantityString(R.plurals.spotify_import_missing, s.missing.size, s.missing.size), Toast.LENGTH_LONG).show()
+                        }
+                        importer.reset()
+                        onDismiss()
+                        onOpen(s.collection)
+                    }
                     is SpotifyImporter.State.Failed -> Failed(s, onRetry = { importer.reset(); importer.start(s.playlist) }, onOther = { importer.reset(); preview = null })
                     else -> Input(
                         text = text,
@@ -163,8 +164,6 @@ fun SpotifyImportSheet(onDismiss: () -> Unit, onOpenPlaylist: (Long) -> Unit) {
 
 @Composable
 private fun Input(text: String, onText: (String) -> Unit, loading: Boolean, error: SpotifyError?, onLookUp: () -> Unit) {
-    Text(stringResource(R.string.spotify_import_body), style = MaterialTheme.typography.bodyMedium, color = SoundColors.TextMuted)
-    Spacer(Modifier.height(16.dp))
     SoundTextField(
         value = text,
         onValueChange = onText,
@@ -202,9 +201,7 @@ private fun Input(text: String, onText: (String) -> Unit, loading: Boolean, erro
             )
         }
     }
-    Spacer(Modifier.height(14.dp))
-    Text(stringResource(R.string.spotify_import_how), style = MaterialTheme.typography.bodySmall, color = SoundColors.TextFaint)
-    Spacer(Modifier.height(8.dp))
+    Spacer(Modifier.height(12.dp))
 }
 
 @Composable
@@ -223,18 +220,11 @@ private fun PlaylistHeader(p: SpotifyPlaylist, line: String) {
 @Composable
 private fun ColumnScope.Preview(p: SpotifyPlaylist, onImport: () -> Unit, onOther: () -> Unit) {
     val count = pluralStringResource(R.plurals.n_songs, p.tracks.size, p.tracks.size)
-    PlaylistHeader(p, listOfNotNull(count, p.owner).joinToString(" · "))
-    Spacer(Modifier.height(16.dp))
-    Text(stringResource(R.string.spotify_import_what_happens), style = MaterialTheme.typography.bodyMedium, color = SoundColors.TextMuted)
-    if (p.tracks.size >= 100) {
-        Spacer(Modifier.height(6.dp))
-        Text(stringResource(R.string.spotify_import_limit), style = MaterialTheme.typography.bodySmall, color = SoundColors.TextFaint)
-    }
-    Spacer(Modifier.height(18.dp))
+    PlaylistHeader(p, count)
+    Spacer(Modifier.height(20.dp))
     PillButton(
         text = stringResource(R.string.spotify_import_go),
         onClick = onImport,
-        icon = Icons.Rounded.Download,
         filled = true,
         big = true,
         enabled = p.tracks.isNotEmpty(),
@@ -260,54 +250,7 @@ private fun Matching(s: SpotifyImporter.State.Matching) {
         gapSize = 0.dp,
         drawStopIndicator = {},
     )
-    Spacer(Modifier.height(12.dp))
-    Text(stringResource(R.string.spotify_import_keeps_going), style = MaterialTheme.typography.bodySmall, color = SoundColors.TextFaint)
-    Spacer(Modifier.height(16.dp))
-}
-
-@Composable
-private fun ColumnScope.Done(s: SpotifyImporter.State.Done, onOpen: () -> Unit, onAnother: () -> Unit) {
-    PlaylistHeader(s.playlist, pluralStringResource(R.plurals.spotify_import_found, s.found, s.found))
-    Spacer(Modifier.height(16.dp))
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(22.dp).clip(CircleShape).background(SoundColors.Accent), contentAlignment = Alignment.Center) {
-            Icon(Icons.Rounded.Check, null, tint = SoundColors.OnAccent, modifier = Modifier.size(15.dp))
-        }
-        Spacer(Modifier.width(10.dp))
-        Text(stringResource(R.string.spotify_import_done), style = MaterialTheme.typography.bodyMedium, color = SoundColors.Text)
-    }
-    if (s.missing.isNotEmpty()) {
-        Spacer(Modifier.height(14.dp))
-        Text(
-            pluralStringResource(R.plurals.spotify_import_missing, s.missing.size, s.missing.size),
-            style = MaterialTheme.typography.labelLarge,
-            color = SoundColors.TextMuted,
-        )
-        Spacer(Modifier.height(4.dp))
-        Column(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SoundColors.Surface3.copy(alpha = 0.5f)).padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            s.missing.take(MISSING_SHOWN).forEach { t ->
-                Text(
-                    listOf(t.title, t.artist).filter { it.isNotBlank() }.joinToString(" — "),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = SoundColors.TextMuted,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            val more = s.missing.size - MISSING_SHOWN
-            if (more > 0) Text(stringResource(R.string.spotify_import_and_more, more), style = MaterialTheme.typography.bodySmall, color = SoundColors.TextFaint)
-        }
-    }
-    Spacer(Modifier.height(18.dp))
-    if (s.playlistId != null) {
-        PillButton(stringResource(R.string.spotify_import_open), onOpen, filled = true, big = true, modifier = Modifier.fillMaxWidth())
-    }
-    TextButton(onClick = onAnother, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-        Text(stringResource(R.string.spotify_import_another), style = MaterialTheme.typography.labelLarge, color = SoundColors.TextMuted)
-    }
+    Spacer(Modifier.height(20.dp))
 }
 
 @Composable
@@ -325,8 +268,6 @@ private fun ColumnScope.Failed(s: SpotifyImporter.State.Failed, onRetry: () -> U
         Text(stringResource(R.string.spotify_import_other), style = MaterialTheme.typography.labelLarge, color = SoundColors.TextMuted)
     }
 }
-
-private const val MISSING_SHOWN = 5
 
 /** A Spotify playlist link in the clipboard (only read when the system says the clip may be a URL). */
 private fun readSpotifyLink(context: Context): String? = runCatching {

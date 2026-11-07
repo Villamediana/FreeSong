@@ -74,6 +74,7 @@ private fun GenreContent(routeName: String, tracks: List<Track>) {
         art = { m -> GeneratedArt(covers, tint, name, m) },
         snackbar = snackbar,
         playing = status.isPlaying,
+        loading = status.isLoading,
         // Play = the smart genre session (genre smart-shuffled, flowing into neighbours).
         onPlay = { if (status.isSource) player.togglePlayPause() else player.playSmart(SmartSeed.Genre(name)) },
         actions = {

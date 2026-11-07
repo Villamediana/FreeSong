@@ -68,6 +68,9 @@ interface PlayerConnection {
      * search result). Each item becomes a transient Track (see data/OnlineTrack.kt, mediaId
      * "yt:<videoId>"); when a song is already in the library the local file is used instead.
      */
+    /** Gets these online songs ready to start at once (their streams resolved in the background). */
+    fun prefetch(videoIds: List<String>) {}
+
     fun playOnline(tracks: List<RemoteTrack>, startIndex: Int = 0, source: PlaySource) {}
 
     fun playSmart(seed: SmartSeed)

@@ -165,7 +165,7 @@ fun MainScreen() {
     if (SpotifyImportRequest.open) {
         SpotifyImportSheet(
             onDismiss = { SpotifyImportRequest.open = false },
-            onOpenPlaylist = { id -> nav.openPlaylist(id) },
+            onOpen = { nav.openRemote(it) },
         )
     }
 
@@ -192,7 +192,7 @@ private fun SpotifyImportFinished() {
         if (SpotifyImportRequest.open) return@LaunchedEffect
         android.widget.Toast.makeText(
             context,
-            context.getString(R.string.spotify_import_finished, done.playlist.name, done.found),
+            context.getString(R.string.spotify_import_finished, done.playlist.name),
             android.widget.Toast.LENGTH_LONG,
         ).show()
         importer.reset()

@@ -54,20 +54,24 @@ object SpotifyMatch {
 }
 
 /**
- * Brings a Spotify playlist in: each song is looked up on YouTube Music, then the found ones become
- * a local playlist with the same name, downloaded in the Spotify order (like saving a YouTube
- * playlist). Runs on the app's scope: closing the sheet does not stop it.
+ * Brings a Spotify playlist in: each song is looked up on YouTube Music and the found ones are kept
+ * as an online playlist (Spotify order) — it streams like the ones from the search; nothing is
+ * downloaded until asked. Runs on the app's scope: closing the sheet does not stop it.
  */
 class SpotifyImporter(
     private val search: suspend (String) -> List<RemoteTrack>,
-    private val save: suspend (CollectionDetail) -> Long?,
+    private val save: suspend (SpotifyPlaylist, List<RemoteTrack>) -> Unit,
     private val scope: CoroutineScope,
     private val parallel: Int = 3,
 ) {
     sealed interface State {
         data object Idle : State
         data class Matching(val playlist: SpotifyPlaylist, val done: Int, val found: Int) : State
-        data class Done(val playlist: SpotifyPlaylist, val playlistId: Long?, val found: Int, val missing: List<SpotifyTrack>) : State
+        data class Done(val playlist: SpotifyPlaylist, val found: Int, val missing: List<SpotifyTrack>) : State {
+            /** The page it opens on (the online playlist page). */
+            val collection: RemoteCollection
+                get() = RemoteCollection(CollectionKind.PLAYLIST, playlist.url, playlist.name, playlist.owner, playlist.coverUrl, found.toLong())
+        }
 
         /** Nothing found ([offline]: no search answered). */
         data class Failed(val playlist: SpotifyPlaylist, val offline: Boolean) : State
@@ -110,21 +114,7 @@ class SpotifyImporter(
         val found = matches.filterNotNull().distinctBy { it.videoId }
         if (found.isEmpty()) return State.Failed(playlist, offline = failures == playlist.tracks.size && failures > 0)
         val missing = playlist.tracks.filterIndexed { i, _ -> matches[i] == null }
-        val id = runCatching {
-            save(
-                CollectionDetail(
-                    collection = RemoteCollection(
-                        kind = CollectionKind.PLAYLIST,
-                        url = playlist.url,
-                        title = playlist.name,
-                        author = playlist.owner,
-                        thumbnailUrl = playlist.coverUrl,
-                        itemCount = found.size.toLong(),
-                    ),
-                    tracks = found,
-                ),
-            )
-        }.getOrElse { return State.Failed(playlist, offline = false) }
-        return State.Done(playlist, id, found.size, missing)
+        runCatching { save(playlist, found) }.getOrElse { return State.Failed(playlist, offline = false) }
+        return State.Done(playlist, found.size, missing)
     }
 }

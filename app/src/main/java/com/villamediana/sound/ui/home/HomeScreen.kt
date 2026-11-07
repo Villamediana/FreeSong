@@ -251,7 +251,7 @@ private fun HomeFeed(
         item(key = "hero", contentType = "hero") {
             val smartActive = playback.hasMedia && playback.isSmartLibrary()
             SmartShuffleHero(
-                playing = smartActive && playback.isPlaying,
+                playing = smartActive && (playback.isPlaying || playback.isBuffering),
                 onClick = { if (smartActive) vm.togglePlayPause() else vm.playSmartLibrary() },
                 modifier = Modifier.animateItem().staggerIn(heroIdx, intro),
             )

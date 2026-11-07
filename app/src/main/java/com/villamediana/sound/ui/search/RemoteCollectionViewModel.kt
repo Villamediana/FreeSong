@@ -18,6 +18,7 @@ import com.villamediana.sound.online.CollectionDetail
 import com.villamediana.sound.online.CollectionKind
 import com.villamediana.sound.online.OnlineException
 import com.villamediana.sound.online.RemoteTrack
+import com.villamediana.sound.online.SpotifyLinks
 import com.villamediana.sound.online.YouTubeSource
 import com.villamediana.sound.playback.PlaySource
 import com.villamediana.sound.playback.PlayerConnection
@@ -57,8 +58,8 @@ sealed interface LocalDestination {
     data class Artist(val name: String) : LocalDestination
 }
 
-/** The player is on this page: is it sounding, is shuffle on. */
-data class HerePlaying(val playing: Boolean, val shuffle: Boolean)
+/** The player is on this page: is it sounding (or about to: [loading]), is shuffle on. */
+data class HerePlaying(val playing: Boolean, val shuffle: Boolean, val loading: Boolean = false)
 
 sealed interface RemoteEvent {
     data class Open(val destination: LocalDestination) : RemoteEvent
@@ -95,6 +96,8 @@ class RemoteCollectionViewModel(
     private val onLike: (RemoteTrack, Boolean) -> Unit = { _, _ -> },
     /** The download button of a song on the phone or on its way (AppGraph.removeDownload). */
     private val onRemoveDownload: (String) -> Unit = {},
+    /** Where the page comes from: YouTube, or the saved songs of a playlist imported from Spotify. */
+    private val loader: suspend (String, CollectionKind) -> CollectionDetail = { url, k -> youTube.collection(url, k) },
 ) : ViewModel() {
 
     val kind: CollectionKind = CollectionKind.entries.firstOrNull { it.name == route.kind } ?: CollectionKind.PLAYLIST
@@ -109,7 +112,7 @@ class RemoteCollectionViewModel(
 
     /** Whether the player is on this page (played online from here), and whether it sounds. */
     val here: StateFlow<HerePlaying?> = player.state
-        .map { s -> if (s.current != null && s.source?.id == route.url) HerePlaying(s.isPlaying, s.shuffle) else null }
+        .map { s -> if (s.current != null && s.source?.id == route.url) HerePlaying(s.isPlaying || s.isBuffering, s.shuffle, s.isBuffering) else null }
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
@@ -182,7 +185,7 @@ class RemoteCollectionViewModel(
         }
         _load.value = RemoteLoad.Loading
         loadJob = viewModelScope.launch {
-            attempt { youTube.collection(route.url, kind) }
+            attempt { loader(route.url, kind) }
                 .onSuccess { detail ->
                     if (kind == CollectionKind.PLAYLIST) {
                         localPlaylistId = attempt {
@@ -190,6 +193,8 @@ class RemoteCollectionViewModel(
                         }.getOrNull()?.id
                     }
                     _load.value = RemoteLoad.Loaded(detail)
+                    // Play is the likely next tap: have the first song's stream ready for it.
+                    detail.tracks.firstOrNull()?.let { player.prefetch(listOf(it.videoId)) }
                 }
                 .onFailure { e -> _load.value = RemoteLoad.Failed(e.toRemoteError(online.value)) }
         }
@@ -418,6 +423,11 @@ class RemoteCollectionViewModel(
                 likeDownloadsFlow = g.settings.settings.map { it.likeDownloads }.distinctUntilChanged(),
                 onLike = g::likeOnline,
                 onRemoveDownload = g::removeDownload,
+                loader = if (SpotifyLinks.playlistId(route.url) != null) {
+                    { url, _ -> g.library.importedDetail(url) ?: throw OnlineException("Imported playlist removed", kind = OnlineException.Kind.NOT_FOUND) }
+                } else {
+                    { url, k -> g.youTube.collection(url, k) }
+                },
             )
         }
     }

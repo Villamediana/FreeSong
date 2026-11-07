@@ -344,6 +344,11 @@ class MediaPlayerConnection(
         play(songs.map { OnlineItem.of(it).toTrack() }, start, source, shuffle = false, smart = source.type in SMART_ONLINE)
     }
 
+    override fun prefetch(videoIds: List<String>) {
+        if (videoIds.isEmpty()) return
+        send(SessionProtocol.PREFETCH, Bundle().apply { putStringArray(SessionProtocol.ARG_VIDEO_IDS, videoIds.toTypedArray()) })
+    }
+
     override fun playSmart(seed: SmartSeed) {
         main.launch {
             val all = known.values.toList().ifEmpty { withContext(Dispatchers.IO) { library.allTracks() } }

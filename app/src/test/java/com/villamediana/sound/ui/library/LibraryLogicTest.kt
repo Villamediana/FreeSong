@@ -127,6 +127,16 @@ class LibraryLogicTest {
         assertEquals(listOf("Mine"), titles(lists.pinned))
         assertEquals(listOf("Other"), titles(lists.items))
 
+        // Imported from Spotify: listed with the playlists, unless already downloaded into one.
+        val spotify = com.villamediana.sound.data.db.ImportedPlaylist("https://open.spotify.com/playlist/x", "Spotify list", tracksJson = "[]", trackCount = 0, importedAt = 5)
+        val downloadedToo = com.villamediana.sound.data.db.ImportedPlaylist("https://open.spotify.com/playlist/y", "Já baixada", tracksJson = "[]", trackCount = 0)
+        val withImports = src.copy(
+            imported = listOf(spotify, downloadedToo),
+            playlists = listOf(pinnedList, otherList.copy(playlist = otherList.playlist.copy(sourceUrl = downloadedToo.url))),
+        )
+        assertEquals(listOf("Other", "Spotify list"), titles(buildSections(withImports, LibFilter.PLAYLISTS, LibSort.ALPHA).items))
+        assertTrue(buildSections(withImports, LibFilter.PLAYLISTS, LibSort.ALPHA).items.any { it is LibItem.ImportedItem })
+
         val albumsOnly = buildSections(src, LibFilter.ALBUMS, LibSort.ADDED)
         assertEquals(listOf("Alpha"), titles(albumsOnly.pinned))
         assertEquals(listOf("Beta"), titles(albumsOnly.items))

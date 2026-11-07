@@ -250,8 +250,8 @@ class SearchScreensSmokeTest {
         harness.show { RemoteCollectionScreen(route) }
 
         rule.waitUntil(20_000) { rule.onAllNodes(hasText("Trátame Suavemente")).fetchSemanticsNodes().isNotEmpty() }
-        rule.onNodeWithText(s(R.string.search_remote_download_all)).assertExists()
-        // No "Cria a playlist … na sua biblioteca" line under the buttons.
+        // No "Baixar tudo" on a playlist: its songs are kept one by one (heart / arrow on each row).
+        rule.onNodeWithText(s(R.string.search_remote_download_all)).assertDoesNotExist()
         harness.screenshot("remote_playlist")
 
         // Play streams the whole playlist from the first song.
@@ -268,11 +268,6 @@ class SearchScreensSmokeTest {
         rule.waitUntil(20_000) { player.queued.isNotEmpty() }
         assertEquals(listOf("aaaaaaaaaaa", "bbbbbbbbbbb", "ccccccccccc"), player.queued.single().second.map { it.videoId })
         rule.waitUntil(20_000) { rule.onAllNodes(hasText(s(R.string.search_remote_share))).fetchSemanticsNodes().isEmpty() }
-
-        rule.onNodeWithText(s(R.string.search_remote_download_all)).performClick()
-        rule.waitUntil(20_000) { downloads.collectionCalls.isNotEmpty() }
-        rule.waitUntil(20_000) { rule.onAllNodes(hasText(s(R.string.search_remote_progress, 0, 3))).fetchSemanticsNodes().isNotEmpty() }
-        harness.screenshot("remote_playlist_downloading")
     }
 
     @Test

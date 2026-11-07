@@ -1,5 +1,10 @@
 package com.villamediana.sound.data
 
+import com.villamediana.sound.data.db.ImportedPlaylist
+import com.villamediana.sound.online.CollectionDetail
+import com.villamediana.sound.online.CollectionKind
+import com.villamediana.sound.online.RemoteCollection
+import kotlinx.serialization.builtins.ListSerializer
 import com.villamediana.sound.online.YouTubeLinks
 import androidx.room.withTransaction
 import com.villamediana.sound.data.db.AlbumKey
@@ -50,6 +55,7 @@ class LibraryRepository(
     private val pinDao = db.albumPins()
     private val eventDao = db.playEvents()
     private val likedOnlineDao = db.likedOnline()
+    private val importedDao = db.importedPlaylists()
 
     /** All tracks, newest first. Shared: every derived flow reuses one Room query. */
     val tracks: Flow<List<Track>> = trackDao.observeAll()
@@ -234,6 +240,38 @@ class LibraryRepository(
 
     suspend fun getPlaylist(id: Long): Playlist? = playlistDao.get(id)
     suspend fun playlistBySourceUrl(url: String): Playlist? = playlistDao.bySourceUrl(url)
+
+    // ---------------------------------------------------------------- imported (Spotify) playlists
+
+    /** Playlists imported from Spotify, newest first. They stream; songs download one by one or all. */
+    val imported: Flow<List<ImportedPlaylist>> = importedDao.observeAll()
+
+    /** Saves (or refreshes, same url) an imported playlist with its songs as found on YouTube Music. */
+    suspend fun saveImported(url: String, name: String, owner: String?, coverUrl: String?, tracks: List<RemoteTrack>) {
+        val songs = tracks.map { ImportedSong(it.videoId, it.url, it.title, it.artist, it.album, it.durationMs, it.thumbnailUrl, it.fromMusicCatalog) }
+        importedDao.upsert(
+            ImportedPlaylist(
+                url = url,
+                name = name,
+                owner = owner,
+                coverUrl = coverUrl,
+                tracksJson = importedJson.encodeToString(ListSerializer(ImportedSong.serializer()), songs),
+                trackCount = songs.size,
+            ),
+        )
+    }
+
+    /** An imported playlist as the online playlist page shows it; null when it was removed. */
+    suspend fun importedDetail(url: String): CollectionDetail? {
+        val p = importedDao.get(url) ?: return null
+        val songs = runCatching { importedJson.decodeFromString(ListSerializer(ImportedSong.serializer()), p.tracksJson) }.getOrDefault(emptyList())
+        return CollectionDetail(
+            collection = RemoteCollection(CollectionKind.PLAYLIST, p.url, p.name, p.owner, p.coverUrl, songs.size.toLong()),
+            tracks = songs.map { RemoteTrack(it.videoId, it.url, it.title, it.artist, it.album, it.durationMs, it.thumbnailUrl, it.catalog) },
+        )
+    }
+
+    suspend fun removeImported(url: String) = importedDao.delete(url)
 
     suspend fun createPlaylist(name: String, description: String? = null, coverPath: String? = null, sourceUrl: String? = null): Long =
         playlistDao.insert(Playlist(name = name.trim().ifEmpty { "Playlist" }, description = description, coverPath = coverPath, sourceUrl = sourceUrl))
@@ -440,3 +478,18 @@ fun String.sortKey(): String =
 
 private fun <T> List<T>.mostCommon(selector: (T) -> String): String =
     groupingBy(selector).eachCount().maxBy { it.value }.key
+
+/** One song of an imported playlist, as stored. */
+@kotlinx.serialization.Serializable
+private data class ImportedSong(
+    val videoId: String,
+    val url: String,
+    val title: String,
+    val artist: String,
+    val album: String? = null,
+    val durationMs: Long? = null,
+    val thumbnailUrl: String? = null,
+    val catalog: Boolean = true,
+)
+
+private val importedJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
