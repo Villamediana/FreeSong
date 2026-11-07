@@ -53,6 +53,7 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     fun setAutoplay(v: Boolean) = launch { store.setAutoplaySimilar(v) }
     fun setPlayOnline(v: Boolean) = launch { store.setPlayOnlineByDefault(v) }
     fun setLikeDownloads(v: Boolean) = launch { store.setLikeDownloads(v) }
+    fun setShowHome(v: Boolean) = launch { store.setShowHome(v) }
     fun setTheme(v: com.villamediana.sound.data.ThemeMode) = launch { store.setTheme(v) }
 
     fun clearHistory() = launch {

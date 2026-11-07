@@ -175,7 +175,7 @@ private fun GenreCard(genre: GenreDef, covers: List<String>, selected: Boolean, 
     }
 }
 
-/** Everything live on the Home: mixes, "porque você ouviu", trending, artists, playlists, genre shelves. */
+/** Everything live on the Home: "porque você ouviu", artists, playlists, genre shelves. */
 internal fun LazyListScope.discoverSections(
     state: DiscoverUiState,
     playback: PlaybackState,
@@ -184,16 +184,6 @@ internal fun LazyListScope.discoverSections(
     onPlaylist: (RemoteCollection) -> Unit,
     onEdit: () -> Unit,
 ) {
-    if (state.mixes.isNotEmpty()) {
-        item(key = "d-mixes", contentType = "row") {
-            DiscoverRow(stringResource(R.string.discover_mixes)) {
-                items(state.mixes, key = { it.kind.name }) { mix ->
-                    val title = stringResource(mixTitle(mix.kind))
-                    MixCard(mix, title, onClick = { onPlay(mix.tracks, 0, title, "mix:" + mix.kind.name) })
-                }
-            }
-        }
-    }
     if (state.because.isNotEmpty() && state.becauseTitle != null) {
         item(key = "d-because", contentType = "row") {
             val title = stringResource(R.string.discover_because, state.becauseTitle)
@@ -264,35 +254,6 @@ private fun SongCard(t: RemoteTrack, playback: PlaybackState, onClick: () -> Uni
     }
 }
 
-/** Big mix card: a cover, the genre color rising from the bottom and the mix name on it. */
-@Composable
-private fun MixCard(mix: DiscoverMix, title: String, onClick: () -> Unit) {
-    val interaction = remember { MutableInteractionSource() }
-    val tint = Color(mix.tint)
-    val shape = RoundedCornerShape(20.dp)
-    Column(Modifier.width(176.dp).pressScale(interaction, 0.97f).clickable(interactionSource = interaction, indication = null, onClick = onClick)) {
-        Box(Modifier.size(176.dp).clip(shape).background(tint)) {
-            Cover(mix.covers.firstOrNull(), Modifier.fillMaxSize(), seed = title, shape = RoundedCornerShape(0.dp))
-            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.25f to tint.copy(alpha = 0f), 1f to tint.copy(alpha = 0.95f))))
-            Column(Modifier.align(Alignment.BottomStart).padding(14.dp)) {
-                Text(title, style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold), color = Color.White, maxLines = 2)
-            }
-            Box(
-                Modifier.align(Alignment.TopEnd).padding(10.dp).size(34.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.92f)),
-                contentAlignment = Alignment.Center,
-            ) { Icon(Icons.Rounded.PlayArrow, null, tint = tint, modifier = Modifier.size(22.dp)) }
-        }
-        Spacer(Modifier.height(8.dp))
-        Text(
-            mix.tracks.take(3).joinToString(", ") { it.artist.substringBefore(",").trim() },
-            style = MaterialTheme.typography.bodySmall,
-            color = SoundColors.TextMuted,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
-}
-
 @Composable
 private fun ArtistBubble(a: ArtistPick, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
@@ -315,13 +276,6 @@ private fun PlaylistCard(c: RemoteCollection, onClick: () -> Unit) {
         Text(c.title, style = MaterialTheme.typography.titleSmall, color = SoundColors.Text, maxLines = 2, overflow = TextOverflow.Ellipsis)
         c.author?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = SoundColors.TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis) }
     }
-}
-
-private fun mixTitle(kind: MixKind): Int = when (kind) {
-    MixKind.YOURS -> R.string.discover_mix_yours
-    MixKind.NEW -> R.string.discover_mix_new
-    MixKind.CLASSICS -> R.string.discover_mix_classics
-    MixKind.CHILL -> R.string.discover_mix_chill
 }
 
 /** Empty library, genres chosen: the Home is the live suggestions. */

@@ -27,14 +27,8 @@
     <string name="discover_edit">Editar</string>
     <string name="discover_offline">Sem conexão. Mostrando as últimas sugestões.</string>
     <string name="discover_selected">Selecionado</string>
-    <string name="discover_mixes">Seus mixes</string>
-    <string name="discover_mix_yours">Seu mix</string>
-    <string name="discover_mix_new">Descobertas</string>
-    <string name="discover_mix_classics">Clássicos</string>
-    <string name="discover_mix_chill">Pra relaxar</string>
     <string name="discover_because">Porque você ouviu %1$s</string>
     <string name="discover_artists">Artistas pra você</string>
     <string name="discover_playlists">Playlists pra você</string>
     <string name="discover_edit_genres">Editar gêneros</string>
-    <string name="discover_mix_songs">%1$d músicas</string>
 </resources>

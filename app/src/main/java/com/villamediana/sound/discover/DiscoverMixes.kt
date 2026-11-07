@@ -2,41 +2,8 @@ package com.villamediana.sound.discover
 
 import com.villamediana.sound.online.RemoteTrack
 
-/** Pure helpers that turn fetched lists into the Home's mixes and picks. Deterministic by seed. */
+/** Pure helpers that turn fetched lists into the Home's picks (artists, playlists). */
 object DiscoverMixes {
-    /**
-     * Interleaves [lists] (one song from each in turn), drops repeats and starts each list at a
-     * [seed]-dependent offset, so a mix of the same genres changes from one slot to the next.
-     */
-    /**
-     * Up to [size] songs from [lists] (one per genre), no repeats, rotated by [seed] so the mix
-     * changes every slot. Genres take turns in runs of [run] songs — a few of one sound, then the
-     * next — instead of jumping genre at every song.
-     */
-    fun blend(lists: List<List<RemoteTrack>>, size: Int, seed: Long, run: Int = 4): List<RemoteTrack> {
-        val sources = lists.filter { it.isNotEmpty() }.mapIndexed { i, l ->
-            val offset = ((seed + i * 7) % l.size).toInt().let { if (it < 0) it + l.size else it }
-            l.drop(offset) + l.take(offset)
-        }
-        val seen = HashSet<String>()
-        val out = ArrayList<RemoteTrack>(size)
-        val taken = IntArray(sources.size)
-        while (out.size < size && sources.indices.any { taken[it] < sources[it].size }) {
-            for ((i, src) in sources.withIndex()) {
-                var added = 0
-                while (added < run && taken[i] < src.size && out.size < size) {
-                    if (seen.add(src[taken[i]].videoId)) {
-                        out += src[taken[i]]
-                        added++
-                    }
-                    taken[i]++
-                }
-                if (out.size == size) break
-            }
-        }
-        return out
-    }
-
     /** Artists that show up most across [lists] (ties: first seen), with one of their covers. */
     fun topArtists(lists: List<List<RemoteTrack>>, limit: Int): List<Pair<String, String?>> {
         val counts = LinkedHashMap<String, Int>()
@@ -65,6 +32,4 @@ object DiscoverMixes {
         return out
     }
 
-    /** Covers for a mix card: distinct, from the start of the mix. */
-    fun covers(tracks: List<RemoteTrack>, n: Int = 4): List<String> = tracks.mapNotNull { it.thumbnailUrl }.distinct().take(n)
 }

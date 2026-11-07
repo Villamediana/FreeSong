@@ -157,6 +157,8 @@
     <string name="home_settings_play_online_sub">Suena al instante, sin descargar. Apagado, el toque descarga la canción.</string>
     <string name="home_settings_like_downloads">Me gusta ya descarga</string>
     <string name="home_settings_like_downloads_sub">Al darle me gusta, la canción se descarga en segundo plano y solo el corazón aparece en las listas. Vale desde ahora: lo que ya está en Me gusta no se descarga.</string>
+    <string name="home_settings_show_home">Pestaña Inicio</string>
+    <string name="home_settings_show_home_sub">Sugerencias y descubrimientos. Apagada, la app abre directo en tus canciones.</string>
     <string name="home_settings_equalizer">Ecualizador</string>
     <string name="home_settings_equalizer_sub">Graves, agudos y presets para tus auriculares.</string>
     <string name="home_settings_equalizer_on">Encendido</string>

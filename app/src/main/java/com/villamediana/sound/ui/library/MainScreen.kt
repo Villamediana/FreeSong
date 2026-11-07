@@ -1,5 +1,10 @@
 package com.villamediana.sound.ui.library
 
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
 import com.villamediana.sound.ui.nav.searchRevealOrigin
 import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedContent
@@ -63,6 +68,15 @@ enum class MainTab(@StringRes val label: Int, val filter: LibFilter?) {
     ALBUMS(R.string.main_tab_albums, LibFilter.ALBUMS),
     ARTISTS(R.string.main_tab_artists, LibFilter.ARTISTS),
     GENRES(R.string.main_tab_genres, LibFilter.GENRES),
+    ;
+
+    companion object {
+        /** The pills on screen: all, or all but Início when it is turned off. */
+        fun visible(showHome: Boolean): List<MainTab> = if (showHome) entries else entries - HOME
+
+        /** Where the app opens. */
+        fun start(showHome: Boolean): MainTab = if (showHome) HOME else SONGS
+    }
 }
 
 /**
@@ -72,7 +86,13 @@ enum class MainTab(@StringRes val label: Int, val filter: LibFilter?) {
 @Composable
 fun MainScreen() {
     val nav = navigator()
-    var tab by rememberSaveable { mutableStateOf(MainTab.HOME) }
+    // "Aba Início" off (Settings): no Início pill, the app opens on the songs.
+    val settingsStore = com.villamediana.sound.SoundApplication.graph.settings
+    val firstShowHome = remember { kotlinx.coroutines.runBlocking { settingsStore.current().showHome } }
+    val showHome by remember { settingsStore.settings.map { it.showHome }.distinctUntilChanged() }.collectAsState(initial = firstShowHome)
+    val tabs = MainTab.visible(showHome)
+    var tab by rememberSaveable { mutableStateOf(MainTab.start(firstShowHome)) }
+    LaunchedEffect(showHome) { if (tab !in tabs) tab = MainTab.start(showHome) }
     var creating by rememberSaveable { mutableStateOf(false) }
     val downloads by SoundApplication.graph.downloads.summary.collectAsStateWithLifecycle(DownloadSummary())
     // The genre intro takes the whole screen: no header, no pills.
@@ -106,7 +126,7 @@ fun MainScreen() {
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    MainTab.entries.forEach { t ->
+                    tabs.forEach { t ->
                         FilterPill(stringResource(t.label), selected = t == tab, onClick = { tab = t })
                     }
                 }

@@ -41,6 +41,8 @@ data class Settings(
     val playOnlineByDefault: Boolean = true,
     /** "Curtir já baixa": the heart of a streamed song also downloads it (only the heart shows on rows). */
     val likeDownloads: Boolean = false,
+    /** The "Início" pill (suggestions). Off, the app opens straight on the songs. */
+    val showHome: Boolean = true,
     val theme: ThemeMode = ThemeMode.DARK,
     /** Highlight color id (see [com.villamediana.sound.ui.theme.SoundAccents]). */
     val accent: String = "purple",
@@ -63,6 +65,7 @@ class SettingsStore(private val context: Context) {
         val lastQueue = stringPreferencesKey("last_queue")
         val playOnline = booleanPreferencesKey("play_online_default")
         val likeDownloads = booleanPreferencesKey("like_downloads")
+        val showHome = booleanPreferencesKey("show_home")
         val theme = stringPreferencesKey("theme")
         val accent = stringPreferencesKey("accent")
         val genres = stringSetPreferencesKey("favorite_genres")
@@ -80,6 +83,7 @@ class SettingsStore(private val context: Context) {
             normalizeVolume = p[K.normalize] ?: false,
             playOnlineByDefault = p[K.playOnline] ?: true,
             likeDownloads = p[K.likeDownloads] ?: false,
+            showHome = p[K.showHome] ?: true,
             theme = p[K.theme]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() } ?: ThemeMode.DARK,
             accent = p[K.accent] ?: "purple",
             favoriteGenres = p[K.genres].orEmpty(),
@@ -105,5 +109,6 @@ class SettingsStore(private val context: Context) {
     suspend fun setTheme(v: ThemeMode) = context.dataStore.edit { it[K.theme] = v.name }
     suspend fun setPlayOnlineByDefault(v: Boolean) = context.dataStore.edit { it[K.playOnline] = v }
     suspend fun setLikeDownloads(v: Boolean) = context.dataStore.edit { it[K.likeDownloads] = v }
+    suspend fun setShowHome(v: Boolean) = context.dataStore.edit { it[K.showHome] = v }
     suspend fun setLastQueueJson(v: String?) = context.dataStore.edit { if (v == null) it.remove(K.lastQueue) else it[K.lastQueue] = v }
 }

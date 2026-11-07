@@ -129,6 +129,13 @@ fun SettingsScreen() {
                         onClick = nav::openTheme,
                         trailing = { Box(Modifier.size(26.dp).clip(CircleShape).background(SoundColors.Accent)) },
                     )
+                    Hairline()
+                    SwitchRow(
+                        title = stringResource(R.string.home_settings_show_home),
+                        subtitle = stringResource(R.string.home_settings_show_home_sub),
+                        checked = s.showHome,
+                        onChange = vm::setShowHome,
+                    )
                 }
             }
         }

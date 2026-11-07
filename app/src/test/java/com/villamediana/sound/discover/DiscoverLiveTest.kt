@@ -49,7 +49,5 @@ class DiscoverLiveTest {
         val artist = repo.artist(classics.first().artist.substringBefore(",").trim())
         println("artist: ${artist?.title} ${artist?.url}")
         assertTrue(artist != null)
-        val mix = DiscoverMixes.blend(listOf(classics, related), 20, 3)
-        assertTrue(mix.size >= 10 && mix.distinctBy { it.videoId }.size == mix.size)
     }
 }
