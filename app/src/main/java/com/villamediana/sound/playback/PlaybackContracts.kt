@@ -43,6 +43,8 @@ data class PlaybackState(
     val source: PlaySource? = null,
     /** True when the queue is extended automatically with similar songs (radio / smart modes). */
     val smart: Boolean = false,
+    /** Indexes in [queue] of the songs the app added to keep it going (shown apart, after yours). */
+    val suggested: Set<Int> = emptySet(),
     /** Name of the output device when known ("Fones Bluetooth", "Alto-falante"…). */
     val outputName: String? = null,
     val error: String? = null,

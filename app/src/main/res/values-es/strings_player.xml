@@ -26,6 +26,10 @@
     <string name="player_queue_empty_body">Cuando termine esta, se acaba la cola.</string>
     <string name="player_queue_smart">Inteligente</string>
     <string name="player_queue_smart_hint">La cola sigue sola con canciones parecidas.</string>
+    <string name="player_queue_more">Buscando más canciones…</string>
+    <string name="player_queue_more_body">Parecidas a las últimas de la cola.</string>
+    <string name="player_queue_suggested">Para seguir</string>
+    <string name="player_queue_suggested_hint">Parecidas a las últimas de la cola, y algunas nuevas.</string>
     <string name="player_queue_reorder">Arrastrar para reordenar</string>
     <string name="player_queue_remove">Quitar de la cola</string>
 

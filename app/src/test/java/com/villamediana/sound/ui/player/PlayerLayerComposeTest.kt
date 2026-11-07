@@ -24,6 +24,7 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.swipeLeft
@@ -235,6 +236,37 @@ class PlayerLayerComposeTest {
         compose.onNodeWithText("Farol").performClick()
         compose.waitForIdle()
         assertEquals(2, player.skippedTo)
+    }
+
+    @Test
+    fun theSongsTheAppAddedShowApartAfterYours() {
+        val player = setUp()
+        compose.runOnIdle { player.state.update { it.copy(smart = true, suggested = setOf(2)) } }
+        expand()
+        compose.onNodeWithContentDescription("Fila").performClick()
+        compose.waitForIdle()
+        val queueList = androidx.compose.ui.test.hasScrollAction() and androidx.compose.ui.test.hasAnyDescendant(hasText("A SEGUIR"))
+        compose.onNode(queueList).performScrollToNode(hasText("Farol"))
+        compose.waitForIdle()
+        compose.onNodeWithText("PRA CONTINUAR").assertIsDisplayed()
+        val label = compose.onNodeWithText("PRA CONTINUAR").fetchSemanticsNode().boundsInRoot.top
+        val mine = compose.onAllNodesWithText("Maré").fetchSemanticsNodes().maxOf { it.boundsInRoot.top }
+        val added = compose.onAllNodesWithText("Farol").fetchSemanticsNodes().maxOf { it.boundsInRoot.top }
+        assertTrue(mine < label && label < added)
+        compose.onNodeWithText("Farol").performClick()
+        compose.waitForIdle()
+        assertEquals(2, player.skippedTo)
+    }
+
+    @Test
+    fun aSmartQueueAtItsLastSongSaysMoreIsComing() {
+        val player = setUp()
+        compose.runOnIdle { player.state.update { it.copy(smart = true, queue = tracks.take(1), queueIndex = 0) } }
+        expand()
+        compose.onNodeWithContentDescription("Fila").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("Buscando mais músicas…").assertIsDisplayed()
+        compose.onNodeWithText("Nada a seguir").assertDoesNotExist()
     }
 
     @Test

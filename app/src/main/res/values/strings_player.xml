@@ -26,6 +26,10 @@
     <string name="player_queue_empty_body">Quando esta acabar, a fila termina.</string>
     <string name="player_queue_smart">Inteligente</string>
     <string name="player_queue_smart_hint">A fila continua sozinha com músicas parecidas.</string>
+    <string name="player_queue_more">Buscando mais músicas…</string>
+    <string name="player_queue_more_body">Parecidas com as últimas da fila.</string>
+    <string name="player_queue_suggested">Pra continuar</string>
+    <string name="player_queue_suggested_hint">Parecidas com as últimas da fila, e algumas novas.</string>
     <string name="player_queue_reorder">Arrastar para reordenar</string>
     <string name="player_queue_remove">Remover da fila</string>
 

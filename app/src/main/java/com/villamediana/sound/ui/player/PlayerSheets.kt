@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -116,7 +117,9 @@ internal fun QueueContent(
     modifier: Modifier = Modifier,
 ) {
     val latest by rememberUpdatedState(state)
-    val upstream = remember(state.queue, state.queueIndex) { queueEntries(state.upNext) }
+    val upstream = remember(state.queue, state.queueIndex, state.suggested) {
+        queueEntries(state.upNext) { i -> state.queueIndex + 1 + i in state.suggested }
+    }
     var entries by remember { mutableStateOf(upstream) }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -151,9 +154,56 @@ internal fun QueueContent(
         if (base == latest.queueIndex && start >= 0 && end >= 0 && start != end) {
             onMove(PlayerMath.upNextToQueueIndex(base, start), PlayerMath.upNextToQueueIndex(base, end))
         } else if (base != latest.queueIndex) {
-            entries = queueEntries(latest.upNext) // the song changed mid-drag: show the real queue
+            entries = queueEntries(latest.upNext) { i -> latest.queueIndex + 1 + i in latest.suggested } // the song changed mid-drag: show the real queue
         }
         dragBase = -1 to -1
+    }
+
+    val entryRow: @Composable LazyItemScope.(QueueEntry) -> Unit = { entry ->
+        val dragging = reorder.draggingKey == entry.key
+        val lift by animateFloatAsState(if (dragging) 1f else 0f, label = "lift")
+        Box(
+            Modifier
+                .zIndex(if (dragging || reorder.settlingKey == entry.key) 1f else 0f)
+                .then(if (dragging || reorder.settlingKey == entry.key) Modifier else Modifier.animateItem())
+                .graphicsLayer {
+                    translationY = reorder.translation(entry.key)
+                    shadowElevation = 14.dp.toPx() * lift
+                    shape = RoundedCornerShape(10.dp)
+                    scaleX = 1f + 0.02f * lift
+                    scaleY = 1f + 0.02f * lift
+                },
+        ) {
+            SwipeToRemove(
+                onRemove = {
+                    val i = entries.indexOfFirst { it.key == entry.key }
+                    if (i >= 0) {
+                        entries = entries.filterNot { it.key == entry.key }
+                        onRemove(PlayerMath.upNextToQueueIndex(latest.queueIndex, i))
+                    }
+                },
+            ) {
+                TrackRow(
+                    track = entry.track,
+                    onClick = {
+                        val i = entries.indexOfFirst { it.key == entry.key }
+                        if (i >= 0) onSkipTo(PlayerMath.upNextToQueueIndex(latest.queueIndex, i))
+                    },
+                    onLongClick = { openActions(entry.track) },
+                    contentPadding = PaddingValues(start = Dimens.Gutter, end = 4.dp),
+                    trailing = {
+                        Box(
+                            Modifier
+                                .size(44.dp)
+                                .reorderHandle(reorder, entry.key),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(Icons.Rounded.DragHandle, stringResource(R.string.player_queue_reorder), tint = SoundColors.TextFaint)
+                        }
+                    },
+                )
+            }
+        }
     }
 
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -205,57 +255,34 @@ internal fun QueueContent(
         if (entries.isEmpty()) {
             item(key = "empty") {
                 Column(Modifier.fillMaxWidth().padding(horizontal = Dimens.Gutter, vertical = 20.dp)) {
-                    Text(stringResource(R.string.player_queue_empty), style = MaterialTheme.typography.titleMedium, color = SoundColors.Text)
+                    // A smart queue (repeat off) is about to get more songs; any other ends with this one.
+                    val more = state.smart && state.repeat == com.villamediana.sound.playback.RepeatMode.OFF
+                    Text(
+                        stringResource(if (more) R.string.player_queue_more else R.string.player_queue_empty),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = SoundColors.Text,
+                    )
                     Spacer(Modifier.height(4.dp))
-                    Text(stringResource(R.string.player_queue_empty_body), style = MaterialTheme.typography.bodyMedium, color = SoundColors.TextMuted)
-                }
-            }
-        }
-        itemsIndexed(entries, key = { _, e -> e.key }) { _, entry ->
-            val dragging = reorder.draggingKey == entry.key
-            val lift by animateFloatAsState(if (dragging) 1f else 0f, label = "lift")
-            Box(
-                Modifier
-                    .zIndex(if (dragging || reorder.settlingKey == entry.key) 1f else 0f)
-                    .then(if (dragging || reorder.settlingKey == entry.key) Modifier else Modifier.animateItem())
-                    .graphicsLayer {
-                        translationY = reorder.translation(entry.key)
-                        shadowElevation = 14.dp.toPx() * lift
-                        shape = RoundedCornerShape(10.dp)
-                        scaleX = 1f + 0.02f * lift
-                        scaleY = 1f + 0.02f * lift
-                    },
-            ) {
-                SwipeToRemove(
-                    onRemove = {
-                        val i = entries.indexOfFirst { it.key == entry.key }
-                        if (i >= 0) {
-                            entries = entries.filterNot { it.key == entry.key }
-                            onRemove(PlayerMath.upNextToQueueIndex(latest.queueIndex, i))
-                        }
-                    },
-                ) {
-                    TrackRow(
-                        track = entry.track,
-                        onClick = {
-                            val i = entries.indexOfFirst { it.key == entry.key }
-                            if (i >= 0) onSkipTo(PlayerMath.upNextToQueueIndex(latest.queueIndex, i))
-                        },
-                        onLongClick = { openActions(entry.track) },
-                        contentPadding = PaddingValues(start = Dimens.Gutter, end = 4.dp),
-                        trailing = {
-                            Box(
-                                Modifier
-                                    .size(44.dp)
-                                    .reorderHandle(reorder, entry.key),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Icon(Icons.Rounded.DragHandle, stringResource(R.string.player_queue_reorder), tint = SoundColors.TextFaint)
-                            }
-                        },
+                    Text(
+                        stringResource(if (more) R.string.player_queue_more_body else R.string.player_queue_empty_body),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = SoundColors.TextMuted,
                     )
                 }
             }
+        }
+        // Yours first, then (under their own heading) the ones the app added to keep going.
+        val split = entries.indexOfFirst { it.suggested }.let { if (it < 0) entries.size else it }
+        itemsIndexed(entries.subList(0, split), key = { _, e -> e.key }) { _, entry -> entryRow(entry) }
+        if (split < entries.size) {
+            item(key = "suggested-label") {
+                Column(Modifier.fillMaxWidth().padding(horizontal = Dimens.Gutter).padding(top = 18.dp, bottom = 6.dp)) {
+                    Overline(stringResource(R.string.player_queue_suggested))
+                    Spacer(Modifier.height(4.dp))
+                    Text(stringResource(R.string.player_queue_suggested_hint), style = MaterialTheme.typography.bodySmall, color = SoundColors.TextFaint)
+                }
+            }
+            itemsIndexed(entries.subList(split, entries.size), key = { _, e -> e.key }) { _, entry -> entryRow(entry) }
         }
     }
     actionsFor?.let { t -> TrackActionsSheet(track = t, onDismiss = { actionsFor = null }) }

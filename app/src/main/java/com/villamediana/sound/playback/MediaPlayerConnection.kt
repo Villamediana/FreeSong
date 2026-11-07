@@ -227,6 +227,7 @@ class MediaPlayerConnection(
         val currentIndex = c.currentMediaItemIndex
         val queue = ArrayList<Track>(count)
         val playIndexes = ArrayList<Int>(count)
+        val suggested = HashSet<Int>()
         var queueIndex = -1
         val missing = ArrayList<Long>()
         for (p in 0 until order.size) {
@@ -238,6 +239,7 @@ class MediaPlayerConnection(
                 continue
             }
             if (t == currentIndex) queueIndex = queue.size
+            if (MediaItems.isSuggested(item)) suggested += queue.size
             queue += track
             playIndexes += p
         }
@@ -257,6 +259,7 @@ class MediaPlayerConnection(
             queueIndex = queueIndex,
             source = source,
             smart = smart,
+            suggested = suggested,
             outputName = outputName,
             error = error,
         )

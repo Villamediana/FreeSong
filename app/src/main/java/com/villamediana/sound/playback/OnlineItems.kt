@@ -84,9 +84,6 @@ data class OnlineItem(
 
 /** Pure decisions about queues that contain online songs. */
 internal object OnlineQueue {
-    /** Songs appended when an online queue reaches its end (radio after the last song). */
-    const val CONTINUATION = 25
-
     /**
      * The songs a PLAY / QUEUE_ADD command names, in order: library ids (≥ 0) from [library],
      * online ids (< 0) from [online] — played from the library instead when that video is already
@@ -101,16 +98,4 @@ internal object OnlineQueue {
         if (id >= 0) library[id]
         else online[id]?.let { item -> byVideoId[item.videoId] ?: item.toTrack() }
     }
-
-    /**
-     * What to append after an online queue: [related] minus anything already queued (by video id,
-     * online or downloaded) and minus repeats, at most [limit]; songs in the library play from it.
-     */
-    fun continuation(related: List<RemoteTrack>, queued: Set<String>, byVideoId: Map<String, Track>, limit: Int = CONTINUATION): List<Track> =
-        related.asSequence()
-            .filter { it.videoId.isNotBlank() && it.videoId !in queued }
-            .distinctBy { it.videoId }
-            .take(limit.coerceAtLeast(0))
-            .map { byVideoId[it.videoId] ?: OnlineItem.of(it).toTrack() }
-            .toList()
 }

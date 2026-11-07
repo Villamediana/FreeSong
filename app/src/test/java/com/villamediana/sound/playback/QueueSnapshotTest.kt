@@ -74,6 +74,14 @@ class QueueSnapshotTest {
     )
 
     @Test
+    fun `the songs the app added stay marked through retain and the round trip`() {
+        val snap = full.copy(suggested = listOf(1, 3))
+        assertEquals(snap, QueueSnapshot.decode(snap.encode()))
+        // 11 (timeline 1) deleted: 13 moves from 3 to 2.
+        assertEquals(listOf(2), snap.retain(setOf(10, 12, 13))!!.suggested)
+    }
+
+    @Test
     fun `online songs survive the round trip with what they show`() {
         val back = QueueSnapshot.decode(mixed.encode())!!
         assertEquals(mixed, back)

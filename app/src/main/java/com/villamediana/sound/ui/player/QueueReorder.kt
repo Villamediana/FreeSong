@@ -48,14 +48,15 @@ import kotlin.math.abs
 import kotlin.math.sign
 
 /** One row of "A seguir". [key] is unique even when the same song is queued twice. */
-internal data class QueueEntry(val key: String, val track: Track)
+/** A row of "A seguir"; [suggested] = one the app added to keep the queue going. */
+internal data class QueueEntry(val key: String, val track: Track, val suggested: Boolean = false)
 
-internal fun queueEntries(tracks: List<Track>): List<QueueEntry> {
+internal fun queueEntries(tracks: List<Track>, suggested: (Int) -> Boolean = { false }): List<QueueEntry> {
     val seen = HashMap<Long, Int>()
-    return tracks.map { t ->
+    return tracks.mapIndexed { i, t ->
         val n = (seen[t.id] ?: 0) + 1
         seen[t.id] = n
-        QueueEntry("${t.id}#$n", t)
+        QueueEntry("${t.id}#$n", t, suggested(i))
     }
 }
 

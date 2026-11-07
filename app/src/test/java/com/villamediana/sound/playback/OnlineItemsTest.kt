@@ -113,16 +113,6 @@ class OnlineItemsTest {
         assertEquals(listOf(local, a.toTrack(), null, downloadedB, null), out)
     }
 
-    @Test fun onlineContinuationSkipsWhatIsQueuedAndRepeats() {
-        fun r(id: String) = RemoteTrack(id, "https://music.youtube.com/watch?v=$id", "T $id", "A")
-        val related = listOf(r("seed"), r("q1"), r("n1"), r("n1"), r("dl"), r("n2"), r(""), r("n3"))
-        val downloaded = Track(id = 30, videoId = "dl", title = "T dl", artist = "A", filePath = "/music/30.m4a")
-        val more = OnlineQueue.continuation(related, queued = setOf("seed", "q1"), byVideoId = mapOf("dl" to downloaded), limit = 3)
-        assertEquals(listOf(OnlineItem.of(r("n1")).toTrack(), downloaded, OnlineItem.of(r("n2")).toTrack()), more)
-        assertEquals(emptyList<Track>(), OnlineQueue.continuation(related, setOf("seed"), emptyMap(), limit = 0))
-        assertEquals(emptyList<Track>(), OnlineQueue.continuation(emptyList(), emptySet(), emptyMap()))
-    }
-
     @Test fun shufflingTreatsOnlineSongsLikeAnyOther() {
         val online = (1..6).map { OnlineItem("v$it", "Song $it", "Artist ${it % 3}").toTrack() }
         val items: List<Track?> = online + local

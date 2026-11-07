@@ -24,6 +24,8 @@ data class QueueSnapshot(
     val savedAt: Long = 0,
     /** What each online song in [ids] is (video id + what to show), so it streams again on resume. */
     val online: List<OnlineItem> = emptyList(),
+    /** Timeline indexes of the songs the app added to keep the queue going. */
+    val suggested: List<Int> = emptyList(),
 ) {
     @Serializable
     data class SavedSource(val type: String, val title: String, val id: String? = null) {
@@ -64,8 +66,10 @@ data class QueueSnapshot(
         val newOrder = if (order.size == ids.size) order.mapNotNull { old -> newIndexOf.getOrNull(old)?.takeIf { it >= 0 } } else emptyList()
         val keptIds = keep.map { ids[it] }
         val keptOnline = keptIds.filter { it < 0 }.toSet()
+        val keptSuggested = suggested.mapNotNull { old -> newIndexOf.getOrNull(old)?.takeIf { it >= 0 } }
         return copy(
             ids = keptIds,
+            suggested = keptSuggested,
             online = online.filter { it.trackId in keptOnline }.distinctBy { it.videoId },
             index = newIndex,
             positionMs = if (currentSurvives) positionMs else 0,

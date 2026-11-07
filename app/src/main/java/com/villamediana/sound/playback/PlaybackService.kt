@@ -43,6 +43,8 @@ import com.villamediana.sound.playback.stream.hasInternet
 import com.villamediana.sound.smart.Taste
 import com.villamediana.sound.smart.loadTaste
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -109,6 +111,8 @@ class PlaybackService : MediaLibraryService() {
     private var pendingRestoreKeys: List<String>? = null
     private var extendJob: Job? = null
     private var extendedAtCount = -1
+    /** Retries of an extension that found nothing (reset once one lands, or a new queue starts). */
+    private var extendRetries = 0
     private var saveJob: Job? = null
     private var persistJob: Job? = null
     private var positionSaver: Job? = null
@@ -257,14 +261,14 @@ class PlaybackService : MediaLibraryService() {
             if (id == null) {
                 val local = MediaItems.videoId(item)?.let(tracksByVideoId::get) ?: continue
                 when {
-                    i != current -> swaps += i to mediaItemOf(local)
-                    includeCurrent -> currentToFile = mediaItemOf(local)
+                    i != current -> swaps += i to MediaItems.keepingMark(mediaItemOf(local), item)
+                    includeCurrent -> currentToFile = MediaItems.keepingMark(mediaItemOf(local), item)
                 }
                 continue
             }
             val track = tracksById[id]
             if (track == null) gone += i
-            else if (!upToDate(item, track)) swaps += i to mediaItemOf(track)
+            else if (!upToDate(item, track)) swaps += i to MediaItems.keepingMark(mediaItemOf(track), item)
         }
         if (swaps.isEmpty() && gone.isEmpty() && currentToFile == null) return
         // A replaced uri is a remove + add for ExoPlayer, which would drop the song somewhere random in the shuffle.
@@ -378,12 +382,6 @@ class PlaybackService : MediaLibraryService() {
         MediaItems.trackId(item)?.let(tracksById::get) ?: MediaItems.onlineTrack(item)
     }
 
-    /** Video ids already in the queue (online songs and downloaded ones). */
-    private fun queuedVideoIds(): Set<String> = (0 until player.mediaItemCount).mapNotNullTo(HashSet()) { i ->
-        val item = player.getMediaItemAt(i)
-        MediaItems.videoId(item) ?: MediaItems.trackId(item)?.let { tracksById[it]?.videoId }
-    }
-
     /** Keeps Wi-Fi awake too (not just the CPU) while the queue streams, so the screen going off doesn't cut it. */
     private fun updateWakeMode() {
         val streaming = (0 until player.mediaItemCount).any { MediaItems.isOnline(player.getMediaItemAt(it)) }
@@ -442,6 +440,7 @@ class PlaybackService : MediaLibraryService() {
         source = plan.source
         smart = plan.smart
         extendedAtCount = -1
+        extendRetries = 0
         consecutiveErrors = 0
         reorderOnNextTimeline = false
         pendingRestore = null
@@ -477,12 +476,14 @@ class PlaybackService : MediaLibraryService() {
 
     /**
      * Inserts after the current song ([next]) or at the end — of the play order, also when shuffled.
+     * The listener's "add to queue" goes after their own songs but before the ones the app added to
+     * keep the queue going; the app's own ([suggested]) go at the very end, marked as such.
      * When the queue had already ended, the player moves on to the first added song: paused (Play
      * starts it), or carrying on when [keepPlaying] (autoplay's songs landing late).
      */
-    private fun insert(tracks: List<Track>, next: Boolean, keepPlaying: Boolean = false) {
+    private fun insert(tracks: List<Track>, next: Boolean, keepPlaying: Boolean = false, suggested: Boolean = false) {
         if (tracks.isEmpty()) return
-        val items = tracks.map(::mediaItemOf)
+        val items = tracks.map(::mediaItemOf).let { list -> if (suggested) list.map(MediaItems::suggested) else list }
         val n = player.mediaItemCount
         if (n == 0) {
             source = null
@@ -495,21 +496,26 @@ class PlaybackService : MediaLibraryService() {
         // Left at ENDED, the player ignores new songs and Play would restart the one that just finished.
         val ended = player.playbackState == Player.STATE_ENDED
         val cur = player.currentMediaItemIndex.coerceIn(0, n - 1)
-        val timelinePos = if (next) cur + 1 else n
-        if (!player.shuffleModeEnabled) {
-            player.addMediaItems(timelinePos, items)
-        } else {
-            val before = playOrder()
-            val playPos = if (next) before.playIndexOf(cur) + 1 else before.size
-            player.addMediaItems(timelinePos, items)
-            setShuffleOrder(before.inserted(playPos, timelinePos, items.size))
+        val before = playOrder()
+        val playPos = when {
+            next -> before.playIndexOf(cur) + 1
+            suggested -> before.size
+            else -> firstSuggestedAfter(before, cur) ?: before.size
         }
+        // Unshuffled, the timeline is the play order.
+        val timelinePos = if (!player.shuffleModeEnabled) playPos else if (next) cur + 1 else n
+        player.addMediaItems(timelinePos, items)
+        if (player.shuffleModeEnabled) setShuffleOrder(before.inserted(playPos, timelinePos, items.size))
         extendedAtCount = -1
         if (ended) {
             if (!keepPlaying) player.pause()
             player.seekTo(timelinePos, 0)
         }
     }
+
+    /** Play index of the first song after [current] (timeline index) that the app added; null when none. */
+    private fun firstSuggestedAfter(order: PlayOrder, current: Int): Int? =
+        (order.playIndexOf(current) + 1 until order.size).firstOrNull { MediaItems.isSuggested(player.getMediaItemAt(order.timelineIndexOf(it))) }
 
     private fun move(from: Int, to: Int) {
         val n = player.mediaItemCount
@@ -546,67 +552,76 @@ class PlaybackService : MediaLibraryService() {
     // ================================================================ autoplay / smart extension
 
     /**
-     * When the last song of the play order starts (repeat off), append what fits: similar songs
-     * when "autoplay similar" is on, and always for smart queues (radio, genre, mixes, smart shuffle).
-     * After an online song, "similar" is YouTube Music's radio from it; the library's own
-     * continuation only ever looks at library songs.
+     * The queue never runs out (repeat off; "autoplay similar" on, or a smart queue): when one song
+     * is left after the playing one, songs like the last few of the list are added after it — your
+     * own that fit, with new ones from YouTube Music in between ([QueueContinuation]). They are
+     * marked as the app's: the queue shows them apart and "add to queue" goes before them.
+     * [again] = called by the extension itself (its retry, or a queue that changed meanwhile).
      */
-    private fun maybeExtend() {
+    private fun maybeExtend(again: Boolean = false) {
         if (suppressShuffleReorder) return // mid queue replacement; the caller extends when done
         val count = player.mediaItemCount
         if (count == 0 || player.repeatMode != Player.REPEAT_MODE_OFF) return
-        if (player.currentMediaItemIndex == C.INDEX_UNSET || player.hasNextMediaItem()) return
-        val lastOnline = MediaItems.videoId(player.currentMediaItem)?.takeIf { settings.autoplaySimilar || smart }
-        if (lastOnline == null && !(settings.autoplaySimilar || smart)) return
-        if (extendJob?.isActive == true || extendedAtCount == count) return
-        extendedAtCount = count
-        if (lastOnline != null) {
-            extendOnline(lastOnline, count)
-            return
-        }
+        if (!settings.autoplaySimilar && !smart) return
+        val current = player.currentMediaItemIndex
+        if (current == C.INDEX_UNSET) return
         val order = playOrder()
-        val queueIds = (0 until order.size).mapNotNull { MediaItems.trackId(player.getMediaItemAt(order.timelineIndexOf(it))) }
+        if (order.size - 1 - order.playIndexOf(current) > QueueContinuation.WHEN_LEFT) return
+        if ((!again && extendJob?.isActive == true) || extendedAtCount == count) return
+        extendedAtCount = count
+        val items = (0 until order.size).map { player.getMediaItemAt(order.timelineIndexOf(it)) }
         val src = source
         val seed = Random.nextLong()
         extendJob = scope.launch {
+            val local = tracksFor(items.mapNotNull(MediaItems::trackId).distinct()).associateBy { it.id }
+            val list = items.mapNotNull { item -> MediaItems.trackId(item)?.let(local::get) ?: MediaItems.onlineTrack(item) }
+            val radios = QueueContinuation.seeds(list)
+                .map { id -> async { graph.youTube.related(id, QueueContinuation.PER_SEED) } }
+                .awaitAll()
             val lib = libraryTracks()
             val taste = taste()
-            val queue = tracksFor(queueIds)
-            val more = withContext(Dispatchers.Default) { SmartPlans.extension(src, queue, lib, taste, seed) }
-            if (player.mediaItemCount != count || player.hasNextMediaItem()) {
-                extendedAtCount = -1 // the queue changed meanwhile: decide again at its real end
-                return@launch
+            val byVideo = localByVideoId(radios.flatten().map { it.videoId })
+            val more = withContext(Dispatchers.Default) {
+                val own = SmartPlans.extension(src, list, lib, taste, seed)
+                QueueContinuation.blend(
+                    own = own,
+                    radios = radios,
+                    ownShare = QueueContinuation.ownShare(list),
+                    queuedIds = list.mapTo(HashSet()) { it.id },
+                    queuedVideoIds = list.mapNotNullTo(HashSet()) { it.videoId },
+                    byVideoId = byVideo,
+                ).ifEmpty { QueueContinuation.again(list, lib, taste, seed) }
             }
-            if (more.isEmpty()) return@launch // nothing left that fits; don't retry for this queue
-            insert(more, next = false, keepPlaying = true)
-            extendedAtCount = player.mediaItemCount
-            if (!smart) {
-                smart = true
-                publishExtras()
-            }
-            scheduleSave()
-        }
-    }
-
-    /** Online queue at its end: YouTube Music's radio after [videoId], minus what's already queued. */
-    private fun extendOnline(videoId: String, count: Int) {
-        extendJob = scope.launch {
-            val related = graph.youTube.related(videoId, OnlineQueue.CONTINUATION * 2)
-            if (player.mediaItemCount != count || player.hasNextMediaItem()) {
+            if (player.mediaItemCount != count) {
+                // The queue changed meanwhile: decide again for the queue as it is now.
                 extendedAtCount = -1
+                maybeExtend(again = true)
                 return@launch
             }
-            val byVideo = localByVideoId(related.map { it.videoId })
-            val more = OnlineQueue.continuation(related, queuedVideoIds(), byVideo)
-            if (more.isEmpty()) return@launch // offline or nothing new: the queue ends here
-            insert(more, next = false, keepPlaying = true)
-            extendedAtCount = player.mediaItemCount
+            if (more.isEmpty()) {
+                retryExtend(count)
+                return@launch
+            }
+            extendRetries = 0
+            insert(more, next = false, keepPlaying = true, suggested = true)
             if (!smart) {
                 smart = true
                 publishExtras()
             }
             prefetchUpcoming()
             scheduleSave()
+        }
+    }
+
+    /** Nothing to add yet (offline, say): tries again in a while, a few times, while the queue stays the same. */
+    private fun retryExtend(count: Int) {
+        if (extendRetries >= QueueContinuation.RETRIES) return
+        extendRetries++
+        extendJob = scope.launch {
+            delay(QueueContinuation.RETRY_MS)
+            if (player.mediaItemCount != count) return@launch
+            extendedAtCount = -1
+            maybeExtend(again = true)
         }
     }
 
@@ -670,6 +685,7 @@ class PlaybackService : MediaLibraryService() {
             smart = smart,
             savedAt = System.currentTimeMillis(),
             online = online.values.toList(),
+            suggested = (0 until n).filter { MediaItems.isSuggested(player.getMediaItemAt(it)) },
         )
     }
 
@@ -720,6 +736,12 @@ class PlaybackService : MediaLibraryService() {
         }
     }
 
+    /** The saved queue's items, the songs the app had added marked again. */
+    private fun itemsOf(snap: QueueSnapshot, tracks: List<Track>): List<MediaItem> {
+        val marked = snap.suggested.toHashSet()
+        return tracks.mapIndexed { i, t -> mediaItemOf(t).let { if (i in marked) MediaItems.suggested(it) else it } }
+    }
+
     /** Puts the saved queue back without playing (the mini player shows the last song). */
     private suspend fun restore() {
         if (player.mediaItemCount > 0) return
@@ -727,13 +749,14 @@ class PlaybackService : MediaLibraryService() {
         if (player.mediaItemCount > 0) return
         extendJob?.cancel()
         extendedAtCount = -1
+        extendRetries = 0
         source = snap.source?.toPlaySource()
         smart = snap.smart
         player.repeatMode = snap.repeat.toPlayer()
         suppressShuffleReorder = true
         try {
             player.shuffleModeEnabled = snap.shuffle
-            player.setMediaItems(tracks.map(::mediaItemOf), snap.index, snap.positionMs)
+            player.setMediaItems(itemsOf(snap, tracks), snap.index, snap.positionMs)
             if (snap.shuffle) PlayOrder.validOrNull(snap.order, tracks.size)?.let(::setShuffleOrder)
         } finally {
             suppressShuffleReorder = false
@@ -1067,13 +1090,14 @@ class PlaybackService : MediaLibraryService() {
                         }
                         return@launch
                     }
-                    val items = tracks.map(::mediaItemOf)
+                    val items = itemsOf(snap, tracks)
                     // Only a play press replaces the queue; the system's resume card just shows the item.
                     if (isForPlayback) {
                         extendJob?.cancel()
                         source = snap.source?.toPlaySource()
                         smart = snap.smart
                         extendedAtCount = -1
+                        extendRetries = 0
                         player.repeatMode = snap.repeat.toPlayer()
                         // The shuffle mode goes now, outside any player callback: set from onTimelineChanged,
                         // ExoPlayer would deliver the change after it and the saved order would be reshuffled.
@@ -1180,6 +1204,7 @@ class PlaybackService : MediaLibraryService() {
         source = src
         smart = isSmart
         extendedAtCount = -1
+        extendRetries = 0
         consecutiveErrors = 0
         reorderOnNextTimeline = player.shuffleModeEnabled
         publishExtras()

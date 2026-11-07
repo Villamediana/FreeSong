@@ -464,4 +464,38 @@ class PlaybackServiceTest {
         assertTrue(controller.availableCommands.contains(Player.COMMAND_PLAY_PAUSE))
         assertEquals(tracks.first().id.toString(), controller.currentMediaItem?.mediaId)
     }
+
+    // ------------------------------------------------------------------ the queue never ends
+
+    private fun suggestedIds(): List<Long> {
+        val order = PlayOrder.of(player.currentTimeline, player.shuffleModeEnabled)
+        return order.toList().map { player.getMediaItemAt(it) }.filter(MediaItems::isSuggested).map { it.mediaId.toLong() }
+    }
+
+    @Test fun theQueueKeepsGettingSongsMarkedAsTheAppsAndNeverRunsOut() {
+        start()
+        val list = tracks.take(2).map { it.id }
+        play(list, 0)
+        // One song left after the playing one: more of yours come after the list, marked as the app's.
+        idleUntil { player.mediaItemCount > 2 }
+        assertEquals(list, playOrderIds().take(2))
+        assertEquals(playOrderIds().drop(2), suggestedIds())
+        assertTrue(suggestedIds().none { it in list })
+
+        // Near the end again (every song of the library is in the queue now): it still goes on.
+        val before = player.mediaItemCount
+        player.seekTo(before - 2, 0)
+        idleUntil { player.mediaItemCount > before }
+        assertEquals(playOrderIds().drop(2), suggestedIds())
+    }
+
+    @Test fun addToQueueGoesAfterYourSongsAndBeforeTheAppsOnes() {
+        start()
+        play(tracks.take(2).map { it.id }, 0)
+        idleUntil { player.mediaItemCount > 2 }
+        val suggested = suggestedIds()
+        add(listOf(tracks[5].id), SessionProtocol.WHERE_END)
+        assertEquals(listOf(tracks[0].id, tracks[1].id, tracks[5].id) + suggested, playOrderIds())
+        assertEquals(suggested, suggestedIds())
+    }
 }

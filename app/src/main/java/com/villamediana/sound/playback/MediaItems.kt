@@ -18,6 +18,19 @@ import java.io.File
  */
 internal object MediaItems {
     private const val EXTRA_URL = "sound.url"
+    private const val EXTRA_SUGGESTED = "sound.suggested"
+
+    /** True for a song the app added to keep the queue going (not one the listener put there). */
+    fun isSuggested(item: MediaItem?): Boolean = item?.mediaMetadata?.extras?.getBoolean(EXTRA_SUGGESTED, false) == true
+
+    /** [item] marked as added by the app to keep the queue going. */
+    fun suggested(item: MediaItem): MediaItem {
+        val extras = Bundle(item.mediaMetadata.extras ?: Bundle()).apply { putBoolean(EXTRA_SUGGESTED, true) }
+        return item.buildUpon().setMediaMetadata(item.mediaMetadata.buildUpon().setExtras(extras).build()).build()
+    }
+
+    /** [replacement] (another source or fresh metadata for the same song) keeps [old]'s mark. */
+    fun keepingMark(replacement: MediaItem, old: MediaItem): MediaItem = if (isSuggested(old)) suggested(replacement) else replacement
 
     fun of(track: Track, quality: AudioQuality = AudioQuality.BEST): MediaItem {
         val videoId = track.videoId
