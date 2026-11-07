@@ -109,7 +109,7 @@ fun SoundRoot(incoming: MutableStateFlow<Inbound?>) {
 
     val navBarInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val bottomBarTotal = Dimens.BottomBarHeight + navBarInset
-    val miniPlayerSpace by animateDpAsState(if (playback.hasMedia) Dimens.MiniPlayerHeight + 8.dp else 0.dp, label = "mini")
+    val miniPlayerSpace by animateDpAsState(if (playback.hasMedia && !Chrome.hideMiniPlayer) Dimens.MiniPlayerHeight + 8.dp else 0.dp, label = "mini")
 
     CompositionLocalProvider(
         LocalNavigator provides navigator,
@@ -165,10 +165,16 @@ fun SoundRoot(incoming: MutableStateFlow<Inbound?>) {
                     modifier = Modifier.align(Alignment.BottomCenter),
                 )
 
-                PlayerLayer(
-                    bottomBarHeight = bottomBarTotal,
-                    modifier = Modifier.fillMaxSize(),
-                )
+                AnimatedVisibility(
+                    visible = !Chrome.hideMiniPlayer,
+                    enter = fadeIn(tween(220)),
+                    exit = fadeOut(tween(160)),
+                ) {
+                    PlayerLayer(
+                        bottomBarHeight = bottomBarTotal,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
             }
         }
     }

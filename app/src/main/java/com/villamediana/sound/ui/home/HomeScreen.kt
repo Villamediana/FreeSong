@@ -1,5 +1,7 @@
 package com.villamediana.sound.ui.home
 
+import com.villamediana.sound.ui.nav.Chrome
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.LinearEasing
@@ -115,6 +117,12 @@ fun HomeScreen() {
         else -> HomePhase.FEED
     }
     val playShelf: (Shelf, Int, String) -> Unit = { shelf, i, title -> discoverVm.play(shelf, i, title) }
+    // The genre picker is an intro: no mini player over it. Back to normal when it goes (or Home does).
+    val picking = phase == HomePhase.PICKER
+    DisposableEffect(picking) {
+        Chrome.hideMiniPlayer = picking
+        onDispose { Chrome.hideMiniPlayer = false }
+    }
 
     Box(Modifier.fillMaxSize().background(SoundColors.Ink)) {
         AnimatedContent(

@@ -98,6 +98,8 @@ class HomeScreensSmokeTest {
         // First run: the genre picker instead of an empty page.
         waitForText("O que você curte?")
         waitForText("Reggaeton")
+        // An intro: the mini player stays out of it.
+        check(com.villamediana.sound.ui.nav.Chrome.hideMiniPlayer)
         shot("home-picker")
     }
 
