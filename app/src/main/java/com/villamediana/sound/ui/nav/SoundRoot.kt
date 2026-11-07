@@ -110,7 +110,8 @@ fun SoundRoot(incoming: MutableStateFlow<Inbound?>) {
     }
 
     val navBarInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    val bottomBarTotal = navBarInset + 14.dp
+    // The mini player sits right on top of the system navigation and its color runs to the edge.
+    val bottomBarTotal = navBarInset
 
     // Full pages (video, settings, equalizer) and the genre intro: no bottom bar, no mini player.
     val entry by controller.currentBackStackEntryAsState()

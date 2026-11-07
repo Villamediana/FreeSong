@@ -31,10 +31,10 @@ import com.villamediana.sound.ui.theme.SoundColors
 import kotlin.math.abs
 
 internal val MiniCoverSize = 54.dp
-internal val MiniCoverInset = 8.dp
+internal val MiniCoverInset = 10.dp
 internal val MiniCoverCorner = 14.dp
-internal val MiniCardCorner = 22.dp
-internal val MiniSideMargin = 12.dp
+internal val MiniCardCorner = 20.dp
+internal val MiniSideMargin = 0.dp
 
 /**
  * The mini player's content (the card itself and the cover are drawn by the host, so the cover

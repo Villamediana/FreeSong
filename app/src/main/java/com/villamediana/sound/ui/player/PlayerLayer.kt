@@ -167,7 +167,7 @@ fun PlayerLayer(bottomBarHeight: Dp, modifier: Modifier = Modifier) {
 }
 
 /** How far the mini card sinks into the bottom bar's faded top edge. */
-private val MiniDockOverlap = 6.dp
+private val MiniDockOverlap = 0.dp
 
 /** Mini content is gone (not placed) past this expand progress. */
 private const val MINI_FADE_END = 0.16f
@@ -427,6 +427,12 @@ internal fun PlayerHost(deps: PlayerDeps, bottomBarHeight: Dp, modifier: Modifie
                             val frameSize = Size(f.width, f.height)
                             val corner = CornerRadius(f.corner)
                             drawRoundRect(base, topLeft, frameSize, corner)
+                            // Collapsed, the card is glued to the bottom of the screen: the same color
+                            // runs from under its rounded top down to the edge (no gap, square bottom).
+                            val glue = 1f - PlayerMath.segment(p, 0f, 0.35f)
+                            if (glue > 0f) {
+                                drawRect(base, Offset(f.left, f.top + f.corner), Size(f.right - f.left, size.height - f.top - f.corner), alpha = glue)
+                            }
                             if (p > 0f) {
                                 val veil = Brush.verticalGradient(
                                     0f to c.copy(alpha = SoundColors.palette.washAlpha),
