@@ -91,9 +91,9 @@ internal fun GenrePicker(
         ) {
             item(span = { GridItemSpan(2) }, key = "header") {
                 Column {
-                    Row(Modifier.fillMaxWidth().padding(bottom = 22.dp), verticalAlignment = Alignment.CenterVertically) {
-                        SoundWordmark(Modifier.weight(1f))
-                        HeaderActions(downloads, nav)
+                    // An intro: just the brand, no settings/downloads buttons.
+                    Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 26.dp), verticalAlignment = Alignment.CenterVertically) {
+                        SoundWordmark()
                     }
                     Text(stringResource(R.string.discover_pick_title), style = MaterialTheme.typography.displaySmall, color = SoundColors.Text)
                     Spacer(Modifier.height(4.dp))

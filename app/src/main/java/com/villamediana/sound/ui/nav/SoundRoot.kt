@@ -109,19 +109,27 @@ fun SoundRoot(incoming: MutableStateFlow<Inbound?>) {
 
     val navBarInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val bottomBarTotal = Dimens.BottomBarHeight + navBarInset
-    val miniPlayerSpace by animateDpAsState(if (playback.hasMedia && !Chrome.hideMiniPlayer) Dimens.MiniPlayerHeight + 8.dp else 0.dp, label = "mini")
+
+    // Full pages (video, settings, equalizer) and the genre intro: no bottom bar, no mini player.
+    val entry by controller.currentBackStackEntryAsState()
+    val dest = entry?.destination
+    val fullPage = dest != null && (dest.hasRoute(VideoRoute::class) || dest.hasRoute(SettingsRoute::class) || dest.hasRoute(EqualizerRoute::class))
+    val chromeHidden = fullPage || Chrome.hideMiniPlayer
+    val miniPlayerSpace by animateDpAsState(if (playback.hasMedia && !chromeHidden) Dimens.MiniPlayerHeight + 8.dp else 0.dp, label = "mini")
+    val barSpace = if (chromeHidden) navBarInset else bottomBarTotal
 
     CompositionLocalProvider(
         LocalNavigator provides navigator,
-        LocalBottomInset provides bottomBarTotal + miniPlayerSpace + 16.dp,
+        LocalBottomInset provides barSpace + miniPlayerSpace + 16.dp,
     ) {
         Box(Modifier.fillMaxSize().background(SoundColors.Ink)) {
             NavHost(
                 navController = controller,
                 startDestination = HomeRoute,
                 modifier = Modifier.fillMaxSize(),
-                // Pages slide in full width and slide out following the back gesture (predictive back
-                // seeks these), the page below moving a little behind; tab switches just cross-fade.
+                // Pages slide in full width and slide out on back (arrow or gesture: predictive back is
+                // off in the manifest, so both play this same animation), the page below moving a
+                // little behind; tab switches just cross-fade.
                 enterTransition = {
                     if (initialState.destination.isTab() && targetState.destination.isTab()) fadeIn(tween(220))
                     else slideInHorizontally(tween(PAGE_MS, easing = Motion.Emphasized)) { it }
@@ -156,25 +164,23 @@ fun SoundRoot(incoming: MutableStateFlow<Inbound?>) {
                 composable<VideoRoute> { Page { VideoScreen(it.toRoute()) } }
             }
 
-            // The video screen is immersive: no bottom bar, no mini player over it.
-            val entry by controller.currentBackStackEntryAsState()
-            val immersive = entry?.destination?.hasRoute(VideoRoute::class) == true
-            if (!immersive) {
-                BottomBar(
-                    navigator = navigator,
-                    modifier = Modifier.align(Alignment.BottomCenter),
+            AnimatedVisibility(
+                visible = !chromeHidden,
+                enter = fadeIn(tween(220)),
+                exit = fadeOut(tween(160)),
+                modifier = Modifier.align(Alignment.BottomCenter),
+            ) {
+                BottomBar(navigator = navigator)
+            }
+            AnimatedVisibility(
+                visible = !chromeHidden,
+                enter = fadeIn(tween(220)),
+                exit = fadeOut(tween(160)),
+            ) {
+                PlayerLayer(
+                    bottomBarHeight = bottomBarTotal,
+                    modifier = Modifier.fillMaxSize(),
                 )
-
-                AnimatedVisibility(
-                    visible = !Chrome.hideMiniPlayer,
-                    enter = fadeIn(tween(220)),
-                    exit = fadeOut(tween(160)),
-                ) {
-                    PlayerLayer(
-                        bottomBarHeight = bottomBarTotal,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                }
             }
         }
     }
