@@ -46,6 +46,11 @@ class WorkDownloadController(
 
     private val liveProgress = MutableStateFlow<Map<Long, TaskProgress>>(emptyMap())
 
+    override val wait: Flow<DownloadWait> =
+        combine(com.villamediana.sound.ui.search.Connectivity.nets(appContext), settings.settings.map { it.wifiOnly }.distinctUntilChanged()) { net, wifiOnly ->
+            DownloadWait.of(net.online, net.unmetered, wifiOnly)
+        }.distinctUntilChanged()
+
     /** Built on first use: the online services come from the app graph. */
     internal val engine: DownloadEngine by lazy {
         val graph = SoundApplication.graph

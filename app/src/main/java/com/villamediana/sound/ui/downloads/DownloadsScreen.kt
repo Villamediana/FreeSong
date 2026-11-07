@@ -1,5 +1,8 @@
 package com.villamediana.sound.ui.downloads
 
+import androidx.compose.material.icons.rounded.CloudOff
+import androidx.compose.material.icons.rounded.Wifi
+import com.villamediana.sound.download.DownloadWait
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -112,6 +115,7 @@ fun DownloadsScreen() {
     val snackbar = remember { SnackbarHostState() }
     val bottomInset = LocalBottomInset.current
     val ui by vm.ui.collectAsStateWithLifecycle()
+    val wait by vm.wait.collectAsStateWithLifecycle()
     var confirmCancelAll by remember { mutableStateOf(false) }
     val looseTitle = stringResource(R.string.dl_loose_title)
 
@@ -171,6 +175,9 @@ fun DownloadsScreen() {
                     )
                 }
                 else -> {
+                    if (wait != DownloadWait.NONE && state.overview.queued > 0) {
+                        item(key = "wait") { WaitBanner(wait, Modifier.animateItem()) }
+                    }
                     item(key = "overview") { OverviewCard(state.overview, Modifier.animateItem()) }
                     item(key = "actions") {
                         HeaderActions(
@@ -619,5 +626,33 @@ private fun TaskTrailing(task: DownloadTask, onCancel: () -> Unit, onRetry: () -
             Icon(Icons.Rounded.Download, stringResource(R.string.dl_redownload), tint = SoundColors.TextMuted)
         }
         DownloadState.DONE -> Spacer(Modifier.width(12.dp))
+    }
+}
+
+/** Queued downloads waiting for a connection / the Wi-Fi: they start by themselves, and this says so. */
+@Composable
+private fun WaitBanner(wait: DownloadWait, modifier: Modifier = Modifier) {
+    Row(
+        modifier
+            .padding(horizontal = Dimens.Gutter)
+            .padding(bottom = 12.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(SoundColors.AccentSoft)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            if (wait == DownloadWait.WIFI) Icons.Rounded.Wifi else Icons.Rounded.CloudOff,
+            null,
+            tint = SoundColors.Accent,
+            modifier = Modifier.size(20.dp),
+        )
+        Spacer(Modifier.width(12.dp))
+        Text(
+            stringResource(if (wait == DownloadWait.WIFI) R.string.download_wait_banner_wifi else R.string.download_wait_banner_network),
+            style = MaterialTheme.typography.bodyMedium,
+            color = SoundColors.Text,
+        )
     }
 }

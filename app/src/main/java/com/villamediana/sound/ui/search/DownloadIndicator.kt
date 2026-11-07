@@ -1,5 +1,8 @@
 package com.villamediana.sound.ui.search
 
+import androidx.compose.material.icons.rounded.CloudOff
+import androidx.compose.material.icons.rounded.Wifi
+import com.villamediana.sound.download.DownloadWait
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -48,11 +51,15 @@ import com.villamediana.sound.ui.theme.Motion
 import com.villamediana.sound.ui.theme.SoundColors
 import kotlin.math.roundToInt
 
-private enum class Glyph { None, Queued, Running, Done, Failed }
+private enum class Glyph { None, Queued, WaitNetwork, WaitWifi, Running, Done, Failed }
 
-private fun ItemDownload.glyph() = when (this) {
+private fun ItemDownload.glyph(wait: DownloadWait) = when (this) {
     ItemDownload.None -> Glyph.None
-    ItemDownload.Queued -> Glyph.Queued
+    ItemDownload.Queued -> when (wait) {
+        DownloadWait.NONE -> Glyph.Queued
+        DownloadWait.NETWORK -> Glyph.WaitNetwork
+        DownloadWait.WIFI -> Glyph.WaitWifi
+    }
     is ItemDownload.Running -> Glyph.Running
     ItemDownload.Done -> Glyph.Done
     is ItemDownload.Failed -> Glyph.Failed
@@ -71,10 +78,16 @@ fun DownloadIndicator(
     size: Dp = 26.dp,
     /** Color of the "not downloaded" arrow (the player draws it over the cover's color). */
     idleTint: Color = SoundColors.TextMuted,
+    /** Queued but waiting for a connection / the Wi-Fi: says so instead of spinning. */
+    wait: DownloadWait = DownloadWait.NONE,
 ) {
     val description = when (state) {
         ItemDownload.None -> stringResource(R.string.search_dl_download)
-        ItemDownload.Queued -> stringResource(R.string.search_dl_queued)
+        ItemDownload.Queued -> when (wait) {
+            DownloadWait.NONE -> stringResource(R.string.search_dl_queued)
+            DownloadWait.NETWORK -> stringResource(R.string.search_dl_waiting_network)
+            DownloadWait.WIFI -> stringResource(R.string.search_dl_waiting_wifi)
+        }
         is ItemDownload.Running -> stringResource(R.string.search_dl_running, (state.progress * 100).roundToInt())
         ItemDownload.Done -> stringResource(R.string.search_dl_done)
         is ItemDownload.Failed -> stringResource(R.string.search_dl_failed)
@@ -98,7 +111,7 @@ fun DownloadIndicator(
         contentAlignment = Alignment.Center,
     ) {
         AnimatedContent(
-            targetState = state.glyph(),
+            targetState = state.glyph(wait),
             transitionSpec = {
                 (fadeIn(tween(160)) + scaleIn(Motion.bouncy(), initialScale = 0.55f)) togetherWith
                     (fadeOut(tween(110)) + scaleOut(tween(140), targetScale = 0.55f))
@@ -111,6 +124,10 @@ fun DownloadIndicator(
                     Icon(Icons.Rounded.ArrowDownward, null, tint = idleTint, modifier = Modifier.size(size * 0.6f))
                 }
                 Glyph.Queued -> SpinningRing(size)
+                // Waiting for the network / the Wi-Fi: a still ring with what it waits for.
+                Glyph.WaitNetwork, Glyph.WaitWifi -> Box(Modifier.size(size).border(1.6.dp, idleTint.copy(alpha = 0.6f), CircleShape), contentAlignment = Alignment.Center) {
+                    Icon(if (glyph == Glyph.WaitWifi) Icons.Rounded.Wifi else Icons.Rounded.CloudOff, null, tint = idleTint, modifier = Modifier.size(size * 0.56f))
+                }
                 Glyph.Running -> ProgressRing(progress, size)
                 // On the phone: the same arrow, filled (white on the dark theme). Tapping again removes it.
                 Glyph.Done -> Box(Modifier.size(size).clip(CircleShape).background(SoundColors.Text), contentAlignment = Alignment.Center) {

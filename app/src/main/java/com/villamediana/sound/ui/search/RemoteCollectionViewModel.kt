@@ -1,5 +1,6 @@
 package com.villamediana.sound.ui.search
 
+import com.villamediana.sound.download.DownloadWait
 import com.villamediana.sound.ui.nav.Chrome
 import androidx.annotation.StringRes
 import androidx.compose.runtime.getValue
@@ -132,7 +133,21 @@ class RemoteCollectionViewModel(
     /** "Curtir já baixa": rows show the heart alone. */
     val likeDownloads: StateFlow<Boolean> = likeDownloadsFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
-    fun like(track: RemoteTrack, liked: Boolean) = onLike(track, liked)
+    /** What queued downloads wait for: the rows' buttons and the message after a tap say it. */
+    val downloadWait: StateFlow<DownloadWait> = downloads.wait.stateIn(viewModelScope, SharingStarted.Eagerly, DownloadWait.NONE)
+
+    fun like(track: RemoteTrack, liked: Boolean) {
+        onLike(track, liked)
+        // With "Curtir já baixa" the like is a download too: offline, say when it will happen.
+        if (liked && likeDownloads.value) waitMessage()?.let { _events.trySend(RemoteEvent.Message(it)) }
+    }
+
+    /** "Baixa quando conectar" / "Baixa quando estiver no Wi-Fi", or null when downloads run now. */
+    private fun waitMessage(): Int? = when (downloadWait.value) {
+        DownloadWait.NONE -> null
+        DownloadWait.NETWORK -> R.string.download_wait_network
+        DownloadWait.WIFI -> R.string.download_wait_wifi
+    }
 
     val lookup: StateFlow<DownloadLookup> = combine(library.downloadedVideoIds, downloads.tasks, requested) { done, tasks, asked ->
         DownloadLookup.build(done, tasks, asked)
@@ -200,6 +215,7 @@ class RemoteCollectionViewModel(
                 }
                     .onSuccess { playlistId ->
                         if (playlistId != null) localPlaylistId = playlistId
+                        if (pending.isNotEmpty()) waitMessage()?.let { _events.send(RemoteEvent.Message(it)) }
                         withTimeoutOrNull(5_000) { lookup.first { l -> pending.all(l::isKnown) } }
                     }
                     .onFailure { _events.send(RemoteEvent.Message(R.string.search_download_error)) }
@@ -217,7 +233,10 @@ class RemoteCollectionViewModel(
         viewModelScope.launch {
             try {
                 attempt { downloads.download(listOf(track)) }
-                    .onSuccess { withTimeoutOrNull(5_000) { lookup.first { it.isKnown(track.videoId) } } }
+                    .onSuccess {
+                        waitMessage()?.let { _events.send(RemoteEvent.Message(it)) }
+                        withTimeoutOrNull(5_000) { lookup.first { it.isKnown(track.videoId) } }
+                    }
                     .onFailure { _events.send(RemoteEvent.Message(R.string.search_download_error)) }
             } finally {
                 requested.update { it - track.videoId }

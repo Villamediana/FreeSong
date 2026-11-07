@@ -1,5 +1,6 @@
 package com.villamediana.sound.ui.search
 
+import com.villamediana.sound.download.DownloadWait
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -108,6 +109,8 @@ fun RemoteSongRow(
     onLike: ((Boolean) -> Unit)? = null,
     /** False with "Curtir já baixa" on: the heart alone stands for both. */
     showDownload: Boolean = true,
+    /** What a queued download waits for (its button says so). */
+    wait: DownloadWait = DownloadWait.NONE,
 ) {
     val bg by animateColorAsState(if (selected) SoundColors.AccentSoft else Color.Transparent, tween(180), label = "rowBg")
     val dimmed = selecting && (state == ItemDownload.Done || state == ItemDownload.Queued || state is ItemDownload.Running)
@@ -158,7 +161,7 @@ fun RemoteSongRow(
         } else {
             // Filled = in Curtidas (white on the dark theme), like the filled download arrow beside it.
             if (onLike != null) com.villamediana.sound.ui.player.LikeButton(liked = liked, onToggle = onLike, size = 44.dp, iconSize = 24.dp, likedTint = SoundColors.Text)
-            if (showDownload) DownloadIndicator(state, onIndicatorClick)
+            if (showDownload) DownloadIndicator(state, onIndicatorClick, wait = wait)
         }
     }
 }

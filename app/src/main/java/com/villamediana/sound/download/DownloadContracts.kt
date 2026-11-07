@@ -1,5 +1,6 @@
 package com.villamediana.sound.download
 
+import kotlinx.coroutines.flow.flowOf
 import com.villamediana.sound.data.db.DownloadTask
 import com.villamediana.sound.online.CollectionDetail
 import com.villamediana.sound.online.RemoteTrack
@@ -22,6 +23,9 @@ interface DownloadController {
     val summary: Flow<DownloadSummary>
     /** videoIds currently queued or running. */
     val inProgressVideoIds: Flow<Set<String>>
+
+    /** What queued downloads are waiting for (nothing, a connection, the Wi-Fi). */
+    val wait: Flow<DownloadWait> get() = flowOf(DownloadWait.NONE)
 
     /** Downloads loose songs (search results / shared link). Already-downloaded ones are skipped. */
     suspend fun download(tracks: List<RemoteTrack>)

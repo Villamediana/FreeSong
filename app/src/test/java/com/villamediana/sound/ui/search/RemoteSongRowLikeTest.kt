@@ -59,4 +59,13 @@ class RemoteSongRowLikeTest {
         compose.onNodeWithContentDescription("Curtir").assertExists()
         compose.onNodeWithContentDescription("Baixar").assertDoesNotExist()
     }
+
+    @Test fun aQueuedDownloadWaitingForTheNetworkSaysSo() {
+        compose.setContent {
+            SoundTheme {
+                RemoteSongRow(song, ItemDownload.Queued, onClick = {}, onIndicatorClick = {}, wait = com.villamediana.sound.download.DownloadWait.NETWORK)
+            }
+        }
+        compose.onNodeWithContentDescription("Na fila. Baixa quando conectar").assertExists()
+    }
 }

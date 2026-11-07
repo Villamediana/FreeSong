@@ -69,6 +69,10 @@ class FakeDownloads : DownloadController {
         list.filter { it.state == DownloadState.QUEUED || it.state == DownloadState.RUNNING }.map { it.videoId }.toSet()
     }
 
+    /** What queued downloads wait for (a connection, the Wi-Fi). */
+    val waitFlow = MutableStateFlow(com.villamediana.sound.download.DownloadWait.NONE)
+    override val wait: Flow<com.villamediana.sound.download.DownloadWait> = waitFlow
+
     val downloadCalls: MutableList<List<RemoteTrack>> = Collections.synchronizedList(mutableListOf())
     val collectionCalls: MutableList<CollectionDetail> = Collections.synchronizedList(mutableListOf())
     val retried: MutableList<Long> = Collections.synchronizedList(mutableListOf())

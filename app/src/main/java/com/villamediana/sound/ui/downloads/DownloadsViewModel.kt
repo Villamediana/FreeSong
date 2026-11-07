@@ -1,5 +1,6 @@
 package com.villamediana.sound.ui.downloads
 
+import com.villamediana.sound.download.DownloadWait
 import com.villamediana.sound.ui.nav.Chrome
 import androidx.annotation.StringRes
 import androidx.compose.runtime.getValue
@@ -50,6 +51,9 @@ class DownloadsViewModel(
         .map { tasks -> DownloadsUi(DownloadGrouping.overview(tasks), DownloadGrouping.groups(tasks)) }
         .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** What queued downloads wait for: the banner on top says it. */
+    val wait: StateFlow<DownloadWait> = downloads.wait.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DownloadWait.NONE)
 
     /** Batches the user opened/closed by hand (key → collapsed). */
     var collapseOverrides by mutableStateOf<Map<String, Boolean>>(emptyMap())

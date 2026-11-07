@@ -1,5 +1,6 @@
 package com.villamediana.sound.ui.player
 
+import com.villamediana.sound.download.DownloadWait
 import com.villamediana.sound.ui.nav.Chrome
 import com.villamediana.sound.ui.nav.PlayerHooks
 import androidx.compose.runtime.MutableState
@@ -142,6 +143,8 @@ internal class PlayerDeps(
     val likeDownloads: Flow<Boolean> = flowOf(false),
     /** The heart of a streamed song (AppGraph.likeOnline). */
     val likeOnline: (RemoteTrack, Boolean) -> Unit = { _, _ -> },
+    /** What queued downloads wait for (a connection, the Wi-Fi). */
+    val downloadWait: Flow<DownloadWait> = flowOf(DownloadWait.NONE),
 )
 
 /** One lyrics cache for the whole process: reopening the player doesn't ask LRCLIB again. */
@@ -178,6 +181,7 @@ fun PlayerLayer(
             likedVideoIds = graph.library.likedVideoIds,
             likeDownloads = graph.settings.settings.map { it.likeDownloads }.distinctUntilChanged(),
             likeOnline = graph::likeOnline,
+            downloadWait = graph.downloads.wait,
         )
     }
     PlayerHost(deps, bottomBarHeight, modifier, expandedMemory, active)
@@ -280,7 +284,8 @@ internal fun PlayerHost(
         if (track.isOnline && videoId != null) deps.downloads.map { it.stateOf(videoId) }.distinctUntilChanged() else flowOf(ItemDownload.None)
     }.collectAsState(initial = ItemDownload.None)
     val likeDownloads by deps.likeDownloads.collectAsState(initial = false)
-    val stream = StreamUi(streamed = track.isOnline, download = download, online = online, likeDownloads = likeDownloads)
+    val downloadWait by deps.downloadWait.collectAsState(initial = DownloadWait.NONE)
+    val stream = StreamUi(streamed = track.isOnline, download = download, online = online, likeDownloads = likeDownloads, wait = downloadWait)
     // A streamed song is liked by its video id (Curtidas keeps it without a library row).
     val likedIds by deps.likedVideoIds.collectAsState(initial = emptySet())
     val baseLiked = if (track.isOnline) track.videoId in likedIds else track.liked
@@ -317,6 +322,7 @@ internal fun PlayerHost(
     val latestTrack by rememberUpdatedState(track)
     val latestOnline by rememberUpdatedState(online)
     val latestDownload by rememberUpdatedState(download)
+    val latestWait by rememberUpdatedState(downloadWait)
     val actions = remember(player, navigator, expand) {
         PlayerActions(
             togglePlay = { player.togglePlayPause() },
@@ -349,7 +355,14 @@ internal fun PlayerHost(
                 if (t.isOnline && (d == ItemDownload.None || d is ItemDownload.Failed)) {
                     t.toRemoteTrack()?.let { remote ->
                         deps.download(remote)
-                        feedback.show(context.getString(R.string.player_download_started, t.title))
+                        // Offline / waiting for the Wi-Fi: it is queued and starts by itself — say when.
+                        feedback.show(
+                            when (latestWait) {
+                                DownloadWait.NONE -> context.getString(R.string.player_download_started, t.title)
+                                DownloadWait.NETWORK -> context.getString(R.string.download_wait_network)
+                                DownloadWait.WIFI -> context.getString(R.string.download_wait_wifi)
+                            },
+                        )
                     }
                 }
             },

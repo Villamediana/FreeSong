@@ -38,4 +38,10 @@
     <string name="download_error_storage">Sin espacio en el dispositivo</string>
     <string name="download_error_incomplete">El archivo llegó incompleto</string>
     <string name="download_error_unknown">No se pudo descargar</string>
+    <string name="search_dl_waiting_network">En cola. Se descarga al conectar</string>
+    <string name="search_dl_waiting_wifi">En cola. Se descarga con Wi-Fi</string>
+    <string name="download_wait_network">Se descarga al conectar</string>
+    <string name="download_wait_wifi">Se descarga cuando haya Wi-Fi</string>
+    <string name="download_wait_banner_network">Sin internet. Las descargas empiezan solas al conectar.</string>
+    <string name="download_wait_banner_wifi">Esperando el Wi-Fi. Las descargas empiezan solas al conectarte.</string>
 </resources>

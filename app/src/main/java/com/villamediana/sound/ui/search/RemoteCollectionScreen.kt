@@ -124,6 +124,7 @@ fun RemoteCollectionScreen(route: RemoteCollectionRoute) {
     val lookup by vm.lookup.collectAsStateWithLifecycle()
     val likedIds by vm.likedIds.collectAsStateWithLifecycle()
     val likeDownloads by vm.likeDownloads.collectAsStateWithLifecycle()
+    val downloadWait by vm.downloadWait.collectAsStateWithLifecycle()
     val progress by vm.progress.collectAsStateWithLifecycle()
     val nowPlaying by vm.nowPlaying.collectAsStateWithLifecycle()
     val here by vm.here.collectAsStateWithLifecycle()
@@ -245,6 +246,7 @@ fun RemoteCollectionScreen(route: RemoteCollectionRoute) {
                             liked = track.videoId in likedIds,
                             onLike = { vm.like(track, it) },
                             showDownload = !likeDownloads,
+                            wait = downloadWait,
                         )
                     }
                     if (kind == CollectionKind.ARTIST && l.detail.related.isNotEmpty()) {

@@ -427,6 +427,7 @@ internal fun HeartOrDownload(
                     },
                     size = ringSize,
                     idleTint = idleTint,
+                    wait = stream.wait,
                 )
             }
         }

@@ -1,5 +1,6 @@
 package com.villamediana.sound.ui.player
 
+import com.villamediana.sound.download.DownloadWait
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.TextLinkStyles
@@ -153,7 +154,14 @@ internal class PlayerActions(
  * the heart, following the download until the song is in the library.
  */
 @Immutable
-internal data class StreamUi(val streamed: Boolean, val download: ItemDownload, val online: Boolean, val likeDownloads: Boolean = false) {
+internal data class StreamUi(
+    val streamed: Boolean,
+    val download: ItemDownload,
+    val online: Boolean,
+    val likeDownloads: Boolean = false,
+    /** What a queued download waits for: its button says so. */
+    val wait: DownloadWait = DownloadWait.NONE,
+) {
     companion object {
         val Local = StreamUi(streamed = false, download = ItemDownload.None, online = true)
     }

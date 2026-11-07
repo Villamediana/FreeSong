@@ -38,4 +38,10 @@
     <string name="download_error_storage">Sem espaço no aparelho</string>
     <string name="download_error_incomplete">O arquivo chegou incompleto</string>
     <string name="download_error_unknown">Não foi possível baixar</string>
+    <string name="search_dl_waiting_network">Na fila. Baixa quando conectar</string>
+    <string name="search_dl_waiting_wifi">Na fila. Baixa no Wi-Fi</string>
+    <string name="download_wait_network">Baixa quando conectar</string>
+    <string name="download_wait_wifi">Baixa quando estiver no Wi-Fi</string>
+    <string name="download_wait_banner_network">Sem internet. Os downloads começam sozinhos quando conectar.</string>
+    <string name="download_wait_banner_wifi">Esperando o Wi-Fi. Os downloads começam sozinhos quando conectar nele.</string>
 </resources>

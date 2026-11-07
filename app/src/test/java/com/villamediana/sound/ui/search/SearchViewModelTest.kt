@@ -281,6 +281,23 @@ class SearchViewModelTest {
     }
 
     @Test
+    fun aDownloadAskedOfflineIsQueuedAndSaysItStartsOnTheConnection() {
+        downloads.waitFlow.value = com.villamediana.sound.download.DownloadWait.NETWORK
+        awaitUntil { vm.downloadWait.value == com.villamediana.sound.download.DownloadWait.NETWORK }
+        vm.onIndicatorTap(remoteTrack("x"), listOf(remoteTrack("x")), "soda")
+        // Queued like any other: the worker waits for the network on its own.
+        awaitUntil { downloads.downloadCalls.size == 1 }
+        assertEquals(SearchEvent.Message(R.string.download_wait_network), nextEvent())
+
+        // "Baixar só no Wi-Fi" on mobile data: it says Wi-Fi.
+        downloads.waitFlow.value = com.villamediana.sound.download.DownloadWait.WIFI
+        awaitUntil { vm.downloadWait.value == com.villamediana.sound.download.DownloadWait.WIFI }
+        vm.onIndicatorTap(remoteTrack("y"), listOf(remoteTrack("y")), "soda")
+        awaitUntil { downloads.downloadCalls.size == 2 }
+        assertEquals(SearchEvent.Message(R.string.download_wait_wifi), nextEvent())
+    }
+
+    @Test
     fun tappingASongStreamsItsRadioNotTheOtherResults() {
         insertTrack("b") // downloaded songs stream too: the player picks the local copy itself
         awaitUntil { vm.lookup.value.isDownloaded("b") }
