@@ -306,6 +306,18 @@ class PlayerLayerComposeTest {
     private val lookup = MutableStateFlow(DownloadLookup.Empty)
     private val lyricsAsked = mutableListOf<LyricsQuery>()
 
+    /** Stand-in for the clip behind the cover: records what the player asked to show. */
+    private class FakeCanvas : com.villamediana.sound.playback.video.PlayerCanvas {
+        override val player = MutableStateFlow<androidx.media3.common.Player?>(null)
+        override val videoId = MutableStateFlow<String?>(null)
+        val shown = mutableListOf<String?>()
+        override fun show(videoId: String?) {
+            shown += videoId
+        }
+    }
+
+    private val canvas = FakeCanvas()
+
     /** Streamed likes the player asked for (AppGraph.likeOnline in the app). */
     private val onlineLikes = mutableListOf<Pair<String, Boolean>>()
     private val likeDownloadsFlow = MutableStateFlow(false)
@@ -327,6 +339,7 @@ class PlayerLayerComposeTest {
             online = MutableStateFlow(online),
             likeDownloads = likeDownloadsFlow,
             likeOnline = { r, v -> onlineLikes += r.videoId to v },
+            canvas = canvas,
         )
         compose.setContent {
             SoundTheme {
@@ -376,6 +389,33 @@ class PlayerLayerComposeTest {
         expand()
         compose.onNodeWithContentDescription("Curtir").assertExists()
         compose.onNodeWithContentDescription("Baixar").assertDoesNotExist()
+    }
+
+    @Test
+    fun theClipBehindTheCoverPlaysOnlyWhileTheFullPlayerIsOpen() {
+        setUpStreaming()
+        compose.waitForIdle()
+        // Collapsed: nothing to show.
+        assertEquals(null, canvas.shown.lastOrNull())
+        expand()
+        compose.waitForIdle()
+        assertEquals(remote.videoId, canvas.shown.last())
+
+        // The clip is there: the cover gets its "Vídeo" tag.
+        val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        val clip = compose.runOnIdle { androidx.media3.exoplayer.ExoPlayer.Builder(context).build() }
+        compose.runOnIdle {
+            canvas.player.value = clip
+            canvas.videoId.value = remote.videoId
+        }
+        compose.waitForIdle()
+        compose.onNodeWithText("Vídeo").assertExists()
+
+        // Collapsed again: the clip stops.
+        compose.onNodeWithContentDescription("Minimizar player").performClick()
+        compose.waitForIdle()
+        assertEquals(null, canvas.shown.last())
+        compose.runOnIdle { clip.release() }
     }
 
     @Test

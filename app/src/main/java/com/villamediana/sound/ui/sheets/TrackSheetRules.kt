@@ -27,14 +27,15 @@ object TrackSheetRules {
         val hasVideo = track.videoId != null
         val canShare = track.shareUrl != null
         // From the player the heart and the download sit beside the title, the equalizer has its
-        // own button, and "play next" of the song playing makes no sense: none of them here.
+        // own button, the cover opens the video, and "play next" of the song playing makes no
+        // sense: none of them here.
         if (track.isOnline) {
             if (hasVideo && !fromPlayer) add(TrackSheetAction.LIKE)
             if (!fromPlayer) add(TrackSheetAction.DOWNLOAD)
             if (!fromPlayer) add(TrackSheetAction.PLAY_NEXT)
             add(TrackSheetAction.ENQUEUE)
             if (hasVideo) add(TrackSheetAction.RADIO)
-            if (hasVideo) add(TrackSheetAction.VIDEO)
+            if (hasVideo && !fromPlayer) add(TrackSheetAction.VIDEO)
             if (canShare) add(TrackSheetAction.SHARE)
             if (fromPlayer) add(TrackSheetAction.SLEEP_TIMER)
             return@buildList
@@ -46,7 +47,7 @@ object TrackSheetRules {
         add(TrackSheetAction.RADIO)
         if (track.albumKey != null) add(TrackSheetAction.GO_ALBUM)
         add(TrackSheetAction.GO_ARTIST)
-        if (hasVideo) add(TrackSheetAction.VIDEO)
+        if (hasVideo && !fromPlayer) add(TrackSheetAction.VIDEO)
         if (canShare) add(TrackSheetAction.SHARE)
         if (fileExists) add(TrackSheetAction.SEND_FILE)
         if (fromPlayer) add(TrackSheetAction.SLEEP_TIMER)

@@ -1,5 +1,8 @@
 package com.villamediana.sound.ui.video
 
+import androidx.compose.material.icons.rounded.ScreenRotation
+import android.content.res.Configuration
+import android.view.OrientationEventListener
 import android.app.Activity
 import android.content.pm.ActivityInfo
 import android.os.SystemClock
@@ -191,7 +194,8 @@ internal fun VideoHost(route: VideoRoute, deps: VideoDeps, onLeave: () -> Unit) 
         onDispose { if (activity?.isChangingConfigurations != true) session.close(resumeMusic = activity?.isFinishing != true) }
     }
 
-    ImmersiveWindow(activity)
+    val turn = remember(activity) { VideoTurn(activity) }
+    ImmersiveWindow(activity, turn)
     PauseWhileInBackground(activity, video)
 
     val leaveNow by rememberUpdatedState(onLeave)
@@ -226,6 +230,10 @@ internal fun VideoHost(route: VideoRoute, deps: VideoDeps, onLeave: () -> Unit) 
 
     val actions = remember(video, route) {
         object : StageActions {
+            override fun rotate() {
+                turn.flip()
+            }
+
             override fun toggleControls() {
                 overlay = overlay.toggle(now())
             }
@@ -295,7 +303,7 @@ internal fun VideoHost(route: VideoRoute, deps: VideoDeps, onLeave: () -> Unit) 
         val portraitStage = min(maxWidth / ratio, maxHeight * 0.62f)
 
         Column(Modifier.fillMaxSize()) {
-            if (!landscape) PortraitTopBar(onBack = actions::leave)
+            if (!landscape) PortraitTopBar(onBack = actions::leave, onRotate = actions::rotate)
             // Same call site in both orientations, so the video surface survives a rotation.
             Stage(
                 player = player,
@@ -340,6 +348,8 @@ internal interface StageActions {
     fun stageTap(side: SeekSide, at: Offset)
     fun retry()
     fun leave()
+    /** Turns the video the other way (sideways ↔ upright) without turning the phone. */
+    fun rotate()
 }
 
 // ------------------------------------------------------------------ stage
@@ -490,7 +500,9 @@ private fun LandscapeTopBar(title: String, artist: String?, actions: StageAction
                 Text(artist, style = MaterialTheme.typography.bodyMedium, color = SoundColors.Text.copy(alpha = 0.72f), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(8.dp))
+        VideoIconButton(Icons.Rounded.ScreenRotation, stringResource(R.string.video_rotate), actions::rotate)
+        Spacer(Modifier.width(8.dp))
         StagePill(stringResource(R.string.video_back_to_audio), Icons.Rounded.Headphones, actions::leave)
     }
 }
@@ -530,7 +542,7 @@ private fun StageError(message: String, compact: Boolean, onRetry: () -> Unit, m
 // ------------------------------------------------------------------ portrait
 
 @Composable
-private fun PortraitTopBar(onBack: () -> Unit) {
+private fun PortraitTopBar(onBack: () -> Unit, onRotate: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -547,7 +559,7 @@ private fun PortraitTopBar(onBack: () -> Unit) {
             textAlign = TextAlign.Center,
             modifier = Modifier.weight(1f),
         )
-        Spacer(Modifier.size(48.dp))
+        VideoIconButton(Icons.Rounded.ScreenRotation, stringResource(R.string.video_rotate), onRotate)
     }
 }
 
@@ -623,12 +635,12 @@ private fun rememberPlayerFlags(player: Player?): PlayerFlags {
 // ------------------------------------------------------------------ window
 
 /**
- * While the video is on screen: no system bars (a swipe brings them back for a moment), the phone
- * may turn to landscape, and the screen stays on. Everything is put back on the way out — but not
+ * While the video is on screen: no system bars (a swipe brings them back for a moment), the video
+ * opens sideways ([VideoTurn]), and the screen stays on. Everything is put back on the way out — but not
  * when the activity is only being recreated for a rotation (the new screen takes over).
  */
 @Composable
-private fun ImmersiveWindow(activity: Activity?) {
+private fun ImmersiveWindow(activity: Activity?, turn: VideoTurn) {
     val view = LocalView.current
     val previousOrientation = rememberSaveable { activity?.requestedOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED }
     DisposableEffect(activity, view) {
@@ -637,8 +649,9 @@ private fun ImmersiveWindow(activity: Activity?) {
         val previousBehavior = controller.systemBarsBehavior
         controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         controller.hide(WindowInsetsCompat.Type.systemBars())
-        activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR
+        turn.start()
         onDispose {
+            turn.stop()
             if (activity.isChangingConfigurations) return@onDispose
             controller.show(WindowInsetsCompat.Type.systemBars())
             controller.systemBarsBehavior = previousBehavior
@@ -672,5 +685,53 @@ private fun PauseWhileInBackground(activity: Activity?, video: VideoPlayback) {
         }
         owner.lifecycle.addObserver(observer)
         onDispose { owner.lifecycle.removeObserver(observer) }
+    }
+}
+
+/**
+ * How the video screen turns. It opens sideways (the video fills the screen); once the phone is
+ * really held sideways, it follows the phone again — so turning it back upright shows the video in
+ * portrait. The rotate button does the same by hand: it turns the screen the other way and, once
+ * the phone matches, lets the phone decide again.
+ */
+internal class VideoTurn(private val activity: Activity?) {
+    private enum class Want { LANDSCAPE, PORTRAIT, FREE }
+
+    private var want = Want.FREE
+    private var listener: OrientationEventListener? = null
+
+    fun start() {
+        val host = activity ?: return
+        lock(Want.LANDSCAPE)
+        listener = object : OrientationEventListener(host) {
+            override fun onOrientationChanged(degrees: Int) {
+                if (degrees == ORIENTATION_UNKNOWN) return
+                val sideways = degrees in 60..120 || degrees in 240..300
+                val upright = degrees <= 30 || degrees >= 330
+                val matches = (want == Want.LANDSCAPE && sideways) || (want == Want.PORTRAIT && upright)
+                if (matches) lock(Want.FREE)
+            }
+        }.also { if (it.canDetectOrientation()) it.enable() }
+    }
+
+    fun stop() {
+        listener?.disable()
+        listener = null
+    }
+
+    /** The rotate button: the other way from how the screen is now. */
+    fun flip() {
+        val host = activity ?: return
+        val landscapeNow = host.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        lock(if (landscapeNow) Want.PORTRAIT else Want.LANDSCAPE)
+    }
+
+    private fun lock(next: Want) {
+        want = next
+        activity?.requestedOrientation = when (next) {
+            Want.LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            Want.PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            Want.FREE -> ActivityInfo.SCREEN_ORIENTATION_SENSOR
+        }
     }
 }

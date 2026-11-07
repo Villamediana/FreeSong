@@ -108,7 +108,8 @@ class VideoScreenSmokeTest {
         compose.onNodeWithText("Aurora").assertIsDisplayed()
         compose.onNodeWithText("Lua Nova").assertIsDisplayed()
         compose.onNodeWithText("Voltar ao áudio").assertIsDisplayed()
-        assertEquals(ActivityInfo.SCREEN_ORIENTATION_SENSOR, activity.requestedOrientation)
+        // Opens sideways; once the phone is turned it follows the phone again.
+        assertEquals(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE, activity.requestedOrientation)
         screenshot("video_portrait")
     }
 

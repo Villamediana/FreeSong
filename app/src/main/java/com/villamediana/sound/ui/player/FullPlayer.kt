@@ -1,5 +1,18 @@
 package com.villamediana.sound.ui.player
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.material.icons.rounded.MusicVideo
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.foundation.layout.requiredSize
+import androidx.media3.ui.compose.state.rememberPresentationState
+import androidx.media3.ui.compose.SURFACE_TYPE_TEXTURE_VIEW
+import androidx.media3.ui.compose.PlayerSurface
+import androidx.annotation.OptIn
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.common.Player
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Brush
@@ -220,6 +233,8 @@ internal fun FullPlayer(
     actions: PlayerActions,
     onCoverBounds: (Rect) -> Unit,
     modifier: Modifier = Modifier,
+    /** The song's music video, silent and looping, to show behind the cover; null = the plain backdrop. */
+    clip: Player? = null,
 ) {
     val root = remember { arrayOfNulls<LayoutCoordinates>(1) }
     val range by rememberUpdatedState(rangePx)
@@ -260,11 +275,14 @@ internal fun FullPlayer(
                     }
                 }
             } else {
-                Column(section) {
-                    TopBar(state.source, actions, hasVideo = track.videoId != null, online = stream.online)
+              Box(Modifier.fillMaxWidth().height(sectionHeight)) {
+                // The music video, darkened and looping, behind the top bar and the cover.
+                ClipLayer(clip, visible, Modifier.fillMaxWidth().fillMaxHeight(0.7f))
+                Column(Modifier.fillMaxSize().padding(top = statusTop)) {
+                    TopBar(state.source, actions, hasVideo = track.videoId != null, online = stream.online, onClip = clip != null)
                     BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                         val size = minOf(maxWidth - PlayerGutter * 2, maxHeight - 20.dp).coerceAtLeast(96.dp)
-                        CoverPager(state, track, size, maxWidth, coverScale, visible, actions.skipTo, reportCover)
+                        CoverPager(state, track, size, maxWidth, coverScale, visible, actions.skipTo, reportCover, onOpenVideo = actions.openVideo.takeIf { clip != null })
                     }
                     Spacer(Modifier.height(14.dp))
                     Column(Modifier.padding(horizontal = PlayerGutter)) {
@@ -272,6 +290,7 @@ internal fun FullPlayer(
                     }
                     Spacer(Modifier.height(10.dp))
                 }
+              }
             }
             // The lyrics wait below the fold: the player fills the screen and they show up only when
             // you scroll down (no edge peeking at the bottom).
@@ -291,15 +310,17 @@ internal fun FullPlayer(
 }
 
 @Composable
-private fun TopBar(source: PlaySource?, actions: PlayerActions, hasVideo: Boolean, online: Boolean) {
+private fun TopBar(source: PlaySource?, actions: PlayerActions, hasVideo: Boolean, online: Boolean, onClip: Boolean = false) {
+    // Over the darkened clip the bar is always light, whatever the theme.
+    val ink = if (onClip) Color.White else SoundColors.Text
     // The source stays centered whatever sits on the right (⋮, and "Ver vídeo" when the song has one).
     Box(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp)) {
-        PlayerIconButton(Icons.Rounded.KeyboardArrowDown, stringResource(R.string.player_collapse), actions.collapse, Modifier.align(Alignment.CenterStart), iconSize = 30.dp)
+        PlayerIconButton(Icons.Rounded.KeyboardArrowDown, stringResource(R.string.player_collapse), actions.collapse, Modifier.align(Alignment.CenterStart), iconSize = 30.dp, tint = ink)
         Column(Modifier.align(Alignment.Center).fillMaxWidth().padding(horizontal = 100.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
                 stringResource(if (source != null) R.string.player_playing_from else R.string.player_now_playing).uppercase(),
                 style = MaterialTheme.typography.labelSmall,
-                color = SoundColors.Text.copy(alpha = 0.72f),
+                color = ink.copy(alpha = 0.72f),
                 maxLines = 1,
             )
             if (source != null) {
@@ -309,7 +330,7 @@ private fun TopBar(source: PlaySource?, actions: PlayerActions, hasVideo: Boolea
                     Text(
                         source.title,
                         style = MaterialTheme.typography.titleSmall,
-                        color = SoundColors.Text,
+                        color = ink,
                         maxLines = 1,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1_800, repeatDelayMillis = 2_600, spacing = MarqueeSpacing(36.dp)),
@@ -318,7 +339,7 @@ private fun TopBar(source: PlaySource?, actions: PlayerActions, hasVideo: Boolea
             }
         }
         Row(Modifier.align(Alignment.CenterEnd), verticalAlignment = Alignment.CenterVertically) {
-            PlayerIconButton(Icons.Rounded.MoreVert, stringResource(R.string.more_options), actions.openActions, iconSize = 24.dp)
+            PlayerIconButton(Icons.Rounded.MoreVert, stringResource(R.string.more_options), actions.openActions, iconSize = 24.dp, tint = ink)
         }
     }
 }
@@ -337,6 +358,8 @@ private fun CoverPager(
     visible: () -> Boolean,
     onSkipTo: (Int) -> Unit,
     onCurrentPlaced: (LayoutCoordinates) -> Unit,
+    /** The song has a music video: a tap on its cover (or its "Vídeo" tag) opens it. */
+    onOpenVideo: (() -> Unit)? = null,
 ) {
     val inQueue = state.queueIndex in state.queue.indices
     val pages = if (inQueue) state.queue else listOf(track)
@@ -388,14 +411,92 @@ private fun CoverPager(
                     clip = true
                 },
         ) {
+            val openVideo = onOpenVideo?.takeIf { page == index }
             Cover(
                 t.coverPath,
-                Modifier.fillMaxSize(),
+                Modifier
+                    .fillMaxSize()
+                    .then(if (openVideo != null) Modifier.clickable(onClickLabel = stringResource(R.string.sheet_video), onClick = openVideo) else Modifier),
                 seed = t.album ?: t.title,
                 shape = RectangleShape,
                 contentDescription = stringResource(R.string.player_cover, t.title),
             )
+            AnimatedVisibility(
+                visible = openVideo != null,
+                enter = fadeIn(tween(300)) + scaleIn(tween(300), initialScale = 0.9f),
+                exit = fadeOut(tween(200)),
+                modifier = Modifier.align(Alignment.BottomStart).padding(12.dp),
+            ) { VideoTag(onClick = { openVideo?.invoke() }) }
         }
+    }
+}
+
+/** "Vídeo" on the cover: the song has a music video, a tap opens it (sideways). */
+@Composable
+private fun VideoTag(onClick: () -> Unit) {
+    val haptic = LocalHapticFeedback.current
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(50))
+            .background(Color.Black.copy(alpha = 0.55f))
+            .clickable {
+                haptic.performHapticFeedback(HapticFeedbackType.ContextClick)
+                onClick()
+            }
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Rounded.MusicVideo, null, tint = Color.White, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(stringResource(R.string.player_video_tag), style = MaterialTheme.typography.labelMedium, color = Color.White)
+    }
+}
+
+/** [clip] fading in when it comes and out when it goes (the last one stays while it fades). */
+@Composable
+private fun ClipLayer(clip: Player?, visible: () -> Boolean, modifier: Modifier = Modifier) {
+    var last by remember { mutableStateOf(clip) }
+    if (clip != null) last = clip
+    AnimatedVisibility(visible = clip != null, enter = fadeIn(tween(600)), exit = fadeOut(tween(400)), modifier = modifier) {
+        last?.let { CanvasBackdrop(it, visible, Modifier.fillMaxSize()) }
+    }
+}
+
+/**
+ * The clip filling its box (cropped, like a cover), darkened, and fading out toward the bottom
+ * into the player's own backdrop, so the title and the controls stay on calm ground.
+ */
+@OptIn(UnstableApi::class)
+@Composable
+private fun CanvasBackdrop(player: Player, visible: () -> Boolean, modifier: Modifier = Modifier) {
+    val presentation = rememberPresentationState(player)
+    val shown by animateFloatAsState(if (presentation.coverSurface) 0f else 1f, tween(700), label = "clip")
+    BoxWithConstraints(
+        modifier
+            .clipToBounds()
+            .graphicsLayer {
+                alpha = shown * (if (visible()) 1f else 0f)
+                compositingStrategy = CompositingStrategy.Offscreen
+            }
+            .drawWithContent {
+                drawContent()
+                drawRect(Color.Black.copy(alpha = 0.5f))
+                drawRect(
+                    Brush.verticalGradient(0f to Color.Black, 0.55f to Color.Black, 1f to Color.Transparent),
+                    blendMode = BlendMode.DstIn,
+                )
+            },
+    ) {
+        val video = presentation.videoSizeDp
+        val ratio = video?.let { if (it.height > 0f) it.width / it.height else null } ?: (16f / 9f)
+        // Cover the box: as wide as needed for its height, or as tall as needed for its width.
+        val boxRatio = maxWidth / maxHeight
+        val (w, h) = if (ratio > boxRatio) (maxHeight * ratio) to maxHeight else maxWidth to (maxWidth / ratio)
+        PlayerSurface(
+            player = player,
+            surfaceType = SURFACE_TYPE_TEXTURE_VIEW,
+            modifier = Modifier.requiredSize(w, h).align(Alignment.Center),
+        )
     }
 }
 

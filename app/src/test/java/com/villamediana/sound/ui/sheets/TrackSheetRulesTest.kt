@@ -41,7 +41,7 @@ class TrackSheetRulesTest {
     @Test fun `the player's sheet leaves out what the player shows and a playlist row can be removed`() {
         val fromPlayer = TrackSheetRules.actionsFor(downloaded, fileExists = true, inPlaylist = false, fromPlayer = true)
         // Heart beside the title, equalizer button below, and "play next" of the song playing: not here.
-        for (gone in listOf(LIKE, PLAY_NEXT, EQUALIZER)) assertFalse(gone.name, gone in fromPlayer)
+        for (gone in listOf(LIKE, PLAY_NEXT, EQUALIZER, VIDEO)) assertFalse(gone.name, gone in fromPlayer)
         assertTrue(TrackSheetAction.SLEEP_TIMER in fromPlayer)
         val inPlaylist = TrackSheetRules.actionsFor(downloaded, fileExists = true, inPlaylist = true, fromPlayer = false)
         assertEquals(listOf(EDIT, REMOVE_FROM_PLAYLIST, DELETE), inPlaylist.takeLast(3))
@@ -59,8 +59,8 @@ class TrackSheetRulesTest {
     @Test fun `a streamed song only gets what works without a library row`() {
         // From the player: heart and download sit beside the title already.
         val actions = TrackSheetRules.actionsFor(streamed, fileExists = false, inPlaylist = true, fromPlayer = true)
-        assertEquals(listOf(ENQUEUE, RADIO, VIDEO, SHARE, TrackSheetAction.SLEEP_TIMER), actions)
-        for (hidden in listOf(LIKE, DOWNLOAD, PLAY_NEXT, EQUALIZER, ADD_TO_PLAYLIST, EDIT, DELETE, REMOVE_FROM_PLAYLIST, SEND_FILE, GO_ALBUM, GO_ARTIST)) {
+        assertEquals(listOf(ENQUEUE, RADIO, SHARE, TrackSheetAction.SLEEP_TIMER), actions)
+        for (hidden in listOf(LIKE, DOWNLOAD, PLAY_NEXT, EQUALIZER, VIDEO, ADD_TO_PLAYLIST, EDIT, DELETE, REMOVE_FROM_PLAYLIST, SEND_FILE, GO_ALBUM, GO_ARTIST)) {
             assertFalse(hidden.name, hidden in actions)
         }
         assertEquals(listOf(LIKE, DOWNLOAD, PLAY_NEXT, ENQUEUE, RADIO, VIDEO, SHARE), TrackSheetRules.actionsFor(streamed, false, false, false))

@@ -1,5 +1,9 @@
 package com.villamediana.sound.ui.player
 
+import androidx.media3.common.Player
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.villamediana.sound.playback.video.PlayerCanvas
 import com.villamediana.sound.download.DownloadWait
 import com.villamediana.sound.ui.nav.Chrome
 import com.villamediana.sound.ui.nav.PlayerHooks
@@ -145,6 +149,8 @@ internal class PlayerDeps(
     val likeOnline: (RemoteTrack, Boolean) -> Unit = { _, _ -> },
     /** What queued downloads wait for (a connection, the Wi-Fi). */
     val downloadWait: Flow<DownloadWait> = flowOf(DownloadWait.NONE),
+    /** The silent clip looping behind the cover; null = none (tests, no video support). */
+    val canvas: PlayerCanvas? = null,
 )
 
 /** One lyrics cache for the whole process: reopening the player doesn't ask LRCLIB again. */
@@ -182,6 +188,7 @@ fun PlayerLayer(
             likeDownloads = graph.settings.settings.map { it.likeDownloads }.distinctUntilChanged(),
             likeOnline = graph::likeOnline,
             downloadWait = graph.downloads.wait,
+            canvas = graph.canvas,
         )
     }
     PlayerHost(deps, bottomBarHeight, modifier, expandedMemory, active)
@@ -380,6 +387,19 @@ internal fun PlayerHost(
     }
 
     val expandedNow by remember { derivedStateOf { expand.target == 1f } }
+
+    // The clip behind the cover: only while the full player is open and on screen (not under a
+    // full page, not with the lyrics over it, not in the background), online, for a YouTube song.
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val lifeState by lifecycle.currentStateFlow.collectAsState()
+    val canvas = deps.canvas
+    val canvasOn = canvas != null && expandedNow && active && online && !lyricsOpen &&
+        track.videoId != null && lifeState.isAtLeast(Lifecycle.State.RESUMED)
+    LaunchedEffect(canvas, canvasOn, track.videoId) { canvas?.show(if (canvasOn) track.videoId else null) }
+    DisposableEffect(canvas) { onDispose { canvas?.show(null) } }
+    val canvasPlayer by (canvas?.player ?: remember { MutableStateFlow<Player?>(null) }).collectAsState()
+    val canvasFor by (canvas?.videoId ?: remember { MutableStateFlow<String?>(null) }).collectAsState()
+    val canvasClip = canvasPlayer?.takeIf { canvasOn && canvasFor == track.videoId }
     // Back goes to the newest enabled handler. The screen under the player (Search clearing its
     // query, a playlist leaving reorder mode) registered its own after ours, so ours are added
     // again whenever the player or the lyrics open: they sit on top while they are showing.
@@ -534,6 +554,7 @@ internal fun PlayerHost(
                             output = output,
                             actions = actions,
                             onCoverBounds = { if (it.width > 1f && it.height > 1f) coverBounds = it },
+                            clip = canvasClip,
                         )
                     }
                     // 2 — mini player content

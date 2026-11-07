@@ -103,4 +103,6 @@ class AppGraph(context: Context) {
 
     val effects: AudioEffectsController by lazy { DeviceAudioEffects(appContext, scope) }
     val video: VideoPlayback by lazy { YouTubeVideoPlayback(appContext, scope) }
+    /** The silent clip looping behind the cover of the full player. */
+    val canvas: com.villamediana.sound.playback.video.VideoCanvas by lazy { com.villamediana.sound.playback.video.VideoCanvas(appContext, scope) }
 }

@@ -15,4 +15,5 @@
     <string name="video_loading">Carregando vídeo</string>
     <string name="video_error_title">Não deu para abrir o vídeo</string>
     <string name="video_retry">Tentar de novo</string>
+    <string name="video_rotate">Girar</string>
 </resources>
