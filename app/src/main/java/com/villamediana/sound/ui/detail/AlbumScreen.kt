@@ -122,18 +122,6 @@ private fun AlbumContent(detail: AlbumDetail, vm: AlbumViewModel) {
         shuffle = shuffleOn,
         onShuffle = { toggleShuffle(status, shuffleOn) { shuffleLocal = it } },
         actions = {
-            HeaderIconButton(
-                icon = if (s.pinned) Icons.Rounded.PushPin else Icons.Outlined.PushPin,
-                contentDescription = stringResource(if (s.pinned) R.string.detail_unpin else R.string.detail_pin),
-                tint = if (s.pinned) SoundColors.Accent else SoundColors.TextMuted,
-                active = s.pinned,
-                onClick = {
-                    val pin = !s.pinned
-                    haptic.performHapticFeedback(if (pin) HapticFeedbackType.ToggleOn else HapticFeedbackType.ToggleOff)
-                    vm.setPinned(s.key, pin)
-                    snackbar.feedback.show(res.getString(if (pin) R.string.detail_pinned else R.string.detail_unpinned))
-                },
-            )
             HeaderIconButton(Icons.Rounded.MoreVert, stringResource(R.string.more_options), onClick = { sheets.menuOpen = true })
         },
         sheets = {

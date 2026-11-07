@@ -149,6 +149,11 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
         Chrome.openPlayer()
     }
 
+    /** The Play of Músicas: from the top, or pause / resume when the list is what plays. */
+    fun playAll(tracks: List<Track>, source: PlaySource, isSource: Boolean) {
+        if (isSource) graph.player.togglePlayPause() else if (tracks.isNotEmpty()) graph.player.play(tracks, 0, source)
+    }
+
     // ------------------------------------------------------------------ downloads of liked songs
 
     /** Songs just asked for — hidden as queued until the queue has them. */

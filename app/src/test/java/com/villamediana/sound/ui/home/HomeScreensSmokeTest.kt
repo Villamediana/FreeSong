@@ -27,6 +27,7 @@ import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performScrollToKey
 import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.rememberNavController
@@ -135,6 +136,8 @@ class HomeScreensSmokeTest {
             check(compose.onAllNodesWithText(it).fetchSemanticsNodes().isEmpty()) { "$it in Músicas" }
         }
         compose.waitUntil(5_000) { compose.onAllNodesWithContentDescription("Baixar").fetchSemanticsNodes().size == 1 }
+        // Play them all, right there.
+        compose.onNodeWithContentDescription("Tocar").assertExists()
         shot("songs-tab")
 
         compose.onAllNodesWithText("Playlists")[0].performClick()
@@ -169,6 +172,32 @@ class HomeScreensSmokeTest {
         compose.onAllNodesWithText("Músicas")[0].performClick()
         waitForText("Velha Infância")
         shot("library-songs")
+    }
+
+    @Test
+    fun playlistsPlusImportsFromSpotify() {
+        seed()
+        compose.setContent { Host { com.villamediana.sound.ui.library.MainScreen() } }
+        compose.onAllNodesWithText("Playlists")[0].performClick()
+        waitForText("Domingo")
+        compose.onNodeWithContentDescription("Nova playlist").performClick()
+        waitForText("Importar do Spotify")
+        compose.onAllNodesWithText("Importar do Spotify")[0].performClick()
+        waitForText("Cole o link de uma playlist pública do Spotify.")
+        val live = System.getProperty("sound.live") == "1"
+        compose.onNode(androidx.compose.ui.test.hasSetTextAction()).performTextInput(
+            if (live) "https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M?si=x" else "minha playlist",
+        )
+        compose.onAllNodesWithText("Buscar playlist")[0].performClick()
+        if (live) {
+            waitForText("Today’s Top Hits", 30_000)
+            waitForText("Importar")
+            shot("spotify-preview")
+        } else {
+            waitForText("Isso não é um link de playlist do Spotify.")
+            shot("spotify-input")
+        }
+        com.villamediana.sound.ui.library.SpotifyImportRequest.open = false
     }
 
     @Test

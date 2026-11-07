@@ -94,6 +94,8 @@ import com.villamediana.sound.online.RemoteTrack
 import com.villamediana.sound.ui.components.Cover
 import com.villamediana.sound.ui.components.EmptyState
 import com.villamediana.sound.ui.components.PillButton
+import com.villamediana.sound.ui.components.PagePlayButton
+import com.villamediana.sound.ui.components.PageShuffleButton
 import com.villamediana.sound.ui.components.SectionHeader
 import com.villamediana.sound.ui.components.Share
 import com.villamediana.sound.ui.components.formatDuration
@@ -476,9 +478,20 @@ private fun RemoteHeader(
                     }
                     if (playable) {
                         Spacer(Modifier.width(12.dp))
-                        ShuffleCircle(active = here?.shuffle == true, enabled = canPlay, onClick = onShuffle)
+                        val playing = here?.playing == true
+                        PageShuffleButton(
+                            active = here?.shuffle == true,
+                            onClick = onShuffle,
+                            enabled = canPlay,
+                            label = stringResource(R.string.search_remote_shuffle),
+                        )
                         Spacer(Modifier.width(10.dp))
-                        PlayCircle(playing = here?.playing == true, enabled = canPlay, onClick = onPlay)
+                        PagePlayButton(
+                            playing = playing,
+                            onClick = onPlay,
+                            enabled = canPlay,
+                            label = stringResource(if (playing) R.string.pause else R.string.search_remote_play),
+                        )
                     }
                 }
             }
@@ -550,55 +563,6 @@ private fun PrimaryActionView(
             }
             PrimaryAction.InLibrary -> BigButton(stringResource(R.string.search_remote_in_library), onOpenLibrary, icon = Icons.Rounded.CheckCircle, filled = false, compact = !filled)
         }
-    }
-}
-
-/** The big round Play of the page (accent): streams it all; pauses when this page is playing. */
-@Composable
-private fun PlayCircle(playing: Boolean, enabled: Boolean, onClick: () -> Unit) {
-    val interaction = remember { MutableInteractionSource() }
-    val label = stringResource(if (playing) R.string.pause else R.string.search_remote_play)
-    Box(
-        Modifier
-            .size(56.dp)
-            .pressScale(interaction, 0.9f)
-            .clip(CircleShape)
-            .background(if (enabled) SoundColors.Accent else SoundColors.Surface3)
-            .clickable(interactionSource = interaction, indication = null, role = Role.Button, onClick = onClick)
-            .semantics { contentDescription = label },
-        contentAlignment = Alignment.Center,
-    ) {
-        AnimatedContent(playing, transitionSpec = { (fadeIn(tween(160)) + scaleIn(Motion.bouncy(), initialScale = 0.6f)) togetherWith fadeOut(tween(100)) }, label = "pagePlay") { on ->
-            Icon(
-                if (on) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                null,
-                tint = if (enabled) SoundColors.OnAccent else SoundColors.TextFaint,
-                modifier = Modifier.size(30.dp),
-            )
-        }
-    }
-}
-
-@Composable
-private fun ShuffleCircle(active: Boolean, enabled: Boolean, onClick: () -> Unit) {
-    val interaction = remember { MutableInteractionSource() }
-    val label = stringResource(R.string.search_remote_shuffle)
-    val tint = when {
-        !enabled -> SoundColors.TextFaint
-        active -> SoundColors.Accent
-        else -> SoundColors.Text
-    }
-    Box(
-        Modifier
-            .size(48.dp)
-            .pressScale(interaction, 0.9f)
-            .clip(CircleShape)
-            .border(1.dp, if (active && enabled) SoundColors.Accent.copy(alpha = 0.5f) else SoundColors.Hairline, CircleShape)
-            .clickable(interactionSource = interaction, indication = null, role = Role.Button, onClick = onClick)
-            .semantics { contentDescription = label },
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(Icons.Rounded.Shuffle, null, tint = tint, modifier = Modifier.size(22.dp))
     }
 }
 

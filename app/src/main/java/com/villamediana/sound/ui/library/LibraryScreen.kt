@@ -92,6 +92,7 @@ import com.villamediana.sound.playback.PlaybackState
 import com.villamediana.sound.playback.PlaySource
 import com.villamediana.sound.data.isOnline
 import com.villamediana.sound.ui.search.DownloadIndicator
+import com.villamediana.sound.ui.components.PagePlayButton
 import com.villamediana.sound.ui.search.DownloadLookup
 import com.villamediana.sound.ui.search.ItemDownload
 import com.villamediana.sound.ui.components.Cover
@@ -282,6 +283,7 @@ private fun LibraryContent(
         verticalArrangement = Arrangement.spacedBy(if (grid) 18.dp else 0.dp),
     ) {
         item(key = "sortbar", span = { GridItemSpan(maxLineSpan) }, contentType = "sortbar") {
+            val listPlaying = playback.isPlaying && playback.isFromLiked()
             SortBar(
                 filter = s.filter,
                 sort = s.sort,
@@ -289,6 +291,12 @@ private fun LibraryContent(
                 onSort = vm::setSort,
                 onToggleMode = vm::toggleViewMode,
                 modifier = Modifier.padding(horizontal = rowPad),
+                // Músicas: play them all, in the order on screen (pauses when it is what plays).
+                play = if (s.filter == LibFilter.SONGS && songs.isNotEmpty()) {
+                    { PagePlayButton(playing = listPlaying, onClick = { vm.playAll(songs, songsSource, playback.hasMedia && playback.isFromLiked()) }, size = 44.dp) }
+                } else {
+                    null
+                },
             )
         }
 
@@ -581,9 +589,10 @@ private fun SortBar(
     onSort: (LibSort) -> Unit,
     onToggleMode: () -> Unit,
     modifier: Modifier = Modifier,
+    play: (@Composable () -> Unit)? = null,
 ) {
     var open by remember { mutableStateOf(false) }
-    Row(modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {
         Box {
             Row(
                 Modifier
@@ -631,6 +640,7 @@ private fun SortBar(
             }
         }
         Spacer(Modifier.weight(1f))
+        play?.invoke()
         if (filter != LibFilter.SONGS) {
             IconButton(onClick = onToggleMode) {
                 Icon(
@@ -661,7 +671,13 @@ private fun LibraryEmpty(filter: LibFilter?, nav: Navigator, onCreate: () -> Uni
             stringResource(R.string.home_lib_empty_playlists_title),
             stringResource(R.string.home_lib_empty_playlists_body),
             modifier,
-        ) { PillButton(text = stringResource(R.string.home_lib_new_playlist), onClick = onCreate, icon = Icons.Rounded.Add, filled = true) }
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                PillButton(text = stringResource(R.string.home_lib_new_playlist), onClick = onCreate, icon = Icons.Rounded.Add, filled = true)
+                Spacer(Modifier.height(10.dp))
+                PillButton(text = stringResource(R.string.spotify_import_title), onClick = { SpotifyImportRequest.show() }, icon = Icons.Rounded.ArrowDownward)
+            }
+        }
         LibFilter.ALBUMS -> EmptyState(Icons.Outlined.Album, stringResource(R.string.home_lib_empty_albums_title), stringResource(R.string.home_lib_empty_albums_body), modifier, search)
         LibFilter.ARTISTS -> EmptyState(Icons.Outlined.MicExternalOn, stringResource(R.string.home_lib_empty_artists_title), stringResource(R.string.home_lib_empty_artists_body), modifier, search)
         LibFilter.SONGS -> EmptyState(Icons.Outlined.MusicNote, stringResource(R.string.home_lib_empty_songs_title), stringResource(R.string.home_lib_empty_songs_body), modifier, search)

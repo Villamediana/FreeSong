@@ -112,8 +112,14 @@ fun SoundRoot(incoming: MutableStateFlow<Inbound?>) {
     val inbound by incoming.collectAsState()
     LaunchedEffect(inbound) {
         val item = inbound ?: return@LaunchedEffect
-        LinkInbox.post(item)
         incoming.value = null
+        // A Spotify playlist shared to FreeSong: the import, on the Playlists tab.
+        if (item is Inbound.Link && com.villamediana.sound.online.SpotifyLinks.mentions(item.text)) {
+            com.villamediana.sound.ui.library.SpotifyImportRequest.show(item.text)
+            navigator.switchTab(HomeRoute)
+            return@LaunchedEffect
+        }
+        LinkInbox.post(item)
         navigator.openSearchScreen()
     }
 

@@ -59,6 +59,9 @@ import com.villamediana.sound.ui.nav.Chrome
 import com.villamediana.sound.ui.nav.navigator
 import com.villamediana.sound.ui.theme.Dimens
 import com.villamediana.sound.ui.theme.SoundColors
+import com.villamediana.sound.ui.sheets.SheetAction
+import com.villamediana.sound.ui.sheets.SoundSheet
+import androidx.compose.material.icons.rounded.Download
 
 /** The pills of the main screen: the Home, then the library by kind. */
 enum class MainTab(@StringRes val label: Int, val filter: LibFilter?) {
@@ -83,6 +86,7 @@ enum class MainTab(@StringRes val label: Int, val filter: LibFilter?) {
  * The one main screen (no bottom bar): brand + search + settings on top, pills right below, and
  * the content switching in place — Início (suggestions) or the library by kind.
  */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen() {
     val nav = navigator()
@@ -94,6 +98,11 @@ fun MainScreen() {
     var tab by rememberSaveable { mutableStateOf(MainTab.start(firstShowHome)) }
     LaunchedEffect(showHome) { if (tab !in tabs) tab = MainTab.start(showHome) }
     var creating by rememberSaveable { mutableStateOf(false) }
+    // The Playlists +: a new one, or one imported from Spotify.
+    var choosing by rememberSaveable { mutableStateOf(false) }
+    // A Spotify link shared to FreeSong (or the import asked from elsewhere) lands on Playlists.
+    LaunchedEffect(SpotifyImportRequest.open) { if (SpotifyImportRequest.open) tab = MainTab.PLAYLISTS }
+    SpotifyImportFinished()
     val downloads by SoundApplication.graph.downloads.summary.collectAsStateWithLifecycle(DownloadSummary())
     // The genre intro takes the whole screen: no header, no pills.
     val intro = Chrome.hideMiniPlayer && tab == MainTab.HOME
@@ -108,7 +117,7 @@ fun MainScreen() {
                 ) {
                     SoundWordmark(Modifier.weight(1f))
                     if (tab == MainTab.PLAYLISTS) {
-                        IconButton(onClick = { creating = true }) {
+                        IconButton(onClick = { choosing = true }) {
                             Icon(Icons.Rounded.Add, stringResource(R.string.home_lib_new_playlist), tint = SoundColors.Text, modifier = Modifier.size(28.dp))
                         }
                     }
@@ -147,6 +156,19 @@ fun MainScreen() {
         }
     }
 
+    if (choosing) {
+        SoundSheet(onDismissRequest = { choosing = false }) {
+            SheetAction(Icons.Rounded.Add, stringResource(R.string.home_lib_new_playlist), onClick = { choosing = false; creating = true })
+            SheetAction(Icons.Rounded.Download, stringResource(R.string.spotify_import_title), onClick = { choosing = false; SpotifyImportRequest.show() })
+        }
+    }
+    if (SpotifyImportRequest.open) {
+        SpotifyImportSheet(
+            onDismiss = { SpotifyImportRequest.open = false },
+            onOpenPlaylist = { id -> nav.openPlaylist(id) },
+        )
+    }
+
     if (creating) {
         val vm: LibraryViewModel = viewModel()
         CreatePlaylistDialog(
@@ -156,5 +178,23 @@ fun MainScreen() {
             },
             onDismiss = { creating = false },
         )
+    }
+}
+
+/** An import that ends with its sheet closed says so (and the sheet starts fresh next time). */
+@Composable
+private fun SpotifyImportFinished() {
+    val importer = SoundApplication.graph.spotifyImport
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val state by importer.state.collectAsState()
+    LaunchedEffect(state, SpotifyImportRequest.open) {
+        val done = state as? com.villamediana.sound.online.SpotifyImporter.State.Done ?: return@LaunchedEffect
+        if (SpotifyImportRequest.open) return@LaunchedEffect
+        android.widget.Toast.makeText(
+            context,
+            context.getString(R.string.spotify_import_finished, done.playlist.name, done.found),
+            android.widget.Toast.LENGTH_LONG,
+        ).show()
+        importer.reset()
     }
 }

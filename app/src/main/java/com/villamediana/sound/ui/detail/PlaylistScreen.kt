@@ -312,18 +312,6 @@ private fun PlaylistContent(detail: PlaylistDetail, vm: PlaylistViewModel) {
         onShuffle = { toggleShuffle(status, shuffleOn) { shuffleLocal = it } },
         showActionRow = !editing,
         actions = {
-            HeaderIconButton(
-                icon = if (summary.pinned) Icons.Rounded.PushPin else Icons.Outlined.PushPin,
-                contentDescription = stringResource(if (summary.pinned) R.string.detail_unpin else R.string.detail_pin),
-                tint = if (summary.pinned) SoundColors.Accent else SoundColors.TextMuted,
-                active = summary.pinned,
-                onClick = {
-                    val pin = !summary.pinned
-                    haptic.performHapticFeedback(if (pin) HapticFeedbackType.ToggleOn else HapticFeedbackType.ToggleOff)
-                    vm.setPinned(pin)
-                    snackbar.feedback.show(res.getString(if (pin) R.string.detail_pinned else R.string.detail_unpinned))
-                },
-            )
             HeaderIconButton(Icons.Rounded.MoreVert, stringResource(R.string.more_options), onClick = { sheets.menuOpen = true })
         },
         barActions = {

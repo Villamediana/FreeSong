@@ -54,6 +54,19 @@ class AppGraph(context: Context) {
     val enricher: MetadataEnricher by lazy { CatalogMetadataEnricher(http) }
     val lyrics: LyricsSource by lazy { LrclibLyricsSource(http) }
 
+    /** Public Spotify playlists (no login) and their import into a downloaded playlist. */
+    val spotify: com.villamediana.sound.online.SpotifyPlaylists by lazy { com.villamediana.sound.online.SpotifyPlaylists(http) }
+    val spotifyImport: com.villamediana.sound.online.SpotifyImporter by lazy {
+        com.villamediana.sound.online.SpotifyImporter(
+            search = { q ->
+                youTube.search(q, com.villamediana.sound.online.SearchFilter.SONGS).items
+                    .filterIsInstance<com.villamediana.sound.online.SearchItem.Song>().map { it.track }
+            },
+            save = { downloads.downloadCollection(it) },
+            scope = scope,
+        )
+    }
+
     val downloads: DownloadController by lazy { WorkDownloadController(appContext, db, library, storage, settings) }
     val player: PlayerConnection by lazy { MediaPlayerConnection(appContext, library, settings, scope) }
     val discover: com.villamediana.sound.discover.DiscoverRepository by lazy {

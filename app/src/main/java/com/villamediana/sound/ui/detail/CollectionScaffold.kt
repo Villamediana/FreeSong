@@ -9,6 +9,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import com.villamediana.sound.ui.components.PillButton
+import com.villamediana.sound.ui.components.PagePlayButton
+import com.villamediana.sound.ui.components.PageShuffleButton
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
@@ -225,42 +227,21 @@ internal fun CollectionScaffold(
                             }
                             HeaderTexts(header, onTitlePlaced = { geometry.title = it; geometry.update() })
                             if (showActionRow) {
-                                Spacer(Modifier.height(8.dp))
+                                // One row, like the online pages: the page's icons (⋮…) on the left,
+                                // Shuffle and the round Play on the right.
+                                Spacer(Modifier.height(16.dp))
                                 Row(
-                                    Modifier.align(Alignment.CenterHorizontally),
+                                    Modifier.fillMaxWidth().padding(start = Dimens.Gutter - 10.dp, end = Dimens.Gutter),
                                     verticalAlignment = Alignment.CenterVertically,
-                                ) { actions() }
-                                Spacer(Modifier.height(10.dp))
-                                Row(
-                                    Modifier.fillMaxWidth().padding(horizontal = Dimens.Gutter),
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                                 ) {
-                                    if (onPlay != null) {
-                                        PillButton(
-                                            text = stringResource(if (playing) R.string.pause else R.string.play),
-                                            onClick = onPlay,
-                                            icon = if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                                            big = true,
-                                            modifier = Modifier.weight(1f),
-                                        )
-                                    }
+                                    Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) { actions() }
                                     if (shuffle != null) {
-                                        val shuffleLabel = stringResource(R.string.shuffle)
-                                        PillButton(
-                                            text = shuffleLabel,
-                                            onClick = onShuffle,
-                                            icon = Icons.Rounded.Shuffle,
-                                            filled = shuffle,
-                                            big = true,
-                                            // TalkBack hears it as a switch (on / off).
-                                            modifier = Modifier.weight(1f).semantics(mergeDescendants = true) {
-                                                contentDescription = shuffleLabel
-                                                role = Role.Switch
-                                                toggleableState = ToggleableState(shuffle)
-                                            },
-                                        )
+                                        PageShuffleButton(active = shuffle, onClick = onShuffle, toggle = true)
+                                        Spacer(Modifier.width(10.dp))
                                     }
+                                    if (onPlay != null) PagePlayButton(playing = playing, onClick = onPlay)
                                 }
+                                Spacer(Modifier.height(6.dp))
                             }
                             Spacer(Modifier.height(8.dp))
                         }

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="spotify_import_title">Importar do Spotify</string>
+    <string name="spotify_import_body">Cole o link de uma playlist pública do Spotify.</string>
+    <string name="spotify_import_link">Link da playlist</string>
+    <string name="spotify_import_not_a_link">Isso não é um link de playlist do Spotify.</string>
+    <string name="spotify_import_not_found">Não deu pra abrir essa playlist. Ela precisa estar pública no Spotify.</string>
+    <string name="spotify_import_offline">Sem conexão. Tente de novo.</string>
+    <string name="spotify_import_look_up">Buscar playlist</string>
+    <string name="spotify_import_how">No Spotify: abra a playlist › ⋮ › Compartilhar › Copiar link. Ou compartilhe direto com o FreeSong.</string>
+    <string name="spotify_import_what_happens">Cada música é procurada no YouTube Music e baixada numa playlist com o mesmo nome.</string>
+    <string name="spotify_import_limit">O Spotify libera até 100 músicas por link: entram as 100 primeiras.</string>
+    <string name="spotify_import_go">Importar</string>
+    <string name="spotify_import_other">Outro link</string>
+    <string name="spotify_import_matching">Procurando no YouTube Music… %1$d de %2$d</string>
+    <string name="spotify_import_keeps_going">Pode fechar: a importação continua sozinha.</string>
+    <plurals name="spotify_import_found">
+        <item quantity="one">%d música encontrada</item>
+        <item quantity="other">%d músicas encontradas</item>
+    </plurals>
+    <string name="spotify_import_done">Playlist criada. As músicas entram na fila de download.</string>
+    <plurals name="spotify_import_missing">
+        <item quantity="one">%d não encontrada</item>
+        <item quantity="other">%d não encontradas</item>
+    </plurals>
+    <string name="spotify_import_and_more">e mais %d</string>
+    <string name="spotify_import_open">Abrir playlist</string>
+    <string name="spotify_import_another">Importar outra</string>
+    <string name="spotify_import_none_found">Nenhuma música dessa playlist apareceu no YouTube Music.</string>
+    <string name="spotify_import_retry">Tentar de novo</string>
+    <string name="spotify_import_finished">“%1$s” importada: %2$d músicas na fila</string>
+</resources>

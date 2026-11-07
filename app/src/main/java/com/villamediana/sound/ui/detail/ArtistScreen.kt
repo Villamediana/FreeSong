@@ -13,7 +13,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Person
-import androidx.compose.material.icons.rounded.Radio
+import androidx.compose.material.icons.rounded.Sensors
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -102,10 +102,9 @@ private fun ArtistContent(detail: ArtistDetail) {
         shuffle = shuffleOn,
         onShuffle = { toggleShuffle(status, shuffleOn) { shuffleLocal = it } },
         actions = {
-            Spacer(Modifier.width(10.dp))
-            PillButton(
-                text = stringResource(R.string.detail_radio_short),
-                icon = Icons.Rounded.Radio,
+            HeaderIconButton(
+                Icons.Rounded.Sensors,
+                stringResource(R.string.detail_radio_short),
                 onClick = {
                     detail.topTracks.firstOrNull()?.let { seed ->
                         player.playSmart(SmartSeed.Radio(seed))
@@ -113,7 +112,6 @@ private fun ArtistContent(detail: ArtistDetail) {
                     }
                 },
             )
-            Spacer(Modifier.width(4.dp))
             HeaderIconButton(Icons.Rounded.MoreVert, stringResource(R.string.more_options), onClick = { sheets.menuOpen = true })
         },
         sheets = {
@@ -125,7 +123,7 @@ private fun ArtistContent(detail: ArtistDetail) {
                     subtitle = countText,
                     art = { m -> ArtistArt(s.coverPath, s.name, m) },
                     items = listOf(
-                        MenuItem(Icons.Rounded.Radio, res.getString(R.string.detail_artist_radio)) {
+                        MenuItem(Icons.Rounded.Sensors, res.getString(R.string.detail_artist_radio)) {
                             detail.topTracks.firstOrNull()?.let {
                                 player.playSmart(SmartSeed.Radio(it))
                                 snackbar.feedback.show(res.getString(R.string.detail_artist_radio_started, s.name))
