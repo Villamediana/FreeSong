@@ -1,5 +1,10 @@
 package com.villamediana.sound.ui.home
 
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.PlayArrow
+import com.villamediana.sound.online.RemoteCollection
+import com.villamediana.sound.online.RemoteTrack
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
@@ -169,60 +174,159 @@ private fun GenreCard(genre: GenreDef, covers: List<String>, selected: Boolean, 
     }
 }
 
-/** The "… pra você" shelves (live songs per favourite genre), with "Editar" on the section. */
-internal fun LazyListScope.discoverShelves(
+/** Everything live on the Home: mixes, "porque você ouviu", trending, artists, playlists, genre shelves. */
+internal fun LazyListScope.discoverSections(
     state: DiscoverUiState,
     playback: PlaybackState,
-    titleFor: @Composable (GenreDef) -> String,
-    onPlay: (Shelf, Int, String) -> Unit,
+    onPlay: (tracks: List<RemoteTrack>, index: Int, title: String, id: String) -> Unit,
+    onArtist: (String) -> Unit,
+    onPlaylist: (RemoteCollection) -> Unit,
     onEdit: () -> Unit,
 ) {
-    if (state.shelves.isEmpty()) return
-    item(key = "discover-header", contentType = "header") {
-        Column(Modifier.padding(top = Dimens.SectionGap - 8.dp)) {
-            SectionHeader(
-                title = stringResource(R.string.discover_title),
-                action = stringResource(R.string.discover_edit),
-                onAction = onEdit,
-            )
-        }
-    }
-    state.shelves.forEach { shelf ->
-        item(key = "shelf:" + shelf.genre.id, contentType = "shelf") {
-            val title = titleFor(shelf.genre)
-            Column(Modifier.padding(top = 4.dp, bottom = 10.dp)) {
-                Text(
-                    title,
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                    color = SoundColors.Text,
-                    modifier = Modifier.padding(horizontal = Dimens.Gutter).padding(bottom = 12.dp),
-                )
-                LazyRow(contentPadding = PaddingValues(horizontal = Dimens.Gutter), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    itemsIndexed(shelf.tracks, key = { _, t -> t.videoId }) { i, t ->
-                        val current = playback.current?.videoId == t.videoId
-                        Column(
-                            Modifier
-                                .width(Dimens.CardCover)
-                                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onPlay(shelf, i, title) },
-                        ) {
-                            Box {
-                                Cover(t.thumbnailUrl, Modifier.size(Dimens.CardCover), seed = t.title, shape = RoundedCornerShape(16.dp))
-                                if (current) {
-                                    Box(
-                                        Modifier.size(Dimens.CardCover).clip(RoundedCornerShape(16.dp)).background(Color.Black.copy(alpha = 0.35f)),
-                                        contentAlignment = Alignment.Center,
-                                    ) { PlayingBars(playback.isPlaying, Modifier.size(28.dp), color = Color.White, barWidth = 5.dp) }
-                                }
-                            }
-                            Spacer(Modifier.height(8.dp))
-                            Text(t.title, style = MaterialTheme.typography.titleSmall, color = if (current) SoundColors.Accent else SoundColors.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(t.artist, style = MaterialTheme.typography.bodySmall, color = SoundColors.TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
-                    }
+    if (state.mixes.isNotEmpty()) {
+        item(key = "d-mixes", contentType = "row") {
+            DiscoverRow(stringResource(R.string.discover_mixes)) {
+                items(state.mixes, key = { it.kind.name }) { mix ->
+                    val title = stringResource(mixTitle(mix.kind))
+                    MixCard(mix, title, onClick = { onPlay(mix.tracks, 0, title, "mix:" + mix.kind.name) })
                 }
             }
         }
     }
+    if (state.because.isNotEmpty() && state.becauseTitle != null) {
+        item(key = "d-because", contentType = "row") {
+            val title = stringResource(R.string.discover_because, state.becauseTitle)
+            SongRow(title, state.because, playback) { i -> onPlay(state.because, i, title, "because") }
+        }
+    }
+    if (state.trending.isNotEmpty()) {
+        item(key = "d-trending", contentType = "row") {
+            val title = stringResource(R.string.discover_trending)
+            SongRow(title, state.trending, playback) { i -> onPlay(state.trending, i, title, "trending") }
+        }
+    }
+    if (state.artists.isNotEmpty()) {
+        item(key = "d-artists", contentType = "row") {
+            DiscoverRow(stringResource(R.string.discover_artists)) {
+                items(state.artists, key = { "a:" + it.name.lowercase() }) { a -> ArtistBubble(a, onClick = { onArtist(a.name) }) }
+            }
+        }
+    }
+    if (state.playlists.isNotEmpty()) {
+        item(key = "d-playlists", contentType = "row") {
+            DiscoverRow(stringResource(R.string.discover_playlists)) {
+                items(state.playlists, key = { it.url }) { c -> PlaylistCard(c, onClick = { onPlaylist(c) }) }
+            }
+        }
+    }
+    state.shelves.forEach { shelf ->
+        item(key = "shelf:" + shelf.genre.id, contentType = "row") {
+            val title = shelfTitle(shelf.genre)
+            SongRow(title, shelf.tracks, playback) { i -> onPlay(shelf.tracks, i, title, "genre:" + shelf.genre.id) }
+        }
+    }
+    if (state.favorites.isNotEmpty()) {
+        item(key = "d-edit", contentType = "footer") {
+            Box(Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 8.dp), contentAlignment = Alignment.Center) {
+                PillButton(stringResource(R.string.discover_edit_genres), onEdit, icon = Icons.Rounded.Tune)
+            }
+        }
+    }
+}
+
+@Composable
+private fun DiscoverRow(title: String, content: LazyListScope.() -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(top = Dimens.SectionGap - 10.dp)) {
+        SectionHeader(title)
+        LazyRow(contentPadding = PaddingValues(horizontal = Dimens.Gutter), horizontalArrangement = Arrangement.spacedBy(14.dp), content = content)
+    }
+}
+
+@Composable
+private fun SongRow(title: String, tracks: List<RemoteTrack>, playback: PlaybackState, onPlay: (Int) -> Unit) {
+    DiscoverRow(title) {
+        itemsIndexed(tracks, key = { _, t -> t.videoId }) { i, t -> SongCard(t, playback, onClick = { onPlay(i) }) }
+    }
+}
+
+@Composable
+private fun SongCard(t: RemoteTrack, playback: PlaybackState, onClick: () -> Unit) {
+    val current = playback.current?.videoId == t.videoId
+    val interaction = remember { MutableInteractionSource() }
+    Column(Modifier.width(Dimens.CardCover).pressScale(interaction, 0.97f).clickable(interactionSource = interaction, indication = null, onClick = onClick)) {
+        Box {
+            Cover(t.thumbnailUrl, Modifier.size(Dimens.CardCover), seed = t.title, shape = RoundedCornerShape(16.dp))
+            if (current) {
+                Box(
+                    Modifier.size(Dimens.CardCover).clip(RoundedCornerShape(16.dp)).background(Color.Black.copy(alpha = 0.35f)),
+                    contentAlignment = Alignment.Center,
+                ) { PlayingBars(playback.isPlaying, Modifier.size(28.dp), color = Color.White, barWidth = 5.dp) }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(t.title, style = MaterialTheme.typography.titleSmall, color = if (current) SoundColors.Accent else SoundColors.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(t.artist, style = MaterialTheme.typography.bodySmall, color = SoundColors.TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** Big mix card: a cover, the genre color rising from the bottom and the mix name on it. */
+@Composable
+private fun MixCard(mix: DiscoverMix, title: String, onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    val tint = Color(mix.tint)
+    val shape = RoundedCornerShape(20.dp)
+    Column(Modifier.width(176.dp).pressScale(interaction, 0.97f).clickable(interactionSource = interaction, indication = null, onClick = onClick)) {
+        Box(Modifier.size(176.dp).clip(shape).background(tint)) {
+            Cover(mix.covers.firstOrNull(), Modifier.fillMaxSize(), seed = title, shape = RoundedCornerShape(0.dp))
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.25f to tint.copy(alpha = 0f), 1f to tint.copy(alpha = 0.95f))))
+            Column(Modifier.align(Alignment.BottomStart).padding(14.dp)) {
+                Text(title, style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold), color = Color.White, maxLines = 2)
+            }
+            Box(
+                Modifier.align(Alignment.TopEnd).padding(10.dp).size(34.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.92f)),
+                contentAlignment = Alignment.Center,
+            ) { Icon(Icons.Rounded.PlayArrow, null, tint = tint, modifier = Modifier.size(22.dp)) }
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            mix.tracks.take(3).joinToString(", ") { it.artist.substringBefore(",").trim() },
+            style = MaterialTheme.typography.bodySmall,
+            color = SoundColors.TextMuted,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+private fun ArtistBubble(a: ArtistPick, onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    Column(
+        Modifier.width(108.dp).pressScale(interaction, 0.96f).clickable(interactionSource = interaction, indication = null, onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Cover(a.imageUrl, Modifier.size(108.dp), seed = a.name, shape = CircleShape)
+        Spacer(Modifier.height(8.dp))
+        Text(a.name, style = MaterialTheme.typography.titleSmall, color = SoundColors.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
+private fun PlaylistCard(c: RemoteCollection, onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    Column(Modifier.width(Dimens.CardCover).pressScale(interaction, 0.97f).clickable(interactionSource = interaction, indication = null, onClick = onClick)) {
+        Cover(c.thumbnailUrl, Modifier.size(Dimens.CardCover), seed = c.title, shape = RoundedCornerShape(16.dp))
+        Spacer(Modifier.height(8.dp))
+        Text(c.title, style = MaterialTheme.typography.titleSmall, color = SoundColors.Text, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        c.author?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = SoundColors.TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+    }
+}
+
+private fun mixTitle(kind: MixKind): Int = when (kind) {
+    MixKind.YOURS -> R.string.discover_mix_yours
+    MixKind.NEW -> R.string.discover_mix_new
+    MixKind.CLASSICS -> R.string.discover_mix_classics
+    MixKind.CHILL -> R.string.discover_mix_chill
 }
 
 /** Empty library, genres chosen: the Home is the live suggestions. */
@@ -232,7 +336,9 @@ internal fun DiscoverHome(
     playback: PlaybackState,
     downloads: DownloadSummary,
     nav: Navigator,
-    onPlay: (Shelf, Int, String) -> Unit,
+    onPlay: (List<RemoteTrack>, Int, String, String) -> Unit,
+    onArtist: (String) -> Unit,
+    onPlaylist: (RemoteCollection) -> Unit,
     onEdit: () -> Unit,
 ) {
     val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
@@ -251,10 +357,10 @@ internal fun DiscoverHome(
                 )
             }
         }
-        if (state.shelves.isEmpty() && state.loadingShelves) {
+        if (!state.hasContent && state.loading) {
             item(key = "loading") { Box(Modifier.fillMaxWidth().height(240.dp)) }
         }
-        discoverShelves(state, playback, titleFor = { shelfTitle(it) }, onPlay = onPlay, onEdit = onEdit)
+        discoverSections(state, playback, onPlay, onArtist, onPlaylist, onEdit)
     }
 }
 

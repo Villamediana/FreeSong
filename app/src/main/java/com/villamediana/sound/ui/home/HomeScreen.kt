@@ -116,7 +116,9 @@ fun HomeScreen() {
         state.empty -> HomePhase.EMPTY
         else -> HomePhase.FEED
     }
-    val playShelf: (Shelf, Int, String) -> Unit = { shelf, i, title -> discoverVm.play(shelf, i, title) }
+    val playDiscover: (List<com.villamediana.sound.online.RemoteTrack>, Int, String, String) -> Unit = { tracks, i, title, id -> discoverVm.play(tracks, i, title, id) }
+    val openArtist: (String) -> Unit = { name -> discoverVm.openArtist(name) { nav.openRemote(it) } }
+    val openPlaylist: (com.villamediana.sound.online.RemoteCollection) -> Unit = { nav.openRemote(it) }
     // The genre picker is an intro: no mini player over it. Back to normal when it goes (or Home does).
     val picking = phase == HomePhase.PICKER
     DisposableEffect(picking) {
@@ -141,7 +143,7 @@ fun HomeScreen() {
                     onContinue = discoverVm::confirm,
                     onSkip = discoverVm::skip,
                 )
-                HomePhase.DISCOVER -> DiscoverHome(discover, playback, downloads, nav, onPlay = playShelf, onEdit = discoverVm::edit)
+                HomePhase.DISCOVER -> DiscoverHome(discover, playback, downloads, nav, onPlay = playDiscover, onArtist = openArtist, onPlaylist = openPlaylist, onEdit = discoverVm::edit)
                 HomePhase.FEED -> HomeFeed(
                     state = state,
                     playback = playback,
@@ -151,7 +153,7 @@ fun HomeScreen() {
                     intro = intro,
                     onSong = { songSheet = it },
                     onMenu = { menuTarget = it },
-                    extra = { discoverShelves(discover, playback, titleFor = { shelfTitle(it) }, onPlay = playShelf, onEdit = discoverVm::edit) },
+                    extra = { discoverSections(discover, playback, playDiscover, openArtist, openPlaylist, discoverVm::edit) },
                 )
             }
         }

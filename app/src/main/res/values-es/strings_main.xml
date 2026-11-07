@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="theme_title">Tema</string>
+    <string name="main_tab_home">Inicio</string>
+    <string name="main_tab_songs">Canciones</string>
+    <string name="main_tab_playlists">Playlists</string>
+    <string name="main_tab_albums">Álbumes</string>
+    <string name="main_tab_artists">Artistas</string>
+    <string name="main_tab_genres">Géneros</string>
+</resources>

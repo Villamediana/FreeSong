@@ -30,4 +30,26 @@ class DiscoverLiveTest {
         println("reggaeton shelf: " + shelf.take(5).joinToString { "${it.title} — ${it.artist}" })
         assertTrue(shelf.size >= 8)
     }
+
+    @Test fun theRestOfTheHomeIsLiveToo() = runBlocking {
+        assumeTrue(System.getProperty("sound.live") == "1")
+        val http = OkHttpClient()
+        NewPipeHttp.init(http, Locale.forLanguageTag("pt-BR"))
+        val repo = DiscoverRepository(NewPipeYouTubeSource(http), tmp.root.resolve("d.json"))
+        val rock = GenreCatalog.byId("rock")!!
+        val classics = repo.songs("classics:rock", "${rock.term} classics", 12)
+        println("classics: " + classics.take(4).joinToString { "${it.title} — ${it.artist}" })
+        assertTrue(classics.size >= 6)
+        val related = repo.related(classics.first().videoId)
+        println("because: " + related.take(4).joinToString { "${it.title} — ${it.artist}" })
+        assertTrue(related.isNotEmpty())
+        val playlists = repo.collections("playlists:rock", "${rock.term} playlist", com.villamediana.sound.online.SearchFilter.PLAYLISTS, 3)
+        println("playlists: " + playlists.joinToString { it.title })
+        assertTrue(playlists.isNotEmpty())
+        val artist = repo.artist(classics.first().artist.substringBefore(",").trim())
+        println("artist: ${artist?.title} ${artist?.url}")
+        assertTrue(artist != null)
+        val mix = DiscoverMixes.blend(listOf(classics, related), 20, 3)
+        assertTrue(mix.size >= 10 && mix.distinctBy { it.videoId }.size == mix.size)
+    }
 }

@@ -116,7 +116,20 @@ fun SettingsScreen() {
         item(key = "look") {
             Column {
                 GroupLabel(stringResource(R.string.home_settings_group_look))
-                Group { ThemeRow(s.theme, vm::setTheme) }
+                Group {
+                    SettingRow(
+                        title = stringResource(R.string.home_settings_theme),
+                        subtitle = stringResource(
+                            when (s.theme) {
+                                ThemeMode.LIGHT -> R.string.home_settings_theme_light
+                                ThemeMode.DARK -> R.string.home_settings_theme_dark
+                                ThemeMode.SYSTEM -> R.string.home_settings_theme_system
+                            },
+                        ),
+                        onClick = nav::openTheme,
+                        trailing = { Box(Modifier.size(26.dp).clip(CircleShape).background(SoundColors.Accent)) },
+                    )
+                }
             }
         }
 

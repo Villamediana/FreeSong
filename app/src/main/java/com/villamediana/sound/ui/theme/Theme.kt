@@ -99,10 +99,10 @@ val LocalBottomInset = staticCompositionLocalOf<Dp> { 0.dp }
  * bar icons. Without a mode (tests, previews) it keeps whatever palette is current.
  */
 @Composable
-fun SoundTheme(mode: ThemeMode? = null, content: @Composable () -> Unit) {
+fun SoundTheme(mode: ThemeMode? = null, accent: String? = null, content: @Composable () -> Unit) {
     val systemDark = isSystemInDarkTheme()
     if (mode != null) {
-        val palette = paletteFor(mode, systemDark)
+        val palette = paletteFor(mode, systemDark, accent)
         if (SoundColors.palette != palette) SoundColors.palette = palette
         val view = LocalView.current
         if (!view.isInEditMode) {
@@ -121,8 +121,11 @@ fun SoundTheme(mode: ThemeMode? = null, content: @Composable () -> Unit) {
     }
 }
 
-fun paletteFor(mode: ThemeMode, systemDark: Boolean): SoundPalette = when (mode) {
-    ThemeMode.LIGHT -> SoundPalettes.Light
-    ThemeMode.DARK -> SoundPalettes.Dark
-    ThemeMode.SYSTEM -> if (systemDark) SoundPalettes.Dark else SoundPalettes.Light
+fun paletteFor(mode: ThemeMode, systemDark: Boolean, accent: String? = null): SoundPalette {
+    val base = when (mode) {
+        ThemeMode.LIGHT -> SoundPalettes.Light
+        ThemeMode.DARK -> SoundPalettes.Dark
+        ThemeMode.SYSTEM -> if (systemDark) SoundPalettes.Dark else SoundPalettes.Light
+    }
+    return base.withAccent(SoundAccents.byId(accent))
 }

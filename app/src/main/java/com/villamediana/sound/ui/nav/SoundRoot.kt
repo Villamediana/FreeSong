@@ -115,7 +115,7 @@ fun SoundRoot(incoming: MutableStateFlow<Inbound?>) {
     // Full pages (video, settings, equalizer) and the genre intro: no bottom bar, no mini player.
     val entry by controller.currentBackStackEntryAsState()
     val dest = entry?.destination
-    val fullPage = dest != null && (dest.hasRoute(VideoRoute::class) || dest.hasRoute(SettingsRoute::class) || dest.hasRoute(EqualizerRoute::class))
+    val fullPage = dest != null && (dest.hasRoute(VideoRoute::class) || dest.hasRoute(SettingsRoute::class) || dest.hasRoute(EqualizerRoute::class) || dest.hasRoute(ThemeRoute::class))
     val chromeHidden = fullPage || Chrome.hideMiniPlayer
     val miniPlayerSpace by animateDpAsState(if (playback.hasMedia && !chromeHidden) Dimens.MiniPlayerHeight + 8.dp else 0.dp, label = "mini")
     val barSpace = if (chromeHidden) navBarInset else bottomBarTotal
@@ -163,6 +163,7 @@ fun SoundRoot(incoming: MutableStateFlow<Inbound?>) {
                 composable<DownloadsRoute> { Page { DownloadsScreen() } }
                 composable<SettingsRoute> { Page { SettingsScreen() } }
                 composable<EqualizerRoute> { Page { EqualizerScreen() } }
+                composable<ThemeRoute> { Page { com.villamediana.sound.ui.settings.ThemeScreen() } }
                 composable<VideoRoute> { Page { VideoScreen(it.toRoute()) } }
             }
 

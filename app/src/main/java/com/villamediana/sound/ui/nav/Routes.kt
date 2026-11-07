@@ -24,3 +24,4 @@ import kotlinx.serialization.Serializable
 /** Full-screen music video (online). */
 @Serializable data class VideoRoute(val videoId: String, val title: String? = null)
 @Serializable data object EqualizerRoute
+@Serializable data object ThemeRoute

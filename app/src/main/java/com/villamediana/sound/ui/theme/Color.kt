@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 
 /** Tokens of one theme. Screens never read this directly: they read [SoundColors]. */
 data class SoundPalette(
@@ -81,6 +82,42 @@ object SoundPalettes {
         softTop = Color(0xFF1C2030),
         softBottom = Color(0xFF14161D),
         washAlpha = 0.5f,
+    )
+}
+
+/** A highlight color the user can pick, tuned for each theme ([play] = what is playing). */
+data class AccentDef(val id: String, val light: Color, val dark: Color, val playLight: Color = light, val playDark: Color = dark)
+
+object SoundAccents {
+    val all = listOf(
+        AccentDef("blue", Color(0xFF4C6FFF), Color(0xFF7C9BFF), playLight = Color(0xFF0FA383), playDark = Color(0xFF86E8CE)),
+        AccentDef("green", Color(0xFF149E5C), Color(0xFF5FD69C)),
+        AccentDef("pink", Color(0xFFE0457B), Color(0xFFFF7AA8)),
+        AccentDef("orange", Color(0xFFEF6A1A), Color(0xFFFF9A5A)),
+        AccentDef("purple", Color(0xFF7B4DFF), Color(0xFFA88BFF)),
+        AccentDef("red", Color(0xFFE5484D), Color(0xFFFF7B7F)),
+        AccentDef("teal", Color(0xFF0E9C9C), Color(0xFF5ED8D8)),
+        AccentDef("graphite", Color(0xFF2B2E36), Color(0xFFE6E8EE)),
+    )
+
+    fun byId(id: String?): AccentDef = all.firstOrNull { it.id == id } ?: all.first()
+}
+
+/** [this] palette with [a] as its highlight color (selection, buttons, player, equalizer). */
+fun SoundPalette.withAccent(a: AccentDef): SoundPalette {
+    val c = if (isLight) a.light else a.dark
+    val play = if (isLight) a.playLight else a.playDark
+    val onDark = lerp(c, Color.Black, 0f).luminance() > 0.5f
+    return copy(
+        accent = c,
+        accentPressed = lerp(c, if (isLight) Color.Black else Color.White, 0.12f),
+        onAccent = if (onDark) Color(0xFF0E0F14) else Color.White,
+        accentSoft = c.copy(alpha = if (isLight) 0.12f else 0.16f),
+        mint = play,
+        onMint = if (play.luminance() > 0.5f) Color(0xFF0E0F14) else Color.White,
+        lyric = if (isLight) c else lyric,
+        softTop = if (isLight) lerp(Color.White, c, 0.10f) else lerp(Color(0xFF14161D), c, 0.14f),
+        softBottom = if (isLight) lerp(Color(0xFFF7F8FB), c, 0.03f) else Color(0xFF14161D),
     )
 }
 

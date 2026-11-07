@@ -32,12 +32,13 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) handle(intent)
         // First frame already in the saved theme (no flash of the other one).
         val settingsStore = SoundApplication.graph.settings
-        val initialTheme = kotlinx.coroutines.runBlocking { settingsStore.current().theme }
+        val initialSettings = kotlinx.coroutines.runBlocking { settingsStore.current() }
+        val initialTheme = initialSettings.theme
         val night = (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
-        com.villamediana.sound.ui.theme.SoundColors.palette = com.villamediana.sound.ui.theme.paletteFor(initialTheme, night)
+        com.villamediana.sound.ui.theme.SoundColors.palette = com.villamediana.sound.ui.theme.paletteFor(initialTheme, night, initialSettings.accent)
         setContent {
             val settings by settingsStore.settings.collectAsState(initial = null)
-            SoundTheme(mode = settings?.theme ?: initialTheme) {
+            SoundTheme(mode = settings?.theme ?: initialTheme, accent = settings?.accent ?: initialSettings.accent) {
                 SoundRoot(incoming = incoming)
             }
         }
