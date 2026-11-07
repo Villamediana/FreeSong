@@ -1,5 +1,11 @@
 package com.villamediana.sound.ui.video
 
+import androidx.compose.ui.test.swipeDown
+import androidx.compose.ui.test.swipeUp
+import androidx.compose.ui.test.doubleClick
+import androidx.compose.ui.test.click
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.percentOffset
 import android.app.Activity
 import android.app.Application
 import android.content.pm.ActivityInfo
@@ -17,6 +23,7 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.activity.ComponentActivity
@@ -72,6 +79,11 @@ class VideoScreenSmokeTest {
             closes += resumeMusic
             state.value = VideoState()
         }
+
+        val speeds = mutableListOf<Float>()
+        override fun setSpeed(speed: Float) {
+            speeds += speed
+        }
     }
 
     private val song = Track(id = 7, videoId = "abc123", title = "Aurora", artist = "Lua Nova", durationMs = 231_000, filePath = "/x/7.m4a")
@@ -79,11 +91,13 @@ class VideoScreenSmokeTest {
     private val musicPosition = MutableStateFlow(42_000L)
     private var leaves = 0
 
+    private var lyricsCache: com.villamediana.sound.ui.player.OnlineLyricsCache? = null
+
     private fun show(video: FakeVideo, route: VideoRoute = VideoRoute("abc123", "Aurora")): () -> Unit {
         var visible by mutableStateOf(true)
         compose.setContent {
             SoundTheme {
-                if (visible) VideoHost(route, VideoDeps(video, music, musicPosition), onLeave = { leaves++ })
+                if (visible) VideoHost(route, VideoDeps(video, music, musicPosition, lyricsCache), onLeave = { leaves++ })
             }
         }
         compose.waitForIdle()
@@ -165,6 +179,72 @@ class VideoScreenSmokeTest {
         compose.onNodeWithContentDescription("Pausar vídeo").assertIsDisplayed()
     }
 
+    /** A real (idle) player, so the stage takes jumps and holds. */
+    private fun withPlayer(video: FakeVideo): androidx.media3.exoplayer.ExoPlayer {
+        val p = compose.runOnIdle { androidx.media3.exoplayer.ExoPlayer.Builder(activity).build() }
+        compose.runOnIdle { video.player.value = p }
+        compose.waitForIdle()
+        return p
+    }
+
+    @Test fun aTapShowsTheControlsAtOnceAndASecondTapJumpsInstead() {
+        val video = FakeVideo()
+        show(video)
+        val p = withPlayer(video)
+        compose.mainClock.advanceTimeBy(OverlayState.AUTO_HIDE_MS + 800)
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Pausar vídeo").assertDoesNotExist()
+
+        // One tap: the controls are there right away, not after the double-tap wait.
+        compose.onNode(stage).performTouchInput { click(center) }
+        compose.mainClock.advanceTimeBy(80)
+        compose.onNodeWithContentDescription("Pausar vídeo").assertIsDisplayed()
+
+        // A tap pair on the right: a 10 s jump, and the controls back to how they were.
+        compose.mainClock.advanceTimeBy(OverlayState.AUTO_HIDE_MS + 800)
+        compose.waitForIdle()
+        compose.onNode(stage).performTouchInput { doubleClick(centerRight - androidx.compose.ui.geometry.Offset(40f, 0f)) }
+        compose.waitForIdle()
+        assertEquals(1, video.seeks.size)
+        compose.onNodeWithContentDescription("Pausar vídeo").assertDoesNotExist()
+        compose.runOnIdle { p.release() }
+    }
+
+    @Test fun holdingTheVideoPlaysItTwiceAsFast() {
+        val video = FakeVideo()
+        show(video)
+        val p = withPlayer(video)
+        compose.onNode(stage).performTouchInput { down(percentOffset(0.2f, 0.2f)) }
+        compose.mainClock.advanceTimeBy(900)
+        compose.waitForIdle()
+        assertEquals(listOf(2f), video.speeds)
+        compose.onNodeWithText("2×").assertExists()
+        compose.onNode(stage).performTouchInput { up() }
+        compose.waitForIdle()
+        assertEquals(listOf(2f, 1f), video.speeds)
+        compose.runOnIdle { p.release() }
+    }
+
+    @Test fun swipingTheVideoTurnsTheScreen() {
+        val video = FakeVideo()
+        show(video)
+        compose.onNode(stage).performTouchInput { swipeDown() }
+        compose.waitForIdle()
+        assertEquals(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT, activity.requestedOrientation)
+        compose.onNode(stage).performTouchInput { swipeUp() }
+        compose.waitForIdle()
+        assertEquals(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE, activity.requestedOrientation)
+    }
+
+    @Test fun upright_theLyricsAndTheSongFactsSitUnderTheVideo() {
+        lyricsCache = com.villamediana.sound.ui.player.OnlineLyricsCache({ com.villamediana.sound.online.Lyrics("[00:01.00]Una verdad sin fin\n[00:40.00]Té para tres", synced = true) })
+        val video = FakeVideo()
+        show(video)
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("Una verdad sin fin").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("DURAÇÃO").assertExists()
+        screenshot("video_portrait_lyrics")
+    }
+
     @Test fun loadingShowsTheSpinnerInsteadOfThePlayButton() {
         val video = FakeVideo()
         show(video)
@@ -207,4 +287,6 @@ class VideoScreenSmokeTest {
     }
 
     private val stageTap = SemanticsMatcher("taps the stage") { it.config.getOrNull(SemanticsActions.OnClick)?.label == "Mostrar controles" }
+    /** The video stage, controls shown or not. */
+    private val stage = SemanticsMatcher("the stage") { it.config.getOrNull(SemanticsActions.OnClick)?.label in setOf("Mostrar controles", "Ocultar controles") }
 }

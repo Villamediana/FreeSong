@@ -154,7 +154,7 @@ internal class PlayerDeps(
 )
 
 /** One lyrics cache for the whole process: reopening the player doesn't ask LRCLIB again. */
-private object PlayerLyrics {
+internal object PlayerLyrics {
     val cache: OnlineLyricsCache by lazy {
         OnlineLyricsCache({ q -> SoundApplication.graph.lyrics.find(q.title, q.artist, q.album, q.durationMs) })
     }

@@ -135,6 +135,7 @@ class YouTubeVideoPlayback internal constructor(
             // Another upload (official clip of an art track) has its own timeline: start it from 0.
             val substitute = stream.substituteVideoId != null && stream.substituteVideoId != videoId
             session?.takeIf { it.videoId == videoId }?.sameTimeline = !substitute
+            _state.value = _state.value.copy(sameTimeline = !substitute)
             player.setMediaSource(mediaSource(videoId, stream), if (substitute) 0 else startAtMs)
             player.prepare()
             player.playWhenReady = true
@@ -165,6 +166,10 @@ class YouTubeVideoPlayback internal constructor(
             }
             player.play()
         }
+    }
+
+    override fun setSpeed(speed: Float) {
+        main.launch { exo?.setPlaybackSpeed(speed) }
     }
 
     override fun seekTo(positionMs: Long) {

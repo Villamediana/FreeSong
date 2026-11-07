@@ -59,6 +59,8 @@ data class VideoState(
     val error: String? = null,
     /** width / height of the video. */
     val aspectRatio: Float = 16f / 9f,
+    /** The clip is the song's own recording (false: another upload, e.g. the official video of an art track — its timing differs). */
+    val sameTimeline: Boolean = true,
 )
 
 /**
@@ -73,4 +75,6 @@ interface VideoPlayback {
     fun togglePlayPause()
     fun seekTo(positionMs: Long)
     fun close(resumeMusic: Boolean = true)
+    /** Playback speed (2× while the stage is held). */
+    fun setSpeed(speed: Float) {}
 }

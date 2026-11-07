@@ -16,4 +16,13 @@
     <string name="video_error_title">Não deu para abrir o vídeo</string>
     <string name="video_retry">Tentar de novo</string>
     <string name="video_rotate">Girar</string>
+    <string name="video_back_10">Voltar 10 segundos</string>
+    <string name="video_forward_10">Avançar 10 segundos</string>
+    <string name="video_fullscreen">Tela cheia</string>
+    <string name="video_exit_fullscreen">Sair da tela cheia</string>
+    <string name="video_lyrics_loading">Buscando a letra…</string>
+    <string name="video_lyrics_none">Sem letra para esta música</string>
+    <string name="video_fact_album">Álbum</string>
+    <string name="video_fact_year">Ano</string>
+    <string name="video_fact_duration">Duração</string>
 </resources>

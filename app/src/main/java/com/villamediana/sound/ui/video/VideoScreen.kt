@@ -1,5 +1,37 @@
 package com.villamediana.sound.ui.video
 
+import androidx.compose.material.icons.rounded.Lyrics
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.LazyColumn
+import com.villamediana.sound.data.db.Track
+import com.villamediana.sound.data.ParsedLyrics
+import com.villamediana.sound.ui.player.rememberLyrics
+import com.villamediana.sound.ui.player.LyricsState
+import com.villamediana.sound.ui.player.LyricsQuery
+import com.villamediana.sound.ui.player.LyricsOrigin
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.animation.scaleIn
+import androidx.compose.material.icons.rounded.FastForward
+import androidx.compose.material.icons.rounded.FullscreenExit
+import androidx.compose.material.icons.rounded.Fullscreen
+import androidx.compose.material.icons.rounded.Forward10
+import androidx.compose.material.icons.rounded.Replay10
+import kotlin.math.abs
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.material.icons.rounded.ScreenRotation
 import android.content.res.Configuration
 import android.view.OrientationEventListener
@@ -117,7 +149,7 @@ import java.io.File
 fun VideoScreen(route: VideoRoute) {
     val graph = SoundApplication.graph
     val nav = navigator()
-    val deps = remember(graph) { VideoDeps(graph.video, graph.player.state, graph.player.positionMs) }
+    val deps = remember(graph) { VideoDeps(graph.video, graph.player.state, graph.player.positionMs, com.villamediana.sound.ui.player.PlayerLyrics.cache) }
     VideoHost(
         route = route,
         deps = deps,
@@ -133,6 +165,8 @@ internal class VideoDeps(
     val video: VideoPlayback,
     val music: StateFlow<PlaybackState>,
     val musicPositionMs: Flow<Long>,
+    /** Lyrics under the video (the player's LRCLIB lookups); null = none. */
+    val lyrics: com.villamediana.sound.ui.player.OnlineLyricsCache? = null,
 )
 
 /** Opens the video for this visit and closes it — music back on — exactly once on the way out. */
@@ -210,6 +244,10 @@ internal fun VideoHost(route: VideoRoute, deps: VideoDeps, onLeave: () -> Unit) 
     var pending by remember { mutableStateOf<PendingSeek?>(null) }
     var streak by remember { mutableStateOf<SeekStreak?>(null) }
     var tapPoint by remember { mutableStateOf<Offset?>(null) }
+    // Held down: 2× while the finger stays. A single tap answers at once (controls); when a second
+    // tap follows, that first tap meant a jump, not the controls — they go back to how they were.
+    var holding by remember { mutableStateOf(false) }
+    var beforeTap by remember { mutableStateOf<OverlayState?>(null) }
     val pinned = scrubbing || loading || error != null
 
     LaunchedEffect(overlay, state.playing, pinned) {
@@ -272,7 +310,37 @@ internal fun VideoHost(route: VideoRoute, deps: VideoDeps, onLeave: () -> Unit) 
             }
 
             override fun stageTap(side: SeekSide, at: Offset) {
-                if (VideoSeek.continues(streak, side, now())) seekTap(side, at) else toggleControls()
+                if (VideoSeek.continues(streak, side, now())) {
+                    seekTap(side, at)
+                    return
+                }
+                beforeTap = overlay
+                toggleControls()
+            }
+
+            override fun doubleTap(side: SeekSide, at: Offset) {
+                beforeTap?.let { overlay = it }
+                beforeTap = null
+                seekTap(side, at)
+            }
+
+            override fun hold(active: Boolean) {
+                if (holding == active) return
+                holding = active
+                if (active) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                video.setSpeed(if (active) FAST_SPEED else 1f)
+            }
+
+            override fun swipe(up: Boolean) {
+                haptic.performHapticFeedback(HapticFeedbackType.ContextClick)
+                if (up) turn.landscape() else turn.portrait()
+            }
+
+            override fun skip(forward: Boolean) {
+                val p = player ?: return
+                val side = if (forward) SeekSide.FORWARD else SeekSide.BACK
+                haptic.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                seekTo(VideoSeek.target(p.currentPosition, p.duration, side))
             }
 
             override fun retry() {
@@ -290,6 +358,19 @@ internal fun VideoHost(route: VideoRoute, deps: VideoDeps, onLeave: () -> Unit) 
 
     val title = route.title?.takeIf { it.isNotBlank() } ?: state.title?.takeIf { it.isNotBlank() } ?: track?.title.orEmpty()
     val artist = track?.artist?.takeIf { it.isNotBlank() }
+    // The song's lyrics under the video: its saved file, else LRCLIB (the player's lookups).
+    val lyricsOrigin = remember(track, title, artist) {
+        track?.lyricsPath?.takeIf { it.isNotBlank() }?.let { LyricsOrigin.File(it) }
+            ?: LyricsOrigin.Online(
+                LyricsQuery(
+                    title = track?.title ?: title,
+                    artist = track?.artist ?: artist.orEmpty(),
+                    album = track?.album?.takeIf { it.isNotBlank() },
+                    durationMs = track?.durationMs?.takeIf { it > 0 },
+                ),
+            )
+    }
+    val lyrics by rememberLyrics(lyricsOrigin, online = true, cache = deps.lyrics)
     val controlsVisible = overlay.visible || error != null
 
     BoxWithConstraints(
@@ -303,7 +384,7 @@ internal fun VideoHost(route: VideoRoute, deps: VideoDeps, onLeave: () -> Unit) 
         val portraitStage = min(maxWidth / ratio, maxHeight * 0.62f)
 
         Column(Modifier.fillMaxSize()) {
-            if (!landscape) PortraitTopBar(onBack = actions::leave, onRotate = actions::rotate)
+            if (!landscape) PortraitTopBar(onBack = actions::leave)
             // Same call site in both orientations, so the video surface survives a rotation.
             Stage(
                 player = player,
@@ -323,6 +404,7 @@ internal fun VideoHost(route: VideoRoute, deps: VideoDeps, onLeave: () -> Unit) 
                 tapPoint = tapPoint,
                 actions = actions,
                 modifier = if (landscape) Modifier.fillMaxSize() else Modifier.fillMaxWidth().height(portraitStage),
+                holding = holding,
             )
             if (!landscape) {
                 PortraitDetails(
@@ -331,6 +413,10 @@ internal fun VideoHost(route: VideoRoute, deps: VideoDeps, onLeave: () -> Unit) 
                     progress = progress,
                     pending = pending,
                     actions = actions,
+                    lyrics = lyrics,
+                    // Another upload (official clip of an art track) has its own timing: plain text then.
+                    synced = state.sameTimeline,
+                    track = track,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -350,6 +436,14 @@ internal interface StageActions {
     fun leave()
     /** Turns the video the other way (sideways ↔ upright) without turning the phone. */
     fun rotate()
+    /** The second tap of a double tap on a side: jump 10 s (the first tap's controls undone). */
+    fun doubleTap(side: SeekSide, at: Offset)
+    /** Finger held on the video: 2× until it lifts. */
+    fun hold(active: Boolean)
+    /** Swipe on the video: up = sideways (full screen), down = upright. */
+    fun swipe(up: Boolean)
+    /** The ±10 s buttons of the controls. */
+    fun skip(forward: Boolean)
 }
 
 // ------------------------------------------------------------------ stage
@@ -374,6 +468,7 @@ private fun Stage(
     tapPoint: Offset?,
     actions: StageActions,
     modifier: Modifier = Modifier,
+    holding: Boolean = false,
 ) {
     val toggleLabel = stringResource(if (controlsVisible) R.string.video_hide_controls else R.string.video_show_controls)
     val interactive = error == null
@@ -389,11 +484,7 @@ private fun Stage(
             }
             .pointerInput(interactive, player != null) {
                 if (!interactive) return@pointerInput
-                val canSeek = player != null
-                detectTapGestures(
-                    onTap = { o -> actions.stageTap(VideoSeek.sideOf(o.x, size.width.toFloat()), o) },
-                    onDoubleTap = if (canSeek) { o -> actions.seekTap(VideoSeek.sideOf(o.x, size.width.toFloat()), o) } else null,
-                )
+                stageGestures(canSeek = player != null, actions = actions)
             },
     ) {
         val coverSurface = rememberCoverSurface(player)
@@ -430,10 +521,31 @@ private fun Stage(
                                 .align(Alignment.BottomCenter)
                                 .fillMaxWidth()
                                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal))
-                                .padding(horizontal = Dimens.Gutter)
+                                .padding(start = Dimens.Gutter, end = 56.dp)
                                 .padding(bottom = 10.dp),
                         )
                     }
+                }
+                if (error == null && player != null) {
+                    // Jump buttons on both sides of play/pause, and full screen in the corner.
+                    Row(
+                        Modifier.align(Alignment.Center),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(if (landscape) 48.dp else 32.dp),
+                    ) {
+                        VideoIconButton(Icons.Rounded.Replay10, stringResource(R.string.video_back_10), { actions.skip(false) })
+                        Spacer(Modifier.size(if (landscape) 80.dp else 68.dp))
+                        VideoIconButton(Icons.Rounded.Forward10, stringResource(R.string.video_forward_10), { actions.skip(true) })
+                    }
+                    VideoIconButton(
+                        if (landscape) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen,
+                        stringResource(if (landscape) R.string.video_exit_fullscreen else R.string.video_fullscreen),
+                        actions::rotate,
+                        Modifier
+                            .align(Alignment.BottomEnd)
+                            .then(if (landscape) Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal)) else Modifier)
+                            .padding(end = 4.dp, bottom = if (landscape) 2.dp else 0.dp),
+                    )
                 }
                 if (error == null && !loading) {
                     VideoPlayPause(
@@ -448,6 +560,22 @@ private fun Stage(
         }
 
         SeekHint(streak, tapPoint)
+        // Held: a small "2×" tag up top while it lasts.
+        AnimatedVisibility(
+            visible = holding,
+            enter = fadeIn(tween(150)) + scaleIn(tween(200), initialScale = 0.85f),
+            exit = fadeOut(tween(200)),
+            modifier = Modifier.align(Alignment.TopCenter).padding(top = 16.dp),
+        ) {
+            Row(
+                Modifier.clip(CircleShape).background(Color.Black.copy(alpha = 0.6f)).padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("2×", style = MaterialTheme.typography.labelLarge, color = Color.White)
+                Spacer(Modifier.width(4.dp))
+                Icon(Icons.Rounded.FastForward, null, tint = Color.White, modifier = Modifier.size(16.dp))
+            }
+        }
         StageSpinner(loading, Modifier.align(Alignment.Center))
         if (error != null) StageError(error, compact = !landscape, onRetry = actions::retry, modifier = Modifier.align(Alignment.Center))
     }
@@ -500,9 +628,7 @@ private fun LandscapeTopBar(title: String, artist: String?, actions: StageAction
                 Text(artist, style = MaterialTheme.typography.bodyMedium, color = SoundColors.Text.copy(alpha = 0.72f), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
-        Spacer(Modifier.width(8.dp))
-        VideoIconButton(Icons.Rounded.ScreenRotation, stringResource(R.string.video_rotate), actions::rotate)
-        Spacer(Modifier.width(8.dp))
+        Spacer(Modifier.width(12.dp))
         StagePill(stringResource(R.string.video_back_to_audio), Icons.Rounded.Headphones, actions::leave)
     }
 }
@@ -542,7 +668,7 @@ private fun StageError(message: String, compact: Boolean, onRetry: () -> Unit, m
 // ------------------------------------------------------------------ portrait
 
 @Composable
-private fun PortraitTopBar(onBack: () -> Unit, onRotate: () -> Unit) {
+private fun PortraitTopBar(onBack: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -559,10 +685,14 @@ private fun PortraitTopBar(onBack: () -> Unit, onRotate: () -> Unit) {
             textAlign = TextAlign.Center,
             modifier = Modifier.weight(1f),
         )
-        VideoIconButton(Icons.Rounded.ScreenRotation, stringResource(R.string.video_rotate), onRotate)
+        Spacer(Modifier.size(48.dp))
     }
 }
 
+/**
+ * Under the video, upright: seek bar, title with "Voltar ao áudio", the lyrics following the video
+ * (synced when the clip is the song's own recording), and the song's facts.
+ */
 @Composable
 private fun PortraitDetails(
     title: String,
@@ -570,37 +700,126 @@ private fun PortraitDetails(
     progress: VideoProgress,
     pending: PendingSeek?,
     actions: StageActions,
+    lyrics: LyricsState,
+    synced: Boolean,
+    track: Track?,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = Dimens.Gutter),
-    ) {
-        Spacer(Modifier.height(14.dp))
+    Column(modifier.fillMaxWidth().padding(horizontal = Dimens.Gutter)) {
+        Spacer(Modifier.height(12.dp))
         VideoSeekBar(progress = progress, pending = pending, onSeek = actions::seekTo, onScrub = actions::scrub)
-        Spacer(Modifier.height(22.dp))
-        Text(
-            title,
-            style = MaterialTheme.typography.headlineLarge,
-            color = SoundColors.Text,
-            maxLines = 3,
-            overflow = TextOverflow.Ellipsis,
-        )
-        if (artist != null) {
-            Spacer(Modifier.height(4.dp))
-            Text(artist, style = MaterialTheme.typography.titleMedium, color = SoundColors.TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Spacer(Modifier.height(14.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.headlineSmall, color = SoundColors.Text, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                if (artist != null) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(artist, style = MaterialTheme.typography.titleMedium, color = SoundColors.TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            Spacer(Modifier.width(12.dp))
+            PillButton(text = stringResource(R.string.video_back_to_audio), onClick = actions::leave, icon = Icons.Rounded.Headphones)
         }
-        Spacer(Modifier.height(24.dp))
-        PillButton(
-            text = stringResource(R.string.video_back_to_audio),
-            onClick = actions::leave,
-            icon = Icons.Rounded.Headphones,
-        )
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(16.dp))
+        Box(
+            Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(18.dp))
+                .background(SoundColors.Surface1),
+        ) {
+            when (lyrics) {
+                is LyricsState.Ready -> VideoLyrics(lyrics.lyrics, synced = synced && lyrics.lyrics.synced, positionMs = { progress.positionMs })
+                LyricsState.Loading -> Text(
+                    stringResource(R.string.video_lyrics_loading),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = SoundColors.TextFaint,
+                    modifier = Modifier.align(Alignment.Center),
+                )
+                else -> Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Rounded.Lyrics, null, tint = SoundColors.TextFaint, modifier = Modifier.size(26.dp))
+                    Spacer(Modifier.height(8.dp))
+                    Text(stringResource(R.string.video_lyrics_none), style = MaterialTheme.typography.bodyMedium, color = SoundColors.TextFaint)
+                }
+            }
+        }
+        SongFacts(track, progress.durationMs)
         Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
     }
+}
+
+/**
+ * The lyrics in their card: synced, the line being sung is bright and kept in view; otherwise
+ * the plain text, free to scroll. Soft fades at the top and bottom edges.
+ */
+@Composable
+private fun VideoLyrics(lyrics: ParsedLyrics, synced: Boolean, positionMs: () -> Long) {
+    val list = rememberLazyListState()
+    val index by remember(lyrics, synced) { derivedStateOf { if (synced) lyrics.indexAt(positionMs()) else -1 } }
+    LaunchedEffect(index) { if (index >= 0) list.animateScrollToItem((index - 1).coerceAtLeast(0)) }
+    LazyColumn(
+        Modifier
+            .fillMaxSize()
+            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+            .drawWithContent {
+                drawContent()
+                drawRect(
+                    Brush.verticalGradient(0f to Color.Transparent, 0.08f to Color.Black, 0.88f to Color.Black, 1f to Color.Transparent),
+                    blendMode = BlendMode.DstIn,
+                )
+            },
+        state = list,
+        contentPadding = PaddingValues(vertical = 18.dp),
+    ) {
+        itemsIndexed(lyrics.lines) { i, line ->
+            val active = i == index
+            val color by animateColorAsState(
+                when {
+                    !synced -> SoundColors.TextMuted
+                    active -> SoundColors.Text
+                    i < index -> SoundColors.TextFaint
+                    else -> SoundColors.TextMuted
+                },
+                tween(300),
+                label = "line",
+            )
+            Text(
+                line.text.ifBlank { "♪" },
+                style = if (synced) MaterialTheme.typography.titleLarge else MaterialTheme.typography.bodyLarge,
+                color = color,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = if (synced) 7.dp else 3.dp),
+            )
+        }
+    }
+}
+
+/** Album, year and length under the lyrics, when known. */
+@Composable
+private fun SongFacts(track: Track?, durationMs: Long) {
+    val facts = buildList {
+        track?.album?.takeIf { it.isNotBlank() }?.let { add(stringResource(R.string.video_fact_album) to it) }
+        track?.year?.takeIf { it > 0 }?.let { add(stringResource(R.string.video_fact_year) to it.toString()) }
+        val length = durationMs.takeIf { it > 0 } ?: track?.durationMs?.takeIf { it > 0 }
+        length?.let { add(stringResource(R.string.video_fact_duration) to VideoTime.formatTotal(it)) }
+    }
+    if (facts.isEmpty()) return
+    Spacer(Modifier.height(12.dp))
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        facts.forEach { (label, value) ->
+            Column(
+                Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(SoundColors.Surface1)
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+            ) {
+                Text(label.uppercase(), style = MaterialTheme.typography.labelSmall, color = SoundColors.TextFaint, maxLines = 1)
+                Spacer(Modifier.height(2.dp))
+                Text(value, style = MaterialTheme.typography.titleSmall, color = SoundColors.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    }
+    Spacer(Modifier.height(10.dp))
 }
 
 // ------------------------------------------------------------------ player flags
@@ -719,6 +938,12 @@ internal class VideoTurn(private val activity: Activity?) {
         listener = null
     }
 
+    /** Swipe up: sideways now, then the phone decides again once it is turned. */
+    fun landscape() = lock(Want.LANDSCAPE)
+
+    /** Swipe down: upright now, then the phone decides again. */
+    fun portrait() = lock(Want.PORTRAIT)
+
     /** The rotate button: the other way from how the screen is now. */
     fun flip() {
         val host = activity ?: return
@@ -732,6 +957,67 @@ internal class VideoTurn(private val activity: Activity?) {
             Want.LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             Want.PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
             Want.FREE -> ActivityInfo.SCREEN_ORIENTATION_SENSOR
+        }
+    }
+}
+
+private const val FAST_SPEED = 2f
+
+/**
+ * Taps, double taps, holds and vertical swipes on the video, told apart by hand so a single tap
+ * answers at once (no wait for a possible second tap): tap = controls, second tap on a side =
+ * jump 10 s, held = 2× until lifted, swipe up/down = sideways/upright.
+ */
+private suspend fun PointerInputScope.stageGestures(canSeek: Boolean, actions: StageActions) {
+    val swipeMin = 56.dp.toPx()
+    awaitEachGesture {
+        val down = awaitFirstDown()
+        val slop = viewConfiguration.touchSlop
+        val deadline = down.uptimeMillis + viewConfiguration.longPressTimeoutMillis
+        var last = down.uptimeMillis
+        var dragging = false
+        var held = false
+        var dy = 0f
+        var upAt: Offset? = null
+        while (true) {
+            val event = if (!dragging && !held) {
+                withTimeoutOrNull((deadline - last).coerceAtLeast(1)) { awaitPointerEvent() }
+            } else {
+                awaitPointerEvent()
+            }
+            if (event == null) {
+                // Still down, not moving: held.
+                held = true
+                if (canSeek) actions.hold(true)
+                continue
+            }
+            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+            last = change.uptimeMillis
+            if (!change.pressed) {
+                upAt = change.position
+                break
+            }
+            val d = change.position - down.position
+            if (!dragging && !held && abs(d.y) > slop && abs(d.y) > abs(d.x)) dragging = true
+            if (dragging) {
+                dy = d.y
+                change.consume()
+            }
+        }
+        when {
+            held -> if (canSeek) actions.hold(false)
+            dragging -> if (abs(dy) >= swipeMin) actions.swipe(up = dy < 0)
+            upAt != null -> {
+                val width = size.width.toFloat()
+                actions.stageTap(VideoSeek.sideOf(upAt.x, width), upAt)
+                if (canSeek) {
+                    val second = withTimeoutOrNull(viewConfiguration.doubleTapTimeoutMillis) { awaitFirstDown() }
+                    if (second != null) {
+                        actions.doubleTap(VideoSeek.sideOf(second.position.x, width), second.position)
+                        waitForUpOrCancellation()
+                    }
+                }
+            }
         }
     }
 }

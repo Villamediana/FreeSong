@@ -1,5 +1,6 @@
 package com.villamediana.sound.ui.player
 
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -276,13 +277,20 @@ internal fun FullPlayer(
                 }
             } else {
               Box(Modifier.fillMaxWidth().height(sectionHeight)) {
-                // The music video, darkened and looping, behind the top bar and the cover.
-                ClipLayer(clip, visible, Modifier.fillMaxWidth().fillMaxHeight(0.7f))
+                // The music video looping behind the top bar; once its first frame is up the cover
+                // steps aside and the clip is the picture (the cover stays offline / without a video).
+                var clipShowing by remember { mutableStateOf(false) }
+                if (clip == null) clipShowing = false
+                ClipLayer(clip, visible, Modifier.fillMaxWidth().fillMaxHeight(0.7f), onShowing = { clipShowing = it })
                 Column(Modifier.fillMaxSize().padding(top = statusTop)) {
                     TopBar(state.source, actions, hasVideo = track.videoId != null, online = stream.online, onClip = clip != null)
                     BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                         val size = minOf(maxWidth - PlayerGutter * 2, maxHeight - 20.dp).coerceAtLeast(96.dp)
-                        CoverPager(state, track, size, maxWidth, coverScale, visible, actions.skipTo, reportCover, onOpenVideo = actions.openVideo.takeIf { clip != null })
+                        CoverPager(
+                            state, track, size, maxWidth, coverScale, visible, actions.skipTo, reportCover,
+                            onOpenVideo = actions.openVideo.takeIf { clip != null },
+                            coverHidden = clipShowing,
+                        )
                     }
                     Spacer(Modifier.height(14.dp))
                     Column(Modifier.padding(horizontal = PlayerGutter)) {
@@ -360,7 +368,10 @@ private fun CoverPager(
     onCurrentPlaced: (LayoutCoordinates) -> Unit,
     /** The song has a music video: a tap on its cover (or its "Vídeo" tag) opens it. */
     onOpenVideo: (() -> Unit)? = null,
+    /** The clip is playing behind: the current cover steps aside (fades, no shadow). */
+    coverHidden: Boolean = false,
 ) {
+    val coverAlpha by animateFloatAsState(if (coverHidden) 0f else 1f, tween(600), label = "coverAlpha")
     val inQueue = state.queueIndex in state.queue.indices
     val pages = if (inQueue) state.queue else listOf(track)
     val index = if (inQueue) state.queueIndex else 0
@@ -406,7 +417,8 @@ private fun CoverPager(
                     val s = coverScale.value
                     scaleX = s
                     scaleY = s
-                    shadowElevation = 20.dp.toPx()
+                    val fade = if (page == index) coverAlpha else 1f
+                    shadowElevation = 20.dp.toPx() * fade
                     shape = RoundedCornerShape(BigCoverCorner)
                     clip = true
                 },
@@ -416,6 +428,7 @@ private fun CoverPager(
                 t.coverPath,
                 Modifier
                     .fillMaxSize()
+                    .graphicsLayer { alpha = if (page == index) coverAlpha else 1f }
                     .then(if (openVideo != null) Modifier.clickable(onClickLabel = stringResource(R.string.sheet_video), onClick = openVideo) else Modifier),
                 seed = t.album ?: t.title,
                 shape = RectangleShape,
@@ -454,11 +467,11 @@ private fun VideoTag(onClick: () -> Unit) {
 
 /** [clip] fading in when it comes and out when it goes (the last one stays while it fades). */
 @Composable
-private fun ClipLayer(clip: Player?, visible: () -> Boolean, modifier: Modifier = Modifier) {
+private fun ClipLayer(clip: Player?, visible: () -> Boolean, modifier: Modifier = Modifier, onShowing: (Boolean) -> Unit = {}) {
     var last by remember { mutableStateOf(clip) }
     if (clip != null) last = clip
     AnimatedVisibility(visible = clip != null, enter = fadeIn(tween(600)), exit = fadeOut(tween(400)), modifier = modifier) {
-        last?.let { CanvasBackdrop(it, visible, Modifier.fillMaxSize()) }
+        last?.let { CanvasBackdrop(it, visible, Modifier.fillMaxSize(), onShowing) }
     }
 }
 
@@ -468,9 +481,12 @@ private fun ClipLayer(clip: Player?, visible: () -> Boolean, modifier: Modifier 
  */
 @OptIn(UnstableApi::class)
 @Composable
-private fun CanvasBackdrop(player: Player, visible: () -> Boolean, modifier: Modifier = Modifier) {
+private fun CanvasBackdrop(player: Player, visible: () -> Boolean, modifier: Modifier = Modifier, onShowing: (Boolean) -> Unit = {}) {
     val presentation = rememberPresentationState(player)
     val shown by animateFloatAsState(if (presentation.coverSurface) 0f else 1f, tween(700), label = "clip")
+    val showing = !presentation.coverSurface
+    LaunchedEffect(showing) { onShowing(showing) }
+    DisposableEffect(Unit) { onDispose { onShowing(false) } }
     BoxWithConstraints(
         modifier
             .clipToBounds()
@@ -480,9 +496,9 @@ private fun CanvasBackdrop(player: Player, visible: () -> Boolean, modifier: Mod
             }
             .drawWithContent {
                 drawContent()
-                drawRect(Color.Black.copy(alpha = 0.5f))
+                drawRect(Color.Black.copy(alpha = 0.3f))
                 drawRect(
-                    Brush.verticalGradient(0f to Color.Black, 0.55f to Color.Black, 1f to Color.Transparent),
+                    Brush.verticalGradient(0f to Color.Black, 0.62f to Color.Black, 1f to Color.Transparent),
                     blendMode = BlendMode.DstIn,
                 )
             },
