@@ -33,8 +33,8 @@ android {
         applicationId = "com.villamediana.sound"
         minSdk = 26
         targetSdk = 36
-        versionCode = 30
-        versionName = "1.6.2"
+        versionCode = 32
+        versionName = "1.6.4"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

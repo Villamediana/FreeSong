@@ -13,4 +13,6 @@
     <string name="eq_crossfade_off">Apagado</string>
     <string name="eq_crossfade_seconds">%d s</string>
     <string name="lyrics_translate">Traducción</string>
+    <string name="settings_player_video">Video en el reproductor</string>
+    <string name="settings_player_video_sub">Clip detrás de la portada</string>
 </resources>

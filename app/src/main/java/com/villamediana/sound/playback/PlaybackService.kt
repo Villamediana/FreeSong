@@ -123,6 +123,15 @@ class PlaybackService : MediaLibraryService() {
         streams = OnlineStreams(graph.scope, online = { hasInternet(this) }) { graph.youTube }
         artwork = ArtworkShare(this)
         player = ExoPlayer.Builder(this)
+            // The song playing is kept whole in memory (back buffer): going back in it, or seeking to
+            // a part already heard, plays at once instead of downloading that part again.
+            .setLoadControl(
+                androidx.media3.exoplayer.DefaultLoadControl.Builder()
+                    .setBackBuffer(BACK_BUFFER_MS, /* retainBackBufferFromKeyframe = */ true)
+                    .setTargetBufferBytes(TARGET_BUFFER_BYTES)
+                    .setPrioritizeTimeOverSizeThresholds(true)
+                    .build(),
+            )
             .setMediaSourceFactory(
                 DefaultMediaSourceFactory(StreamDataSources.factory(this, streams))
                     .setLoadErrorHandlingPolicy(StreamLoadErrorPolicy()),
@@ -1179,6 +1188,9 @@ class PlaybackService : MediaLibraryService() {
     }
 
     private companion object {
+        /** A long song whole (audio is ~1–2 MB a minute). */
+        const val BACK_BUFFER_MS = 20 * 60_000
+        const val TARGET_BUFFER_BYTES = 48 * 1024 * 1024
         const val TASTE_TTL_MS = 5 * 60_000L
         const val SAVE_DEBOUNCE_MS = 1_500L
         const val POSITION_SAVE_MS = 15_000L

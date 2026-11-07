@@ -236,6 +236,13 @@ private fun PlaybackGroup(s: Settings, vm: SettingsViewModel, onEqualizer: () ->
             onChange = vm::setLikeDownloads,
         )
         Hairline()
+        SwitchRow(
+            title = stringResource(R.string.settings_player_video),
+            subtitle = stringResource(R.string.settings_player_video_sub),
+            checked = s.playerVideo,
+            onChange = vm::setPlayerVideo,
+        )
+        Hairline()
         SettingRow(
             title = stringResource(R.string.home_settings_equalizer),
             subtitle = null,

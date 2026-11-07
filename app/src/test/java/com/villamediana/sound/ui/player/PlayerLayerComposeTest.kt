@@ -317,6 +317,7 @@ class PlayerLayerComposeTest {
     }
 
     private val canvas = FakeCanvas()
+    private val videoOn = MutableStateFlow(true)
 
     /** Streamed likes the player asked for (AppGraph.likeOnline in the app). */
     private val onlineLikes = mutableListOf<Pair<String, Boolean>>()
@@ -340,6 +341,7 @@ class PlayerLayerComposeTest {
             likeDownloads = likeDownloadsFlow,
             likeOnline = { r, v -> onlineLikes += r.videoId to v },
             canvas = canvas,
+            videoOn = videoOn,
         )
         compose.setContent {
             SoundTheme {
@@ -416,6 +418,17 @@ class PlayerLayerComposeTest {
         compose.waitForIdle()
         assertEquals(null, canvas.shown.last())
         compose.runOnIdle { clip.release() }
+    }
+
+    @Test
+    fun withVideoInThePlayerOffTheCoverStaysPlain() {
+        videoOn.value = false
+        setUpStreaming()
+        expand()
+        compose.waitForIdle()
+        // "Vídeo no player" off: no clip asked for, and the cover doesn't open the video.
+        assertTrue(canvas.shown.none { it != null })
+        compose.onNode(SemanticsMatcher("opens the video") { it.config.getOrNull(SemanticsActions.OnClick)?.label == "Ver vídeo" }).assertDoesNotExist()
     }
 
     @Test

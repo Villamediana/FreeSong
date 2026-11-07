@@ -188,4 +188,17 @@ internal object PlayerMath {
     private val PLAY_RIGHT = floatArrayOf(0.58f, 0.35f, 0.82f, 0.50f, 0.82f, 0.50f, 0.58f, 0.65f)
     private val PAUSE_LEFT = floatArrayOf(0.27f, 0.22f, 0.43f, 0.22f, 0.43f, 0.78f, 0.27f, 0.78f)
     private val PAUSE_RIGHT = floatArrayOf(0.57f, 0.22f, 0.73f, 0.22f, 0.73f, 0.78f, 0.57f, 0.78f)
+
+    /** How long the clip takes to dissolve into the backdrop at the end of its loop (and back at its start). */
+    const val LOOP_FADE_MS = 800L
+
+    /** 1 = the clip fully shown, 0 = dissolved: down over the loop's last moments, up over its first. */
+    fun loopFade(positionMs: Long, durationMs: Long): Float {
+        if (durationMs <= 0 || durationMs == Long.MIN_VALUE + 1) return 1f
+        val fade = minOf(LOOP_FADE_MS, durationMs / 4)
+        if (fade <= 0) return 1f
+        val p = positionMs.coerceIn(0, durationMs)
+        val f = minOf(p, durationMs - p).toFloat() / fade
+        return (f * f * (3 - 2 * f)).coerceIn(0f, 1f).let { if (f >= 1f) 1f else it }
+    }
 }

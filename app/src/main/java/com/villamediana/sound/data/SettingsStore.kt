@@ -43,6 +43,8 @@ data class Settings(
     val likeDownloads: Boolean = false,
     /** The "Início" pill (suggestions). Off, the app opens straight on the songs. */
     val showHome: Boolean = true,
+    /** The music video in the player: the clip behind the cover, a tap on it opens the video. Off = plain cover. */
+    val playerVideo: Boolean = true,
     /** Crossfade between songs, in seconds (0 = off). Set in the equalizer. */
     val crossfadeSeconds: Int = 5,
     /** Lyrics in another language show their translation under each line. */
@@ -73,6 +75,7 @@ class SettingsStore(private val context: Context) {
         val likeDownloads = booleanPreferencesKey("like_downloads")
         val showHome = booleanPreferencesKey("show_home")
         val crossfade = intPreferencesKey("crossfade_seconds")
+        val playerVideo = booleanPreferencesKey("player_video")
         val translateLyrics = booleanPreferencesKey("translate_lyrics")
         val smartDownloads = booleanPreferencesKey("smart_downloads")
         val theme = stringPreferencesKey("theme")
@@ -94,6 +97,7 @@ class SettingsStore(private val context: Context) {
             likeDownloads = p[K.likeDownloads] ?: false,
             showHome = p[K.showHome] ?: true,
             crossfadeSeconds = (p[K.crossfade] ?: 5).coerceIn(0, MAX_CROSSFADE_SECONDS),
+            playerVideo = p[K.playerVideo] ?: true,
             translateLyrics = p[K.translateLyrics] ?: true,
             smartDownloads = p[K.smartDownloads] ?: false,
             theme = p[K.theme]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() } ?: ThemeMode.DARK,
@@ -122,6 +126,7 @@ class SettingsStore(private val context: Context) {
     suspend fun setPlayOnlineByDefault(v: Boolean) = context.dataStore.edit { it[K.playOnline] = v }
     suspend fun setLikeDownloads(v: Boolean) = context.dataStore.edit { it[K.likeDownloads] = v }
     suspend fun setShowHome(v: Boolean) = context.dataStore.edit { it[K.showHome] = v }
+    suspend fun setPlayerVideo(v: Boolean) = context.dataStore.edit { it[K.playerVideo] = v }
     suspend fun setCrossfadeSeconds(v: Int) = context.dataStore.edit { it[K.crossfade] = v.coerceIn(0, MAX_CROSSFADE_SECONDS) }
     suspend fun setTranslateLyrics(v: Boolean) = context.dataStore.edit { it[K.translateLyrics] = v }
     suspend fun setSmartDownloads(v: Boolean) = context.dataStore.edit { it[K.smartDownloads] = v }

@@ -13,4 +13,6 @@
     <string name="eq_crossfade_off">Desligado</string>
     <string name="eq_crossfade_seconds">%d s</string>
     <string name="lyrics_translate">Tradução</string>
+    <string name="settings_player_video">Vídeo no player</string>
+    <string name="settings_player_video_sub">Clipe atrás da capa</string>
 </resources>

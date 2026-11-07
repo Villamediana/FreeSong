@@ -1,5 +1,8 @@
 package com.villamediana.sound.ui.player
 
+import androidx.compose.runtime.withFrameMillis
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.animation.core.animateFloatAsState
@@ -281,9 +284,17 @@ internal fun FullPlayer(
               Box(Modifier.fillMaxWidth().height(sectionHeight)) {
                 // The music video looping behind the top bar; once its first frame is up the cover
                 // steps aside and the clip is the picture (the cover stays offline / without a video).
-                var clipShowing by remember { mutableStateOf(false) }
-                if (clip == null) clipShowing = false
-                ClipLayer(clip, visible, { wash.value }, playerHeight, Modifier.fillMaxWidth().fillMaxHeight(0.66f), onShowing = { clipShowing = it })
+                // The clip reports whether its frames are up; the cover hides whenever a clip is on and
+                // showing. Derived, not reset: coming back from the background, a clip that kept its
+                // frames hides the cover again (it doesn't report a change, so a reset would stick).
+                var clipFramesUp by remember { mutableStateOf(false) }
+                // Once a song's clip has shown, its cover stays aside whenever the clip is on (reopening
+                // the player, coming back to the app): no cover blinking while the clip finds its frames.
+                LaunchedEffect(clip, clipFramesUp, track.videoId) {
+                    if (clip != null && clipFramesUp) track.videoId?.let(ClipMemory.shown::add)
+                }
+                val clipShowing = clip != null && (clipFramesUp || track.videoId in ClipMemory.shown)
+                ClipLayer(clip, visible, { wash.value }, playerHeight, Modifier.fillMaxWidth().fillMaxHeight(0.66f), onShowing = { clipFramesUp = it })
                 Column(Modifier.fillMaxSize().padding(top = statusTop)) {
                     TopBar(state.source, actions, hasVideo = track.videoId != null, online = stream.online, onClip = clip != null)
                     BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -373,7 +384,10 @@ private fun CoverPager(
     /** The clip is playing behind: the current cover steps aside (fades, no shadow). */
     coverHidden: Boolean = false,
 ) {
-    val coverAlpha by animateFloatAsState(if (coverHidden) 0f else 1f, tween(600), label = "coverAlpha")
+    // The cover lands (the flying cover hands over) and only then steps aside for the clip: one
+    // smooth fade every time, never a cover that blinks in and out.
+    val landed by remember { derivedStateOf { visible() } }
+    val coverAlpha by animateFloatAsState(if (coverHidden && landed) 0f else 1f, tween(600), label = "coverAlpha")
     val inQueue = state.queueIndex in state.queue.indices
     val pages = if (inQueue) state.queue else listOf(track)
     val index = if (inQueue) state.queueIndex else 0
@@ -472,6 +486,24 @@ private fun CanvasBackdrop(
     val showing = !presentation.coverSurface
     LaunchedEffect(showing) { onShowing(showing) }
     DisposableEffect(Unit) { onDispose { onShowing(false) } }
+    // The loop never cuts: near its end the clip dissolves into the backdrop and comes back
+    // from it as it starts over.
+    var loopFade by remember { mutableFloatStateOf(1f) }
+    var clipPlaying by remember(player) { mutableStateOf(player.isPlaying) }
+    DisposableEffect(player) {
+        val listener = object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) { clipPlaying = isPlaying }
+        }
+        player.addListener(listener)
+        onDispose { player.removeListener(listener) }
+    }
+    // Follows the loop frame by frame only while the clip plays (no frames asked for when it is still).
+    LaunchedEffect(player, clipPlaying) {
+        while (clipPlaying) {
+            withFrameMillis { }
+            loopFade = PlayerMath.loopFade(player.currentPosition, player.duration)
+        }
+    }
     // Painted over the video (a TextureView ignores layer alpha and masks): darkened, then the
     // player's very own backdrop — its color and the cover's veil, as PlayerLayer paints them —
     // drawn in a layer of its own and masked in from the middle down, so where the clip ends it is
@@ -501,7 +533,7 @@ private fun CanvasBackdrop(
                     blendMode = BlendMode.DstIn,
                 )
                 canvas.restore()
-                val hide = 1f - shown * (if (visible()) 1f else 0f)
+                val hide = 1f - shown * loopFade * (if (visible()) 1f else 0f)
                 if (hide > 0f) {
                     drawRect(bg, alpha = hide)
                     drawRect(veil, alpha = hide)
@@ -768,3 +800,8 @@ private fun Modifier.fadedEdges(edge: Float = 0.1f): Modifier = this
             blendMode = BlendMode.DstIn,
         )
     }
+
+/** Songs whose clip has been seen this session: their cover stays aside while the clip is on. */
+internal object ClipMemory {
+    val shown = androidx.compose.runtime.mutableStateSetOf<String>()
+}

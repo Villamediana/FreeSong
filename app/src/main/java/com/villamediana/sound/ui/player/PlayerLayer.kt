@@ -151,6 +151,8 @@ internal class PlayerDeps(
     val downloadWait: Flow<DownloadWait> = flowOf(DownloadWait.NONE),
     /** The silent clip looping behind the cover; null = none (tests, no video support). */
     val canvas: PlayerCanvas? = null,
+    /** "Vídeo no player" (Settings): off, the plain cover — no clip, no video from the cover. */
+    val videoOn: Flow<Boolean> = flowOf(true),
 )
 
 /** One lyrics cache for the whole process: reopening the player doesn't ask LRCLIB again. */
@@ -189,6 +191,7 @@ fun PlayerLayer(
             likeOnline = graph::likeOnline,
             downloadWait = graph.downloads.wait,
             canvas = graph.canvas,
+            videoOn = graph.settings.settings.map { it.playerVideo }.distinctUntilChanged(),
         )
     }
     PlayerHost(deps, bottomBarHeight, modifier, expandedMemory, active)
@@ -402,7 +405,8 @@ internal fun PlayerHost(
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val lifeState by lifecycle.currentStateFlow.collectAsState()
     val canvas = deps.canvas
-    val canvasOn = canvas != null && expandedNow && active && online && !lyricsOpen &&
+    val videoOn by deps.videoOn.collectAsState(initial = false)
+    val canvasOn = canvas != null && videoOn && expandedNow && active && online && !lyricsOpen &&
         track.videoId != null && lifeState.isAtLeast(Lifecycle.State.RESUMED)
     LaunchedEffect(canvas, canvasOn, track.videoId) { canvas?.show(if (canvasOn) track.videoId else null) }
     DisposableEffect(canvas) { onDispose { canvas?.show(null) } }
