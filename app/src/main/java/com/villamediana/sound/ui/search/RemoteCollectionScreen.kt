@@ -481,13 +481,9 @@ private fun RemoteHeader(
             } else {
                 val playable = !tracks.isNullOrEmpty()
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.weight(1f)) {
-                        // With Play beside it, downloading is the quiet (outlined) action: one accent per screen.
-                        // Artists and playlists have none: their songs are downloaded one by one (heart / arrow).
-                        if (kind == CollectionKind.ALBUM) PrimaryActionView(kind, action, onDownloadAll, onOpenLibrary, onOpenDownloads, filled = !playable)
-                    }
+                    // No "Baixar tudo": songs are kept one by one (heart / arrow on each row).
+                    Spacer(Modifier.weight(1f))
                     if (playable) {
-                        Spacer(Modifier.width(12.dp))
                         val playing = here?.playing == true
                         PageShuffleButton(
                             active = here?.shuffle == true,
@@ -507,17 +503,6 @@ private fun RemoteHeader(
                 }
             }
 
-            val onPhone = (action as? PrimaryAction.Download)?.takeIf { it.partial && kind == CollectionKind.ALBUM }?.let { it.total - it.remaining }
-            if (onPhone != null) {
-                Spacer(Modifier.height(10.dp))
-                Text(
-                    pluralStringResource(R.plurals.search_remote_on_phone, onPhone, onPhone),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = SoundColors.TextMuted,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                    textAlign = TextAlign.Center,
-                )
-            }
             if (progress.failed > 0 && progress.active == 0 && action !is PrimaryAction.Enqueuing) {
                 Spacer(Modifier.height(10.dp))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
@@ -534,45 +519,6 @@ private fun RemoteHeader(
                 }
             }
             Spacer(Modifier.height(14.dp))
-        }
-    }
-}
-
-@Composable
-private fun PrimaryActionView(
-    kind: CollectionKind,
-    action: PrimaryAction,
-    onDownloadAll: () -> Unit,
-    onOpenLibrary: () -> Unit,
-    onOpenDownloads: () -> Unit,
-    filled: Boolean,
-) {
-    AnimatedContent(
-        targetState = action,
-        contentKey = { it::class },
-        transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(140)) },
-        label = "primaryAction",
-    ) { a ->
-        when (a) {
-            PrimaryAction.Hidden -> Spacer(Modifier.height(0.dp))
-            PrimaryAction.Enqueuing -> ProgressPill(stringResource(R.string.search_remote_enqueuing), fraction = null)
-            is PrimaryAction.Download -> BigButton(
-                text = when {
-                    a.partial -> pluralStringResource(R.plurals.search_remote_download_rest, a.remaining, a.remaining)
-                    else -> stringResource(R.string.search_remote_download_all)
-                },
-                onClick = onDownloadAll,
-                icon = Icons.Rounded.Download,
-                filled = filled,
-                compact = !filled,
-            )
-            PrimaryAction.SavePlaylist -> BigButton(stringResource(R.string.search_remote_save_playlist), onDownloadAll, icon = Icons.AutoMirrored.Rounded.PlaylistAdd, filled = filled, compact = !filled)
-            is PrimaryAction.Progress -> {
-                // The live numbers come from the latest action, not the one the transition captured.
-                val live = action as? PrimaryAction.Progress ?: a
-                ProgressPill(stringResource(R.string.search_remote_progress, live.done, live.total), live.fraction, onClick = onOpenDownloads)
-            }
-            PrimaryAction.InLibrary -> BigButton(stringResource(R.string.search_remote_in_library), onOpenLibrary, icon = Icons.Rounded.CheckCircle, filled = false, compact = !filled)
         }
     }
 }

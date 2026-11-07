@@ -271,6 +271,19 @@ class SearchScreensSmokeTest {
     }
 
     @Test
+    fun remoteAlbumPageHasNoDownloadAll() {
+        val url = "https://music.youtube.com/browse/MPREb_signos"
+        youTube.onCollection = { u, kind -> CollectionDetail(RemoteCollection(kind, u, "Signos", "Soda Stereo", itemCount = 2), listOf(remoteTrack("aaaaaaaaaaa", "Persiana Americana"), remoteTrack("bbbbbbbbbbb", "Signos"))) }
+        val route = RemoteCollectionRoute(url, CollectionKind.ALBUM.name, "Signos", "Soda Stereo")
+        harness.put(RemoteCollectionViewModel(route, youTube, library, downloads, player, online, true), key = "remote:${route.kind}:${route.url}")
+        harness.show { RemoteCollectionScreen(route) }
+        rule.waitUntil(20_000) { rule.onAllNodes(hasText("Persiana Americana")).fetchSemanticsNodes().isNotEmpty() }
+        rule.onNodeWithText(s(R.string.search_remote_download_all)).assertDoesNotExist()
+        rule.onNodeWithContentDescription(s(R.string.search_remote_play)).assertExists()
+        harness.screenshot("remote_album")
+    }
+
+    @Test
     fun remoteArtistPage() {
         val url = "https://music.youtube.com/channel/UC1"
         youTube.onCollection = { u, kind ->
