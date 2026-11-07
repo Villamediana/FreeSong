@@ -1,5 +1,9 @@
 package com.villamediana.sound.ui.components
 
+import com.villamediana.sound.R
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -26,7 +30,7 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.villamediana.sound.ui.theme.SoundColors
 
-/** Bar heights of the Sound mark (same as res/drawable/ic_launcher_foreground.xml). */
+/** Bar heights of the sound-bars glyph (placeholders, hero card). */
 private val MarkBars = floatArrayOf(0.40f, 0.74f, 1.0f, 0.62f, 0.30f)
 
 /** Just the sound-wave bars, [color] on transparent. */
@@ -45,26 +49,25 @@ fun SoundBars(modifier: Modifier = Modifier, color: Color = SoundColors.Mint) {
     }
 }
 
-/** The app mark: mint sound bars on a royal-blue tile. */
+/** The app mark: the FreeSong icon (headphones with wings on graphite). */
 @Composable
 fun SoundMark(modifier: Modifier = Modifier, size: Dp = 30.dp) {
-    Box(
-        modifier.size(size).clip(RoundedCornerShape(size * 0.27f)).background(SoundColors.BrandRoyal),
-        contentAlignment = Alignment.Center,
-    ) {
-        SoundBars(Modifier.size(size * 0.56f), SoundColors.BrandMint)
-    }
+    Image(
+        painterResource(R.drawable.freesong_mark),
+        contentDescription = null,
+        modifier = modifier.size(size).clip(RoundedCornerShape(size * 0.23f)),
+    )
 }
 
-/** Mark + "Sound" wordmark (the Home header). */
+/** Mark + "FreeSong" wordmark (the main header). */
 @Composable
 fun SoundWordmark(modifier: Modifier = Modifier, markSize: Dp = 34.dp) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
         SoundMark(size = markSize)
         Spacer(Modifier.width(10.dp))
         Text(
-            "Sound",
-            style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.01).em, fontSize = 29.sp),
+            stringResource(R.string.app_name),
+            style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.01).em, fontSize = 28.sp),
             color = SoundColors.Text,
         )
     }

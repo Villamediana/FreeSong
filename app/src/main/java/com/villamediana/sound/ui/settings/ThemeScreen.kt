@@ -169,7 +169,7 @@ private fun ThemePreview(modifier: Modifier = Modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             SoundMark(size = 22.dp)
             Spacer(Modifier.width(6.dp))
-            Text("Sound", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold, fontSize = 17.sp), color = SoundColors.Text, modifier = Modifier.weight(1f))
+            Text(stringResource(R.string.app_name), style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold, fontSize = 17.sp), color = SoundColors.Text, modifier = Modifier.weight(1f))
             Icon(Icons.Rounded.Search, null, tint = SoundColors.Text, modifier = Modifier.size(17.dp))
             Spacer(Modifier.width(10.dp))
             Icon(Icons.Rounded.Settings, null, tint = SoundColors.Text, modifier = Modifier.size(17.dp))
