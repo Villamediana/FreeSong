@@ -1,5 +1,7 @@
 package com.villamediana.sound.ui.nav
 
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.animation.core.tween
 import androidx.navigation.NavDestination
 import android.Manifest
@@ -213,10 +215,11 @@ internal fun BottomBar(navigator: Navigator, modifier: Modifier = Modifier) {
     Column(
         modifier
             .fillMaxWidth()
-            .background(Brush.verticalGradient(0f to SoundColors.Ink.copy(alpha = 0f), 0.38f to SoundColors.Ink.copy(alpha = 0.92f), 1f to SoundColors.Ink)),
+            // A defined bar: solid surface with a hairline on top (no fade showing the page through).
+            .background(SoundColors.Surface2)
+            .drawBehind { drawLine(SoundColors.Hairline, Offset(0f, 0f), Offset(size.width, 0f), strokeWidth = 1.dp.toPx()) },
     ) {
-        Spacer(Modifier.height(18.dp))
-        Row(Modifier.fillMaxWidth().height(Dimens.BottomBarHeight - 18.dp).selectableGroup(), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().height(Dimens.BottomBarHeight).selectableGroup(), verticalAlignment = Alignment.CenterVertically) {
             tabs.forEach { tab ->
                 val selected = tab.route == currentTab
                 Column(

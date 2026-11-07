@@ -167,7 +167,7 @@ fun PlayerLayer(bottomBarHeight: Dp, modifier: Modifier = Modifier) {
 }
 
 /** How far the mini card sinks into the bottom bar's faded top edge. */
-private val MiniDockOverlap = 6.dp
+private val MiniDockOverlap = (-6).dp
 
 /** Mini content is gone (not placed) past this expand progress. */
 private const val MINI_FADE_END = 0.16f
