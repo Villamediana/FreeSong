@@ -23,8 +23,12 @@ import com.villamediana.sound.online.YouTubeSource
 import com.villamediana.sound.playback.PlaySource
 import com.villamediana.sound.playback.PlayerConnection
 import com.villamediana.sound.ui.nav.RemoteCollectionRoute
+import com.villamediana.sound.ui.nav.RemoteFind
+import com.villamediana.sound.discover.DiscoverRepository
+import com.villamediana.sound.online.RemoteCollection
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -64,6 +68,8 @@ data class HerePlaying(val playing: Boolean, val shuffle: Boolean, val loading: 
 sealed interface RemoteEvent {
     data class Open(val destination: LocalDestination) : RemoteEvent
     data class Message(@StringRes val text: Int) : RemoteEvent
+    /** A song left the page (imported playlist): "Desfazer" puts it back. */
+    data class Removed(val title: String, val undo: () -> Unit) : RemoteEvent
 }
 
 internal fun Throwable.toRemoteError(online: Boolean): RemoteError = when {
@@ -110,14 +116,19 @@ class RemoteCollectionViewModel(
     val nowPlaying: StateFlow<NowPlaying?> = player.state.nowPlaying()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    /** Whether the player is on this page (played online from here), and whether it sounds. */
-    val here: StateFlow<HerePlaying?> = player.state
-        .map { s -> if (s.current != null && s.source?.id == route.url) HerePlaying(s.isPlaying || s.isBuffering, s.shuffle, s.isBuffering) else null }
-        .distinctUntilChanged()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
-
     private val _load = MutableStateFlow<RemoteLoad>(RemoteLoad.Loading)
     val load: StateFlow<RemoteLoad> = _load
+
+    /** The page's url: the one found when it was opened by name (artist / album of the player). */
+    private fun pageUrl(load: RemoteLoad = _load.value): String =
+        if (RemoteFind.isFind(route.url)) (load as? RemoteLoad.Loaded)?.detail?.collection?.url ?: route.url else route.url
+
+    /** Whether the player is on this page (played online from here), and whether it sounds. */
+    val here: StateFlow<HerePlaying?> = combine(player.state, _load) { s, load ->
+        if (s.current != null && s.source?.id == pageUrl(load)) HerePlaying(s.isPlaying || s.isBuffering, s.shuffle, s.isBuffering) else null
+    }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /** Waiting for the queue to take a "Baixar tudo". */
     var enqueuing by mutableStateOf(false)
@@ -198,6 +209,25 @@ class RemoteCollectionViewModel(
                 }
                 .onFailure { e -> _load.value = RemoteLoad.Failed(e.toRemoteError(online.value)) }
         }
+    }
+
+    /** A playlist imported from Spotify is yours: its songs come out with a swipe. */
+    val canRemoveSongs: Boolean = SpotifyLinks.isImported(route.url)
+
+    /** Takes the song at [index] out of the imported playlist; the message offers "Desfazer". */
+    fun removeSong(index: Int, track: RemoteTrack) {
+        val d = detail ?: return
+        if (!canRemoveSongs || d.tracks.getOrNull(index)?.videoId != track.videoId) return
+        _load.value = RemoteLoad.Loaded(d.copy(tracks = d.tracks.toMutableList().apply { removeAt(index) }))
+        viewModelScope.launch(NonCancellable) { attempt { library.removeFromImported(route.url, index, track.videoId) } }
+        _events.trySend(RemoteEvent.Removed(track.title) { putBack(index, track) })
+    }
+
+    private fun putBack(index: Int, track: RemoteTrack) {
+        val d = detail ?: return
+        if (d.tracks.any { it.videoId == track.videoId }) return
+        _load.value = RemoteLoad.Loaded(d.copy(tracks = d.tracks.toMutableList().apply { add(index.coerceIn(0, size), track) }))
+        viewModelScope.launch(NonCancellable) { attempt { library.putBackInImported(route.url, track, index) } }
     }
 
     /** "Baixar tudo" / "Baixar N restantes" / "Salvar playlist". */
@@ -329,7 +359,7 @@ class RemoteCollectionViewModel(
     /** The page's songs, once each (the same video twice would be the same transient song). */
     private fun pageTracks(): List<RemoteTrack> = detail?.tracks?.distinctBy { it.videoId }.orEmpty()
 
-    private fun source(): PlaySource = PlaySource(sourceType(), detail?.collection?.title?.ifBlank { null } ?: route.title, route.url)
+    private fun source(): PlaySource = PlaySource(sourceType(), detail?.collection?.title?.ifBlank { null } ?: route.title, pageUrl())
 
     private fun sourceType(): PlaySource.Type = when (kind) {
         CollectionKind.ALBUM -> PlaySource.Type.ALBUM
@@ -425,10 +455,22 @@ class RemoteCollectionViewModel(
                 onRemoveDownload = g::removeDownload,
                 loader = if (SpotifyLinks.isImported(route.url)) {
                     { url, _ -> g.library.importedDetail(url) ?: throw OnlineException("Imported playlist removed", kind = OnlineException.Kind.NOT_FOUND) }
+                } else if (RemoteFind.isFind(route.url)) {
+                    { _, k -> g.youTube.collection(findPage(route, k, g.discover).url, k) }
                 } else {
                     { url, k -> g.youTube.collection(url, k) }
                 },
             )
         }
     }
+}
+
+/** The real page behind a route opened by name; "not found" when YouTube Music has none. */
+internal suspend fun findPage(route: RemoteCollectionRoute, kind: CollectionKind, discover: DiscoverRepository): RemoteCollection {
+    val page = when (kind) {
+        CollectionKind.ARTIST -> discover.findArtist(route.title)
+        CollectionKind.ALBUM -> discover.findAlbum(route.title, route.author.orEmpty())
+        CollectionKind.PLAYLIST -> null
+    }
+    return page ?: throw OnlineException("No ${kind.name.lowercase()} named ${route.title}", kind = OnlineException.Kind.NOT_FOUND)
 }

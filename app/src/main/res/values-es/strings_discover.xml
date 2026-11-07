@@ -28,7 +28,6 @@
     <string name="discover_offline">Sin conexión. Mostrando las últimas sugerencias.</string>
     <string name="discover_selected">Seleccionado</string>
     <string name="discover_because">Porque escuchaste %1$s</string>
-    <string name="discover_artists">Artistas para ti</string>
     <string name="discover_playlists">Playlists para ti</string>
     <string name="discover_edit_genres">Editar géneros</string>
     <string name="discover_pick_genres">Elegir géneros</string>

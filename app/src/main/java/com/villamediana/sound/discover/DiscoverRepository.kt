@@ -23,12 +23,15 @@ import java.io.File
  * Live suggestions for the Home: genre covers for the picker, and any list of songs or
  * playlists the Home shows (genre shelves, mixes, trending, "porque você ouviu…"). Everything is
  * cached on disk — covers for a week, lists for their 6-hour slot — so the Home opens instantly,
- * changes through the day and still shows the last lists offline.
+ * changes through the day and still shows the last lists offline. Genre shelves and playlists are
+ * drawn from a pool per genre, a new draw each session.
  */
 class DiscoverRepository(
     private val youTube: YouTubeSource,
     private val file: File,
     private val clock: () -> Long = System::currentTimeMillis,
+    /** Varies the Home's draws from one app start to the next. */
+    private val session: Long = kotlin.random.Random.nextLong(),
 ) {
     @Serializable
     private data class Song(
@@ -120,7 +123,8 @@ class DiscoverRepository(
 
     /** "Up next" radio of a song (YouTube Music), cached per song and slot. */
     suspend fun related(videoId: String, size: Int = SHELF_SIZE): List<RemoteTrack> =
-        cachedOrFetch("related:$videoId", false, { it.songs.map { s -> s.toRemote() } }) {
+        // Kept per size: a short radio saved for the Home must not cut a longer one asked later.
+        cachedOrFetch(if (size == SHELF_SIZE) "related:$videoId" else "related:$videoId:$size", false, { it.songs.map { s -> s.toRemote() } }) {
             val list = gate.withPermit { youTube.related(videoId, size + 4) }
                 .filter { it.videoId != videoId && (it.durationMs ?: 0L) <= MAX_SONG_MS }
                 .distinctBy { it.videoId }.take(size)
@@ -150,29 +154,34 @@ class DiscoverRepository(
         }
 
     /** The page of an artist by name (searched once, then kept). */
-    suspend fun artist(name: String): RemoteCollection? {
+    suspend fun artist(name: String): RemoteCollection? = runCatching { findArtist(name) }.getOrNull()
+
+    /** Like [artist], but a failed search throws: a page can tell "offline / try again" from "not found". */
+    suspend fun findArtist(name: String): RemoteCollection? {
         val k = name.trim().lowercase()
+        if (k.isEmpty()) return null
         lock.withLock { load() }.artists[k]?.toRemote()?.let { return it }
-        val found = runCatching {
-            gate.withPermit { youTube.search(name, SearchFilter.ARTISTS).items }
-                .filterIsInstance<SearchItem.Collection>().map { it.collection }
-                .firstOrNull { it.kind == CollectionKind.ARTIST }
-        }.getOrNull() ?: return null
+        val found = gate.withPermit { youTube.search(name, SearchFilter.ARTISTS).items }
+            .filterIsInstance<SearchItem.Collection>().map { it.collection }
+            .firstOrNull { it.kind == CollectionKind.ARTIST } ?: return null
         update { it.copy(artists = it.artists + (k to found.toCol())) }
         return found
     }
 
     /** The online page of [album] by [artist] (YouTube Music), or null when no album has that name. */
-    suspend fun album(album: String, artist: String): RemoteCollection? {
+    suspend fun album(album: String, artist: String): RemoteCollection? = runCatching { findAlbum(album, artist) }.getOrNull()
+
+    /**
+     * Like [album], but a failed search throws. An album credited to [artist] wins over one that
+     * only shares the name; with [sameArtist] only those count.
+     */
+    suspend fun findAlbum(album: String, artist: String, sameArtist: Boolean = false): RemoteCollection? {
         val want = com.villamediana.sound.online.CoverMatch.key(album)
         if (want.isEmpty()) return null
-        val found = runCatching {
-            gate.withPermit { youTube.search("$album $artist".trim(), SearchFilter.ALBUMS).items }
-                .filterIsInstance<SearchItem.Collection>().map { it.collection }
-                .filter { it.kind == CollectionKind.ALBUM }
-        }.getOrNull().orEmpty()
-        return found.firstOrNull { com.villamediana.sound.online.CoverMatch.key(it.title) == want }
-            ?: found.firstOrNull { val k = com.villamediana.sound.online.CoverMatch.key(it.title); k.startsWith(want) || want.startsWith(k) }
+        val found = gate.withPermit { youTube.search("$album $artist".trim(), SearchFilter.ALBUMS).items }
+            .filterIsInstance<SearchItem.Collection>().map { it.collection }
+            .filter { it.kind == CollectionKind.ALBUM }
+        return AlbumPick.best(found, album, artist, sameArtist)
     }
 
     /** What is cached under [key] right now, without the network (instant first paint). */
@@ -180,14 +189,74 @@ class DiscoverRepository(
 
     suspend fun cachedCollections(key: String): List<RemoteCollection> = lock.withLock { load() }.lists[key]?.cols.orEmpty().mapNotNull { it.toRemote() }
 
-    // ------------------------------------------------------------------ genre shelves (kept API)
+    // ------------------------------------------------------------------ genre shelves and playlists
 
-    suspend fun shelf(genre: GenreDef, force: Boolean = false): List<RemoteTrack> =
-        songs(shelfKey(genre), GenreCatalog.liveQuery(genre, slot()), SHELF_SIZE, force)
+    /**
+     * A genre's shelf ("Rock pra você"), drawn fresh from the genre's pool: every 6-hour slot
+     * searches the genre in two wordings and adds what it finds to the pool (the newest
+     * [POOL_SONGS] kept); every session — opening the app, or half an hour later — draws another
+     * shelf from it, half from this slot's songs and half from the earlier ones. It changes often
+     * and stays in the genre. Offline: drawn from what is cached.
+     */
+    suspend fun shelf(genre: GenreDef, force: Boolean = false): List<RemoteTrack> {
+        val fresh = cachedOrFetch(shelfKey(genre), force, { it.songs.map { s -> s.toRemote() } }) {
+            val found = coroutineScope {
+                GenreCatalog.liveQueries(genre, slot()).map { q -> async { runCatching { gate.withPermit { searchSongs(q, SHELF_FETCH) } }.getOrDefault(emptyList()) } }.awaitAll()
+            }
+            Entry(slot(), songs = found.flatten().distinctBy { it.videoId })
+        }
+        val pool = poolSongs("pool:" + genre.id, fresh)
+        return draw(fresh, pool, SHELF_SIZE, "shelf:" + genre.id) { it.videoId }
+    }
 
     suspend fun cachedShelf(genre: GenreDef): List<RemoteTrack> = cachedSongs(shelfKey(genre))
 
     private fun shelfKey(genre: GenreDef) = "shelf:" + genre.id
+
+    /** "Playlists pra você" of a genre: drawn from its pool like [shelf], with the wording rotating each slot. */
+    suspend fun playlists(genre: GenreDef, size: Int = 3, force: Boolean = false): List<RemoteCollection> {
+        val fresh = cachedOrFetch("playlists:" + genre.id, force, { it.cols.mapNotNull { c -> c.toRemote() } }) {
+            val found = gate.withPermit { youTube.search(GenreCatalog.playlistQuery(genre, slot()), SearchFilter.PLAYLISTS).items }
+                .filterIsInstance<SearchItem.Collection>().map { it.collection }
+                .filter { it.kind == CollectionKind.PLAYLIST }
+                .distinctBy { it.url }.take(PLAYLIST_FETCH)
+            Entry(slot(), cols = found.map { it.toCol() })
+        }
+        val pool = poolCols("plpool:" + genre.id, fresh)
+        return draw(fresh, pool, size, "playlists:" + genre.id) { it.url }
+    }
+
+    private suspend fun poolSongs(key: String, fresh: List<RemoteTrack>): List<RemoteTrack> {
+        val current = lock.withLock { load() }.lists[key]?.songs.orEmpty()
+        val merged = (fresh.map { it.toSong() } + current).distinctBy { it.videoId }.take(POOL_SONGS)
+        if (merged != current) update { it.copy(lists = it.lists + (key to Entry(slot(), songs = merged))) }
+        return merged.map { it.toRemote() }
+    }
+
+    private suspend fun poolCols(key: String, fresh: List<RemoteCollection>): List<RemoteCollection> {
+        val current = lock.withLock { load() }.lists[key]?.cols.orEmpty()
+        val merged = (fresh.map { it.toCol() } + current).distinctBy { it.url }.take(POOL_COLS)
+        if (merged != current) update { it.copy(lists = it.lists + (key to Entry(slot(), cols = merged))) }
+        return merged.mapNotNull { it.toRemote() }
+    }
+
+    /** Pulled down to refresh: the next draws are new ones, even with nothing new from the network. */
+    fun reshuffle() {
+        draws++
+    }
+
+    @Volatile private var draws = 0L
+
+    /** [size] items: half from [fresh], the rest from the [pool] around it, mixed — another draw each session. */
+    private fun <T> draw(fresh: List<T>, pool: List<T>, size: Int, key: String, id: (T) -> String): List<T> {
+        val rnd = kotlin.random.Random(session * 31 + (clock() / SESSION_MS) * 17 + draws * 1_000_003 + key.hashCode())
+        val freshIds = fresh.mapTo(HashSet(), id)
+        val now = fresh.shuffled(rnd).take((size + 1) / 2)
+        val before = pool.filter { id(it) !in freshIds }.shuffled(rnd).take(size - now.size)
+        // A pool still young (the first slot): the rest from this slot too.
+        val fill = fresh.filter { it !in now }.shuffled(rnd).take(size - now.size - before.size)
+        return (now + before + fill).shuffled(rnd)
+    }
 
     // ------------------------------------------------------------------ internals
 
@@ -219,6 +288,13 @@ class DiscoverRepository(
     private companion object {
         const val WEEK_MS = 7L * 24 * 3_600_000L
         const val SHELF_SIZE = 16
+        /** Songs asked per wording of a genre (two wordings a slot). */
+        const val SHELF_FETCH = 24
+        const val PLAYLIST_FETCH = 10
+        const val POOL_SONGS = 120
+        const val POOL_COLS = 40
+        /** A new draw of the Home's shelves at most this often (and at every app start). */
+        const val SESSION_MS = 30L * 60_000L
         const val MAX_SONG_MS = 9L * 60_000L
     }
 }

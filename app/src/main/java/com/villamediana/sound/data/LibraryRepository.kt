@@ -290,11 +290,31 @@ class LibraryRepository(
         true
     }
 
+    /**
+     * Songs of a list into a playlist, in order: the ones on the phone as themselves, the streamed
+     * ones as streamed rows (nothing downloads). Returns how many went in (repeats are skipped).
+     */
+    suspend fun addSongsToPlaylist(playlistId: Long, tracks: List<Track>): Int = db.withTransaction {
+        var added = 0
+        tracks.distinctBy { it.videoId ?: "t:${it.id}" }.forEach { t ->
+            val online = streamedOf(t)
+            added += when {
+                online != null -> if (addOnlineToPlaylist(playlistId, online)) 1 else 0
+                t.id > 0 -> addToPlaylist(playlistId, listOf(t.id))
+                else -> 0
+            }
+        }
+        added
+    }
+
+    /** A streamed (transient) song as the online song it is; null for a song in the library. */
+    private fun streamedOf(track: Track): RemoteTrack? = track.takeIf { it.id < 0 }?.let { t ->
+        t.videoId?.let { id -> RemoteTrack(id, t.sourceUrl ?: t.filePath, t.title, t.artist, t.album, t.durationMs.takeIf { it > 0 }, t.coverPath, (t.sourceUrl ?: "").contains("music.youtube.com")) }
+    }
+
     /** Puts a song back at [position] (undo of a removal): a library row, or a streamed one. */
     suspend fun putBackInPlaylist(playlistId: Long, track: Track, position: Int?) {
-        val online = track.takeIf { it.id < 0 }?.let { t ->
-            t.videoId?.let { id -> RemoteTrack(id, t.sourceUrl ?: t.filePath, t.title, t.artist, t.album, t.durationMs.takeIf { it > 0 }, t.coverPath, (t.sourceUrl ?: "").contains("music.youtube.com")) }
-        }
+        val online = streamedOf(track)
         when {
             online != null && position != null -> addOnlineToPlaylistAt(playlistId, online, position)
             online != null -> addOnlineToPlaylist(playlistId, online)
@@ -337,7 +357,7 @@ class LibraryRepository(
     /** An imported playlist as the online playlist page shows it; null when it was removed. */
     suspend fun importedDetail(url: String): CollectionDetail? {
         val p = importedDao.get(url) ?: return null
-        val songs = runCatching { importedJson.decodeFromString(ListSerializer(ImportedSong.serializer()), p.tracksJson) }.getOrDefault(emptyList())
+        val songs = importedSongs(p)
         return CollectionDetail(
             collection = RemoteCollection(CollectionKind.PLAYLIST, p.url, p.name, p.owner, p.coverUrl, songs.size.toLong()),
             tracks = songs.map { RemoteTrack(it.videoId, it.url, it.title, it.artist, it.album, it.durationMs, it.thumbnailUrl, it.catalog) },
@@ -345,6 +365,34 @@ class LibraryRepository(
     }
 
     suspend fun removeImported(url: String) = importedDao.delete(url)
+
+    /** "Editar informações" of an imported playlist: its name and cover here (Spotify's stay as they are). */
+    suspend fun editImported(url: String, name: String, coverUrl: String?) {
+        val p = importedDao.get(url) ?: return
+        importedDao.upsert(p.copy(name = name.trim().ifEmpty { p.name }, coverUrl = coverUrl))
+    }
+
+    /** Takes the song at [index] out of an imported playlist (when it is still [videoId]). */
+    suspend fun removeFromImported(url: String, index: Int, videoId: String) = db.withTransaction {
+        val p = importedDao.get(url) ?: return@withTransaction
+        val songs = importedSongs(p).toMutableList()
+        val at = if (songs.getOrNull(index)?.videoId == videoId) index else songs.indexOfFirst { it.videoId == videoId }
+        if (at < 0) return@withTransaction
+        songs.removeAt(at)
+        importedDao.upsert(p.copy(tracksJson = importedJson.encodeToString(ListSerializer(ImportedSong.serializer()), songs), trackCount = songs.size))
+    }
+
+    /** Puts a song back in an imported playlist at [index] (undo of a removal). */
+    suspend fun putBackInImported(url: String, song: RemoteTrack, index: Int) = db.withTransaction {
+        val p = importedDao.get(url) ?: return@withTransaction
+        val songs = importedSongs(p).toMutableList()
+        if (songs.any { it.videoId == song.videoId }) return@withTransaction
+        songs.add(index.coerceIn(0, songs.size), ImportedSong(song.videoId, song.url, song.title, song.artist, song.album, song.durationMs, song.thumbnailUrl, song.fromMusicCatalog))
+        importedDao.upsert(p.copy(tracksJson = importedJson.encodeToString(ListSerializer(ImportedSong.serializer()), songs), trackCount = songs.size))
+    }
+
+    private fun importedSongs(p: ImportedPlaylist): List<ImportedSong> =
+        runCatching { importedJson.decodeFromString(ListSerializer(ImportedSong.serializer()), p.tracksJson) }.getOrDefault(emptyList())
 
     suspend fun createPlaylist(name: String, description: String? = null, coverPath: String? = null, sourceUrl: String? = null): Long =
         playlistDao.insert(Playlist(name = name.trim().ifEmpty { "Playlist" }, description = description, coverPath = coverPath, sourceUrl = sourceUrl))

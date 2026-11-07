@@ -9,7 +9,6 @@ import com.villamediana.sound.discover.GenreCatalog
 import com.villamediana.sound.discover.GenreDef
 import com.villamediana.sound.online.RemoteCollection
 import com.villamediana.sound.online.RemoteTrack
-import com.villamediana.sound.online.SearchFilter
 import com.villamediana.sound.playback.PlaySource
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -27,8 +26,6 @@ import kotlinx.coroutines.launch
 /** One "Rock pra você" row. */
 data class Shelf(val genre: GenreDef, val tracks: List<RemoteTrack>)
 
-data class ArtistPick(val name: String, val imageUrl: String?)
-
 data class DiscoverUiState(
     /** Settings read at least once. */
     val ready: Boolean = false,
@@ -44,10 +41,11 @@ data class DiscoverUiState(
     /** "Porque você ouviu <title>". */
     val becauseTitle: String? = null,
     val because: List<RemoteTrack> = emptyList(),
-    val artists: List<ArtistPick> = emptyList(),
     val playlists: List<RemoteCollection> = emptyList(),
     val shelves: List<Shelf> = emptyList(),
     val loading: Boolean = false,
+    /** Pulled down to refresh, until the new lists are in. */
+    val refreshing: Boolean = false,
 ) {
     val showPicker: Boolean get() = ready && (!chosen || editing)
     val hasContent: Boolean get() = because.isNotEmpty() || shelves.isNotEmpty()
@@ -98,36 +96,35 @@ class DiscoverViewModel(app: Application) : AndroidViewModel(app) {
         load(force = false)
     }
 
-    fun refresh() = load(force = true)
+    /** Pull to refresh: searches again and draws new shelves and playlists. */
+    fun refresh() {
+        repo.reshuffle()
+        load(force = true, pulled = true)
+    }
 
-    private fun load(force: Boolean) {
+    private fun load(force: Boolean, pulled: Boolean = false) {
         val genres = _state.value.favorites.mapNotNull(GenreCatalog::byId)
         loadJob?.cancel()
         if (genres.isEmpty()) {
-            _state.update { it.copy(because = emptyList(), becauseTitle = null, artists = emptyList(), playlists = emptyList(), shelves = emptyList(), loading = false) }
+            _state.update { it.copy(because = emptyList(), becauseTitle = null, playlists = emptyList(), shelves = emptyList(), loading = false, refreshing = false) }
             return
         }
         loadJob = viewModelScope.launch {
-            _state.update { it.copy(loading = true) }
+            _state.update { it.copy(loading = true, refreshing = pulled) }
             // Each section lands on its own as soon as it is ready.
             coroutineScope {
             launch {
                 val list = genres.map { g -> async { Shelf(g, runCatching { repo.shelf(g, force) }.getOrDefault(emptyList())) } }.awaitAll()
                     .filter { it.tracks.isNotEmpty() }
-                _state.update { s ->
-                    s.copy(
-                        shelves = list,
-                        artists = DiscoverMixes.topArtists(list.map { it.tracks }, 10).map { (n, img) -> ArtistPick(n, img) },
-                    )
-                }
+                _state.update { it.copy(shelves = list) }
             }
             launch {
-                val lists = genres.map { g -> async { runCatching { repo.collections("playlists:${g.id}", "${g.term} playlist", SearchFilter.PLAYLISTS, 3) }.getOrDefault(emptyList()) } }.awaitAll()
+                val lists = genres.map { g -> async { runCatching { repo.playlists(g, 3, force) }.getOrDefault(emptyList()) } }.awaitAll()
                 _state.update { it.copy(playlists = DiscoverMixes.blendCollections(lists, 9)) }
             }
             launch { loadBecause() }
             }
-            _state.update { it.copy(loading = false) }
+            _state.update { it.copy(loading = false, refreshing = false) }
         }
     }
 
@@ -182,10 +179,5 @@ class DiscoverViewModel(app: Application) : AndroidViewModel(app) {
     fun play(tracks: List<RemoteTrack>, index: Int, title: String, id: String) {
         val type = if (id.startsWith("genre:")) PlaySource.Type.GENRE else PlaySource.Type.RADIO
         graph.player.playOnline(tracks, index, PlaySource(type, title, "discover:$id"))
-    }
-
-    /** Finds the artist's page (once) and hands it to [open]. */
-    fun openArtist(name: String, open: (RemoteCollection) -> Unit) {
-        viewModelScope.launch { repo.artist(name)?.let(open) }
     }
 }

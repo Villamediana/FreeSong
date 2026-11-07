@@ -1,5 +1,6 @@
 package com.villamediana.sound.ui.home
 
+import com.villamediana.sound.data.asTransientTrack
 import com.villamediana.sound.ui.nav.searchRevealOrigin
 import com.villamediana.sound.ui.nav.Chrome
 import androidx.compose.runtime.DisposableEffect
@@ -85,6 +86,7 @@ import java.time.LocalTime
 
 private enum class HomePhase { LOADING, EMPTY, PICKER, DISCOVER, FEED }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen() {
     val vm: HomeViewModel = viewModel()
@@ -124,8 +126,9 @@ fun HomeScreen() {
         else -> HomePhase.FEED
     }
     val playDiscover: (List<com.villamediana.sound.online.RemoteTrack>, Int, String, String) -> Unit = { tracks, i, title, id -> discoverVm.play(tracks, i, title, id) }
-    val openArtist: (String) -> Unit = { name -> discoverVm.openArtist(name) { nav.openRemote(it) } }
     val openPlaylist: (com.villamediana.sound.online.RemoteCollection) -> Unit = { nav.openRemote(it) }
+    // Holding a song of the Home: its actions (queue, playlist, like…), as a streamed song.
+    val songMenu: (com.villamediana.sound.online.RemoteTrack) -> Unit = { songSheet = it.asTransientTrack() }
     // The genre picker is an intro: no mini player over it. Back to normal when it goes (or Home does).
     val picking = phase == HomePhase.PICKER
     DisposableEffect(picking) {
@@ -133,7 +136,24 @@ fun HomeScreen() {
         onDispose { Chrome.hideMiniPlayer = false }
     }
 
-    Box(Modifier.fillMaxSize().background(SoundColors.Ink)) {
+    // Pull down to refresh: new searches and new draws of the shelves and playlists.
+    val pull = androidx.compose.material3.pulltorefresh.rememberPullToRefreshState()
+    val pullTop = if (LocalHomeEmbedded.current) 0.dp else WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    androidx.compose.material3.pulltorefresh.PullToRefreshBox(
+        isRefreshing = discover.refreshing,
+        onRefresh = discoverVm::refresh,
+        state = pull,
+        modifier = Modifier.fillMaxSize().background(SoundColors.Ink),
+        indicator = {
+            androidx.compose.material3.pulltorefresh.PullToRefreshDefaults.Indicator(
+                state = pull,
+                isRefreshing = discover.refreshing,
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = pullTop),
+                containerColor = SoundColors.Surface2,
+                color = SoundColors.Accent,
+            )
+        },
+    ) {
         AnimatedContent(
             targetState = phase,
             transitionSpec = { fadeIn(tween(320)) togetherWith fadeOut(tween(180)) },
@@ -150,7 +170,7 @@ fun HomeScreen() {
                     onContinue = discoverVm::confirm,
                     onSkip = discoverVm::skip,
                 )
-                HomePhase.DISCOVER -> DiscoverHome(discover, playback, downloads, nav, onPlay = playDiscover, onArtist = openArtist, onPlaylist = openPlaylist, onEdit = discoverVm::edit)
+                HomePhase.DISCOVER -> DiscoverHome(discover, playback, downloads, nav, onPlay = playDiscover, onPlaylist = openPlaylist, onEdit = discoverVm::edit, onSongMenu = songMenu)
                 HomePhase.FEED -> HomeFeed(
                     state = state,
                     playback = playback,
@@ -161,7 +181,7 @@ fun HomeScreen() {
                     recap = recap,
                     onSong = { songSheet = it },
                     onMenu = { menuTarget = it },
-                    extra = { discoverSections(discover, playback, playDiscover, openArtist, openPlaylist, discoverVm::edit) },
+                    extra = { discoverSections(discover, playback, playDiscover, openPlaylist, discoverVm::edit, songMenu) },
                 )
             }
         }
@@ -314,7 +334,10 @@ private fun HomeFeed(
 
 @Composable
 private fun Carousel(title: String, modifier: Modifier = Modifier, content: LazyListScope.() -> Unit) {
-    Column(modifier.fillMaxWidth().padding(top = Dimens.SectionGap - 8.dp)) {
+    Column(modifier.fillMaxWidth().padding(top = 18.dp)) {
+        // A light line between the Home's sections.
+        com.villamediana.sound.ui.components.SectionRule()
+        Spacer(Modifier.height(16.dp))
         SectionHeader(title)
         LazyRow(
             // Swiping a carousel scrolls it; it never turns into a tab change at its end.

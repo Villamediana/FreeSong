@@ -31,14 +31,23 @@ object GenreCatalog {
     fun byId(id: String): GenreDef? = all.firstOrNull { it.id == id }
 
     /**
-     * The search behind a genre's suggestions right now. The wording rotates with the day and the
-     * time of day (4 slots), so the shelves change while staying in the genre.
+     * The two searches behind a genre's shelf in [slot]: the genre's own search in two wordings,
+     * both rotating through the day, so every slot brings other songs of the same style.
      */
-    fun liveQuery(genre: GenreDef, slot: Long): String {
-        val flavours = listOf("", "new", "top", "best", "2026")
-        val i = ((slot + all.indexOf(genre)) % flavours.size).toInt()
-        return listOf(genre.query, flavours[i]).filter { it.isNotBlank() }.joinToString(" ")
+    fun liveQueries(genre: GenreDef, slot: Long): List<String> {
+        val i = (slot + all.indexOf(genre)).toInt()
+        return listOf(FLAVOURS[i.mod(FLAVOURS.size)], FLAVOURS[(i + 3).mod(FLAVOURS.size)])
+            .map { f -> listOf(genre.query, f).filter(String::isNotBlank).joinToString(" ") }
+            .distinct()
     }
+
+    /** The search behind a genre's playlists in [slot] (the wording rotates). */
+    fun playlistQuery(genre: GenreDef, slot: Long): String {
+        val forms = listOf("%s playlist", "%s mix playlist", "best %s playlist", "%s hits playlist", "%s essentials", "%s favorites playlist", "%s 2026 playlist")
+        return forms[(slot + all.indexOf(genre)).mod(forms.size)].format(genre.term)
+    }
+
+    private val FLAVOURS = listOf("", "new", "top", "best", "2026", "popular", "essentials", "favorites")
 
     /** 6-hour slot of [nowMs]: changes four times a day. */
     fun slotOf(nowMs: Long): Long = nowMs / (6L * 3_600_000L)

@@ -1,5 +1,13 @@
 package com.villamediana.sound.ui.search
 
+import com.villamediana.sound.data.asTransientTrack
+import com.villamediana.sound.SoundApplication
+import com.villamediana.sound.ui.sheets.PlaylistInfoSheet
+import com.villamediana.sound.ui.sheets.PlaylistInfoTarget
+import androidx.compose.material.icons.rounded.Edit
+import com.villamediana.sound.ui.components.SwipeToRemove
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -134,6 +142,8 @@ fun RemoteCollectionScreen(route: RemoteCollectionRoute) {
     val online by vm.online.collectAsStateWithLifecycle()
     val playOnline by vm.playOnline.collectAsStateWithLifecycle()
     var menuOpen by remember { mutableStateOf(false) }
+    var editingInfo by remember { mutableStateOf(false) }
+    var actionsFor by remember { mutableStateOf<com.villamediana.sound.data.db.Track?>(null) }
     val detail = (load as? RemoteLoad.Loaded)?.detail
     val kind = vm.kind
     val title = detail?.collection?.title?.takeIf { it.isNotBlank() } ?: route.title
@@ -152,6 +162,17 @@ fun RemoteCollectionScreen(route: RemoteCollectionRoute) {
                 is RemoteEvent.Message -> {
                     snackbar.currentSnackbarData?.dismiss()
                     scope.launch { snackbar.showSnackbar(context.getString(event.text)) }
+                }
+                is RemoteEvent.Removed -> {
+                    snackbar.currentSnackbarData?.dismiss()
+                    scope.launch {
+                        val result = snackbar.showSnackbar(
+                            context.getString(R.string.detail_removed_from_playlist, event.title),
+                            actionLabel = context.getString(R.string.detail_undo),
+                            duration = SnackbarDuration.Short,
+                        )
+                        if (result == SnackbarResult.ActionPerformed) event.undo()
+                    }
                 }
             }
         }
@@ -231,6 +252,8 @@ fun RemoteCollectionScreen(route: RemoteCollectionRoute) {
                     itemsIndexed(tracks, key = { i, t -> "$i:${t.videoId}" }, contentType = { _, _ -> "song" }) { index, track ->
                         val state = lookup.stateOf(track.videoId)
                         val current = nowPlaying.of(track.videoId)
+                        // A playlist you imported: swipe sideways takes the song out (as in the queue).
+                        SwipeToRemove(onRemove = { vm.removeSong(index, track) }, enabled = vm.canRemoveSongs, background = SoundColors.Ink) {
                         RemoteSongRow(
                             track = track,
                             state = state,
@@ -250,7 +273,14 @@ fun RemoteCollectionScreen(route: RemoteCollectionRoute) {
                             onLike = { vm.like(track, it) },
                             showDownload = !likeDownloads,
                             wait = downloadWait,
+                            // Every action of the song, as in your lists (the copy on the phone when there is one).
+                            onMore = {
+                                scope.launch {
+                                    actionsFor = SoundApplication.graph.library.trackByVideoId(track.videoId) ?: track.asTransientTrack()
+                                }
+                            },
                         )
+                        }
                     }
                     if (kind == CollectionKind.ARTIST && l.detail.related.isNotEmpty()) {
                         item(key = "related-header") {
@@ -335,6 +365,8 @@ fun RemoteCollectionScreen(route: RemoteCollectionRoute) {
                     },
                 )
             }
+            // Imported from Spotify: yours to rename and dress (name, cover).
+            if (vm.canRemoveSongs) add(MenuItem(Icons.Rounded.Edit, res.getString(R.string.sheet_edit_info_title)) { editingInfo = true })
             add(MenuItem(Icons.Rounded.Share, res.getString(R.string.search_remote_share)) { Share.collection(context, loaded.collection) })
             // Imported from Spotify: it can leave the library.
             if (com.villamediana.sound.online.SpotifyLinks.isImported(vm.route.url)) {
@@ -354,6 +386,10 @@ fun RemoteCollectionScreen(route: RemoteCollectionRoute) {
             onDismiss = { menuOpen = false },
         )
     }
+    if (editingInfo) {
+        PlaylistInfoSheet(PlaylistInfoTarget.Imported(vm.route.url), onDismiss = { editingInfo = false }, onSaved = vm::load)
+    }
+    actionsFor?.let { com.villamediana.sound.ui.sheets.TrackActionsSheet(it, onDismiss = { actionsFor = null }) }
 }
 
 @Composable

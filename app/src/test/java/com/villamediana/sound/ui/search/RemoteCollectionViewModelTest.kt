@@ -321,4 +321,37 @@ class RemoteCollectionViewModelTest {
         generic.load()
         awaitUntil { generic.load.value is RemoteLoad.Loaded }
     }
+
+    @Test
+    fun aSongOfAnImportedPlaylistComesOutWithASwipeAndUndoPutsItBack() {
+        val url = "https://open.spotify.com/playlist/abcdefghijklmnopqrstuv"
+        runBlocking { library.saveImported(url, "Domingo", null, null, tracks) }
+        val vm = RemoteCollectionViewModel(
+            RemoteCollectionRoute(url, CollectionKind.PLAYLIST.name, "Domingo"),
+            youTube, library, downloads, player, online, initiallyOnline = true,
+            loader = { u, _ -> library.importedDetail(u)!! },
+        )
+        vms += vm
+        awaitUntil(message = "loaded") { vm.load.value is RemoteLoad.Loaded }
+        assertTrue(vm.canRemoveSongs)
+
+        vm.removeSong(1, tracks[1])
+        assertEquals(listOf("a", "c"), vm.detail!!.tracks.map { it.videoId })
+        val removed = vm.nextEvent() as RemoteEvent.Removed
+        awaitUntil(message = "saved") { runBlocking { library.importedDetail(url)!!.tracks.size } == 2 }
+
+        removed.undo()
+        assertEquals(listOf("a", "b", "c"), vm.detail!!.tracks.map { it.videoId })
+        awaitUntil(message = "put back") { runBlocking { library.importedDetail(url)!!.tracks.map { it.videoId } } == listOf("a", "b", "c") }
+    }
+
+    @Test
+    fun onlyImportedPlaylistsLetSongsOut() {
+        val vm = viewModel(CollectionKind.PLAYLIST)
+        awaitUntil(message = "loaded") { vm.load.value is RemoteLoad.Loaded }
+        assertTrue(!vm.canRemoveSongs)
+        vm.removeSong(0, tracks[0])
+        assertEquals(3, vm.detail!!.tracks.size)
+    }
 }
+

@@ -55,39 +55,54 @@ class DiscoverRepositoryTest {
         assertEquals(covers, DiscoverRepository(src, file).covers(listOf(pop, rock)))
     }
 
-    @Test fun aShelfLastsItsSlotAndChangesWithTheNext() = runBlocking {
+    @Test fun aShelfSearchesOncePerSlotAndDrawsFromAGrowingPool() = runBlocking {
         val src = FakeSource()
         var now = 1_000_000_000L
-        val repo = DiscoverRepository(src, tmp.root.resolve("d.json")) { now }
+        val repo = DiscoverRepository(src, tmp.root.resolve("d.json"), clock = { now }, session = 7)
         val first = repo.shelf(pop)
         assertEquals(16, first.size)
-        repo.shelf(pop)
-        assertEquals(1, src.queries.size) // same slot: cached
+        assertEquals(2, src.queries.size) // two wordings a slot
+        assertNotEquals(src.queries[0], src.queries[1])
+        // Same slot and session: cached, the same draw.
+        assertEquals(first, repo.shelf(pop))
+        assertEquals(2, src.queries.size)
+        // Half an hour later: another draw from the same songs, no network.
+        now += 30L * 60_000L
+        val later = repo.shelf(pop)
+        assertEquals(2, src.queries.size)
+        assertNotEquals(first, later)
+        // Next slot: new wordings; the shelf mixes this slot's songs with the ones before.
         now += 6L * 3_600_000L
         val next = repo.shelf(pop)
-        assertEquals(2, src.queries.size)
-        assertNotEquals(src.queries[0], src.queries[1]) // the wording rotates: the shelf is alive
-        assertNotEquals(first.first().videoId, next.first().videoId)
+        assertEquals(4, src.queries.size)
+        assertTrue(src.queries.drop(2).none { it in src.queries.take(2) })
+        val newIds = src.queries.drop(2).map { it.hashCode().toString() }
+        val oldIds = src.queries.take(2).map { it.hashCode().toString() }
+        assertEquals(8, next.count { t -> newIds.any { t.videoId.startsWith(it + "_") } })
+        assertEquals(8, next.count { t -> oldIds.any { t.videoId.startsWith(it + "_") } })
+    }
+
+    @Test fun anotherAppStartDrawsAnotherShelf() = runBlocking {
+        val src = FakeSource()
+        val file = tmp.root.resolve("d.json")
+        val a = DiscoverRepository(src, file, clock = { 1_000_000_000L }, session = 1).shelf(pop)
+        val b = DiscoverRepository(src, file, clock = { 1_000_000_000L }, session = 2).shelf(pop)
+        assertEquals(2, src.queries.size) // the second start read the slot from disk
+        assertNotEquals(a, b)
+        assertEquals(a.toSet().size, 16)
     }
 
     @Test fun offlineFallsBackToTheLastShelf() = runBlocking {
         val src = FakeSource()
         var now = 1_000_000_000L
-        val repo = DiscoverRepository(src, tmp.root.resolve("d.json")) { now }
+        val repo = DiscoverRepository(src, tmp.root.resolve("d.json"), clock = { now }, session = 3)
         val cached = repo.shelf(rock)
+        val known = src.queries.map { it.hashCode().toString() }
         now += 6L * 3_600_000L
         src.offline = true
-        assertEquals(cached, repo.shelf(rock))
-        assertTrue(repo.cachedShelf(rock).isNotEmpty())
-    }
-}
-
-class DiscoverMixesTest {
-    private fun t(id: String, artist: String = "A") = com.villamediana.sound.online.RemoteTrack(id, "u", id, artist, thumbnailUrl = "img/$id")
-
-    @Test fun topArtistsCountsMainArtistAcrossLists() {
-        val lists = listOf(listOf(t("1", "Bad Bunny"), t("2", "Bad Bunny, Jhayco"), t("3", "Ozuna")), listOf(t("4", "Ozuna & Anuel"), t("5", "Bad Bunny")))
-        val top = DiscoverMixes.topArtists(lists, 2)
-        assertEquals(listOf("Bad Bunny", "Ozuna"), top.map { it.first })
+        val offline = repo.shelf(rock)
+        assertEquals(16, offline.size)
+        assertTrue(offline.all { t -> known.any { t.videoId.startsWith(it + "_") } })
+        assertTrue(cached.isNotEmpty() && repo.cachedShelf(rock).isNotEmpty())
     }
 }

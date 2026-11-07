@@ -1,5 +1,8 @@
 package com.villamediana.sound.ui.detail
 
+import com.villamediana.sound.ui.sheets.PlaylistInfoSheet
+import com.villamediana.sound.ui.sheets.PlaylistInfoTarget
+import com.villamediana.sound.ui.components.SwipeToRemove
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -173,30 +176,8 @@ internal class PlaylistViewModel(private val id: Long) : ViewModel() {
         graph.scope.launch { library.putBackInPlaylist(id, entry.track, entry.position) }
     }
 
-    fun rename(name: String, description: String?) {
-        viewModelScope.launch { library.renamePlaylist(id, name, description) }
-    }
-
     fun setPinned(pinned: Boolean) {
         viewModelScope.launch { library.setPlaylistPinned(id, pinned) }
-    }
-
-    /** Copies the chosen cover so it survives deleting the song it came from; null = mosaic. */
-    fun setCover(source: String?) {
-        graph.scope.launch(Dispatchers.IO) {
-            val old = library.getPlaylist(id)?.coverPath
-            if (source == old) return@launch
-            val newPath = source?.let { src ->
-                if (PlaylistCovers.isOwned(src, id)) {
-                    src
-                } else {
-                    val dest = graph.storage.coverFile(PlaylistCovers.fileName(id, System.currentTimeMillis()))
-                    runCatching { File(src).copyTo(dest, overwrite = true) }.map { dest.absolutePath }.getOrDefault(src)
-                }
-            }
-            library.setPlaylistCover(id, newPath)
-            if (old != null && old != newPath && PlaylistCovers.isOwned(old, id)) runCatching { File(old).delete() }
-        }
     }
 
     fun delete() {
@@ -241,8 +222,7 @@ private fun PlaylistContent(detail: PlaylistDetail, vm: PlaylistViewModel) {
     val listState = rememberLazyListState()
     var shuffleLocal by rememberSaveable { mutableStateOf(false) }
     var editing by rememberSaveable { mutableStateOf(false) }
-    var renaming by rememberSaveable { mutableStateOf(false) }
-    var choosingCover by rememberSaveable { mutableStateOf(false) }
+    var editingInfo by rememberSaveable { mutableStateOf(false) }
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
     var dragStartIndex by remember { mutableIntStateOf(-1) }
 
@@ -327,8 +307,7 @@ private fun PlaylistContent(detail: PlaylistDetail, vm: PlaylistViewModel) {
             AddAllHost(sheets)
             if (sheets.menuOpen) {
                 val items = buildList {
-                    add(MenuItem(Icons.Rounded.Edit, res.getString(R.string.detail_menu_edit_playlist)) { renaming = true })
-                    add(MenuItem(Icons.Rounded.Image, res.getString(R.string.detail_menu_choose_cover)) { choosingCover = true })
+                    add(MenuItem(Icons.Rounded.Edit, res.getString(R.string.sheet_edit_info_title)) { editingInfo = true })
                     if (entries.size > 1) add(MenuItem(Icons.Rounded.SwapVert, res.getString(R.string.detail_menu_reorder)) { editing = true })
                     addAll(queueMenuItems(tracks, res, snackbar.feedback) { sheets.addToPlaylist = it })
                     playlist.sourceUrl?.takeIf { it.startsWith("http") }?.let { url ->
@@ -347,29 +326,8 @@ private fun PlaylistContent(detail: PlaylistDetail, vm: PlaylistViewModel) {
                     onDismiss = { sheets.menuOpen = false },
                 )
             }
-            if (renaming) {
-                RenamePlaylistDialog(
-                    name = summary.name,
-                    description = playlist.description.orEmpty(),
-                    onDismiss = { renaming = false },
-                    onSave = { n, d ->
-                        renaming = false
-                        vm.rename(n, d)
-                    },
-                )
-            }
-            if (choosingCover) {
-                ChooseCoverSheet(
-                    current = summary.coverPath,
-                    mosaic = summary.mosaic,
-                    trackCovers = tracks.mapNotNull { it.coverPath },
-                    seed = summary.name,
-                    onChoose = { path ->
-                        choosingCover = false
-                        vm.setCover(path)
-                    },
-                    onDismiss = { choosingCover = false },
-                )
+            if (editingInfo) {
+                PlaylistInfoSheet(PlaylistInfoTarget.Local(summary.id), onDismiss = { editingInfo = false })
             }
             if (confirmDelete) {
                 ConfirmDialog(
@@ -421,14 +379,16 @@ private fun PlaylistContent(detail: PlaylistDetail, vm: PlaylistViewModel) {
                         ),
                 )
             } else {
-                SongRow(
-                    track = e.track,
-                    playback = playback,
-                    onClick = { player.play(tracks, i, source, shuffleOn) },
-                    sheet = sheet,
-                    context = PlaylistContext(summary.id, e.rowId),
-                    modifier = Modifier.animateItem(),
-                )
+                // Swipe sideways takes the song out of the playlist (as in the queue), with "Desfazer".
+                SwipeToRemove(onRemove = { removeWithUndo(e) }, modifier = Modifier.animateItem(), background = SoundColors.Ink) {
+                    SongRow(
+                        track = e.track,
+                        playback = playback,
+                        onClick = { player.play(tracks, i, source, shuffleOn) },
+                        sheet = sheet,
+                        context = PlaylistContext(summary.id, e.rowId),
+                    )
+                }
             }
         }
     }
@@ -470,118 +430,6 @@ private fun EditableRow(
                     tint = if (dragging) SoundColors.Accent else SoundColors.TextMuted,
                 )
             }
-        }
-    }
-}
-
-/** "Editar playlist": name + description. */
-@Composable
-private fun RenamePlaylistDialog(name: String, description: String, onDismiss: () -> Unit, onSave: (String, String?) -> Unit) {
-    var n by rememberSaveable { mutableStateOf(name) }
-    var d by rememberSaveable { mutableStateOf(description) }
-    val valid = n.isNotBlank()
-    val save = { if (valid) onSave(n.trim(), d.trim().ifEmpty { null }) }
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).imePadding(),
-            shape = RoundedCornerShape(28.dp),
-            color = SoundColors.Surface2,
-            contentColor = SoundColors.Text,
-        ) {
-            Column(Modifier.padding(top = 24.dp, bottom = 12.dp)) {
-                Text(
-                    stringResource(R.string.detail_edit_playlist_title),
-                    style = MaterialTheme.typography.headlineSmall,
-                    modifier = Modifier.padding(horizontal = 24.dp),
-                )
-                Spacer(Modifier.height(16.dp))
-                Column(Modifier.padding(horizontal = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    SoundTextField(n, { n = it.take(80) }, stringResource(R.string.detail_field_name))
-                    SoundTextField(
-                        d, { d = it.take(300) }, stringResource(R.string.detail_field_description),
-                        singleLine = false, imeAction = ImeAction.Done, onDone = save,
-                    )
-                }
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(top = 12.dp),
-                    horizontalArrangement = Arrangement.End,
-                ) {
-                    TextButton(onClick = onDismiss) {
-                        Text(stringResource(R.string.cancel), style = MaterialTheme.typography.labelLarge, color = SoundColors.TextMuted)
-                    }
-                    TextButton(onClick = save, enabled = valid) {
-                        Text(stringResource(R.string.save), style = MaterialTheme.typography.labelLarge, color = if (valid) SoundColors.Accent else SoundColors.TextFaint)
-                    }
-                }
-            }
-        }
-    }
-}
-
-/** Grid of the playlist's covers (+ the mosaic) to pick the playlist art. */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun ChooseCoverSheet(
-    current: String?,
-    mosaic: List<String>,
-    trackCovers: List<String>,
-    seed: String,
-    onChoose: (String?) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val state = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val scope = rememberCoroutineScope()
-    val choices = remember(current, trackCovers) { PlaylistCovers.choices(current, trackCovers) }
-    fun pick(path: String?) {
-        scope.launch { state.hide() }.invokeOnCompletion { onChoose(path) }
-    }
-    SoundSheet(onDismissRequest = onDismiss, sheetState = state) {
-        SheetTitle(stringResource(R.string.detail_choose_cover_title), stringResource(R.string.detail_choose_cover_subtitle))
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 100.dp),
-            modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp).padding(horizontal = 20.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            item(key = "mosaic") {
-                CoverChoice(selected = current == null, label = stringResource(R.string.detail_cover_mosaic), onClick = { pick(null) }) { m ->
-                    MosaicCover(mosaic, m, seed = seed)
-                }
-            }
-            items(choices, key = { it }) { path ->
-                CoverChoice(selected = path == current, label = null, onClick = { pick(path) }) { m ->
-                    Cover(path, m, seed = path)
-                }
-            }
-        }
-        Spacer(Modifier.height(12.dp))
-    }
-}
-
-@Composable
-private fun CoverChoice(selected: Boolean, label: String?, onClick: () -> Unit, art: @Composable (Modifier) -> Unit) {
-    val shape = RoundedCornerShape(Dimens.CoverCorner + 2.dp)
-    Column {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .aspectRatio(1f)
-                .clip(shape)
-                .then(if (selected) Modifier.border(2.dp, SoundColors.Accent, shape) else Modifier)
-                .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
-                .padding(if (selected) 5.dp else 0.dp),
-        ) {
-            art(Modifier.fillMaxSize())
-            if (selected) {
-                Box(
-                    Modifier.align(Alignment.TopEnd).padding(6.dp).size(22.dp).clip(CircleShape).background(SoundColors.Ink),
-                    contentAlignment = Alignment.Center,
-                ) { Icon(Icons.Rounded.CheckCircle, null, tint = SoundColors.Accent, modifier = Modifier.size(22.dp)) }
-            }
-        }
-        if (label != null) {
-            Spacer(Modifier.height(6.dp))
-            Text(label, style = MaterialTheme.typography.labelMedium, color = if (selected) SoundColors.Accent else SoundColors.TextMuted)
         }
     }
 }

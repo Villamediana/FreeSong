@@ -11,6 +11,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.toRoute
 import com.villamediana.sound.data.db.AlbumKey
+import com.villamediana.sound.online.CollectionKind
 import com.villamediana.sound.online.RemoteCollection
 
 /** Thin wrapper over NavController so screens don't depend on navigation details. */
@@ -66,6 +67,12 @@ class Navigator(val controller: NavHostController) {
     fun openLiked() = go(LikedRoute)
     fun openSongs() = go(SongsRoute)
     fun openRemote(c: RemoteCollection) = go(RemoteCollectionRoute(c.url, c.kind.name, c.title, c.author, c.thumbnailUrl))
+
+    /** The artist's online page, found by name (it opens at once and finds itself). */
+    fun findArtist(name: String) = go(RemoteCollectionRoute(RemoteFind.url(CollectionKind.ARTIST, name, null), CollectionKind.ARTIST.name, name))
+
+    /** The album's online page with every song, found by its name and artist. */
+    fun findAlbum(album: String, artist: String) = go(RemoteCollectionRoute(RemoteFind.url(CollectionKind.ALBUM, album, artist), CollectionKind.ALBUM.name, album, artist))
     fun openDownloads() = go(DownloadsRoute)
     fun openSettings() = go(SettingsRoute)
     fun openEqualizer() = go(EqualizerRoute)

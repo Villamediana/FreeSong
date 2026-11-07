@@ -262,7 +262,12 @@ class SearchScreensSmokeTest {
         rule.onNodeWithContentDescription(s(R.string.search_remote_shuffle)).assertExists()
 
         // ⋮ → share the playlist.
-        rule.onNodeWithContentDescription(s(R.string.more_options)).performClick()
+        // The page's ⋮ (the songs have theirs too, as buttons in their rows).
+        check(rule.onAllNodesWithContentDescription(s(R.string.more_options)).fetchSemanticsNodes().size > 1)
+        rule.onNode(
+            androidx.compose.ui.test.hasContentDescription(s(R.string.more_options)) and
+                androidx.compose.ui.test.SemanticsMatcher.keyNotDefined(androidx.compose.ui.semantics.SemanticsProperties.Role),
+        ).performClick()
         rule.waitUntil(20_000) { rule.onAllNodes(hasText(s(R.string.search_remote_share))).fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText(s(R.string.detail_menu_play_next)).performClick()
         rule.waitUntil(20_000) { player.queued.isNotEmpty() }

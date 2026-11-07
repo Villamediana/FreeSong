@@ -166,7 +166,7 @@ internal class PlayerActions(
     val openSleep: () -> Unit,
     val openLyrics: () -> Unit,
     val openActions: () -> Unit,
-    val openArtist: (String) -> Unit,
+    val openArtist: (Track) -> Unit,
     val openAlbum: (Track) -> Unit,
     val openOutput: () -> Unit,
     /** Streamed song: keep it on the phone. */
@@ -612,12 +612,16 @@ private fun TrackHeader(track: Track, stream: StreamUi, liked: Boolean, actions:
             label = "title",
         ) { t ->
             Column {
+                // The song's name leads to its album, like the album's name below it.
+                val toAlbum = remember { MutableInteractionSource() }
                 Text(
                     t.title,
                     style = MaterialTheme.typography.headlineSmall.copy(fontSize = 28.sp, lineHeight = 33.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.01).em),
                     color = SoundColors.Mint,
                     maxLines = 1,
-                    modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1_800, repeatDelayMillis = 2_600),
+                    modifier = Modifier
+                        .then(if (t.hasAlbum) Modifier.clickable(interactionSource = toAlbum, indication = null, onClickLabel = t.album, role = Role.Button) { actions.openAlbum(t) } else Modifier)
+                        .basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1_800, repeatDelayMillis = 2_600),
                 )
                 Spacer(Modifier.height(3.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -626,10 +630,10 @@ private fun TrackHeader(track: Track, stream: StreamUi, liked: Boolean, actions:
                     val dim = SoundColors.Text.copy(alpha = 0.7f)
                     val line = buildAnnotatedString {
                         val style = TextLinkStyles(SpanStyle(color = dim))
-                        if (t.isOnline) append(t.artist) else withLink(LinkAnnotation.Clickable("artist", style) { actions.openArtist(t.artist) }) { append(t.artist) }
+                        withLink(LinkAnnotation.Clickable("artist", style) { actions.openArtist(t) }) { append(t.artist) }
                         if (t.hasAlbum) {
                             withStyle(SpanStyle(color = SoundColors.Text.copy(alpha = 0.4f))) { append("  ·  ") }
-                            if (t.isOnline) append(t.album.orEmpty()) else withLink(LinkAnnotation.Clickable("album", style) { actions.openAlbum(t) }) { append(t.album.orEmpty()) }
+                            withLink(LinkAnnotation.Clickable("album", style) { actions.openAlbum(t) }) { append(t.album.orEmpty()) }
                         }
                     }
                     Text(

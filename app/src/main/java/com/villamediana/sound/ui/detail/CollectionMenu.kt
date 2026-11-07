@@ -72,7 +72,7 @@ internal fun queueMenuItems(
     tracks: List<Track>,
     res: Resources,
     feedback: SheetFeedback,
-    onAddToPlaylist: (List<Long>) -> Unit,
+    onAddToPlaylist: (List<Track>) -> Unit,
 ): List<MenuItem> {
     if (tracks.isEmpty()) return emptyList()
     val player = graph.player
@@ -86,7 +86,7 @@ internal fun queueMenuItems(
             feedback.show(res.getQuantityString(R.plurals.detail_enqueue_done, tracks.size, tracks.size))
         },
         MenuItem(Icons.AutoMirrored.Rounded.PlaylistAdd, res.getString(R.string.detail_menu_add_to_playlist)) {
-            onAddToPlaylist(tracks.map { it.id })
+            onAddToPlaylist(tracks)
         },
     )
 }

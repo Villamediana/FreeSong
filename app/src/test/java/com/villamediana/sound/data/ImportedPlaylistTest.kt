@@ -150,4 +150,41 @@ class ImportedPlaylistTest {
         }
         v3.close()
     }
+
+    @Test fun aSongComesOutAndGoesBackInItsPlace() = runBlocking {
+        library.saveImported(url, "Domingo", "Miguel", null, listOf(song("a1", "Um"), song("b2", "Dois"), song("c3", "Três")))
+        library.removeFromImported(url, 1, "b2")
+        assertEquals(listOf("a1", "c3"), library.importedDetail(url)!!.tracks.map { it.videoId })
+        assertEquals(2, library.imported.first().single().trackCount)
+        // Undo: back in the same slot (and never twice).
+        library.putBackInImported(url, song("b2", "Dois"), 1)
+        library.putBackInImported(url, song("b2", "Dois"), 1)
+        assertEquals(listOf("a1", "b2", "c3"), library.importedDetail(url)!!.tracks.map { it.videoId })
+        // An index that moved meanwhile: the song is found by its id.
+        library.removeFromImported(url, 0, "c3")
+        assertEquals(listOf("a1", "b2"), library.importedDetail(url)!!.tracks.map { it.videoId })
+    }
+
+    @Test fun editInfoRenamesAndChangesTheCover() = runBlocking {
+        library.saveImported(url, "Domingo", "Miguel", "https://i.scdn.co/x", listOf(song("a1", "Um")))
+        library.editImported(url, "  Sábado  ", "/covers/imported-1.jpg")
+        val p = library.imported.first().single()
+        assertEquals("Sábado", p.name)
+        assertEquals("/covers/imported-1.jpg", p.coverUrl)
+        assertEquals(1, library.importedDetail(url)!!.tracks.size)
+        library.editImported(url, " ", null)
+        assertEquals("Sábado", library.imported.first().single().name) // a blank name keeps the old one
+    }
+
+    @Test fun aListOfYoursAndStreamedSongsGoesIntoAPlaylistInOrder() = runBlocking {
+        val mine = library.getTrack(library.insertTrack(com.villamediana.sound.data.db.Track(title = "Minha", artist = "Banda", filePath = "/m.m4a", videoId = "mine0000001")))!!
+        val streamed = song("s1", "Online").asTransientTrack()
+        val pid = library.createPlaylist("Mista")
+        assertEquals(2, library.addSongsToPlaylist(pid, listOf(streamed, mine)))
+        val entries = library.playlist(pid).first()!!.entries
+        assertEquals(listOf("s1", "mine0000001"), entries.map { it.track.videoId })
+        assertTrue(entries[0].track.isOnline)
+        // Already there: nothing twice.
+        assertEquals(0, library.addSongsToPlaylist(pid, listOf(mine, streamed)))
+    }
 }

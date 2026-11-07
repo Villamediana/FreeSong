@@ -368,8 +368,21 @@ internal fun PlayerHost(
             openSleep = { sleepOpen = true },
             openLyrics = { lyricsOpen = true },
             openActions = { actionsFor = latestTrack },
-            openArtist = { name -> navigator.openArtist(name) },
-            openAlbum = { t -> t.albumKey?.let { navigator.openAlbum(it) } },
+            // The artist's page with all their songs, as in the search; offline, a song of yours
+            // opens its artist in the library.
+            openArtist = { t ->
+                if (latestOnline || t.isOnline) navigator.findArtist(com.villamediana.sound.stats.Recaps.mainArtist(t.artist)) else navigator.openArtist(t.artist)
+            },
+            // A song of yours: its album in the library, which shows the rest of the album too.
+            // A streamed one: the album's online page.
+            openAlbum = { t ->
+                val key = t.albumKey
+                when {
+                    key == null -> Unit
+                    !t.isOnline -> navigator.openAlbum(key)
+                    else -> navigator.findAlbum(key.title, com.villamediana.sound.stats.Recaps.mainArtist(key.artist))
+                }
+            },
             openOutput = { OutputRoutes.openSwitcher(context) },
             download = {
                 val t = latestTrack

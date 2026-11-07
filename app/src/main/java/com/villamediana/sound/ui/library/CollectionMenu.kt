@@ -1,5 +1,8 @@
 package com.villamediana.sound.ui.library
 
+import com.villamediana.sound.ui.sheets.PlaylistInfoSheet
+import com.villamediana.sound.ui.sheets.PlaylistInfoTarget
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.DeleteOutline
@@ -124,6 +127,12 @@ fun CollectionMenuSheet(target: CollectionTarget, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val feedback = rememberSheetFeedback()
     var confirmDelete by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf<PlaylistInfoTarget?>(null) }
+
+    editing?.let { t ->
+        PlaylistInfoSheet(t, onDismiss = { editing = null; onDismiss() })
+        return
+    }
 
     fun closeThen(action: () -> Unit) {
         action()
@@ -147,6 +156,15 @@ fun CollectionMenuSheet(target: CollectionTarget, onDismiss: () -> Unit) {
             onClick = { closeThen { CollectionCommands.setPinned(target, !pinned) } },
             tint = if (pinned) SoundColors.Accent else SoundColors.TextMuted,
         )
+        // Name, description and cover of a playlist of yours (or one you imported).
+        val editTarget = when (target) {
+            is CollectionTarget.Playlist -> PlaylistInfoTarget.Local(target.summary.id)
+            is CollectionTarget.Imported -> PlaylistInfoTarget.Imported(target.playlist.url)
+            is CollectionTarget.Album -> null
+        }
+        if (editTarget != null) {
+            SheetAction(Icons.Rounded.Edit, stringResource(R.string.sheet_edit_info_title), onClick = { editing = editTarget })
+        }
         if (imported != null) {
             SheetAction(Icons.Rounded.Share, stringResource(R.string.home_lib_share), onClick = {
                 closeThen { Share.collection(context, RemoteCollection(CollectionKind.PLAYLIST, imported.playlist.url, imported.playlist.name)) }

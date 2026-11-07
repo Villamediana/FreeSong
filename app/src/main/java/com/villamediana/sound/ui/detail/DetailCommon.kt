@@ -151,7 +151,7 @@ internal fun TrackSheetHost(state: TrackSheetState) {
 @Stable
 internal class CollectionSheetsState {
     var menuOpen by mutableStateOf(false)
-    var addToPlaylist by mutableStateOf<List<Long>?>(null)
+    var addToPlaylist by mutableStateOf<List<Track>?>(null)
 }
 
 @Composable
@@ -159,8 +159,8 @@ internal fun rememberCollectionSheets(): CollectionSheetsState = remember { Coll
 
 @Composable
 internal fun AddAllHost(state: CollectionSheetsState) {
-    val ids = state.addToPlaylist ?: return
-    AddToPlaylistSheet(trackIds = ids, onDismiss = { state.addToPlaylist = null })
+    val songs = state.addToPlaylist ?: return
+    AddToPlaylistSheet(tracks = songs, onDismiss = { state.addToPlaylist = null })
 }
 
 /** Long-press on a row: haptic tick, then the sheet. */

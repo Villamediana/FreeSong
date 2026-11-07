@@ -1,5 +1,6 @@
 package com.villamediana.sound.ui.search
 
+import androidx.compose.material.icons.rounded.MoreVert
 import com.villamediana.sound.ui.theme.sc
 import com.villamediana.sound.download.DownloadWait
 import androidx.compose.animation.AnimatedContent
@@ -112,6 +113,8 @@ fun RemoteSongRow(
     showDownload: Boolean = true,
     /** What a queued download waits for (its button says so). */
     wait: DownloadWait = DownloadWait.NONE,
+    /** The ⋮ with every action of the song (also on a long press when [onLongClick] is null). */
+    onMore: (() -> Unit)? = null,
 ) {
     val bg by animateColorAsState(if (selected) sc.AccentSoft else Color.Transparent, tween(180), label = "rowBg")
     val dimmed = selecting && (state == ItemDownload.Done || state == ItemDownload.Queued || state is ItemDownload.Running)
@@ -120,8 +123,8 @@ fun RemoteSongRow(
             .fillMaxWidth()
             .height(Dimens.RowHeight)
             .background(bg)
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(start = Dimens.Gutter, end = Dimens.Gutter - 10.dp),
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick ?: onMore)
+            .padding(start = Dimens.Gutter, end = if (onMore != null) 6.dp else Dimens.Gutter - 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (number != null) {
@@ -163,6 +166,11 @@ fun RemoteSongRow(
             // Filled = in Curtidas (white on the dark theme), like the filled download arrow beside it.
             if (onLike != null) com.villamediana.sound.ui.player.LikeButton(liked = liked, onToggle = onLike, size = 44.dp, iconSize = 24.dp, likedTint = sc.Text)
             if (showDownload) DownloadIndicator(state, onIndicatorClick, wait = wait)
+            if (onMore != null) {
+                androidx.compose.material3.IconButton(onClick = onMore, modifier = Modifier.size(40.dp)) {
+                    androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Rounded.MoreVert, androidx.compose.ui.res.stringResource(R.string.more_options), tint = sc.TextMuted)
+                }
+            }
         }
     }
 }

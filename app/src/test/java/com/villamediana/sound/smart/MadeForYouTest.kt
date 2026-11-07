@@ -22,9 +22,11 @@ class MadeForYouTest {
         val plans = MadeForYou.plan(lib, Taste(), day = 100)
         assertEquals(listOf("Rock", "MPB", "Jazz"), plans.map { it.genre })
         assertTrue(plans.all { it.id.startsWith(MadeForYou.PREFIX) })
-        assertEquals(MadeForYou.OWN, plans[0].own.size)
+        assertEquals(12, plans[0].own.size) // every Rock song is a candidate
         assertTrue(plans[0].own.all { it.genre == "Rock" })
         assertEquals(MadeForYou.SEEDS, plans[0].seeds.size)
+        // Seeds from different artists first (4 artists in the library, then a repeat).
+        assertEquals(4, plans[0].seeds.take(4).map { it.artist }.distinct().size)
         // The same day makes the same mixes; another day, another pick.
         assertEquals(plans, MadeForYou.plan(lib, Taste(), day = 100))
         assertTrue(MadeForYou.plan(lib, Taste(), day = 101)[0].own != plans[0].own)
@@ -37,10 +39,46 @@ class MadeForYouTest {
         assertEquals("Seu mix", MadeForYou.assemble(plans[0], emptyList(), labels).title)
     }
 
-    @Test fun newSongsComeInTurnsFromEachRadioNeverOnesYouHave() {
-        val radios = listOf(listOf(rt("a1"), rt("mine"), rt("a2")), listOf(rt("b1"), rt("a1"), rt("b2")), listOf(rt("c1")))
-        val picked = MadeForYou.pickNew(radios, inLibrary = setOf("mine"), count = 5)
-        assertEquals(listOf("a1", "b1", "c1", "a2", "b2"), picked.map { it.videoId })
+    private fun rt(id: String, artist: String) = RemoteTrack(id, "https://music.youtube.com/watch?v=$id", "New $id", artist)
+
+    @Test fun newSongsAreTheOnesTheRadiosAgreeOnNeverOnesYouHave() {
+        val radios = listOf(
+            listOf(rt("a1", "Maná"), rt("mine", "Maná"), rt("a2", "Jaguares")),
+            listOf(rt("b1", "Soda Stereo"), rt("a1", "Maná"), rt("b2", "Jaguares")),
+            listOf(rt("c1", "Bad Bunny")),
+        )
+        val picked = MadeForYou.pickNew(radios, inLibrary = setOf("mine"), count = 5).map { it.videoId }
+        assertTrue("mine" !in picked)
+        // In two radios: first. Off on its own (a radio that shares no artist): last.
+        assertEquals("a1", picked.first())
+        assertEquals("c1", picked.last())
+        assertEquals(setOf("a1", "a2", "b1", "b2", "c1"), picked.toSet())
+    }
+
+    @Test fun newSongsKeepVarietyAndNeverTheSameSongTwice() {
+        val radio = (1..10).map { rt("m$it", "Maná") } + listOf(
+            RemoteTrack("x1", "u", "Clavado en un bar", "Maná"),
+            RemoteTrack("x2", "u", "Clavado En Un Bar", "Maná"),
+            rt("o1", "Other"),
+        )
+        val picked = MadeForYou.pickNew(listOf(radio), inLibrary = emptySet(), count = 20)
+        assertEquals(MadeForYou.PER_ARTIST, picked.count { it.artist == "Maná" })
+        assertTrue(picked.any { it.videoId == "o1" })
+    }
+
+    @Test fun yourSongsInTheMixStyleMoveUp() {
+        val lib = (1L..30L).map { track(it, "Rock") }
+        val plan = MadeForYou.plan(lib, Taste(), day = 5)[0]
+        val lastArtist = plan.own.last().artist
+        val mix = MadeForYou.assemble(plan, listOf(rt("n1", lastArtist)), labels)
+        assertEquals(MadeForYou.OWN, mix.tracks.count { !it.isOnline })
+        assertTrue(mix.tracks.filter { !it.isOnline }.count { it.artist == lastArtist } >= plan.own.take(MadeForYou.OWN).count { it.artist == lastArtist })
+    }
+
+    @Test fun theSameArtistDoesNotPlayTwiceInARowWhenAvoidable() {
+        val order = listOf(track(1, "Rock"), track(5, "Rock"), track(2, "Rock"), track(3, "Rock"))
+        val apart = MadeForYou.apart(order) // artists 1, 1, 2, 3 → 1, 2, 1, 3
+        assertTrue(apart.zipWithNext().none { (a, b) -> a.artist == b.artist })
     }
 
     @Test fun theMixWeavesYourSongsWithTheNewOnes() {

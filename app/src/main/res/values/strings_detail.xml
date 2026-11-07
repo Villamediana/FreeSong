@@ -61,11 +61,8 @@
     <string name="detail_remove">Remover</string>
     <string name="detail_removed_from_playlist">“%s” removida</string>
     <string name="detail_undo">Desfazer</string>
-    <string name="detail_edit_playlist_title">Editar playlist</string>
     <string name="detail_field_name">Nome</string>
     <string name="detail_field_description">Descrição</string>
-    <string name="detail_choose_cover_title">Escolher capa</string>
-    <string name="detail_choose_cover_subtitle">Use a capa de uma das músicas ou o mosaico.</string>
     <string name="detail_cover_mosaic">Mosaico</string>
     <string name="detail_delete_playlist_title">Apagar playlist?</string>
     <string name="detail_delete_playlist_body">“%s” sai da biblioteca. As músicas continuam no celular.</string>
@@ -92,8 +89,6 @@
     <string name="detail_menu_add_to_playlist">Adicionar à playlist</string>
     <string name="detail_menu_go_artist">Ir para o artista</string>
     <string name="detail_menu_delete_album">Apagar álbum do celular</string>
-    <string name="detail_menu_edit_playlist">Editar nome e descrição</string>
-    <string name="detail_menu_choose_cover">Escolher capa</string>
     <string name="detail_menu_reorder">Organizar músicas</string>
     <string name="detail_menu_delete_playlist">Apagar playlist</string>
     <plurals name="detail_play_next_done">
@@ -184,4 +179,7 @@
     <string name="sheet_radio_unavailable">Não deu para montar a rádio agora.</string>
     <string name="detail_menu_share">Compartilhar</string>
     <string name="sheet_sleep_timer">Timer para dormir</string>
+    <string name="sheet_edit_info_title">Editar informações</string>
+    <string name="sheet_cover_label">Capa</string>
+    <string name="sheet_cover_gallery">Da galeria</string>
 </resources>

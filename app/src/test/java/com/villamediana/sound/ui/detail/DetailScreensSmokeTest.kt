@@ -176,7 +176,7 @@ class DetailScreensSmokeTest {
 
         compose.onAllNodesWithContentDescription("Mais opções").onFirst().performClick()
         waitForText("Organizar músicas")
-        assertShown("Escolher capa")
+        assertShown("Editar informações")
         assertShown("Apagar playlist")
         shot("playlist-menu")
     }
@@ -270,7 +270,8 @@ class DetailScreensSmokeTest {
         val ids = seed()
         val pid = runBlocking { library.createPlaylist("Domingo") }
         val crimen = ids.getValue("Crimen")
-        compose.setContent { Host { AddToPlaylistSheet(trackIds = listOf(crimen), onDismiss = {}) } }
+        val song = runBlocking { library.getTrack(crimen) }!!
+        compose.setContent { Host { AddToPlaylistSheet(tracks = listOf(song), onDismiss = {}) } }
         compose.mainClock.advanceTimeBy(1_000) // let the sheet slide in
         waitForText("Domingo")
         assertShown("Nova playlist")

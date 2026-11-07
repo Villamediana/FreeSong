@@ -43,11 +43,40 @@ class DiscoverLiveTest {
         val related = repo.related(classics.first().videoId)
         println("because: " + related.take(4).joinToString { "${it.title} — ${it.artist}" })
         assertTrue(related.isNotEmpty())
-        val playlists = repo.collections("playlists:rock", "${rock.term} playlist", com.villamediana.sound.online.SearchFilter.PLAYLISTS, 3)
+        val playlists = repo.playlists(rock, 3)
         println("playlists: " + playlists.joinToString { it.title })
         assertTrue(playlists.isNotEmpty())
         val artist = repo.artist(classics.first().artist.substringBefore(",").trim())
         println("artist: ${artist?.title} ${artist?.url}")
         assertTrue(artist != null)
     }
+
+    /** The player's album and artist by name, and the long radios the made-for-you mixes compare. */
+    @Test fun albumAndArtistByNameAndLongRadios() = runBlocking {
+        assumeTrue(System.getProperty("sound.live") == "1")
+        val http = OkHttpClient()
+        NewPipeHttp.init(http, Locale.forLanguageTag("pt-BR"))
+        val source = NewPipeYouTubeSource(http)
+        val repo = DiscoverRepository(source, tmp.root.resolve("d.json"))
+        val album = repo.findAlbum("Amar Es Combatir", "Maná", sameArtist = true)
+        println("album: ${album?.title} — ${album?.author} ${album?.url}")
+        assertTrue(album != null)
+        val songs = source.collection(album!!.url, com.villamediana.sound.online.CollectionKind.ALBUM).tracks
+        println("album songs: ${songs.size} " + songs.take(4).joinToString { it.title })
+        assertTrue(songs.size >= 8)
+        val artist = repo.findArtist("Maná")
+        println("artist: ${artist?.title} ${artist?.url}")
+        assertTrue(artist != null)
+        val radios = songs.take(3).map { repo.related(it.videoId, 50) }
+        println("radios: " + radios.map { it.size })
+        val picked = com.villamediana.sound.smart.MadeForYou.pickNew(radios, songs.map { it.videoId }.toSet())
+        println("for you (${picked.size}): " + picked.take(10).joinToString { "${it.title} — ${it.artist}" })
+        assertTrue(picked.size >= 20)
+        val rock = GenreCatalog.byId("rock")!!
+        val shelf = repo.shelf(rock)
+        val lists = repo.playlists(rock)
+        println("rock shelf ${shelf.size}: " + shelf.take(4).joinToString { it.title } + " | playlists: " + lists.joinToString { it.title })
+        assertTrue(shelf.size >= 12 && lists.isNotEmpty())
+    }
 }
+

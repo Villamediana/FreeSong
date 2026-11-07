@@ -1,6 +1,7 @@
 package com.villamediana.sound.ui.components
 
 import com.villamediana.sound.ui.theme.sc
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -26,6 +27,18 @@ import com.villamediana.sound.ui.theme.Dimens
 import com.villamediana.sound.ui.theme.SoundColors
 
 /** Section title with an optional action on the right ("Ver tudo"). */
+/** A hairline between two sections of a page (the Home): a light separation, nothing more. */
+@Composable
+fun SectionRule(modifier: Modifier = Modifier) {
+    androidx.compose.foundation.layout.Box(
+        modifier
+            .padding(horizontal = Dimens.Gutter)
+            .fillMaxWidth()
+            .height(1.dp)
+            .background(SoundColors.Hairline),
+    )
+}
+
 @Composable
 fun SectionHeader(
     title: String,

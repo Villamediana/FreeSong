@@ -336,12 +336,8 @@ fun TrackActionsSheet(
             }
         }
 
-        TrackSheetStage.AddToPlaylist -> AddToPlaylistSheet(
-            trackIds = listOf(t.id),
-            onDismiss = onDismiss,
-            // A streamed song goes in as itself (it plays online; nothing is downloaded).
-            online = if (t.isOnline) t.toRemoteTrack() else null,
-        )
+        // A streamed song goes in as itself (it plays online; nothing is downloaded).
+        TrackSheetStage.AddToPlaylist -> AddToPlaylistSheet(tracks = listOf(t), onDismiss = onDismiss)
 
         TrackSheetStage.Edit -> EditTrackDialog(
             track = t,
@@ -441,7 +437,7 @@ data class PlaylistContext(val playlistId: Long, val rowId: Long)
 /** Picker to add songs to an existing or new playlist. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddToPlaylistSheet(trackIds: List<Long>, onDismiss: () -> Unit, online: com.villamediana.sound.online.RemoteTrack? = null) {
+fun AddToPlaylistSheet(tracks: List<Track>, onDismiss: () -> Unit) {
     val graph = SoundApplication.graph
     val library = graph.library
     val feedback = rememberSheetFeedback()
@@ -455,7 +451,9 @@ fun AddToPlaylistSheet(trackIds: List<Long>, onDismiss: () -> Unit, online: com.
     var creating by rememberSaveable { mutableStateOf(false) }
     var name by rememberSaveable { mutableStateOf("") }
     var addedTo by remember { mutableStateOf<Long?>(null) }
-    val ids = remember(trackIds) { trackIds.distinct() }
+    // Songs of the library and streamed ones alike (a streamed one goes in without downloading).
+    val songs = remember(tracks) { tracks.distinctBy { it.videoId ?: "t:${it.id}" } }
+    val songIds = remember(songs) { songs.map { it.id } }
 
     fun finish(message: String) {
         feedback.show(message)
@@ -463,14 +461,12 @@ fun AddToPlaylistSheet(trackIds: List<Long>, onDismiss: () -> Unit, online: com.
     }
 
     fun addTo(p: PlaylistSummary) {
-        if (addedTo != null || ids.isEmpty()) return
+        if (addedTo != null || songs.isEmpty()) return
         addedTo = p.id
         haptic.performHapticFeedback(HapticFeedbackType.Confirm)
         scope.launch {
             // The write runs in the app scope: it finishes even if the sheet is swiped away meanwhile.
-            val added = graph.scope.async {
-                if (online != null) (if (library.addOnlineToPlaylist(p.id, online)) 1 else 0) else library.addToPlaylist(p.id, ids)
-            }.await()
+            val added = graph.scope.async { library.addSongsToPlaylist(p.id, songs) }.await()
             delay(320) // let the check land before the sheet slides away
             finish(
                 if (added == 0) res.getString(R.string.sheet_already_in, p.name)
@@ -487,11 +483,7 @@ fun AddToPlaylistSheet(trackIds: List<Long>, onDismiss: () -> Unit, online: com.
         scope.launch {
             val added = graph.scope.async {
                 val id = library.createPlaylist(playlistName)
-                when {
-                    online != null -> if (library.addOnlineToPlaylist(id, online)) 1 else 0
-                    ids.isEmpty() -> 0
-                    else -> library.addToPlaylist(id, ids)
-                }
+                if (songs.isEmpty()) 0 else library.addSongsToPlaylist(id, songs)
             }.await()
             finish(
                 if (added == 0) res.getString(R.string.sheet_playlist_created, playlistName)
@@ -503,7 +495,7 @@ fun AddToPlaylistSheet(trackIds: List<Long>, onDismiss: () -> Unit, online: com.
     SoundSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         SheetTitle(
             title = stringResource(R.string.sheet_add_title),
-            subtitle = songCount(ids.size),
+            subtitle = songCount(songs.size),
         )
         AnimatedContent(
             targetState = creating,
@@ -549,7 +541,7 @@ fun AddToPlaylistSheet(trackIds: List<Long>, onDismiss: () -> Unit, online: com.
         } else {
             LazyColumn(Modifier.fillMaxWidth().heightIn(max = 440.dp)) {
                 items(lists.orEmpty(), key = { it.id }) { p ->
-                    val inside = membership[p.id]?.containsAll(ids) == true
+                    val inside = membership[p.id]?.containsAll(songIds) == true
                     PlaylistPickRow(
                         playlist = p,
                         checked = inside || addedTo == p.id,

@@ -11,6 +11,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -176,26 +177,19 @@ private fun GenreCard(genre: GenreDef, covers: List<String>, selected: Boolean, 
     }
 }
 
-/** Everything live on the Home: "porque você ouviu", artists, playlists, genre shelves. */
+/** Everything live on the Home: "porque você ouviu", playlists, genre shelves. */
 internal fun LazyListScope.discoverSections(
     state: DiscoverUiState,
     playback: PlaybackState,
     onPlay: (tracks: List<RemoteTrack>, index: Int, title: String, id: String) -> Unit,
-    onArtist: (String) -> Unit,
     onPlaylist: (RemoteCollection) -> Unit,
     onEdit: () -> Unit,
+    onSongMenu: (RemoteTrack) -> Unit,
 ) {
     if (state.because.isNotEmpty() && state.becauseTitle != null) {
         item(key = "d-because", contentType = "row") {
             val title = stringResource(R.string.discover_because, state.becauseTitle)
-            SongRow(title, state.because, playback) { i -> onPlay(state.because, i, title, "because"); Chrome.openPlayer() }
-        }
-    }
-    if (state.artists.isNotEmpty()) {
-        item(key = "d-artists", contentType = "row") {
-            DiscoverRow(stringResource(R.string.discover_artists)) {
-                items(state.artists, key = { "a:" + it.name.lowercase() }) { a -> ArtistBubble(a, onClick = { onArtist(a.name) }) }
-            }
+            SongRow(title, state.because, playback, onSongMenu) { i -> onPlay(state.because, i, title, "because"); Chrome.openPlayer() }
         }
     }
     if (state.playlists.isNotEmpty()) {
@@ -208,7 +202,7 @@ internal fun LazyListScope.discoverSections(
     state.shelves.forEach { shelf ->
         item(key = "shelf:" + shelf.genre.id, contentType = "row") {
             val title = shelfTitle(shelf.genre)
-            SongRow(title, shelf.tracks, playback) { i -> onPlay(shelf.tracks, i, title, "genre:" + shelf.genre.id); Chrome.openPlayer() }
+            SongRow(title, shelf.tracks, playback, onSongMenu) { i -> onPlay(shelf.tracks, i, title, "genre:" + shelf.genre.id); Chrome.openPlayer() }
         }
     }
     // No genres yet (songs came in before the picker was answered): the way to choose them.
@@ -222,24 +216,43 @@ internal fun LazyListScope.discoverSections(
 
 @Composable
 private fun DiscoverRow(title: String, content: LazyListScope.() -> Unit) {
-    Column(Modifier.fillMaxWidth().padding(top = Dimens.SectionGap - 10.dp)) {
+    Column(Modifier.fillMaxWidth().padding(top = 18.dp)) {
+        // A light line between the Home's sections.
+        com.villamediana.sound.ui.components.SectionRule()
+        Spacer(Modifier.height(16.dp))
         SectionHeader(title)
         LazyRow(modifier = Modifier.keepHorizontalDrags(), contentPadding = PaddingValues(horizontal = Dimens.Gutter), horizontalArrangement = Arrangement.spacedBy(14.dp), content = content)
     }
 }
 
 @Composable
-private fun SongRow(title: String, tracks: List<RemoteTrack>, playback: PlaybackState, onPlay: (Int) -> Unit) {
+private fun SongRow(title: String, tracks: List<RemoteTrack>, playback: PlaybackState, onMenu: (RemoteTrack) -> Unit, onPlay: (Int) -> Unit) {
     DiscoverRow(title) {
-        itemsIndexed(tracks, key = { _, t -> t.videoId }) { i, t -> SongCard(t, playback, onClick = { onPlay(i) }) }
+        itemsIndexed(tracks, key = { _, t -> t.videoId }) { i, t -> SongCard(t, playback, onClick = { onPlay(i) }, onLongClick = { onMenu(t) }) }
     }
 }
 
+/** A song of the Home: a tap plays it, holding it opens its actions (queue, playlist, like…) without playing. */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun SongCard(t: RemoteTrack, playback: PlaybackState, onClick: () -> Unit) {
+private fun SongCard(t: RemoteTrack, playback: PlaybackState, onClick: () -> Unit, onLongClick: () -> Unit) {
     val current = playback.current?.videoId == t.videoId
     val interaction = remember { MutableInteractionSource() }
-    Column(Modifier.width(Dimens.CardCover).pressScale(interaction, 0.97f).clickable(interactionSource = interaction, indication = null, onClick = onClick)) {
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    Column(
+        Modifier
+            .width(Dimens.CardCover)
+            .pressScale(interaction, 0.97f)
+            .combinedClickable(
+                interactionSource = interaction,
+                indication = null,
+                onClick = onClick,
+                onLongClick = {
+                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                    onLongClick()
+                },
+            ),
+    ) {
         Box {
             Cover(com.villamediana.sound.ui.components.rememberSongCover(t), Modifier.size(Dimens.CardCover), seed = t.title, shape = RoundedCornerShape(16.dp))
             if (current) {
@@ -252,19 +265,6 @@ private fun SongCard(t: RemoteTrack, playback: PlaybackState, onClick: () -> Uni
         Spacer(Modifier.height(8.dp))
         Text(t.title, style = MaterialTheme.typography.titleSmall, color = if (current) SoundColors.Accent else SoundColors.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(t.artist, style = MaterialTheme.typography.bodySmall, color = SoundColors.TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-    }
-}
-
-@Composable
-private fun ArtistBubble(a: ArtistPick, onClick: () -> Unit) {
-    val interaction = remember { MutableInteractionSource() }
-    Column(
-        Modifier.width(108.dp).pressScale(interaction, 0.96f).clickable(interactionSource = interaction, indication = null, onClick = onClick),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Cover(a.imageUrl, Modifier.size(108.dp), seed = a.name, shape = CircleShape)
-        Spacer(Modifier.height(8.dp))
-        Text(a.name, style = MaterialTheme.typography.titleSmall, color = SoundColors.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -287,9 +287,9 @@ internal fun DiscoverHome(
     downloads: DownloadSummary,
     nav: Navigator,
     onPlay: (List<RemoteTrack>, Int, String, String) -> Unit,
-    onArtist: (String) -> Unit,
     onPlaylist: (RemoteCollection) -> Unit,
     onEdit: () -> Unit,
+    onSongMenu: (RemoteTrack) -> Unit,
 ) {
     val embedded = LocalHomeEmbedded.current
     val top = if (embedded) 0.dp else WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
@@ -311,7 +311,7 @@ internal fun DiscoverHome(
         if (!state.hasContent && state.loading) {
             item(key = "loading") { Box(Modifier.fillMaxWidth().height(240.dp)) }
         }
-        discoverSections(state, playback, onPlay, onArtist, onPlaylist, onEdit)
+        discoverSections(state, playback, onPlay, onPlaylist, onEdit, onSongMenu)
     }
 }
 

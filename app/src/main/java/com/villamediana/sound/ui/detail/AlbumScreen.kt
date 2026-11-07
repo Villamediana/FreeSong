@@ -36,6 +36,18 @@ import com.villamediana.sound.R
 import com.villamediana.sound.data.db.AlbumKey
 import com.villamediana.sound.data.model.AlbumDetail
 import com.villamediana.sound.data.model.AlbumSummary
+import com.villamediana.sound.data.db.Track
+import com.villamediana.sound.data.isOnline
+import com.villamediana.sound.discover.AlbumMerge
+import com.villamediana.sound.online.CollectionKind
+import com.villamediana.sound.online.RemoteTrack
+import com.villamediana.sound.stats.Recaps
+import com.villamediana.sound.ui.search.Connectivity
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
 import com.villamediana.sound.ui.components.Cover
 import com.villamediana.sound.ui.components.songCount
 import com.villamediana.sound.ui.nav.AlbumRoute
@@ -55,6 +67,42 @@ internal class AlbumViewModel(artist: String, title: String) : ViewModel() {
 
     val album: StateFlow<Load<AlbumDetail>> = library.album(key).asLoad().stateIn(this)
 
+    /** The album on YouTube Music (empty offline, until found, or when it isn't the same album). */
+    private val remote = MutableStateFlow(memo[key.normalized].orEmpty())
+
+    /**
+     * The album's songs: yours, and the rest of the album streamed, in the album's order. Only
+     * when the online album has one of your songs (otherwise it is another album of that name).
+     */
+    val songs: StateFlow<AlbumSongs?> = combine(library.album(key), remote, library.likedVideoIds) { detail, online, likedIds ->
+        detail ?: return@combine null
+        if (online.isEmpty() || !AlbumMerge.overlaps(detail.tracks, online)) return@combine AlbumSongs(detail.tracks, complete = false)
+        val merged = AlbumMerge.merge(detail.tracks, online).map { t -> if (t.isOnline && t.videoId in likedIds) t.copy(liked = true) else t }
+        AlbumSongs(merged, complete = true)
+    }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    init {
+        if (remote.value.isEmpty()) {
+            viewModelScope.launch {
+                // Waits for the network when the page opens without it.
+                Connectivity.online(graph.appContext).first { it }
+                val page = runCatching {
+                    graph.discover.findAlbum(key.title, Recaps.mainArtist(key.artist), sameArtist = true)
+                }.getOrNull() ?: return@launch
+                val tracks = runCatching { graph.youTube.collection(page.url, CollectionKind.ALBUM).tracks }.getOrNull().orEmpty()
+                if (tracks.isNotEmpty()) {
+                    memo[key.normalized] = tracks
+                    remote.value = tracks
+                }
+            }
+        }
+    }
+
+    private companion object {
+        /** Albums already looked up while the app is open: reopening one is instant. */
+        val memo = java.util.concurrent.ConcurrentHashMap<String, List<RemoteTrack>>()
+    }
+
     /** Other albums credited to the same album artist, newest first. */
     val moreByArtist: StateFlow<List<AlbumSummary>> = library.albums.map { all ->
         val artistKey = key.artist.trim().lowercase()
@@ -71,6 +119,9 @@ internal class AlbumViewModel(artist: String, title: String) : ViewModel() {
     }
 }
 
+/** [tracks] of the album page; [complete] when the online album filled in the songs you don't have. */
+internal data class AlbumSongs(val tracks: List<Track>, val complete: Boolean)
+
 @Composable
 fun AlbumScreen(route: AlbumRoute) {
     val vm = viewModel { AlbumViewModel(route.artist, route.title) }
@@ -86,7 +137,11 @@ fun AlbumScreen(route: AlbumRoute) {
 @Composable
 private fun AlbumContent(detail: AlbumDetail, vm: AlbumViewModel) {
     val s = detail.summary
-    val tracks = detail.tracks
+    val songs by vm.songs.collectAsStateWithLifecycle()
+    // Your songs at once; the rest of the album joins when it is found.
+    val tracks = songs?.tracks ?: detail.tracks
+    val complete = songs?.complete == true
+    val durationMs = if (complete) tracks.sumOf { it.durationMs } else s.durationMs
     val navigator = LocalNavigator.current
     val context = LocalContext.current
     val res = context.resources
@@ -112,7 +167,7 @@ private fun AlbumContent(detail: AlbumDetail, vm: AlbumViewModel) {
             title = s.title,
             owner = s.artist,
             onOwnerClick = { navigator.openArtist(s.artist) },
-            meta = MetaFormat.join(s.year?.toString(), MetaFormat.countAndDuration(countText, s.durationMs)),
+            meta = MetaFormat.join(s.year?.toString(), MetaFormat.countAndDuration(countText, durationMs)),
             wash = wash,
         ),
         art = { m -> Cover(s.coverPath, m, seed = s.title) },
@@ -143,11 +198,11 @@ private fun AlbumContent(detail: AlbumDetail, vm: AlbumViewModel) {
             if (confirmDelete) {
                 ConfirmDialog(
                     title = stringResource(R.string.detail_delete_album_title),
-                    body = pluralStringResource(R.plurals.detail_delete_album_body, tracks.size, tracks.size, s.title),
+                    body = pluralStringResource(R.plurals.detail_delete_album_body, detail.tracks.size, detail.tracks.size, s.title),
                     confirm = stringResource(R.string.delete),
                     onConfirm = {
                         confirmDelete = false
-                        vm.delete(tracks.map { it.id })
+                        vm.delete(detail.tracks.map { it.id })
                         toast(context, res.getString(R.string.detail_album_deleted, s.title))
                     },
                     onDismiss = { confirmDelete = false },
@@ -161,7 +216,7 @@ private fun AlbumContent(detail: AlbumDetail, vm: AlbumViewModel) {
                 playback = playback,
                 onClick = { player.play(tracks, i, source, shuffleOn) },
                 sheet = sheet,
-                number = t.trackNumber ?: (i + 1),
+                number = if (complete) i + 1 else t.trackNumber ?: (i + 1),
                 subtitle = t.artist,
                 showDuration = true,
                 modifier = Modifier.animateItem(),
@@ -173,7 +228,7 @@ private fun AlbumContent(detail: AlbumDetail, vm: AlbumViewModel) {
                     Text(it.toString(), style = MaterialTheme.typography.titleSmall, color = SoundColors.Text)
                     Spacer(Modifier.height(2.dp))
                 }
-                SmallCaption(MetaFormat.countAndDuration(countText, s.durationMs))
+                SmallCaption(MetaFormat.countAndDuration(countText, durationMs))
             }
         }
         if (more.isNotEmpty()) {

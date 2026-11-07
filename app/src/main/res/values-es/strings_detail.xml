@@ -63,11 +63,8 @@
     <string name="detail_remove">Quitar</string>
     <string name="detail_removed_from_playlist">“%s” quitada</string>
     <string name="detail_undo">Deshacer</string>
-    <string name="detail_edit_playlist_title">Editar playlist</string>
     <string name="detail_field_name">Nombre</string>
     <string name="detail_field_description">Descripción</string>
-    <string name="detail_choose_cover_title">Elegir portada</string>
-    <string name="detail_choose_cover_subtitle">Usa la portada de una de las canciones o el mosaico.</string>
     <string name="detail_cover_mosaic">Mosaico</string>
     <string name="detail_delete_playlist_title">¿Borrar la playlist?</string>
     <string name="detail_delete_playlist_body">“%s” sale de la biblioteca. Las canciones siguen en el teléfono.</string>
@@ -94,8 +91,6 @@
     <string name="detail_menu_add_to_playlist">Añadir a una playlist</string>
     <string name="detail_menu_go_artist">Ir al artista</string>
     <string name="detail_menu_delete_album">Borrar álbum del teléfono</string>
-    <string name="detail_menu_edit_playlist">Editar nombre y descripción</string>
-    <string name="detail_menu_choose_cover">Elegir portada</string>
     <string name="detail_menu_reorder">Ordenar canciones</string>
     <string name="detail_menu_delete_playlist">Borrar playlist</string>
     <plurals name="detail_play_next_done">
@@ -189,4 +184,7 @@
     <string name="sheet_radio_unavailable">No se pudo armar la radio ahora.</string>
     <string name="detail_menu_share">Compartir</string>
     <string name="sheet_sleep_timer">Temporizador para dormir</string>
+    <string name="sheet_edit_info_title">Editar información</string>
+    <string name="sheet_cover_label">Portada</string>
+    <string name="sheet_cover_gallery">De la galería</string>
 </resources>

@@ -71,7 +71,8 @@ class MadeForYouStore(
         val made = coroutineScope {
             plans.map { plan ->
                 async {
-                    val new = discover.daily("foryou:" + plan.id, day) {
+                    // "v2": the mixes got bigger and match the style (yesterday's list doesn't carry over).
+                    val new = discover.daily("foryou-v2:" + plan.id, day) {
                         val radios = plan.seeds.mapNotNull { seed ->
                             seed.videoId?.let { id -> runCatching { discover.related(id, RADIO_SIZE) }.getOrNull() }
                         }
@@ -83,12 +84,13 @@ class MadeForYouStore(
         }
         _mixes.value = made.map { it.second }
         built = shape
-        complete = made.all { (plan, mix) -> plan.seeds.isEmpty() || mix.tracks.size > plan.own.size }
+        complete = made.all { (plan, mix) -> plan.seeds.isEmpty() || mix.tracks.any { it.id < 0 } }
     }
 
     fun byId(id: String): Mix? = _mixes.value.firstOrNull { it.id == id }
 
     private companion object {
-        const val RADIO_SIZE = 20
+        /** Songs asked of each radio: the more each brings, the better they can be compared. */
+        const val RADIO_SIZE = 50
     }
 }
