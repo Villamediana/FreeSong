@@ -54,6 +54,20 @@ class OnlineLyricsTest {
         assertEquals(1, calls)
     }
 
+    @Test fun `found lyrics are kept on the phone for another day`() = runBlocking<Unit> {
+        val file = java.io.File.createTempFile("lyrics-online", ".json").apply { delete() }
+        var calls = 0
+        val q = LyricsQuery("Té para Tres", "Soda Stereo", "Canción Animal", 140_000)
+        val first = OnlineLyricsCache({ calls++; Lyrics("[00:01.00]Uno\n[00:05.50]Dos", synced = true) }, file = file)
+        assertEquals(listOf("Uno", "Dos"), first.get(q)!!.lines.map { it.text })
+        // Next app start: a new cache over the same file answers without asking LRCLIB.
+        val later = OnlineLyricsCache({ calls++; null }, file = file)
+        assertEquals(listOf("Uno", "Dos"), later.peek(q)!!.lines.map { it.text })
+        assertEquals(listOf("Uno", "Dos"), later.get(q)!!.lines.map { it.text })
+        assertEquals(1, calls)
+        file.delete()
+    }
+
     @Test fun `not found is remembered for a while only`() = runBlocking {
         var now = 0L
         var calls = 0

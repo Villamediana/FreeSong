@@ -60,4 +60,37 @@ object Thumbnails {
         isGoogleImage(url) -> 1
         else -> 0
     }
+
+    /** Sizes asked of Google's image servers: few, so a cover is cached once per size class. */
+    private val BUCKETS = intArrayOf(120, 240, 360, 544, 720, 1080)
+
+    /**
+     * [url] fetched at about [px] pixels (its larger side on screen): a 52 dp row cover doesn't
+     * need the 720 px art. Google images get the smallest size class that covers [px] (never more
+     * than the url asked for); i.ytimg frames step down to the 320 px one for small spots. Other
+     * urls, unknown sizes and the larger ones stay as they are.
+     */
+    fun sized(url: String, px: Int): String {
+        if (px <= 0) return url
+        if (isGoogleImage(url)) {
+            val wanted = BUCKETS.firstOrNull { it >= px } ?: return url
+            sizeWH.find(url)?.let { m ->
+                val current = Regex("\\d+").find(m.value)?.value?.toIntOrNull() ?: return url
+                return if (wanted < current) url.replace(sizeWH, "=w$wanted-h$wanted") else url
+            }
+            sizeS.find(url)?.let { m ->
+                val current = m.value.removePrefix("=s").toIntOrNull() ?: return url
+                return if (wanted < current) url.replace(sizeS, "=s$wanted") else url
+            }
+            return url
+        }
+        ytimg.matchEntire(url)?.let { m ->
+            if (m.groupValues[5].isNotEmpty() || px > 320) return url
+            val name = m.groupValues[3]
+            if (name.startsWith("maxres") || name.startsWith("hq720") || name == "sddefault") {
+                return "https://i.ytimg.com/vi/${m.groupValues[2]}/mqdefault.jpg"
+            }
+        }
+        return url
+    }
 }

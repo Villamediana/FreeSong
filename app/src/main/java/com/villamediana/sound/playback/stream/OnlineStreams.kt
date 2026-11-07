@@ -166,9 +166,48 @@ internal object StreamDataSources {
         .setReadTimeoutMs(20_000)
         .setAllowCrossProtocolRedirects(true)
 
-    /** file://, content:// … as [DefaultDataSource] does; everything else through the chunked source. */
-    fun factory(context: Context, resolver: ChunkedHttpDataSource.UriResolver): DataSource.Factory =
-        DefaultDataSource.Factory(context, ChunkedHttpDataSource.Factory(http(), ChunkedHttpDataSource.DEFAULT_CHUNK_SIZE, resolver))
+    /**
+     * file://, content:// … as [DefaultDataSource] does; everything else through the chunked source —
+     * kept in [cache] when one is given (what was heard isn't downloaded again), in ranges of [chunkSize].
+     */
+    fun factory(
+        context: Context,
+        resolver: ChunkedHttpDataSource.UriResolver,
+        cache: androidx.media3.datasource.cache.Cache? = null,
+        chunkSize: Long = ChunkedHttpDataSource.DEFAULT_CHUNK_SIZE,
+    ): DataSource.Factory {
+        val network: DataSource.Factory = ChunkedHttpDataSource.Factory(http(), chunkSize, resolver)
+        val upstream = if (cache == null) {
+            network
+        } else {
+            androidx.media3.datasource.cache.CacheDataSource.Factory()
+                .setCache(cache)
+                .setUpstreamDataSourceFactory(network)
+                .setFlags(androidx.media3.datasource.cache.CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+        }
+        return DefaultDataSource.Factory(context, upstream)
+    }
+}
+
+/**
+ * The songs streamed lately, on disk: playing one again, going back to the previous one, seeking
+ * into a part already heard or the crossfade replaying a song's end cost no data. Keyed by the
+ * placeholder uri (video id + quality), so it outlives the expiring googlevideo urls. Least
+ * recently heard go first past [BYTES]. One per process (a cache folder opens once).
+ */
+@OptIn(UnstableApi::class)
+internal object AudioCache {
+    const val BYTES = 300L * 1024 * 1024
+
+    @Volatile private var shared: androidx.media3.datasource.cache.SimpleCache? = null
+
+    fun get(context: Context): androidx.media3.datasource.cache.SimpleCache = shared ?: synchronized(this) {
+        shared ?: androidx.media3.datasource.cache.SimpleCache(
+            java.io.File(context.cacheDir, "audio"),
+            androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor(BYTES),
+            androidx.media3.database.StandaloneDatabaseProvider(context.applicationContext),
+        ).also { shared = it }
+    }
 }
 
 /**

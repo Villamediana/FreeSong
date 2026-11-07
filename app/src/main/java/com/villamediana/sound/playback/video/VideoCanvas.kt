@@ -133,7 +133,8 @@ class VideoCanvas internal constructor(
     }
 
     private val sources by lazy {
-        val upstream = StreamDataSources.factory(context, resolver)
+        // Small ranges: the loop is ten seconds, not the whole video.
+        val upstream = StreamDataSources.factory(context, resolver, chunkSize = CANVAS_CHUNK_BYTES)
         val cached = CacheDataSource.Factory()
             .setCache(cache(context))
             .setUpstreamDataSourceFactory(upstream)
@@ -187,8 +188,10 @@ class VideoCanvas internal constructor(
             player.repeatMode = Player.REPEAT_MODE_OFF
             player.prepare()
             player.play()
+            // Prepared once the first copy has the whole loop in the cache (see [step]): started
+            // together, both would download the same bytes.
+            second.stop()
             second.setMediaSource(clip(videoId, stream, startMs))
-            second.prepare()
             front = player
             crossing = false
             _twinAlpha.value = 0f
@@ -215,6 +218,13 @@ class VideoCanvas internal constructor(
     private fun step() {
         val cur = front ?: return
         val next = other()
+        // The second copy readies itself from the disk cache, after the first one loaded the loop.
+        val first = exo
+        if (next != null && next.playbackState == Player.STATE_IDLE && first != null &&
+            first.playbackState == Player.STATE_READY && !first.isLoading
+        ) {
+            next.prepare()
+        }
         if (next == null) {
             // No second copy: the clip loops on its own (with its cut).
             if (cur.repeatMode != Player.REPEAT_MODE_ONE) cur.repeatMode = Player.REPEAT_MODE_ONE
@@ -341,6 +351,7 @@ class VideoCanvas internal constructor(
         const val CLIP_MS = 10_000L
         const val RELEASE_AFTER_MS = 15_000L
         private const val FRAME_MS = 16L
+        private const val CANVAS_CHUNK_BYTES = 512L * 1024
         private const val CACHE_BYTES = 64L * 1024 * 1024
 
         @Volatile private var sharedCache: SimpleCache? = null

@@ -1,5 +1,6 @@
 package com.villamediana.sound.playback
 
+import com.villamediana.sound.playback.stream.AudioCache
 import com.villamediana.sound.data.isOnline
 import android.app.PendingIntent
 import android.content.Intent
@@ -133,7 +134,7 @@ class PlaybackService : MediaLibraryService() {
                     .build(),
             )
             .setMediaSourceFactory(
-                DefaultMediaSourceFactory(StreamDataSources.factory(this, streams))
+                DefaultMediaSourceFactory(StreamDataSources.factory(this, streams, AudioCache.get(this)))
                     .setLoadErrorHandlingPolicy(StreamLoadErrorPolicy()),
             )
             .setAudioAttributes(
@@ -179,7 +180,7 @@ class PlaybackService : MediaLibraryService() {
             newTail = {
                 ExoPlayer.Builder(this)
                     .setMediaSourceFactory(
-                        DefaultMediaSourceFactory(StreamDataSources.factory(this, streams))
+                        DefaultMediaSourceFactory(StreamDataSources.factory(this, streams, AudioCache.get(this)))
                             .setLoadErrorHandlingPolicy(StreamLoadErrorPolicy()),
                     )
                     .setAudioAttributes(

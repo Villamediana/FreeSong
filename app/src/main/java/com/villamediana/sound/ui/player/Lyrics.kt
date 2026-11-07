@@ -1,5 +1,6 @@
 package com.villamediana.sound.ui.player
 
+import kotlinx.serialization.builtins.serializer
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.isSpecified
 import androidx.compose.foundation.layout.Column
@@ -101,8 +102,24 @@ internal class OnlineLyricsCache(
     private val now: () -> Long = System::currentTimeMillis,
     private val capacity: Int = 60,
     private val missTtlMs: Long = 10 * 60_000L,
+    /** Found lyrics also kept on disk (raw text): a song heard again another day doesn't ask again. */
+    private val file: java.io.File? = null,
 ) {
     private val mutex = Mutex()
+    private var stored: LinkedHashMap<String, String>? = null
+
+    /** Lyrics text kept on disk, by query key (oldest first; capped). Called under [mutex]. */
+    private fun disk(): LinkedHashMap<String, String> = stored ?: LinkedHashMap<String, String>().also { map ->
+        file?.takeIf { it.isFile }?.let { f ->
+            runCatching {
+                map.putAll(diskJson.decodeFromString(diskSerializer, f.readText()))
+            }
+        }
+        stored = map
+    }
+
+    private fun parse(text: String): ParsedLyrics? =
+        Lrc.parse(text.removePrefix("\uFEFF")).takeIf { lyrics -> lyrics.lines.any { it.text.isNotBlank() } }
     private val found = object : LinkedHashMap<String, ParsedLyrics>(16, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, ParsedLyrics>?): Boolean = size > capacity
     }
@@ -110,19 +127,29 @@ internal class OnlineLyricsCache(
 
     /** Already known: the lyrics, or [MISSING] when recently not found; null = never asked. */
     suspend fun peek(query: LyricsQuery): ParsedLyrics? = mutex.withLock {
-        found[query.key] ?: missing[query.key]?.takeIf { now() - it < missTtlMs }?.let { MISSING }
+        found[query.key]
+            ?: (if (file != null) disk()[query.key]?.let(::parse)?.also { found[query.key] = it } else null)
+            ?: missing[query.key]?.takeIf { now() - it < missTtlMs }?.let { MISSING }
     }
 
     suspend fun get(query: LyricsQuery): ParsedLyrics? {
         peek(query)?.let { return it.takeUnless { l -> l === MISSING } }
-        val parsed = runCatching { find(query) }.getOrNull()?.text
-            ?.removePrefix("\uFEFF")
-            ?.let { Lrc.parse(it) }
-            ?.takeIf { lyrics -> lyrics.lines.any { it.text.isNotBlank() } }
+        val text = runCatching { find(query) }.getOrNull()?.text
+        val parsed = text?.let(::parse)
         mutex.withLock {
             if (parsed != null) {
                 found[query.key] = parsed
                 missing.remove(query.key)
+                val f = file
+                if (f != null && text != null) {
+                    val map = disk()
+                    map[query.key] = text
+                    while (map.size > DISK_ENTRIES) map.remove(map.keys.first())
+                    runCatching {
+                        f.parentFile?.mkdirs()
+                        f.writeText(diskJson.encodeToString(diskSerializer, map))
+                    }
+                }
             } else {
                 missing[query.key] = now()
             }
@@ -132,6 +159,10 @@ internal class OnlineLyricsCache(
 
     companion object {
         val MISSING = ParsedLyrics(synced = false, lines = emptyList())
+        private const val DISK_ENTRIES = 400
+        private val diskJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+        private val diskSerializer: kotlinx.serialization.KSerializer<Map<String, String>> =
+            kotlinx.serialization.builtins.MapSerializer(String.serializer(), String.serializer())
     }
 }
 
