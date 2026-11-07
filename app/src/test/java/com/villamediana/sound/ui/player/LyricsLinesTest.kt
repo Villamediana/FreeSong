@@ -28,6 +28,26 @@ class LyricsLinesTest {
         ParsedLyrics(synced, (1..80).map { LyricLine(if (synced) it * 4_000L else 0L, "$name $it") })
 
     @Test
+    fun translationsSitUnderTheirLines() {
+        val song = ParsedLyrics(true, listOf(LyricLine(0, "I'm in the business of misery"), LyricLine(4_000, ""), LyricLine(8_000, "Let's take it from the top")))
+        compose.setContent {
+            SoundTheme {
+                LyricsLines(
+                    lyrics = song,
+                    clock = PlaybackClock(),
+                    onSeek = {},
+                    textStyle = MaterialTheme.typography.titleLarge,
+                    colors = LyricColors.over(Color.Black),
+                    translations = listOf("Estou no negócio da miséria", null, "Vamos começar do início"),
+                )
+            }
+        }
+        compose.onNodeWithText("I'm in the business of misery").assertExists()
+        compose.onNodeWithText("Estou no negócio da miséria").assertExists()
+        compose.onNodeWithText("Vamos começar do início").assertExists()
+    }
+
+    @Test
     fun theNextSongsLyricsStartAtTheirFirstLine() {
         var shown by mutableStateOf(lyrics("Aurora", synced = true))
         compose.setContent {

@@ -1,5 +1,6 @@
 package com.villamediana.sound.ui.video
 
+import com.villamediana.sound.ui.player.translationStyle
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.material.icons.rounded.FastRewind
@@ -794,6 +795,7 @@ private fun PortraitDetails(
 private fun VideoLyrics(lyrics: ParsedLyrics, synced: Boolean, positionMs: () -> Long) {
     val list = rememberLazyListState()
     val index by remember(lyrics, synced) { derivedStateOf { if (synced) lyrics.indexAt(positionMs()) else -1 } }
+    val translations = com.villamediana.sound.ui.player.rememberTranslation(lyrics)
     LaunchedEffect(index) { if (index >= 0) list.animateScrollToItem((index - 1).coerceAtLeast(0)) }
     LazyColumn(
         Modifier
@@ -821,12 +823,13 @@ private fun VideoLyrics(lyrics: ParsedLyrics, synced: Boolean, positionMs: () ->
                 tween(300),
                 label = "line",
             )
-            Text(
-                line.text.ifBlank { "♪" },
-                style = if (synced) MaterialTheme.typography.titleLarge else MaterialTheme.typography.bodyLarge,
-                color = color,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = if (synced) 7.dp else 3.dp),
-            )
+            val style = if (synced) MaterialTheme.typography.titleLarge else MaterialTheme.typography.bodyLarge
+            Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = if (synced) 7.dp else 3.dp)) {
+                Text(line.text.ifBlank { "♪" }, style = style, color = color)
+                translations?.getOrNull(i)?.let { t ->
+                    Text(t, style = style.translationStyle(), color = color.copy(alpha = color.alpha * 0.7f), modifier = Modifier.padding(top = 1.dp))
+                }
+            }
         }
     }
 }

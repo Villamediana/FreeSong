@@ -43,6 +43,12 @@ data class Settings(
     val likeDownloads: Boolean = false,
     /** The "Início" pill (suggestions). Off, the app opens straight on the songs. */
     val showHome: Boolean = true,
+    /** Crossfade between songs, in seconds (0 = off). Set in the equalizer. */
+    val crossfadeSeconds: Int = 5,
+    /** Lyrics in another language show their translation under each line. */
+    val translateLyrics: Boolean = true,
+    /** "Downloads inteligentes": the songs heard most online download by themselves on Wi-Fi. */
+    val smartDownloads: Boolean = false,
     val theme: ThemeMode = ThemeMode.DARK,
     /** Highlight color id (see [com.villamediana.sound.ui.theme.SoundAccents]). */
     val accent: String = "purple",
@@ -66,6 +72,9 @@ class SettingsStore(private val context: Context) {
         val playOnline = booleanPreferencesKey("play_online_default")
         val likeDownloads = booleanPreferencesKey("like_downloads")
         val showHome = booleanPreferencesKey("show_home")
+        val crossfade = intPreferencesKey("crossfade_seconds")
+        val translateLyrics = booleanPreferencesKey("translate_lyrics")
+        val smartDownloads = booleanPreferencesKey("smart_downloads")
         val theme = stringPreferencesKey("theme")
         val accent = stringPreferencesKey("accent")
         val genres = stringSetPreferencesKey("favorite_genres")
@@ -84,6 +93,9 @@ class SettingsStore(private val context: Context) {
             playOnlineByDefault = p[K.playOnline] ?: true,
             likeDownloads = p[K.likeDownloads] ?: false,
             showHome = p[K.showHome] ?: true,
+            crossfadeSeconds = (p[K.crossfade] ?: 5).coerceIn(0, MAX_CROSSFADE_SECONDS),
+            translateLyrics = p[K.translateLyrics] ?: true,
+            smartDownloads = p[K.smartDownloads] ?: false,
             theme = p[K.theme]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() } ?: ThemeMode.DARK,
             accent = p[K.accent] ?: "purple",
             favoriteGenres = p[K.genres].orEmpty(),
@@ -110,5 +122,10 @@ class SettingsStore(private val context: Context) {
     suspend fun setPlayOnlineByDefault(v: Boolean) = context.dataStore.edit { it[K.playOnline] = v }
     suspend fun setLikeDownloads(v: Boolean) = context.dataStore.edit { it[K.likeDownloads] = v }
     suspend fun setShowHome(v: Boolean) = context.dataStore.edit { it[K.showHome] = v }
+    suspend fun setCrossfadeSeconds(v: Int) = context.dataStore.edit { it[K.crossfade] = v.coerceIn(0, MAX_CROSSFADE_SECONDS) }
+    suspend fun setTranslateLyrics(v: Boolean) = context.dataStore.edit { it[K.translateLyrics] = v }
+    suspend fun setSmartDownloads(v: Boolean) = context.dataStore.edit { it[K.smartDownloads] = v }
     suspend fun setLastQueueJson(v: String?) = context.dataStore.edit { if (v == null) it.remove(K.lastQueue) else it[K.lastQueue] = v }
 }
+
+const val MAX_CROSSFADE_SECONDS = 12

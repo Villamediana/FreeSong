@@ -143,6 +143,7 @@ fun SoundRoot(incoming: MutableStateFlow<Inbound?>) {
     CompositionLocalProvider(
         LocalNavigator provides navigator,
         com.villamediana.sound.ui.components.LocalSongCovers provides SoundApplication.graph.covers,
+        com.villamediana.sound.ui.player.LocalLyricsTranslator provides SoundApplication.graph.lyricsTranslator,
         LocalBottomInset provides barSpace + miniPlayerSpace + 16.dp,
     ) {
         Box(Modifier.fillMaxSize().background(SoundColors.Ink)) {
@@ -203,6 +204,7 @@ fun SoundRoot(incoming: MutableStateFlow<Inbound?>) {
                 composable<RemoteCollectionRoute> { Page { RemoteCollectionScreen(it.toRoute()) } }
                 composable<DownloadsRoute> { Page { DownloadsScreen() } }
                 composable<SettingsRoute> { Page { SettingsScreen() } }
+                composable<RecapRoute> { Page { com.villamediana.sound.ui.recap.RecapScreen() } }
                 composable<EqualizerRoute> { Page { EqualizerScreen() } }
                 composable<ThemeRoute> { Page { com.villamediana.sound.ui.settings.ThemeScreen() } }
                 composable<VideoRoute> { Page { VideoScreen(it.toRoute()) } }

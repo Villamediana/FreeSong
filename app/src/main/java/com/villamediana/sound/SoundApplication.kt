@@ -1,5 +1,8 @@
 package com.villamediana.sound
 
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import android.app.Application
 import coil3.ImageLoader
 import coil3.PlatformContext
@@ -20,6 +23,12 @@ class SoundApplication : Application(), SingletonImageLoader.Factory {
         instance = this
         Notifications.createChannels(this)
         graph.downloads.kick()
+        // "Downloads inteligentes" follows its switch (scheduled on, cancelled off).
+        graph.scope.launch {
+            graph.settings.settings.map { it.smartDownloads }.distinctUntilChanged().collect { on ->
+                runCatching { com.villamediana.sound.download.SmartDownloads.sync(this@SoundApplication, on) }
+            }
+        }
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader =

@@ -1,5 +1,6 @@
 package com.villamediana.sound.data
 
+import com.villamediana.sound.data.db.OnlinePlay
 import com.villamediana.sound.data.db.ImportedPlaylist
 import com.villamediana.sound.online.CollectionDetail
 import com.villamediana.sound.online.CollectionKind
@@ -56,6 +57,7 @@ class LibraryRepository(
     private val eventDao = db.playEvents()
     private val likedOnlineDao = db.likedOnline()
     private val importedDao = db.importedPlaylists()
+    private val onlinePlayDao = db.onlinePlays()
 
     /** All tracks, newest first. Shared: every derived flow reuses one Room query. */
     val tracks: Flow<List<Track>> = trackDao.observeAll()
@@ -211,15 +213,38 @@ class LibraryRepository(
     suspend fun recordPlay(trackId: Long, listenedMs: Long, durationMs: Long, context: String?) {
         if (listenedMs < 1_000) return
         val now = System.currentTimeMillis()
-        val completed = durationMs > 0 && listenedMs >= durationMs * 0.9
-        val skipped = !completed && (listenedMs < 30_000 || (durationMs > 0 && listenedMs < durationMs / 3))
+        val (completed, skipped) = listenOutcome(listenedMs, durationMs)
         db.withTransaction {
             eventDao.insert(PlayEvent(trackId = trackId, playedAt = now, listenedMs = listenedMs, completed = completed, skipped = skipped, context = context))
             if (skipped) trackDao.markSkipped(trackId) else trackDao.markPlayed(trackId, now)
         }
     }
 
-    suspend fun clearHistory() = eventDao.clear()
+    /** A song listened to online (not in the library): kept for the retrospective and the smart downloads. */
+    suspend fun recordOnlinePlay(song: RemoteTrack, listenedMs: Long, durationMs: Long, context: String?, now: Long = System.currentTimeMillis()) {
+        if (listenedMs < 1_000) return
+        val (completed, skipped) = listenOutcome(listenedMs, durationMs)
+        onlinePlayDao.insert(
+            OnlinePlay(
+                videoId = song.videoId, title = song.title, artist = song.artist, album = song.album,
+                thumbnailUrl = song.thumbnailUrl, url = song.url, durationMs = durationMs,
+                playedAt = now, listenedMs = listenedMs, completed = completed, skipped = skipped, context = context,
+            ),
+        )
+    }
+
+    /** Library listens since [since] (newest first). */
+    fun playEventsSince(since: Long): Flow<List<PlayEvent>> = eventDao.observeSince(since)
+
+    /** Online listens since [since] (newest first). */
+    fun onlinePlaysSince(since: Long): Flow<List<OnlinePlay>> = onlinePlayDao.observeSince(since)
+
+    suspend fun onlinePlaysListSince(since: Long): List<OnlinePlay> = onlinePlayDao.since(since)
+
+    suspend fun clearHistory() = db.withTransaction {
+        eventDao.clear()
+        onlinePlayDao.clear()
+    }
 
     // ---------------------------------------------------------------- playlists
 
@@ -493,3 +518,10 @@ private data class ImportedSong(
 )
 
 private val importedJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+
+/** Completed (≥ 90 %) / skipped (< 30 s or < 1/3) — the same rule for library and online listens. */
+internal fun listenOutcome(listenedMs: Long, durationMs: Long): Pair<Boolean, Boolean> {
+    val completed = durationMs > 0 && listenedMs >= durationMs * 0.9
+    val skipped = !completed && (listenedMs < 30_000 || (durationMs > 0 && listenedMs < durationMs / 3))
+    return completed to skipped
+}

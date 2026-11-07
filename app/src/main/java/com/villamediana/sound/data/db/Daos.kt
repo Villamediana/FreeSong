@@ -176,6 +176,9 @@ interface PlayEventDao {
     @Query("SELECT * FROM play_events ORDER BY playedAt DESC LIMIT :limit")
     fun observeRecent(limit: Int): Flow<List<PlayEvent>>
 
+    @Query("SELECT * FROM play_events WHERE playedAt >= :since ORDER BY playedAt DESC")
+    fun observeSince(since: Long): Flow<List<PlayEvent>>
+
     @Query("DELETE FROM play_events")
     suspend fun clear()
 }
@@ -242,4 +245,19 @@ interface ImportedPlaylistDao {
 
     @Query("DELETE FROM imported_playlists WHERE url = :url")
     suspend fun delete(url: String)
+}
+
+@Dao
+interface OnlinePlayDao {
+    @Insert
+    suspend fun insert(play: OnlinePlay): Long
+
+    @Query("SELECT * FROM online_plays WHERE playedAt >= :since ORDER BY playedAt DESC")
+    suspend fun since(since: Long): List<OnlinePlay>
+
+    @Query("SELECT * FROM online_plays WHERE playedAt >= :since ORDER BY playedAt DESC")
+    fun observeSince(since: Long): Flow<List<OnlinePlay>>
+
+    @Query("DELETE FROM online_plays")
+    suspend fun clear()
 }

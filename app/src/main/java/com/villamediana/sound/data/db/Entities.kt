@@ -211,3 +211,24 @@ data class ImportedPlaylist(
     val trackCount: Int,
     val importedAt: Long = System.currentTimeMillis(),
 )
+
+/**
+ * One listening session of a song played online (not in the library): the history of streamed
+ * listening — the retrospective and the smart downloads read it.
+ */
+@Entity(tableName = "online_plays", indices = [Index("videoId"), Index("playedAt")])
+data class OnlinePlay(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val videoId: String,
+    val title: String,
+    val artist: String,
+    val album: String? = null,
+    val thumbnailUrl: String? = null,
+    val url: String? = null,
+    val durationMs: Long = 0,
+    val playedAt: Long,
+    val listenedMs: Long,
+    val completed: Boolean,
+    val skipped: Boolean,
+    val context: String? = null,
+)

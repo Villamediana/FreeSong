@@ -1,5 +1,7 @@
 package com.villamediana.sound
 
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import com.villamediana.sound.data.db.DownloadState
 import kotlinx.coroutines.flow.first
 import android.content.Context
@@ -53,6 +55,15 @@ class AppGraph(context: Context) {
     }
     val enricher: MetadataEnricher by lazy { CatalogMetadataEnricher(http) }
     val lyrics: LyricsSource by lazy { LrclibLyricsSource(http) }
+
+    /** Lyrics in another language, translated under each line (Settings.translateLyrics). */
+    val lyricsTranslator: com.villamediana.sound.online.LyricsTranslator by lazy {
+        com.villamediana.sound.online.LyricsTranslator(
+            http,
+            java.io.File(appContext.filesDir, "lyrics-translations.json"),
+            settings.settings.map { it.translateLyrics }.distinctUntilChanged(),
+        )
+    }
 
     /** Public Spotify playlists (no login) and their import into a downloaded playlist. */
     val spotify: com.villamediana.sound.online.SpotifyPlaylists by lazy { com.villamediana.sound.online.SpotifyPlaylists(http) }

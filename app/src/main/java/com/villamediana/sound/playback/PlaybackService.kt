@@ -74,6 +74,7 @@ class PlaybackService : MediaLibraryService() {
     private val library get() = graph.library
 
     private lateinit var player: ExoPlayer
+    private lateinit var crossfader: Crossfader
     private lateinit var session: MediaLibrarySession
     private lateinit var sleep: SleepTimerRunner
     private lateinit var output: OutputDeviceMonitor
@@ -163,6 +164,24 @@ class PlaybackService : MediaLibraryService() {
 
         browser = LibraryBrowser(this, library, ::libraryTracks, ::taste, strings)
         sleep = SleepTimerRunner(player) { publishExtras() }
+        // Crossfade: a tail player plays the end of the song out while the next one fades in.
+        crossfader = Crossfader(
+            player = player,
+            newTail = {
+                ExoPlayer.Builder(this)
+                    .setMediaSourceFactory(
+                        DefaultMediaSourceFactory(StreamDataSources.factory(this, streams))
+                            .setLoadErrorHandlingPolicy(StreamLoadErrorPolicy()),
+                    )
+                    .setAudioAttributes(
+                        AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(),
+                        /* handleAudioFocus = */ false,
+                    )
+                    .build()
+            },
+            seconds = { settings.crossfadeSeconds },
+            blocked = { sleep.timer != SleepTimer.Off },
+        ).also { it.start() }
         output = OutputDeviceMonitor(this) { name ->
             outputName = name
             publishExtras()
@@ -188,6 +207,7 @@ class PlaybackService : MediaLibraryService() {
     override fun onDestroy() {
         saveNow()
         finishListen()
+        crossfader.release()
         sleep.release()
         output.stop()
         leveler.release()
@@ -562,17 +582,30 @@ class PlaybackService : MediaLibraryService() {
 
     // ================================================================ listening stats
 
+    /** Library songs by their id, online ones by their (negative) transient id. */
+    private fun listenId(item: MediaItem?): Long? = MediaItems.trackId(item) ?: MediaItems.onlineItem(item)?.trackId
+
+    /** The online song being listened to (its metadata goes with the listen). */
+    private var listeningOnline: OnlineItem? = null
+
     private fun startListen(item: MediaItem?) {
-        val id = MediaItems.trackId(item) ?: return
-        val duration = player.duration.takeIf { it != C.TIME_UNSET && it > 0 } ?: tracksById[id]?.durationMs ?: 0
+        val id = listenId(item) ?: return
+        listeningOnline = MediaItems.onlineItem(item)
+        val duration = player.duration.takeIf { it != C.TIME_UNSET && it > 0 }
+            ?: tracksById[id]?.durationMs ?: listeningOnline?.durationMs ?: 0
         listen.start(id, duration, source?.type?.name, player.isPlaying)
     }
 
     private fun finishListen() {
         val s = listen.finish() ?: return
+        val online = listeningOnline?.takeIf { it.trackId == s.trackId }
+        listeningOnline = null
         tasteCache = null
         graph.scope.launch {
-            runCatching { library.recordPlay(s.trackId, s.listenedMs, s.durationMs, s.context) }
+            runCatching {
+                if (online != null) library.recordOnlinePlay(online.toRemote(), s.listenedMs, s.durationMs, s.context)
+                else if (s.trackId >= 0) library.recordPlay(s.trackId, s.listenedMs, s.durationMs, s.context)
+            }
         }
     }
 
@@ -738,7 +771,7 @@ class PlaybackService : MediaLibraryService() {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             // A metadata refresh of the playing song (replaceMediaItem) is not a new listen.
             val sameSong = reason == Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED &&
-                MediaItems.trackId(mediaItem) == listen.currentTrackId
+                listenId(mediaItem) == listen.currentTrackId
             if (!sameSong) {
                 finishListen()
                 startListen(mediaItem)

@@ -7,4 +7,10 @@
     <string name="main_tab_albums">Álbumes</string>
     <string name="main_tab_artists">Artistas</string>
     <string name="main_tab_genres">Géneros</string>
+    <string name="settings_smart_downloads">Descargas inteligentes</string>
+    <string name="settings_smart_downloads_sub">Con Wi-Fi, descarga las que más escuchas en línea.</string>
+    <string name="eq_crossfade">Crossfade</string>
+    <string name="eq_crossfade_off">Apagado</string>
+    <string name="eq_crossfade_seconds">%d s</string>
+    <string name="lyrics_translate">Traducción</string>
 </resources>

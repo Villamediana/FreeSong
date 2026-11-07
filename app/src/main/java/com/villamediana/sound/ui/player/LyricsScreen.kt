@@ -1,5 +1,8 @@
 package com.villamediana.sound.ui.player
 
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.collectAsState
+import androidx.compose.material.icons.rounded.Translate
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -177,6 +180,7 @@ internal fun LyricsScreen(
                     )
                     Text(track.artist, style = MaterialTheme.typography.bodyMedium, color = SoundColors.Text.copy(alpha = 0.7f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
+                if (lyrics is LyricsState.Ready) TranslateToggle()
             }
             Box(
                 Modifier
@@ -218,3 +222,19 @@ internal fun LyricsScreen(
 }
 
 private val CARD_LYRICS_HEIGHT = 330.dp
+
+/** "Tradução" on/off for lyrics in another language (remembered in the settings). */
+@Composable
+private fun TranslateToggle() {
+    val translator = LocalLyricsTranslator.current ?: return
+    val on by translator.enabled.collectAsState(initial = false)
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    PlayerIconButton(
+        Icons.Rounded.Translate,
+        stringResource(R.string.lyrics_translate),
+        onClick = { scope.launch { com.villamediana.sound.SoundApplication.graph.settings.setTranslateLyrics(!on) } },
+        size = 44.dp,
+        iconSize = 22.dp,
+        tint = if (on) SoundColors.Text else SoundColors.Text.copy(alpha = 0.4f),
+    )
+}

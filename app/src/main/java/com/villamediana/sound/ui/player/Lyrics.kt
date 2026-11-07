@@ -1,5 +1,9 @@
 package com.villamediana.sound.ui.player
 
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.isSpecified
+import androidx.compose.foundation.layout.Column
+import androidx.compose.runtime.collectAsState
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
@@ -168,6 +172,20 @@ internal object LyricsFiles {
 }
 
 
+/** Translates lyrics in another language (none in previews and tests). */
+val LocalLyricsTranslator = androidx.compose.runtime.staticCompositionLocalOf<com.villamediana.sound.online.LyricsTranslator?> { null }
+
+/** The translation of [lyrics] (one entry per line, null where none) while "Tradução" is on; null otherwise. */
+@Composable
+internal fun rememberTranslation(lyrics: ParsedLyrics): List<String?>? {
+    val translator = LocalLyricsTranslator.current ?: return null
+    val enabled by translator.enabled.collectAsState(initial = false)
+    val result by produceState<List<String?>?>(null, lyrics, enabled) {
+        value = if (enabled) translator.translate(lyrics.lines.map { it.text }) else null
+    }
+    return result
+}
+
 /** Colors for lyric lines drawn over [background]: the sung line, lines already sung, lines to come. */
 internal data class LyricColors(val active: Color, val past: Color, val future: Color) {
     companion object {
@@ -197,6 +215,8 @@ internal fun LyricsLines(
     contentPadding: PaddingValues = PaddingValues(0.dp),
     horizontalPadding: Dp = 20.dp,
     lineGap: Dp = 10.dp,
+    /** Under each line, its translation (lyrics in another language, "Tradução" on). */
+    translations: List<String?>? = rememberTranslation(lyrics),
 ) {
     // One scroll per song's lyrics: the next song starts at its first line, not where the last one was.
     val listState = rememberSaveable(lyrics, saver = LazyListState.Saver) { LazyListState() }
@@ -229,11 +249,9 @@ internal fun LyricsLines(
                 else -> colors.future
             }
             val color by animateColorAsState(target, tween(LINE_FADE_MS), label = "lyric")
-            Text(
-                text = line.text.ifBlank { MUSIC_NOTE },
-                style = textStyle,
-                color = color,
-                modifier = Modifier
+            val translation = translations?.getOrNull(index)
+            Column(
+                Modifier
                     .fillMaxWidth()
                     .then(
                         if (lyrics.synced) {
@@ -243,7 +261,17 @@ internal fun LyricsLines(
                         },
                     )
                     .padding(horizontal = horizontalPadding, vertical = lineGap / 2),
-            )
+            ) {
+                Text(text = line.text.ifBlank { MUSIC_NOTE }, style = textStyle, color = color)
+                if (translation != null) {
+                    Text(
+                        text = translation,
+                        style = textStyle.translationStyle(),
+                        color = color.copy(alpha = color.alpha * 0.7f),
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
+            }
         }
     }
 }
@@ -251,3 +279,11 @@ internal fun LyricsLines(
 private const val FOLLOW_PAUSE_MS = 3_000L
 private const val LINE_FADE_MS = 260
 private const val MUSIC_NOTE = "♪"
+
+/** The translation under a line: the same face, smaller and lighter. */
+internal fun TextStyle.translationStyle(): TextStyle = copy(
+    fontSize = if (fontSize.isSpecified) fontSize * 0.62f else 15.sp,
+    lineHeight = if (lineHeight.isSpecified) lineHeight * 0.62f else lineHeight,
+    fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+    letterSpacing = androidx.compose.ui.unit.TextUnit.Unspecified,
+)

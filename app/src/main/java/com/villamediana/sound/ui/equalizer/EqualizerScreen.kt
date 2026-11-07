@@ -1,5 +1,8 @@
 package com.villamediana.sound.ui.equalizer
 
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.map
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
@@ -98,7 +101,12 @@ fun EqualizerScreen() {
     val hasMedia by vm.hasMedia.collectAsStateWithLifecycle()
     val nav = navigator()
     val playback by com.villamediana.sound.SoundApplication.graph.player.state.collectAsStateWithLifecycle()
+    val settingsStore = com.villamediana.sound.SoundApplication.graph.settings
+    val crossfade by androidx.compose.runtime.remember { settingsStore.settings.map { it.crossfadeSeconds } }.collectAsStateWithLifecycle(5)
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     EqualizerContent(
+        crossfadeSeconds = crossfade,
+        onCrossfade = { v -> scope.launch { settingsStore.setCrossfadeSeconds(v) } },
         state = state,
         hasMedia = hasMedia,
         nowPlaying = playback.current?.let { t ->
@@ -129,6 +137,9 @@ internal fun EqualizerContent(
     onBassBoost: (Int) -> Unit,
     onVirtualizer: (Int) -> Unit,
     onReset: () -> Unit,
+    /** Crossfade between songs (seconds, 0 = off): not an effect, but it lives with the sound settings. */
+    crossfadeSeconds: Int = 0,
+    onCrossfade: ((Int) -> Unit)? = null,
 ) {
     val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val active = state.enabled && state.available
@@ -209,6 +220,11 @@ internal fun EqualizerContent(
             }
         }
 
+        if (onCrossfade != null) {
+            Spacer(Modifier.height(Dimens.SectionGap))
+            CrossfadeRow(crossfadeSeconds, onCrossfade)
+        }
+
         if (state.available) {
             Spacer(Modifier.height(22.dp))
             Text(
@@ -225,6 +241,42 @@ internal fun EqualizerContent(
 
         Spacer(Modifier.height(LocalBottomInset.current))
         }
+    }
+}
+
+/** "Crossfade · 5 s": the slider sets how long one song melts into the next (0 = off). */
+@Composable
+private fun CrossfadeRow(seconds: Int, onChange: (Int) -> Unit) {
+    var dragging by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<Float?>(null) }
+    val shown = dragging?.let { kotlin.math.round(it).toInt() } ?: seconds
+    val label = stringResource(R.string.eq_crossfade)
+    Column(Modifier.fillMaxWidth().padding(horizontal = Dimens.Gutter)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.eq_crossfade), style = MaterialTheme.typography.titleMedium, color = SoundColors.Text, modifier = Modifier.weight(1f))
+            Text(
+                if (shown == 0) stringResource(R.string.eq_crossfade_off) else stringResource(R.string.eq_crossfade_seconds, shown),
+                style = MaterialTheme.typography.labelLarge,
+                color = if (shown == 0) SoundColors.TextMuted else SoundColors.Accent,
+            )
+        }
+        androidx.compose.material3.Slider(
+            value = dragging ?: seconds.toFloat(),
+            onValueChange = { dragging = it },
+            onValueChangeFinished = {
+                dragging?.let { onChange(kotlin.math.round(it).toInt()) }
+                dragging = null
+            },
+            valueRange = 0f..com.villamediana.sound.data.MAX_CROSSFADE_SECONDS.toFloat(),
+            steps = com.villamediana.sound.data.MAX_CROSSFADE_SECONDS - 1,
+            colors = androidx.compose.material3.SliderDefaults.colors(
+                thumbColor = SoundColors.Accent,
+                activeTrackColor = SoundColors.Accent,
+                inactiveTrackColor = SoundColors.Text.copy(alpha = 0.14f),
+                activeTickColor = SoundColors.OnAccent.copy(alpha = 0.5f),
+                inactiveTickColor = SoundColors.Text.copy(alpha = 0.25f),
+            ),
+            modifier = Modifier.semantics { contentDescription = label },
+        )
     }
 }
 

@@ -1,5 +1,7 @@
 package com.villamediana.sound.ui.home
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -206,6 +208,29 @@ class HomeScreensSmokeTest {
             shot("spotify-input")
         }
         com.villamediana.sound.ui.library.SpotifyImportRequest.open = false
+    }
+
+    @Test
+    fun recapSumsUpTheListening() {
+        seed()
+        runBlocking {
+            val lib = SoundApplication.graph.library
+            val tracks = lib.allTracks()
+            val soda = tracks.first { it.title == "De Música Ligera" }
+            repeat(4) { lib.recordPlay(soda.id, 220_000, 230_000, "ALBUM") }
+            lib.recordPlay(tracks.first { it.title == "Velha Infância" }.id, 200_000, 210_000, "SONGS")
+            val online = com.villamediana.sound.online.RemoteTrack("zz1", "https://music.youtube.com/watch?v=zz1", "Streamed Love", "Online Artist")
+            repeat(3) { lib.recordOnlinePlay(online, 180_000, 190_000, "RADIO") }
+        }
+        var recap by androidx.compose.runtime.mutableStateOf(false)
+        compose.setContent { Host { if (recap) com.villamediana.sound.ui.recap.RecapScreen() else HomeScreen() } }
+        waitForText("Sua retrospectiva")
+        recap = true
+        waitForText("Mais tocadas")
+        waitForText("De Música Ligera")
+        waitForText("Streamed Love")
+        waitForText("Soda Stereo")
+        shot("recap")
     }
 
     @Test

@@ -93,6 +93,7 @@ fun HomeScreen() {
     val state by vm.state.collectAsStateWithLifecycle()
     val playback by vm.playback.collectAsStateWithLifecycle()
     val downloads by vm.downloads.collectAsStateWithLifecycle()
+    val monthListened by vm.monthListenedMs.collectAsStateWithLifecycle()
     val nav = navigator()
 
     // Staggered entrance only on the first load; items composed later (scrolling, returning) just appear.
@@ -150,6 +151,7 @@ fun HomeScreen() {
                     vm = vm,
                     nav = nav,
                     intro = intro,
+                    monthListenedMs = monthListened,
                     onSong = { songSheet = it },
                     onMenu = { menuTarget = it },
                     extra = { discoverSections(discover, playback, playDiscover, openArtist, openPlaylist, discoverVm::edit) },
@@ -211,6 +213,7 @@ private fun HomeFeed(
     onSong: (Track) -> Unit,
     onMenu: (CollectionTarget) -> Unit,
     extra: LazyListScope.() -> Unit = {},
+    monthListenedMs: Long = 0,
 ) {
     val embedded = LocalHomeEmbedded.current
     val top = if (embedded) 0.dp else WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
@@ -255,6 +258,18 @@ private fun HomeFeed(
                 onClick = { if (smartActive) vm.togglePlayPause() else vm.playSmartLibrary() },
                 modifier = Modifier.animateItem().staggerIn(heroIdx, intro),
             )
+        }
+
+        // This month in music (once there is a minute to tell).
+        if (monthListenedMs >= 60_000) {
+            val idx = order++
+            item(key = "recap", contentType = "recap") {
+                com.villamediana.sound.ui.recap.RecapEntry(
+                    listenedMs = monthListenedMs,
+                    onClick = { nav.openRecap() },
+                    modifier = Modifier.animateItem().staggerIn(idx, intro).padding(top = 12.dp),
+                )
+            }
         }
 
         if (state.mixes.isNotEmpty()) {

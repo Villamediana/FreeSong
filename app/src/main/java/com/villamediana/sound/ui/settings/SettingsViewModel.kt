@@ -54,6 +54,7 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setQuality(q: AudioQuality) = launch { store.setAudioQuality(q) }
     fun setWifiOnly(v: Boolean) = launch { store.setWifiOnly(v) }
+    fun setSmartDownloads(v: Boolean) = launch { store.setSmartDownloads(v) }
     fun setParallel(n: Int) = launch { store.setParallelDownloads(n) }
     fun setFetchLyrics(v: Boolean) = launch { store.setFetchLyrics(v) }
     fun setLikeDownloads(v: Boolean) = launch { store.setLikeDownloads(v) }

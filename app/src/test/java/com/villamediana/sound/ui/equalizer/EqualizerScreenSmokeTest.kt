@@ -65,6 +65,7 @@ class EqualizerScreenSmokeTest {
         val bass = mutableListOf<Int>()
         val virtualizer = mutableListOf<Int>()
         var resets = 0
+        val crossfades = mutableListOf<Int>()
     }
 
     private fun show(initial: EqState, hasMedia: Boolean = false): Pair<Calls, (EqState) -> Unit> {
@@ -83,6 +84,8 @@ class EqualizerScreenSmokeTest {
                     onBassBoost = { calls.bass += it },
                     onVirtualizer = { calls.virtualizer += it },
                     onReset = { calls.resets++ },
+                    crossfadeSeconds = 5,
+                    onCrossfade = { calls.crossfades += it },
                 )
             }
         }
@@ -215,6 +218,14 @@ class EqualizerScreenSmokeTest {
         rule.mainClock.advanceTimeBy(2_000)
         rule.waitForIdle()
         screenshot("equalizer_off")
+    }
+
+    @Test
+    fun crossfadeSecondsLiveWithTheSound() {
+        show(full)
+        rule.onNodeWithText("Crossfade").performScrollTo()
+        rule.onNodeWithText("5 s").assertExists()
+        screenshot("equalizer_crossfade")
     }
 
     /** Best effort PNG into build/screenshots (only with native graphics). */

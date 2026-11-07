@@ -150,6 +150,13 @@ fun SettingsScreen() {
                         onChange = vm::setWifiOnly,
                     )
                     Hairline()
+                    SwitchRow(
+                        title = stringResource(R.string.settings_smart_downloads),
+                        subtitle = stringResource(R.string.settings_smart_downloads_sub),
+                        checked = s.smartDownloads,
+                        onChange = vm::setSmartDownloads,
+                    )
+                    Hairline()
                     ParallelRow(s.parallelDownloads, vm::setParallel)
                     Hairline()
                     SwitchRow(

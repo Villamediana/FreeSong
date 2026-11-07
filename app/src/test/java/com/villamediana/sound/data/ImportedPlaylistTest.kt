@@ -74,6 +74,29 @@ class ImportedPlaylistTest {
         assertNull(library.importedDetail(url))
     }
 
+    @Test fun onlineListensAreKeptWithTheirSong() = runBlocking {
+        library.recordOnlinePlay(song("a1", "Um"), listenedMs = 190_000, durationMs = 200_000, context = "RADIO", now = 1_000)
+        library.recordOnlinePlay(song("a1", "Um"), listenedMs = 5_000, durationMs = 200_000, context = "RADIO", now = 2_000)
+        library.recordOnlinePlay(song("b2", "Dois"), listenedMs = 500, durationMs = 200_000, context = null, now = 3_000) // too short: not a listen
+        val plays = library.onlinePlaysListSince(0)
+        assertEquals(listOf(2_000L, 1_000L), plays.map { it.playedAt })
+        assertTrue(plays[1].completed)
+        assertTrue(plays[0].skipped)
+        assertEquals("Um", plays[0].title)
+        library.clearHistory()
+        assertTrue(library.onlinePlaysListSince(0).isEmpty())
+    }
+
+    @Test fun version3DatabasesGainTheOnlineHistory() {
+        migrations.createDatabase("migrate4.db", 3).close()
+        val v4 = migrations.runMigrationsAndValidate("migrate4.db", 4, true)
+        v4.query("SELECT COUNT(*) FROM online_plays").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals(0, c.getInt(0))
+        }
+        v4.close()
+    }
+
     @Test fun version2DatabasesGainTheImportedTable() {
         migrations.createDatabase("migrate3.db", 2).close()
         val v3 = migrations.runMigrationsAndValidate("migrate3.db", 3, true)
