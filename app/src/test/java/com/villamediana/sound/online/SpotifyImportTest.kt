@@ -31,11 +31,22 @@ class SpotifyImportTest {
             "Ouça no Spotify: https://open.spotify.com/intl-pt/playlist/$id",
             "https://open.spotify.com/embed/playlist/$id",
             "spotify:playlist:$id",
-        ).forEach { assertEquals(it, id, SpotifyLinks.playlistId(it)) }
-        assertNull(SpotifyLinks.playlistId("https://open.spotify.com/album/$id"))
-        assertNull(SpotifyLinks.playlistId("https://www.youtube.com/playlist?list=PL123"))
+        ).forEach { assertEquals(it, SpotifyRef(SpotifyKind.PLAYLIST, id), SpotifyLinks.ref(it)) }
+        assertNull(SpotifyLinks.ref("https://open.spotify.com/track/$id"))
+        assertNull(SpotifyLinks.ref("https://www.youtube.com/playlist?list=PL123"))
         assertTrue(SpotifyLinks.mentions("https://spotify.link/AbC12xyz"))
         assertFalse(SpotifyLinks.mentions("só um texto"))
+    }
+
+    @Test fun findsTheAlbumToo() {
+        val id = "0kKh7zmNtUFradKiKK4AV1"
+        listOf(
+            "https://open.spotify.com/album/$id?si=3DkjCSVXSEm5aXA0YOFXlA&utm_source=copy-link",
+            "https://open.spotify.com/intl-pt/album/$id",
+            "spotify:album:$id",
+        ).forEach { assertEquals(it, SpotifyRef(SpotifyKind.ALBUM, id), SpotifyLinks.ref(it)) }
+        assertTrue(SpotifyLinks.mentions("Escuta esse: https://open.spotify.com/album/$id"))
+        assertTrue(SpotifyLinks.isImported("https://open.spotify.com/album/$id"))
     }
 
     // ------------------------------------------------------------------ embed page
@@ -48,6 +59,17 @@ class SpotifyImportTest {
         assertTrue(p.coverUrl!!.startsWith("https://"))
         assertEquals("https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M", p.url)
         assertTrue(p.tracks.all { it.title.isNotBlank() && it.artist.isNotBlank() })
+    }
+
+    @Test fun readsAnAlbumsEmbedPage() {
+        val a = SpotifyPlaylists.parseEmbed("0kKh7zmNtUFradKiKK4AV1", resource("embed-album.html"), SpotifyKind.ALBUM)!!
+        assertEquals("Fundamental - Samba de Raiz", a.name)
+        assertEquals("Samba De Raiz", a.owner)
+        assertEquals(14, a.tracks.size)
+        assertEquals(SpotifyTrack("Coração Em Desalinho", "Samba De Raiz", 186_560), a.tracks.first())
+        assertTrue(a.coverUrl!!.startsWith("https://"))
+        assertTrue(a.coverUrl!!.contains("b273"))
+        assertEquals("https://open.spotify.com/album/0kKh7zmNtUFradKiKK4AV1", a.url)
     }
 
     @Test fun aPrivateOrMissingPlaylistIsNotFound() {
@@ -154,5 +176,15 @@ class SpotifyImportTest {
         }
         assertTrue(p.tracks.size >= 20)
         assertTrue("found ${found.count { it != null }} of ${sample.size}", found.count { it != null } >= 6)
+    }
+
+    /** Live (SOUND_LIVE=1): the album link Miguel sent is read like a playlist. */
+    @Test fun liveAlbumLinkIsRead() = runBlocking {
+        assumeTrue(System.getProperty("sound.live") == "1")
+        val a = SpotifyPlaylists(OkHttpClient()).find("https://open.spotify.com/album/0kKh7zmNtUFradKiKK4AV1?si=3DkjCSVXSEm5aXA0YOFXlA&utm_source=copy-link")
+        println("LIVE spotify album: ${a.name} · ${a.owner} · ${a.tracks.size} músicas · ${a.coverUrl}")
+        assertEquals(SpotifyKind.ALBUM, a.kind)
+        assertTrue(a.tracks.size >= 10)
+        assertTrue(a.coverUrl != null)
     }
 }

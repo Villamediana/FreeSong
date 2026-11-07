@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="spotify_import_title">Importar do Spotify</string>
-    <string name="spotify_import_link">Link da playlist</string>
-    <string name="spotify_import_not_a_link">Não é um link de playlist do Spotify.</string>
-    <string name="spotify_import_not_found">Playlist não encontrada. Ela precisa ser pública.</string>
+    <string name="spotify_import_link">Link da playlist ou do álbum</string>
+    <string name="spotify_import_not_a_link">Não é um link de playlist ou álbum do Spotify.</string>
+    <string name="spotify_import_not_found">Nada encontrado nesse link. Playlists precisam ser públicas.</string>
     <string name="spotify_import_offline">Sem conexão.</string>
     <string name="spotify_import_look_up">Buscar</string>
     <string name="spotify_import_go">Importar</string>

@@ -42,8 +42,8 @@ Fiz pra mim e tô dividindo com quem também cansou.
   Não curtiu? Desliga nos Ajustes e fica só a capa.
 - **Crossfade** entre as músicas e **equalizador** de verdade.
 - **Descobre a música que está tocando** no ambiente, pelo microfone, estilo Shazam.
-- **Traz suas playlists do Spotify**: cola o link (ou compartilha direto do app do Spotify) e
-  pronto, ela toca aqui.
+- **Traz suas playlists e álbuns do Spotify**: cola o link (ou compartilha direto do app do
+  Spotify) e pronto, toca aqui.
 - **Sua retrospectiva**: todo janeiro, o seu ano em música. As que você mais ouviu, os artistas,
   as horas, o seu horário favorito.
 - **Economiza sua internet**: o que você já ouviu fica guardado no celular e não é baixado de novo.

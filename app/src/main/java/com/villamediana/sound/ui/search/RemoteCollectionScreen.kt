@@ -337,7 +337,7 @@ fun RemoteCollectionScreen(route: RemoteCollectionRoute) {
             }
             add(MenuItem(Icons.Rounded.Share, res.getString(R.string.search_remote_share)) { Share.collection(context, loaded.collection) })
             // Imported from Spotify: it can leave the library.
-            if (com.villamediana.sound.online.SpotifyLinks.playlistId(vm.route.url) != null) {
+            if (com.villamediana.sound.online.SpotifyLinks.isImported(vm.route.url)) {
                 add(
                     MenuItem(Icons.Rounded.DeleteOutline, res.getString(R.string.spotify_import_remove), destructive = true) {
                         com.villamediana.sound.ui.library.CollectionCommands.removeImported(vm.route.url)

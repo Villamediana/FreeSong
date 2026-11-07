@@ -542,10 +542,14 @@ class PlaybackService : MediaLibraryService() {
         shuffleJob = scope.launch {
             val taste = taste()
             val order = withContext(Dispatchers.Default) { QueueShuffler.order(items, current, useSmart, taste, seed) }
-            if (!player.shuffleModeEnabled || mediaKeys() != keys) return@launch
-            val now = player.currentMediaItemIndex
-            setShuffleOrder(if (now != C.INDEX_UNSET) order.withFirst(now) else order)
-            scheduleSave()
+            if (player.shuffleModeEnabled && mediaKeys() == keys) {
+                val now = player.currentMediaItemIndex
+                setShuffleOrder(if (now != C.INDEX_UNSET) order.withFirst(now) else order)
+                scheduleSave()
+            }
+            // The queue's end is known only now (see maybeExtend).
+            shuffleJob = null
+            maybeExtend()
         }
     }
 
@@ -560,6 +564,9 @@ class PlaybackService : MediaLibraryService() {
      */
     private fun maybeExtend(again: Boolean = false) {
         if (suppressShuffleReorder) return // mid queue replacement; the caller extends when done
+        // The shuffled order is being made: songs added now would change the queue under it and the
+        // playing song would not go first. It extends once the order is set.
+        if (shuffleJob?.isActive == true) return
         val count = player.mediaItemCount
         if (count == 0 || player.repeatMode != Player.REPEAT_MODE_OFF) return
         if (!settings.autoplaySimilar && !smart) return

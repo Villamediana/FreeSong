@@ -423,7 +423,7 @@ class RemoteCollectionViewModel(
                 likeDownloadsFlow = g.settings.settings.map { it.likeDownloads }.distinctUntilChanged(),
                 onLike = g::likeOnline,
                 onRemoveDownload = g::removeDownload,
-                loader = if (SpotifyLinks.playlistId(route.url) != null) {
+                loader = if (SpotifyLinks.isImported(route.url)) {
                     { url, _ -> g.library.importedDetail(url) ?: throw OnlineException("Imported playlist removed", kind = OnlineException.Kind.NOT_FOUND) }
                 } else {
                     { url, k -> g.youTube.collection(url, k) }

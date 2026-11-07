@@ -372,6 +372,20 @@ class PlaybackServiceTest {
         idleUntil { playOrderIds().first() == ids[2] && playOrderIds().toSet() == ids.toSet() }
     }
 
+    @Test fun theQueueGetsMoreOnlyAfterTheShuffledOrderIsMade() {
+        start()
+        val ids = tracks.map { it.id }
+        // The player's own random order puts the playing song anywhere, near the end at times; the
+        // songs that keep the queue going must not come in before the playing song goes first.
+        repeat(8) {
+            playCommand(ids, 0)
+            idleUntil { player.mediaItemCount == ids.size && player.currentMediaItemIndex == 0 }
+            await(shuffleCommand(true))
+            idleUntil { playOrderIds().let { it.first() == ids[0] && it.size == ids.size && it.toSet() == ids.toSet() } }
+            await(shuffleCommand(false))
+        }
+    }
+
     @Test fun shuffleOffRightAfterPlayWinsOverTheShuffleBeingComputed() {
         start()
         val ids = tracks.map { it.id }

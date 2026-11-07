@@ -212,7 +212,7 @@ class HomeScreensSmokeTest {
         compose.onNodeWithContentDescription("Nova playlist").performClick()
         waitForText("Importar do Spotify")
         compose.onAllNodesWithText("Importar do Spotify")[0].performClick()
-        waitForText("Link da playlist")
+        waitForText("Link da playlist ou do álbum")
         val live = System.getProperty("sound.live") == "1"
         compose.onNode(androidx.compose.ui.test.hasSetTextAction()).performTextInput(
             if (live) "https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M?si=x" else "minha playlist",
@@ -223,7 +223,7 @@ class HomeScreensSmokeTest {
             waitForText("Importar")
             shot("spotify-preview")
         } else {
-            waitForText("Não é um link de playlist do Spotify.")
+            waitForText("Não é um link de playlist ou álbum do Spotify.")
             shot("spotify-input")
         }
         com.villamediana.sound.ui.library.SpotifyImportRequest.open = false
