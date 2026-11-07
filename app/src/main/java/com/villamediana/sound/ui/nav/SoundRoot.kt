@@ -1,5 +1,7 @@
 package com.villamediana.sound.ui.nav
 
+import androidx.compose.animation.core.tween
+import androidx.navigation.NavDestination
 import android.Manifest
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -118,26 +120,40 @@ fun SoundRoot(incoming: MutableStateFlow<Inbound?>) {
                 navController = controller,
                 startDestination = HomeRoute,
                 modifier = Modifier.fillMaxSize(),
-                enterTransition = { fadeIn(Motion.enter()) + slideInHorizontally(Motion.enter()) { it / 12 } },
-                exitTransition = { fadeOut(Motion.exit()) },
-                popEnterTransition = { fadeIn(Motion.enter()) },
-                popExitTransition = { fadeOut(Motion.exit()) + slideOutHorizontally(Motion.exit()) { it / 12 } },
+                // Pages slide in full width and slide out following the back gesture (predictive back
+                // seeks these), the page below moving a little behind; tab switches just cross-fade.
+                enterTransition = {
+                    if (initialState.destination.isTab() && targetState.destination.isTab()) fadeIn(tween(220))
+                    else slideInHorizontally(tween(PAGE_MS, easing = Motion.Emphasized)) { it }
+                },
+                exitTransition = {
+                    if (initialState.destination.isTab() && targetState.destination.isTab()) fadeOut(tween(160))
+                    else slideOutHorizontally(tween(PAGE_MS, easing = Motion.Emphasized)) { -it / 4 }
+                },
+                popEnterTransition = {
+                    if (initialState.destination.isTab() && targetState.destination.isTab()) fadeIn(tween(220))
+                    else slideInHorizontally(tween(PAGE_MS, easing = Motion.Emphasized)) { -it / 4 }
+                },
+                popExitTransition = {
+                    if (initialState.destination.isTab() && targetState.destination.isTab()) fadeOut(tween(160))
+                    else slideOutHorizontally(tween(PAGE_MS, easing = Motion.Emphasized)) { it }
+                },
             ) {
-                composable<HomeRoute> { HomeScreen() }
-                composable<SearchRoute> { SearchScreen() }
-                composable<LibraryRoute> { LibraryScreen() }
-                composable<AlbumRoute> { AlbumScreen(it.toRoute()) }
-                composable<ArtistRoute> { ArtistScreen(it.toRoute()) }
-                composable<PlaylistRoute> { PlaylistScreen(it.toRoute()) }
-                composable<GenreRoute> { GenreScreen(it.toRoute()) }
-                composable<MixRoute> { MixScreen(it.toRoute()) }
-                composable<LikedRoute> { LikedScreen() }
-                composable<SongsRoute> { SongsScreen() }
-                composable<RemoteCollectionRoute> { RemoteCollectionScreen(it.toRoute()) }
-                composable<DownloadsRoute> { DownloadsScreen() }
-                composable<SettingsRoute> { SettingsScreen() }
-                composable<EqualizerRoute> { EqualizerScreen() }
-                composable<VideoRoute> { VideoScreen(it.toRoute()) }
+                composable<HomeRoute> { Page { HomeScreen() } }
+                composable<SearchRoute> { Page { SearchScreen() } }
+                composable<LibraryRoute> { Page { LibraryScreen() } }
+                composable<AlbumRoute> { Page { AlbumScreen(it.toRoute()) } }
+                composable<ArtistRoute> { Page { ArtistScreen(it.toRoute()) } }
+                composable<PlaylistRoute> { Page { PlaylistScreen(it.toRoute()) } }
+                composable<GenreRoute> { Page { GenreScreen(it.toRoute()) } }
+                composable<MixRoute> { Page { MixScreen(it.toRoute()) } }
+                composable<LikedRoute> { Page { LikedScreen() } }
+                composable<SongsRoute> { Page { SongsScreen() } }
+                composable<RemoteCollectionRoute> { Page { RemoteCollectionScreen(it.toRoute()) } }
+                composable<DownloadsRoute> { Page { DownloadsScreen() } }
+                composable<SettingsRoute> { Page { SettingsScreen() } }
+                composable<EqualizerRoute> { Page { EqualizerScreen() } }
+                composable<VideoRoute> { Page { VideoScreen(it.toRoute()) } }
             }
 
             // The video screen is immersive: no bottom bar, no mini player over it.
@@ -156,6 +172,17 @@ fun SoundRoot(incoming: MutableStateFlow<Inbound?>) {
             }
         }
     }
+}
+
+private const val PAGE_MS = 340
+
+private fun NavDestination.isTab(): Boolean =
+    hasRoute(HomeRoute::class) || hasRoute(SearchRoute::class) || hasRoute(LibraryRoute::class)
+
+/** Every page is opaque, so a page sliding over another never shows both at once. */
+@Composable
+private fun Page(content: @Composable () -> Unit) {
+    Box(Modifier.fillMaxSize().background(SoundColors.Ink)) { content() }
 }
 
 private data class Tab(val route: Any, val label: Int, val icon: ImageVector, val selectedIcon: ImageVector)
