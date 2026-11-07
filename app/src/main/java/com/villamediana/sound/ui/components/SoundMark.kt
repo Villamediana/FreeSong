@@ -49,10 +49,10 @@ fun SoundBars(modifier: Modifier = Modifier, color: Color = SoundColors.Mint) {
 @Composable
 fun SoundMark(modifier: Modifier = Modifier, size: Dp = 30.dp) {
     Box(
-        modifier.size(size).clip(RoundedCornerShape(size * 0.27f)).background(SoundColors.Royal),
+        modifier.size(size).clip(RoundedCornerShape(size * 0.27f)).background(SoundColors.BrandRoyal),
         contentAlignment = Alignment.Center,
     ) {
-        SoundBars(Modifier.size(size * 0.56f), SoundColors.Mint)
+        SoundBars(Modifier.size(size * 0.56f), SoundColors.BrandMint)
     }
 }
 

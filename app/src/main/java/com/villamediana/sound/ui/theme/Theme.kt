@@ -7,7 +7,16 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
+import android.app.Activity
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
+import com.villamediana.sound.data.ThemeMode
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -15,35 +24,38 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 
-private val SoundScheme = darkColorScheme(
-    primary = SoundColors.Accent,
-    onPrimary = SoundColors.OnAccent,
-    primaryContainer = SoundColors.AccentSoft,
-    onPrimaryContainer = SoundColors.Accent,
-    secondary = SoundColors.Text,
-    onSecondary = SoundColors.Ink,
-    secondaryContainer = SoundColors.Surface3,
-    onSecondaryContainer = SoundColors.Text,
-    tertiary = SoundColors.Accent,
-    background = SoundColors.Ink,
-    onBackground = SoundColors.Text,
-    surface = SoundColors.Ink,
-    onSurface = SoundColors.Text,
-    surfaceVariant = SoundColors.Surface2,
-    onSurfaceVariant = SoundColors.TextMuted,
-    surfaceContainerLowest = SoundColors.Ink,
-    surfaceContainerLow = SoundColors.Surface1,
-    surfaceContainer = SoundColors.Surface1,
-    surfaceContainerHigh = SoundColors.Surface2,
-    surfaceContainerHighest = SoundColors.Surface3,
-    inverseSurface = SoundColors.Text,
-    inverseOnSurface = SoundColors.Ink,
-    outline = SoundColors.Hairline,
-    outlineVariant = SoundColors.Hairline,
-    error = SoundColors.Danger,
-    onError = SoundColors.Ink,
-    scrim = SoundColors.Scrim,
-)
+private fun schemeOf(p: SoundPalette): ColorScheme {
+    val base = if (p.isLight) lightColorScheme() else darkColorScheme()
+    return base.copy(
+        primary = p.accent,
+        onPrimary = p.onAccent,
+        primaryContainer = p.accentSoft,
+        onPrimaryContainer = p.accent,
+        secondary = p.text,
+        onSecondary = p.ink,
+        secondaryContainer = p.surface3,
+        onSecondaryContainer = p.text,
+        tertiary = p.accent,
+        background = p.ink,
+        onBackground = p.text,
+        surface = p.ink,
+        onSurface = p.text,
+        surfaceVariant = p.surface2,
+        onSurfaceVariant = p.textMuted,
+        surfaceContainerLowest = p.ink,
+        surfaceContainerLow = p.surface1,
+        surfaceContainer = p.surface1,
+        surfaceContainerHigh = p.surface2,
+        surfaceContainerHighest = p.surface3,
+        inverseSurface = p.text,
+        inverseOnSurface = p.ink,
+        outline = p.hairline,
+        outlineVariant = p.hairline,
+        error = p.danger,
+        onError = p.ink,
+        scrim = p.scrim,
+    )
+}
 
 val SoundShapes = Shapes(
     extraSmall = RoundedCornerShape(4.dp),
@@ -82,9 +94,35 @@ object Motion {
  */
 val LocalBottomInset = staticCompositionLocalOf<Dp> { 0.dp }
 
+/**
+ * Applies [mode] (Claro / Escuro / Sistema): swaps [SoundColors.palette] and the status/navigation
+ * bar icons. Without a mode (tests, previews) it keeps whatever palette is current.
+ */
 @Composable
-fun SoundTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = SoundScheme, typography = SoundTypography, shapes = SoundShapes) {
+fun SoundTheme(mode: ThemeMode? = null, content: @Composable () -> Unit) {
+    val systemDark = isSystemInDarkTheme()
+    if (mode != null) {
+        val palette = paletteFor(mode, systemDark)
+        if (SoundColors.palette != palette) SoundColors.palette = palette
+        val view = LocalView.current
+        if (!view.isInEditMode) {
+            SideEffect {
+                val window = (view.context as? Activity)?.window ?: return@SideEffect
+                WindowCompat.getInsetsController(window, view).apply {
+                    isAppearanceLightStatusBars = palette.isLight
+                    isAppearanceLightNavigationBars = palette.isLight
+                }
+            }
+        }
+    }
+    val scheme = remember(SoundColors.palette) { schemeOf(SoundColors.palette) }
+    MaterialTheme(colorScheme = scheme, typography = SoundTypography, shapes = SoundShapes) {
         CompositionLocalProvider(content = content)
     }
+}
+
+fun paletteFor(mode: ThemeMode, systemDark: Boolean): SoundPalette = when (mode) {
+    ThemeMode.LIGHT -> SoundPalettes.Light
+    ThemeMode.DARK -> SoundPalettes.Dark
+    ThemeMode.SYSTEM -> if (systemDark) SoundPalettes.Dark else SoundPalettes.Light
 }

@@ -128,7 +128,7 @@ internal fun EqualizerContent(
     Column(
         Modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(SoundColors.Royal, SoundColors.RoyalDeep)))
+            .background(Brush.verticalGradient(listOf(SoundColors.SoftTop, SoundColors.SoftBottom)))
             .verticalScroll(rememberScrollState())
             .padding(top = top),
     ) {
@@ -225,7 +225,7 @@ private fun TopBar(enabled: Boolean, onBack: () -> Unit, onEnabled: (Boolean) ->
             },
             modifier = Modifier.testTag("eq_switch").semantics { contentDescription = switchLabel },
             colors = SwitchDefaults.colors(
-                checkedThumbColor = SoundColors.RoyalDeep,
+                checkedThumbColor = SoundColors.OnMint,
                 checkedTrackColor = SoundColors.Mint,
                 checkedBorderColor = SoundColors.Mint,
                 uncheckedThumbColor = SoundColors.Text.copy(alpha = 0.7f),

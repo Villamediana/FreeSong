@@ -411,7 +411,7 @@ private fun SmartShuffleHero(cover: String?, playing: Boolean, onClick: () -> Un
             Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(24.dp))
-                .background(Brush.linearGradient(listOf(SoundColors.Royal, SoundColors.RoyalDeep)))
+                .background(Brush.linearGradient(listOf(SoundColors.SoftTop, SoundColors.SoftBottom)))
                 .pressable(onClick, pressed = 0.98f)
                 .padding(start = 22.dp, top = 22.dp, bottom = 22.dp, end = 18.dp),
             verticalAlignment = Alignment.CenterVertically,

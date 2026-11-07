@@ -235,7 +235,7 @@ internal fun PlayerHost(deps: PlayerDeps, bottomBarHeight: Dp, modifier: Modifie
     val liked = likeOverrides[track.id] ?: track.liked
 
     val seed = track.album ?: track.title
-    val fallbackColor = SoundColors.Royal
+    val fallbackColor = SoundColors.Accent
     // Streamed songs have an http cover: extract its color through the network image cache.
     val washTarget = if (track.coverPath?.startsWith("http") == true) {
         com.villamediana.sound.ui.search.rememberRemoteCoverColor(track.coverPath, fallbackColor)
@@ -419,9 +419,9 @@ internal fun PlayerHost(deps: PlayerDeps, bottomBarHeight: Dp, modifier: Modifie
                             val p = expand.progress
                             val f = frame(p)
                             val c = wash.value
-                            val miniBg = lerp(SoundColors.Royal, c, 0.38f)
+                            val miniBg = SoundColors.miniBackground(c)
                             // The full player is the cover's color, deep and saturated (not black).
-                            val fullBg = lerp(c, Color.Black, 0.28f)
+                            val fullBg = SoundColors.playerBackground(c)
                             val base = lerp(miniBg, fullBg, PlayerMath.segment(p, 0f, 0.6f))
                             val topLeft = Offset(f.left, f.top)
                             val frameSize = Size(f.width, f.height)

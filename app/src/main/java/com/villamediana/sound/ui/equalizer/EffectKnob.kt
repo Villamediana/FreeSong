@@ -178,7 +178,7 @@ internal fun EffectKnob(
                 }
                 // The knob itself, with its pointer.
                 val disc = arcSize.width / 2 - stroke - 5.dp.toPx()
-                drawCircle(SoundColors.RoyalDeep, radius = disc, center = c)
+                drawCircle(SoundColors.Surface1, radius = disc, center = c)
                 drawCircle(SoundColors.Hairline, radius = disc, center = c, style = Stroke(1.dp.toPx()))
                 val rad = (START_DEG + SWEEP_DEG * fraction) * PI.toFloat() / 180f
                 val pr = disc - 6.dp.toPx()

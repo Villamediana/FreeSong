@@ -1,5 +1,7 @@
 package com.villamediana.sound
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -23,13 +25,19 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            statusBarStyle = SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
         )
         super.onCreate(savedInstanceState)
         if (savedInstanceState == null) handle(intent)
+        // First frame already in the saved theme (no flash of the other one).
+        val settingsStore = SoundApplication.graph.settings
+        val initialTheme = kotlinx.coroutines.runBlocking { settingsStore.current().theme }
+        val night = (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+        com.villamediana.sound.ui.theme.SoundColors.palette = com.villamediana.sound.ui.theme.paletteFor(initialTheme, night)
         setContent {
-            SoundTheme {
+            val settings by settingsStore.settings.collectAsState(initial = null)
+            SoundTheme(mode = settings?.theme ?: initialTheme) {
                 SoundRoot(incoming = incoming)
             }
         }

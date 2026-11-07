@@ -23,6 +23,8 @@ enum class AudioQuality {
     SAVER,
 }
 
+enum class ThemeMode { LIGHT, DARK, SYSTEM }
+
 data class Settings(
     val audioQuality: AudioQuality = AudioQuality.BEST,
     val wifiOnly: Boolean = false,
@@ -36,6 +38,7 @@ data class Settings(
     val normalizeVolume: Boolean = false,
     /** Tapping a search result streams it right away (true) or downloads it (false). */
     val playOnlineByDefault: Boolean = true,
+    val theme: ThemeMode = ThemeMode.LIGHT,
     val lastQueueJson: String? = null,
 )
 
@@ -50,6 +53,7 @@ class SettingsStore(private val context: Context) {
         val normalize = booleanPreferencesKey("normalize_volume")
         val lastQueue = stringPreferencesKey("last_queue")
         val playOnline = booleanPreferencesKey("play_online_default")
+        val theme = stringPreferencesKey("theme")
     }
 
     val settings: Flow<Settings> = context.dataStore.data.map { p ->
@@ -62,6 +66,7 @@ class SettingsStore(private val context: Context) {
             autoplaySimilar = p[K.autoplay] ?: true,
             normalizeVolume = p[K.normalize] ?: false,
             playOnlineByDefault = p[K.playOnline] ?: true,
+            theme = p[K.theme]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() } ?: ThemeMode.LIGHT,
             lastQueueJson = p[K.lastQueue],
         )
     }
@@ -75,6 +80,7 @@ class SettingsStore(private val context: Context) {
     suspend fun setSmartShuffle(v: Boolean) = context.dataStore.edit { it[K.smartShuffle] = v }
     suspend fun setAutoplaySimilar(v: Boolean) = context.dataStore.edit { it[K.autoplay] = v }
     suspend fun setNormalizeVolume(v: Boolean) = context.dataStore.edit { it[K.normalize] = v }
+    suspend fun setTheme(v: ThemeMode) = context.dataStore.edit { it[K.theme] = v.name }
     suspend fun setPlayOnlineByDefault(v: Boolean) = context.dataStore.edit { it[K.playOnline] = v }
     suspend fun setLastQueueJson(v: String?) = context.dataStore.edit { if (v == null) it.remove(K.lastQueue) else it[K.lastQueue] = v }
 }

@@ -59,7 +59,7 @@ import com.villamediana.sound.data.db.Track
 import com.villamediana.sound.ui.theme.SoundColors
 
 /** Background of everything lyrics: the cover color, deepened so paper-white text reads well. */
-internal fun lyricsBackground(cover: Color): Color = lerp(cover, SoundColors.Ink, 0.22f)
+internal fun lyricsBackground(cover: Color): Color = SoundColors.lyricsBackground(cover)
 
 /** The "Letra" card at the bottom of the full player (revealed by scrolling down). */
 @Composable
