@@ -1,5 +1,18 @@
 package com.villamediana.sound.ui.library
 
+import kotlinx.coroutines.launch
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.pager.PagerState
+import androidx.compose.foundation.pager.HorizontalPager
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import androidx.compose.runtime.remember
@@ -97,6 +110,16 @@ fun MainScreen() {
     val tabs = MainTab.visible(showHome)
     var tab by rememberSaveable { mutableStateOf(MainTab.start(firstShowHome)) }
     LaunchedEffect(showHome) { if (tab !in tabs) tab = MainTab.start(showHome) }
+    // The tabs are pages side by side: a sideways swipe (on the content or on the pills) moves to the next one.
+    val pager = rememberPagerState(initialPage = tabs.indexOf(tab).coerceAtLeast(0)) { tabs.size }
+    val scope = rememberCoroutineScope()
+    // The page in view names the tab (already halfway through a swipe, so the pill follows the finger).
+    LaunchedEffect(pager, tabs) { snapshotFlow { pager.currentPage }.collect { p -> tabs.getOrNull(p)?.let { tab = it } } }
+    // A tab chosen elsewhere (a pill, a shared Spotify link, Início turned off) brings its page.
+    LaunchedEffect(tab, tabs) {
+        val i = tabs.indexOf(tab)
+        if (i >= 0 && i != pager.currentPage && !pager.isScrollInProgress) pager.animateScrollToPage(i)
+    }
     var creating by rememberSaveable { mutableStateOf(false) }
     // The Playlists +: a new one, or one imported from Spotify.
     var choosing by rememberSaveable { mutableStateOf(false) }
@@ -126,29 +149,28 @@ fun MainScreen() {
                     }
                     HeaderActions(downloads, nav)
                 }
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = Dimens.Gutter, vertical = 8.dp)
-                        .selectableGroup(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    tabs.forEach { t ->
-                        FilterPill(stringResource(t.label), selected = t == tab, onClick = { tab = t })
-                    }
-                }
+                TabPills(
+                    tabs = tabs,
+                    selected = tab,
+                    pager = pager,
+                    onSelect = { t ->
+                        val i = tabs.indexOf(t)
+                        if (i >= 0) scope.launch { pager.animateScrollToPage(i) }
+                    },
+                )
                 Spacer(Modifier.height(2.dp))
             }
         }
         Box(Modifier.weight(1f).fillMaxWidth()) {
-            AnimatedContent(
-                targetState = tab,
-                transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(140)) },
-                label = "mainTab",
+            HorizontalPager(
+                state = pager,
                 modifier = Modifier.fillMaxSize(),
-            ) { t ->
+                // The genre intro is a step of its own: no swiping away from it.
+                userScrollEnabled = !intro,
+                beyondViewportPageCount = 1,
+                key = { tabs.getOrNull(it)?.name ?: it },
+            ) { page ->
+                val t = tabs.getOrNull(page) ?: return@HorizontalPager
                 CompositionLocalProvider(LocalHomeEmbedded provides true) {
                     if (t == MainTab.HOME) HomeScreen() else LibraryScreen(embeddedFilter = t.filter)
                 }
@@ -198,3 +220,65 @@ private fun SpotifyImportFinished() {
         importer.reset()
     }
 }
+
+/**
+ * The tab pills. They follow the pages: the selected one is scrolled into view, and a sideways
+ * drag on the row moves the pages with the finger (the "menu" swipes too); a tap jumps there.
+ */
+@Composable
+private fun TabPills(tabs: List<MainTab>, selected: MainTab, pager: PagerState, onSelect: (MainTab) -> Unit) {
+    val scroll = rememberScrollState()
+    val scope = rememberCoroutineScope()
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val gutter = with(density) { Dimens.Gutter.toPx() }
+    val spans = remember { mutableStateMapOf<MainTab, Pair<Float, Float>>() }
+    var viewport by remember { mutableStateOf(0) }
+    LaunchedEffect(selected, viewport, spans[selected]) {
+        val (x, w) = spans[selected] ?: return@LaunchedEffect
+        if (viewport <= 0) return@LaunchedEffect
+        // Keep the selected pill in view, a little room on its sides.
+        val target = when {
+            x - gutter < scroll.value -> x - gutter
+            x + w + gutter > scroll.value + viewport -> x + w + gutter - viewport
+            else -> return@LaunchedEffect
+        }
+        scroll.animateScrollTo(target.toInt().coerceIn(0, scroll.maxValue))
+    }
+    val drag = rememberDraggableState { delta -> pager.dispatchRawDelta(-delta) }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .onSizeChanged { viewport = it.width }
+            .draggable(
+                state = drag,
+                orientation = Orientation.Horizontal,
+                onDragStopped = { velocity ->
+                    val here = pager.currentPage + pager.currentPageOffsetFraction
+                    val target = when {
+                        velocity < -FLING_VELOCITY -> kotlin.math.floor(here).toInt() + 1
+                        velocity > FLING_VELOCITY -> kotlin.math.ceil(here).toInt() - 1
+                        else -> kotlin.math.round(here).toInt()
+                    }.coerceIn(0, tabs.lastIndex)
+                    scope.launch { pager.animateScrollToPage(target) }
+                },
+            )
+            .horizontalScroll(scroll, enabled = false)
+            .padding(horizontal = Dimens.Gutter, vertical = 8.dp)
+            .selectableGroup(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        tabs.forEach { t ->
+            FilterPill(
+                stringResource(t.label),
+                selected = t == selected,
+                onClick = { onSelect(t) },
+                modifier = Modifier.onGloballyPositioned { c ->
+                    spans[t] = (c.positionInParent().x) to c.size.width.toFloat()
+                },
+            )
+        }
+    }
+}
+
+private const val FLING_VELOCITY = 600f

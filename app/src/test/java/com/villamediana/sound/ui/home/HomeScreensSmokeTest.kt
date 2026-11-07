@@ -1,5 +1,9 @@
 package com.villamediana.sound.ui.home
 
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.swipeRight
+import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import android.graphics.Bitmap
@@ -139,7 +143,9 @@ class HomeScreensSmokeTest {
         }
         compose.waitUntil(5_000) { compose.onAllNodesWithContentDescription("Baixar").fetchSemanticsNodes().size == 1 }
         // Play them all, right there.
-        compose.onNodeWithContentDescription("Tocar").assertExists()
+        // (The tabs beside it are composed off screen: only the one in view counts.)
+        val plays = compose.onAllNodesWithContentDescription("Tocar").fetchSemanticsNodes().map { it.boundsInRoot }
+        check(plays.count { it.width > 0f } == 1) { "$plays" }
         shot("songs-tab")
 
         compose.onAllNodesWithText("Playlists")[0].performClick()
@@ -150,7 +156,8 @@ class HomeScreensSmokeTest {
         // Back to Músicas: still the songs (the pill never toggles back to "everything").
         compose.onAllNodesWithText("Músicas")[0].performClick()
         waitForText("Velha Infância")
-        compose.waitUntil(5_000) { compose.onAllNodesWithText("Domingo").fetchSemanticsNodes().isEmpty() }
+        // Playlists stays composed beside it (swipe), but out of view.
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("Domingo").fetchSemanticsNodes().none { it.boundsInRoot.width > 0f } }
     }
 
     @Test
@@ -231,6 +238,22 @@ class HomeScreensSmokeTest {
         waitForText("Streamed Love")
         waitForText("Soda Stereo")
         shot("recap")
+    }
+
+    @Test
+    fun swipingMovesBetweenTabs() {
+        seed()
+        compose.setContent { Host { com.villamediana.sound.ui.library.MainScreen() } }
+        compose.onAllNodesWithText("Músicas")[0].performClick()
+        waitForText("Velha Infância")
+        // On the content: the next tab.
+        compose.onNodeWithText("Velha Infância").performTouchInput { swipeLeft(startX = right - 10f, endX = left + 10f) }
+        waitForText("Domingo")
+        compose.onNode(hasText("Playlists") and isSelectable()).assertIsSelected()
+        // On the pills ("menu") too: back to Músicas.
+        compose.onNode(hasText("Playlists") and isSelectable()).performTouchInput { swipeRight(startX = left, endX = left + 900f) }
+        compose.waitUntil(10_000) { compose.onAllNodes(hasText("Músicas") and isSelectable() and androidx.compose.ui.test.isSelected()).fetchSemanticsNodes().isNotEmpty() }
+        waitForText("Velha Infância")
     }
 
     @Test

@@ -68,6 +68,7 @@ import com.villamediana.sound.ui.components.Cover
 import com.villamediana.sound.ui.components.PillButton
 import com.villamediana.sound.ui.components.PlayingBars
 import com.villamediana.sound.ui.components.SectionHeader
+import com.villamediana.sound.ui.components.keepHorizontalDrags
 import com.villamediana.sound.ui.components.SoundWordmark
 import com.villamediana.sound.ui.components.pressScale
 import com.villamediana.sound.ui.nav.Navigator
@@ -223,7 +224,7 @@ internal fun LazyListScope.discoverSections(
 private fun DiscoverRow(title: String, content: LazyListScope.() -> Unit) {
     Column(Modifier.fillMaxWidth().padding(top = Dimens.SectionGap - 10.dp)) {
         SectionHeader(title)
-        LazyRow(contentPadding = PaddingValues(horizontal = Dimens.Gutter), horizontalArrangement = Arrangement.spacedBy(14.dp), content = content)
+        LazyRow(modifier = Modifier.keepHorizontalDrags(), contentPadding = PaddingValues(horizontal = Dimens.Gutter), horizontalArrangement = Arrangement.spacedBy(14.dp), content = content)
     }
 }
 

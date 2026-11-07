@@ -68,6 +68,7 @@ import com.villamediana.sound.playback.PlaybackState
 import com.villamediana.sound.ui.components.PillButton
 import com.villamediana.sound.ui.components.PlayPauseButton
 import com.villamediana.sound.ui.components.SectionHeader
+import com.villamediana.sound.ui.components.keepHorizontalDrags
 import com.villamediana.sound.ui.components.SoundMark
 import com.villamediana.sound.ui.components.SoundWordmark
 import com.villamediana.sound.ui.library.CollectionMenuSheet
@@ -310,6 +311,8 @@ private fun Carousel(title: String, modifier: Modifier = Modifier, content: Lazy
     Column(modifier.fillMaxWidth().padding(top = Dimens.SectionGap - 8.dp)) {
         SectionHeader(title)
         LazyRow(
+            // Swiping a carousel scrolls it; it never turns into a tab change at its end.
+            modifier = Modifier.keepHorizontalDrags(),
             contentPadding = PaddingValues(horizontal = Dimens.Gutter),
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             content = content,
