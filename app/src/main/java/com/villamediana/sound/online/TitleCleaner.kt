@@ -68,7 +68,8 @@ object TitleCleaner {
     private val partFeat = Regex("(?i)\\((part\\.|participa[cç][aã]o( especial)?( de)?)\\s+(?=\\p{L})")
     private val hashtags = Regex("(^|\\s)#[\\p{L}\\p{N}_]+")
     private val prodGroup = Regex("(?i)^(prod(\\.|uced)?|produced)(\\s+by)?\\s+.+$")
-    private val bracketGroup = Regex("\\(([^()]*)\\)|\\[([^\\[\\]]*)]|\\{([^{}]*)}")
+    // Every literal ] and } escaped: Android's regex engine (ICU) rejects them bare, the JVM doesn't.
+    private val bracketGroup = Regex("\\(([^()]*)\\)|\\[([^\\[\\]]*)\\]|\\{([^\\{\\}]*)\\}")
     private val pipeSplit = Regex("\\s*[|｜¦]\\s*")
     private val dashSep = Regex("\\s+[-–—]\\s+|\\s+[–—]|[–—]\\s+")
     private val topicSuffix = Regex("(?i)\\s*-\\s*(topic|t[oó]pico|tema|thema|sujet|argomento)$")
