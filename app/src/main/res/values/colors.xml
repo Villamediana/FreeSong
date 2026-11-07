@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ink">#08080C</color>
+    <color name="ink">#F7F8FB</color>
     <color name="accent">#4F7DFF</color>
     <color name="royal">#2341C9</color>
 </resources>

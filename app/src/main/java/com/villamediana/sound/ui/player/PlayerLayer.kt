@@ -429,8 +429,8 @@ internal fun PlayerHost(deps: PlayerDeps, bottomBarHeight: Dp, modifier: Modifie
                             drawRoundRect(base, topLeft, frameSize, corner)
                             if (p > 0f) {
                                 val veil = Brush.verticalGradient(
-                                    0f to c.copy(alpha = 0.95f),
-                                    0.55f to c.copy(alpha = 0.35f),
+                                    0f to c.copy(alpha = SoundColors.palette.washAlpha),
+                                    0.55f to c.copy(alpha = SoundColors.palette.washAlpha * 0.35f),
                                     1f to c.copy(alpha = 0f),
                                     startY = f.top,
                                     endY = f.top + size.height,

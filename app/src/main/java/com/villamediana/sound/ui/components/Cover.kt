@@ -108,7 +108,11 @@ private fun CoverPlaceholder(seed: String, modifier: Modifier) {
     // A colored tile with the Sound bars: every song without art still gets its own, stable look.
     val tint = seedColor(seed)
     Box(
-        modifier.background(Brush.linearGradient(listOf(tint, lerp(tint, Color.Black, 0.45f)))),
+        modifier.background(
+            Brush.linearGradient(
+                if (SoundColors.isLight) listOf(lerp(tint, Color.White, 0.35f), tint) else listOf(tint, lerp(tint, Color.Black, 0.45f)),
+            ),
+        ),
         contentAlignment = Alignment.Center,
     ) {
         SoundBars(Modifier.fillMaxSize(0.34f), color = Color.White.copy(alpha = 0.85f))

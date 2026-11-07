@@ -1,5 +1,9 @@
 package com.villamediana.sound.ui.settings
 
+import androidx.compose.material.icons.rounded.Contrast
+import androidx.compose.material.icons.rounded.DarkMode
+import androidx.compose.material.icons.rounded.LightMode
+import com.villamediana.sound.data.ThemeMode
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -108,6 +112,13 @@ fun SettingsScreen() {
         }
 
         val s = settings ?: return@LazyColumn
+
+        item(key = "look") {
+            Column {
+                GroupLabel(stringResource(R.string.home_settings_group_look))
+                Group { ThemeRow(s.theme, vm::setTheme) }
+            }
+        }
 
         item(key = "downloads") {
             Column {
@@ -383,6 +394,43 @@ private fun RadioDot(selected: Boolean) {
     val dot by animateFloatAsState(if (selected) 1f else 0f, Motion.bouncy(), label = "dot")
     Box(Modifier.size(22.dp).clip(CircleShape).border(2.dp, ring, CircleShape), contentAlignment = Alignment.Center) {
         Box(Modifier.size(10.dp).scale(dot).clip(CircleShape).background(SoundColors.Accent))
+    }
+}
+
+@Composable
+private fun ThemeRow(current: ThemeMode, onPick: (ThemeMode) -> Unit) {
+    val options = listOf(
+        Triple(ThemeMode.LIGHT, R.string.home_settings_theme_light, Icons.Rounded.LightMode),
+        Triple(ThemeMode.DARK, R.string.home_settings_theme_dark, Icons.Rounded.DarkMode),
+        Triple(ThemeMode.SYSTEM, R.string.home_settings_theme_system, Icons.Rounded.Contrast),
+    )
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)) {
+        Text(stringResource(R.string.home_settings_theme), style = MaterialTheme.typography.titleMedium, color = SoundColors.Text)
+        Spacer(Modifier.height(12.dp))
+        Row(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SoundColors.Surface3).padding(3.dp).selectableGroup(),
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            options.forEach { (mode, label, icon) ->
+                val selected = mode == current
+                val bg by animateColorAsState(if (selected) SoundColors.Accent else SoundColors.Surface3, label = "theme")
+                val fg by animateColorAsState(if (selected) SoundColors.OnAccent else SoundColors.TextMuted, label = "themeText")
+                Row(
+                    Modifier
+                        .weight(1f)
+                        .height(42.dp)
+                        .clip(RoundedCornerShape(11.dp))
+                        .background(bg)
+                        .selectable(selected = selected, role = Role.RadioButton, onClick = { onPick(mode) }),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(icon, null, tint = fg, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(stringResource(label), style = MaterialTheme.typography.labelLarge, color = fg, maxLines = 1)
+                }
+            }
+        }
     }
 }
 

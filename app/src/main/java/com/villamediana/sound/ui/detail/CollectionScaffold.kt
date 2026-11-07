@@ -190,8 +190,8 @@ internal fun CollectionScaffold(
                                 .matchParentSize()
                                 .background(
                                     Brush.verticalGradient(
-                                        0f to header.wash,
-                                        0.5f to header.wash.copy(alpha = 0.55f),
+                                        0f to header.wash.copy(alpha = SoundColors.palette.washAlpha),
+                                        0.5f to header.wash.copy(alpha = SoundColors.palette.washAlpha * 0.45f),
                                         1f to header.wash.copy(alpha = 0f),
                                     ),
                                 ),

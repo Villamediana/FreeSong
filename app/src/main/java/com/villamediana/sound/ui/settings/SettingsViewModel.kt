@@ -52,6 +52,7 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     fun setSmartShuffle(v: Boolean) = launch { store.setSmartShuffle(v) }
     fun setAutoplay(v: Boolean) = launch { store.setAutoplaySimilar(v) }
     fun setPlayOnline(v: Boolean) = launch { store.setPlayOnlineByDefault(v) }
+    fun setTheme(v: com.villamediana.sound.data.ThemeMode) = launch { store.setTheme(v) }
 
     fun clearHistory() = launch {
         library.clearHistory()

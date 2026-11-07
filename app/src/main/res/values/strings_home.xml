@@ -159,4 +159,9 @@
     <string name="home_settings_equalizer_sub">Graves, agudos e presets para o seu fone.</string>
     <string name="home_settings_equalizer_on">Ligado</string>
     <string name="home_lib_share">Compartilhar</string>
+    <string name="home_settings_group_look">Aparência</string>
+    <string name="home_settings_theme">Tema</string>
+    <string name="home_settings_theme_light">Claro</string>
+    <string name="home_settings_theme_dark">Escuro</string>
+    <string name="home_settings_theme_system">Sistema</string>
 </resources>
