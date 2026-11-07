@@ -413,6 +413,8 @@ internal fun PlayerHost(
     val canvasPlayer by (canvas?.player ?: remember { MutableStateFlow<Player?>(null) }).collectAsState()
     val canvasFor by (canvas?.videoId ?: remember { MutableStateFlow<String?>(null) }).collectAsState()
     val canvasClip = canvasPlayer?.takeIf { canvasOn && canvasFor == track.videoId }
+    // Its second copy, over it: the loop's end melts into the loop's own start.
+    val canvasTwin by (canvas?.twin ?: remember { MutableStateFlow<Player?>(null) }).collectAsState()
     // Back goes to the newest enabled handler. The screen under the player (Search clearing its
     // query, a playlist leaving reorder mode) registered its own after ours, so ours are added
     // again whenever the player or the lyrics open: they sit on top while they are showing.
@@ -568,6 +570,8 @@ internal fun PlayerHost(
                             actions = actions,
                             onCoverBounds = { if (it.width > 1f && it.height > 1f) coverBounds = it },
                             clip = canvasClip,
+                            clipTwin = canvasTwin.takeIf { canvasClip != null },
+                            clipTwinAlpha = canvas?.twinAlpha,
                         )
                     }
                     // 2 — mini player content

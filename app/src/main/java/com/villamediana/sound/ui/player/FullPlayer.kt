@@ -240,6 +240,9 @@ internal fun FullPlayer(
     modifier: Modifier = Modifier,
     /** The song's music video, silent and looping, to show behind the cover; null = the plain backdrop. */
     clip: Player? = null,
+    /** The clip's second copy and how much of it shows (the loop's seamless seam). */
+    clipTwin: Player? = null,
+    clipTwinAlpha: kotlinx.coroutines.flow.StateFlow<Float>? = null,
 ) {
     val root = remember { arrayOfNulls<LayoutCoordinates>(1) }
     val range by rememberUpdatedState(rangePx)
@@ -294,7 +297,7 @@ internal fun FullPlayer(
                     if (clip != null && clipFramesUp) track.videoId?.let(ClipMemory.shown::add)
                 }
                 val clipShowing = clip != null && (clipFramesUp || track.videoId in ClipMemory.shown)
-                ClipLayer(clip, visible, { wash.value }, playerHeight, Modifier.fillMaxWidth().fillMaxHeight(0.66f), onShowing = { clipFramesUp = it })
+                ClipLayer(clip, visible, { wash.value }, playerHeight, Modifier.fillMaxWidth().fillMaxHeight(0.66f), onShowing = { clipFramesUp = it }, twin = clipTwin, twinAlpha = clipTwinAlpha)
                 Column(Modifier.fillMaxSize().padding(top = statusTop)) {
                     TopBar(state.source, actions, hasVideo = track.videoId != null, online = stream.online, onClip = clip != null)
                     BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -459,11 +462,20 @@ private fun CoverPager(
 
 /** [clip] fading in when it comes and out when it goes (the last one stays while it fades). */
 @Composable
-private fun ClipLayer(clip: Player?, visible: () -> Boolean, wash: () -> Color, playerHeight: Float, modifier: Modifier = Modifier, onShowing: (Boolean) -> Unit = {}) {
+private fun ClipLayer(
+    clip: Player?,
+    visible: () -> Boolean,
+    wash: () -> Color,
+    playerHeight: Float,
+    modifier: Modifier = Modifier,
+    onShowing: (Boolean) -> Unit = {},
+    twin: Player? = null,
+    twinAlpha: kotlinx.coroutines.flow.StateFlow<Float>? = null,
+) {
     var last by remember { mutableStateOf(clip) }
     if (clip != null) last = clip
     AnimatedVisibility(visible = clip != null, enter = fadeIn(tween(600)), exit = fadeOut(tween(400)), modifier = modifier) {
-        last?.let { CanvasBackdrop(it, visible, wash, playerHeight, Modifier.fillMaxSize(), onShowing) }
+        last?.let { CanvasBackdrop(it, visible, wash, playerHeight, Modifier.fillMaxSize(), onShowing, twin, twinAlpha) }
     }
 }
 
@@ -480,30 +492,14 @@ private fun CanvasBackdrop(
     playerHeight: Float,
     modifier: Modifier = Modifier,
     onShowing: (Boolean) -> Unit = {},
+    twin: Player? = null,
+    twinAlpha: kotlinx.coroutines.flow.StateFlow<Float>? = null,
 ) {
     val presentation = rememberPresentationState(player)
     val shown by animateFloatAsState(if (presentation.coverSurface) 0f else 1f, tween(700), label = "clip")
     val showing = !presentation.coverSurface
     LaunchedEffect(showing) { onShowing(showing) }
     DisposableEffect(Unit) { onDispose { onShowing(false) } }
-    // The loop never cuts: near its end the clip dissolves into the backdrop and comes back
-    // from it as it starts over.
-    var loopFade by remember { mutableFloatStateOf(1f) }
-    var clipPlaying by remember(player) { mutableStateOf(player.isPlaying) }
-    DisposableEffect(player) {
-        val listener = object : Player.Listener {
-            override fun onIsPlayingChanged(isPlaying: Boolean) { clipPlaying = isPlaying }
-        }
-        player.addListener(listener)
-        onDispose { player.removeListener(listener) }
-    }
-    // Follows the loop frame by frame only while the clip plays (no frames asked for when it is still).
-    LaunchedEffect(player, clipPlaying) {
-        while (clipPlaying) {
-            withFrameMillis { }
-            loopFade = PlayerMath.loopFade(player.currentPosition, player.duration)
-        }
-    }
     // Painted over the video (a TextureView ignores layer alpha and masks): darkened, then the
     // player's very own backdrop — its color and the cover's veil, as PlayerLayer paints them —
     // drawn in a layer of its own and masked in from the middle down, so where the clip ends it is
@@ -533,7 +529,7 @@ private fun CanvasBackdrop(
                     blendMode = BlendMode.DstIn,
                 )
                 canvas.restore()
-                val hide = 1f - shown * loopFade * (if (visible()) 1f else 0f)
+                val hide = 1f - shown * (if (visible()) 1f else 0f)
                 if (hide > 0f) {
                     drawRect(bg, alpha = hide)
                     drawRect(veil, alpha = hide)
@@ -550,6 +546,11 @@ private fun CanvasBackdrop(
             surfaceType = SURFACE_TYPE_TEXTURE_VIEW,
             modifier = Modifier.requiredSize(w, h).align(Alignment.Center),
         )
+        // The second copy on top: at the end of each loop it fades in from the loop's start (or
+        // out, handing back), so the end melts into the start and the loop never cuts.
+        if (twin != null && twinAlpha != null) {
+            TwinSurface(twin, twinAlpha, Modifier.requiredSize(w, h).align(Alignment.Center))
+        }
     }
 }
 
@@ -804,4 +805,26 @@ private fun Modifier.fadedEdges(edge: Float = 0.1f): Modifier = this
 /** Songs whose clip has been seen this session: their cover stays aside while the clip is on. */
 internal object ClipMemory {
     val shown = androidx.compose.runtime.mutableStateSetOf<String>()
+}
+
+/**
+ * A TextureView for the clip's second copy. Its own view alpha (a TextureView ignores the layer
+ * alpha of Compose) follows [alpha] frame by frame, without recomposing.
+ */
+@Composable
+private fun TwinSurface(player: Player, alpha: kotlinx.coroutines.flow.StateFlow<Float>, modifier: Modifier) {
+    var view by remember { mutableStateOf<android.view.TextureView?>(null) }
+    androidx.compose.ui.viewinterop.AndroidView(
+        factory = { ctx -> android.view.TextureView(ctx).also { it.alpha = alpha.value; view = it } },
+        modifier = modifier,
+    )
+    DisposableEffect(player, view) {
+        val v = view ?: return@DisposableEffect onDispose { }
+        player.setVideoTextureView(v)
+        onDispose { player.clearVideoTextureView(v) }
+    }
+    LaunchedEffect(view) {
+        val v = view ?: return@LaunchedEffect
+        alpha.collect { v.alpha = it }
+    }
 }

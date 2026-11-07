@@ -45,6 +45,38 @@ interface PlayerCanvas {
 
     /** Shows the clip of [videoId] behind the cover, or stops (null). Main thread. */
     fun show(videoId: String?)
+
+    /**
+     * A second copy of the clip, drawn over [player]: near the end of a loop it starts from the
+     * beginning and [twinAlpha] fades it in (or out), so the loop melts into its own start.
+     */
+    val twin: StateFlow<Player?> get() = NO_PLAYER
+    val twinAlpha: StateFlow<Float> get() = NO_ALPHA
+}
+
+private val NO_PLAYER = MutableStateFlow<Player?>(null)
+private val NO_ALPHA = MutableStateFlow(0f)
+
+/**
+ * The loop's seam, without a seam: when the copy in front is [LoopCrossfade.FADE_MS] from its end,
+ * the other copy starts from the beginning and takes over over that time (an S curve), then they
+ * swap roles. Pure: tested on its own.
+ */
+object LoopCrossfade {
+    const val FADE_MS = 1_200L
+
+    /** Time to start the other copy: the one playing is within the fade of its end. */
+    fun shouldStart(positionMs: Long, durationMs: Long): Boolean =
+        durationMs > FADE_MS * 2 && durationMs - positionMs <= FADE_MS
+
+    /** How far the takeover is (0 → 1) when the incoming copy is at [incomingPositionMs]. */
+    fun progress(incomingPositionMs: Long): Float {
+        val t = (incomingPositionMs.toFloat() / FADE_MS).coerceIn(0f, 1f)
+        return t * t * (3 - 2 * t)
+    }
+
+    /** Alpha of the top copy: it comes in when it is the incoming one, goes out when it hands back. */
+    fun topAlpha(incomingIsTop: Boolean, progress: Float): Float = if (incomingIsTop) progress else 1f - progress
 }
 
 /**
@@ -69,7 +101,19 @@ class VideoCanvas internal constructor(
     private val _videoId = MutableStateFlow<String?>(null)
     override val videoId: StateFlow<String?> = _videoId.asStateFlow()
 
+    private val _twin = MutableStateFlow<Player?>(null)
+    override val twin: StateFlow<Player?> = _twin.asStateFlow()
+
+    private val _twinAlpha = MutableStateFlow(0f)
+    override val twinAlpha: StateFlow<Float> = _twinAlpha.asStateFlow()
+
     private var exo: ExoPlayer? = null
+    /** The copy drawn on top ([twin]); null when it couldn't play (then [exo] loops by itself). */
+    private var top: ExoPlayer? = null
+    /** The copy the loop is on now ([exo] or [top]); the other waits at the start. */
+    private var front: ExoPlayer? = null
+    private var crossing = false
+    private var loopJob: Job? = null
     private var current: String? = null
     /** Where the loop of [current] starts (30 s, or 0 after a clip too short for that). */
     private var clipStart = CLIP_START_MS
@@ -106,7 +150,9 @@ class VideoCanvas internal constructor(
             releaseJob?.cancel()
             val player = exo
             if (videoId == current && player != null) {
-                player.play()
+                (front ?: player).play()
+                if (crossing) other()?.play()
+                startLoop()
                 return@launch
             }
             release()
@@ -132,11 +178,71 @@ class VideoCanvas internal constructor(
                 exo = it
                 it.addListener(Events(it))
             }
+            // The second copy reads the same bytes from the disk cache.
+            val second = top ?: build().also {
+                top = it
+                it.addListener(TopEvents(it))
+            }
             player.setMediaSource(clip(videoId, stream, startMs))
+            player.repeatMode = Player.REPEAT_MODE_OFF
             player.prepare()
             player.play()
+            second.setMediaSource(clip(videoId, stream, startMs))
+            second.prepare()
+            front = player
+            crossing = false
+            _twinAlpha.value = 0f
             _player.value = player
+            _twin.value = second
             _videoId.value = videoId
+            startLoop()
+        }
+    }
+
+    private fun other(): ExoPlayer? = if (front === exo) top else exo
+
+    /** Watches the copy in front and hands over to the other one at the end of the loop. */
+    private fun startLoop() {
+        if (loopJob?.isActive == true) return
+        loopJob = main.launch {
+            while (true) {
+                delay(FRAME_MS)
+                step()
+            }
+        }
+    }
+
+    private fun step() {
+        val cur = front ?: return
+        val next = other()
+        if (next == null) {
+            // No second copy: the clip loops on its own (with its cut).
+            if (cur.repeatMode != Player.REPEAT_MODE_ONE) cur.repeatMode = Player.REPEAT_MODE_ONE
+            return
+        }
+        if (!crossing) {
+            // The other copy wasn't ready in time: start over on this one rather than freeze.
+            if (cur.playbackState == Player.STATE_ENDED) {
+                cur.seekTo(0)
+                cur.play()
+                return
+            }
+            if (!cur.isPlaying) return
+            if (LoopCrossfade.shouldStart(cur.currentPosition, cur.duration) && next.playbackState == Player.STATE_READY) {
+                next.seekTo(0)
+                next.play()
+                crossing = true
+            }
+            return
+        }
+        val progress = LoopCrossfade.progress(next.currentPosition)
+        _twinAlpha.value = LoopCrossfade.topAlpha(incomingIsTop = next === top, progress)
+        if (progress >= 1f || cur.playbackState == Player.STATE_ENDED) {
+            cur.pause()
+            cur.seekTo(0)
+            front = next
+            crossing = false
+            _twinAlpha.value = if (next === top) 1f else 0f
         }
     }
 
@@ -158,7 +264,7 @@ class VideoCanvas internal constructor(
         .build()
         .apply {
             volume = 0f
-            repeatMode = Player.REPEAT_MODE_ONE
+            repeatMode = Player.REPEAT_MODE_OFF
             videoScalingMode = C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
             trackSelectionParameters = trackSelectionParameters.buildUpon()
                 .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true)
@@ -167,7 +273,10 @@ class VideoCanvas internal constructor(
 
     /** Hidden: paused now, let go of the decoder a little later (a quick collapse/expand keeps it). */
     private fun pause() {
+        loopJob?.cancel()
+        loopJob = null
         exo?.pause()
+        top?.pause()
         releaseJob?.cancel()
         releaseJob = main.launch {
             delay(RELEASE_AFTER_MS)
@@ -179,11 +288,35 @@ class VideoCanvas internal constructor(
     private fun release() {
         loadJob?.cancel()
         loadJob = null
+        loopJob?.cancel()
+        loopJob = null
+        top?.let { t ->
+            top = null
+            _twin.value = null
+            t.release()
+        }
+        front = null
+        crossing = false
+        _twinAlpha.value = 0f
         val player = exo ?: return
         exo = null
         _player.value = null
         _videoId.value = null
         player.release()
+    }
+
+    /** The second copy failing is no reason to lose the clip: it just loops on its own again. */
+    private inner class TopEvents(private val player: ExoPlayer) : Player.Listener {
+        override fun onPlayerError(error: PlaybackException) {
+            if (top !== player) return
+            top = null
+            _twin.value = null
+            _twinAlpha.value = 0f
+            if (front === player) front = exo
+            crossing = false
+            exo?.let { if (!it.isPlaying) { it.seekTo(0); it.play() } }
+            player.release()
+        }
     }
 
     private inner class Events(private val player: ExoPlayer) : Player.Listener {
@@ -207,6 +340,7 @@ class VideoCanvas internal constructor(
         const val CLIP_START_MS = 30_000L
         const val CLIP_MS = 10_000L
         const val RELEASE_AFTER_MS = 15_000L
+        private const val FRAME_MS = 16L
         private const val CACHE_BYTES = 64L * 1024 * 1024
 
         @Volatile private var sharedCache: SimpleCache? = null
