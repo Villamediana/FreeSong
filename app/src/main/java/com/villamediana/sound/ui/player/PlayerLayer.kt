@@ -479,6 +479,7 @@ internal fun PlayerHost(deps: PlayerDeps, bottomBarHeight: Dp, modifier: Modifie
                             swipeOffset = { swipe.value },
                             swipeWidth = swipeWidth,
                             onTogglePlay = actions.togglePlay,
+                            onPrevious = actions.previous,
                             onNext = actions.next,
                             modifier = miniGestures,
                         )

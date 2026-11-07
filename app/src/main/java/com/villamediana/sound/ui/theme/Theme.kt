@@ -73,7 +73,7 @@ object Dimens {
     val RowHeight = 70.dp
     val RowCover = 54.dp
     val CardCover = 150.dp        // home carousels
-    val MiniPlayerHeight = 70.dp
+    val MiniPlayerHeight = 76.dp
     val BottomBarHeight = 66.dp
     val CoverCorner = 13.dp       // album art corners (soft, rounded)
 }

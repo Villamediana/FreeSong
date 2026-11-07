@@ -1,5 +1,6 @@
 package com.villamediana.sound.ui.player
 
+import androidx.compose.foundation.layout.width
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -24,14 +25,15 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material.icons.rounded.FastForward
+import androidx.compose.material.icons.rounded.FastRewind
 import androidx.compose.ui.unit.dp
 import com.villamediana.sound.data.db.Track
 import com.villamediana.sound.data.isOnline
 import com.villamediana.sound.ui.theme.SoundColors
 import kotlin.math.abs
 
-internal val MiniCoverSize = 54.dp
-internal val MiniCoverInset = 10.dp
+internal val MiniCoverSize = 52.dp
+internal val MiniCoverInset = 12.dp
 internal val MiniCoverCorner = 14.dp
 internal val MiniCardCorner = 20.dp
 internal val MiniSideMargin = 0.dp
@@ -51,6 +53,7 @@ internal fun MiniPlayerBar(
     swipeOffset: () -> Float,
     swipeWidth: Float,
     onTogglePlay: () -> Unit,
+    onPrevious: () -> Unit,
     onNext: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -69,7 +72,7 @@ internal fun MiniPlayerBar(
             },
     ) {
         Row(
-            Modifier.fillMaxSize().padding(start = MiniCoverInset + MiniCoverSize + 14.dp, end = 8.dp),
+            Modifier.fillMaxSize().padding(start = MiniCoverInset + MiniCoverSize + 14.dp, end = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
@@ -93,7 +96,7 @@ internal fun MiniPlayerBar(
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
                             color = SoundColors.Text,
                             maxLines = 1,
-                            modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 2_000, repeatDelayMillis = 3_000),
+                            overflow = TextOverflow.Ellipsis,
                         )
                         Spacer(Modifier.height(1.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -103,13 +106,22 @@ internal fun MiniPlayerBar(
                     }
                 }
             }
+            Spacer(Modifier.width(6.dp))
+            PlayerIconButton(
+                androidx.compose.material.icons.Icons.Rounded.FastRewind,
+                androidx.compose.ui.res.stringResource(com.villamediana.sound.R.string.player_previous),
+                onPrevious,
+                size = 42.dp,
+                iconSize = 26.dp,
+                tint = SoundColors.Text,
+            )
             MorphPlayPauseIcon(playing = playing, onClick = onTogglePlay, size = 46.dp)
             PlayerIconButton(
                 androidx.compose.material.icons.Icons.Rounded.FastForward,
                 androidx.compose.ui.res.stringResource(com.villamediana.sound.R.string.player_next),
                 onNext,
-                size = 46.dp,
-                iconSize = 30.dp,
+                size = 42.dp,
+                iconSize = 26.dp,
                 tint = SoundColors.Text,
             )
         }
