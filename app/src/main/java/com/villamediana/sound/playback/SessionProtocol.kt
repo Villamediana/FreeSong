@@ -50,6 +50,8 @@ internal object SessionProtocol {
     /** JSON list of [OnlineItem] for the negative ids in [ARG_IDS]. */
     const val ARG_ONLINE = "online"
     const val ARG_START = "start"
+    /** The start song is the one playing: it keeps going and the new queue is put around it (a radio from it). */
+    const val ARG_CONTINUE = "continue"
     const val ARG_SHUFFLE = "shuffle"
     const val ARG_SMART = "smart"
     const val ARG_WHERE = "where"

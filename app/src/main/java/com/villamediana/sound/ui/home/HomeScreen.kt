@@ -90,7 +90,10 @@ fun HomeScreen() {
     val vm: HomeViewModel = viewModel()
     val discoverVm: DiscoverViewModel = viewModel()
     val discover by discoverVm.state.collectAsStateWithLifecycle()
-    LaunchedEffect(Unit) { discoverVm.onShown() }
+    LaunchedEffect(Unit) {
+        discoverVm.onShown()
+        vm.refreshMixes()
+    }
     val state by vm.state.collectAsStateWithLifecycle()
     val playback by vm.playback.collectAsStateWithLifecycle()
     val downloads by vm.downloads.collectAsStateWithLifecycle()

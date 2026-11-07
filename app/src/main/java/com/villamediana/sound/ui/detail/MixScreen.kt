@@ -1,5 +1,8 @@
 package com.villamediana.sound.ui.detail
 
+import androidx.compose.ui.unit.dp
+import com.villamediana.sound.ui.search.toRemoteTrack
+import com.villamediana.sound.data.isOnline
 import android.content.res.Resources
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
@@ -39,15 +42,31 @@ import kotlinx.coroutines.flow.map
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 internal class MixViewModel(private val id: String, private val labels: MixLabels) : ViewModel() {
-    val mix: StateFlow<Load<Mix>> = flow { emit(buildTaste()) }
-        .flatMapLatest { taste ->
-            var frozen: Mix? = null
-            graph.library.tracks.map { all ->
-                val base = frozen ?: SmartMixes.byId(id, all, taste, labels)?.also { frozen = it } ?: return@map null
+    val mix: StateFlow<Load<Mix>> = (
+        if (id.startsWith(com.villamediana.sound.smart.MadeForYou.PREFIX)) {
+            // "Feitos pra você": the very mix of the card (your songs + new ones). A new song that
+            // got downloaded since shows as its library song.
+            kotlinx.coroutines.flow.combine(graph.madeForYou.mixes, graph.library.tracks) { mixes, all ->
+                val base = mixes.firstOrNull { it.id == id } ?: return@combine null
                 val byId = all.associateBy { it.id }
-                base.copy(tracks = base.tracks.mapNotNull { byId[it.id] }.distinctBy { it.id })
+                val byVideo = all.filter { it.videoId != null }.associateBy { it.videoId!! }
+                base.copy(
+                    tracks = base.tracks.mapNotNull { t ->
+                        if (t.isOnline) byVideo[t.videoId] ?: t else byId[t.id]
+                    }.distinctBy { it.videoId ?: "t:${it.id}" },
+                )
+            }.also { graph.madeForYou.refresh() }
+        } else {
+            flow { emit(buildTaste()) }.flatMapLatest { taste ->
+                var frozen: Mix? = null
+                graph.library.tracks.map { all ->
+                    val base = frozen ?: SmartMixes.byId(id, all, taste, labels)?.also { frozen = it } ?: return@map null
+                    val byId = all.associateBy { it.id }
+                    base.copy(tracks = base.tracks.mapNotNull { byId[it.id] }.distinctBy { it.id })
+                }
             }
         }
+        )
         .flowOn(Dispatchers.Default)
         .asLoad()
         .stateIn(this)
@@ -78,6 +97,7 @@ private fun MixContent(mix: Mix) {
     val sheet = rememberTrackSheetState()
     val sheets = rememberCollectionSheets()
     val tracks = mix.tracks
+    val likedIds by graph.library.likedVideoIds.collectAsStateWithLifecycle(emptySet())
 
     val tint = remember(mix.tint) { mix.tint?.let { Color(it) } ?: CoverColors.tune(SoundColors.Accent) }
     val duration = remember(tracks) { tracks.sumOf { it.durationMs } }
@@ -98,7 +118,7 @@ private fun MixContent(mix: Mix) {
         playing = status.isPlaying,
         loading = status.isLoading,
         onPlay = if (tracks.isEmpty()) null else {
-            { if (status.isSource) player.togglePlayPause() else player.playSmart(SmartSeed.Mix(mix.id)) }
+            { if (status.isSource) player.togglePlayPause() else player.play(tracks, 0, source) }
         },
         actions = {
             HeaderIconButton(Icons.Rounded.MoreVert, stringResource(R.string.more_options), onClick = { sheets.menuOpen = true })
@@ -118,12 +138,26 @@ private fun MixContent(mix: Mix) {
         },
     ) {
         itemsIndexed(tracks, key = { _, t -> t.id }, contentType = { _, _ -> "track" }) { i, t ->
+            // A heart on every song: the new ones you like go to your Músicas (and download with
+            // "Curtir já baixa").
+            val liked = if (t.isOnline) t.videoId in likedIds else t.liked
             SongRow(
                 track = t,
                 playback = playback,
                 onClick = { player.play(tracks, i, source) },
                 sheet = sheet,
                 modifier = Modifier.animateItem(),
+                trailing = {
+                    com.villamediana.sound.ui.player.LikeButton(
+                        liked = liked,
+                        onToggle = { v ->
+                            if (t.isOnline) t.toRemoteTrack()?.let { graph.likeOnline(it, v) } else graph.likeTrack(t.id, v)
+                        },
+                        size = 40.dp,
+                        iconSize = 22.dp,
+                    )
+                },
+                likedMark = false,
             )
         }
     }

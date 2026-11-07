@@ -411,7 +411,16 @@ class PlaybackService : MediaLibraryService() {
     }
 
     /** Replaces the queue, starting at the plan's start song (also first when shuffled). [shuffleMode] = [SessionProtocol.SHUFFLE_KEEP] / ON / OFF. */
-    private suspend fun playPlan(plan: QueuePlan, shuffleMode: Int) {
+    /** The item playing is [track] (same library row, or same YouTube video). */
+    private fun isPlaying(track: Track): Boolean {
+        val item = player.currentMediaItem ?: return false
+        val id = MediaItems.trackId(item)
+        if (id != null && id == track.id) return true
+        val videoId = MediaItems.videoId(item) ?: id?.let { tracksById[it]?.videoId }
+        return videoId != null && videoId == track.videoId
+    }
+
+    private suspend fun playPlan(plan: QueuePlan, shuffleMode: Int, keepCurrent: Boolean = false) {
         val tracks = plan.tracks
         if (tracks.isEmpty()) return
         val start = plan.startIndex.coerceIn(0, tracks.lastIndex)
@@ -440,7 +449,18 @@ class PlaybackService : MediaLibraryService() {
         suppressShuffleReorder = true
         try {
             player.shuffleModeEnabled = shuffleOn
-            player.setMediaItems(tracks.map(::mediaItemOf), order?.timelineIndexOf(0) ?: start, 0)
+            if (keepCurrent && order == null && isPlaying(tracks[start])) {
+                // A radio from the song playing: it keeps going, the radio is put around it.
+                val idx = player.currentMediaItemIndex
+                if (idx + 1 < player.mediaItemCount) player.removeMediaItems(idx + 1, player.mediaItemCount)
+                if (idx > 0) player.removeMediaItems(0, idx)
+                val before = tracks.take(start).map(::mediaItemOf)
+                val after = tracks.drop(start + 1).map(::mediaItemOf)
+                if (before.isNotEmpty()) player.addMediaItems(0, before)
+                if (after.isNotEmpty()) player.addMediaItems(player.mediaItemCount, after)
+            } else {
+                player.setMediaItems(tracks.map(::mediaItemOf), order?.timelineIndexOf(0) ?: start, 0)
+            }
             if (order != null) player.setShuffleOrder(DefaultShuffleOrder(order.toIntArray(), seed))
         } finally {
             suppressShuffleReorder = false
@@ -951,13 +971,14 @@ class PlaybackService : MediaLibraryService() {
                     val shuffle = args.getInt(SessionProtocol.ARG_SHUFFLE, SessionProtocol.SHUFFLE_KEEP)
                     val src = SessionProtocol.getSource(args)
                     val isSmart = args.getBoolean(SessionProtocol.ARG_SMART)
+                    val keepCurrent = args.getBoolean(SessionProtocol.ARG_CONTINUE)
                     val online = SessionProtocol.getOnline(args)
                     return serialized {
                         val kept = resolveIds(ids, online).withIndex().mapNotNull { (i, t) -> t?.let { IndexedValue(i, it) } }
                         if (kept.isNotEmpty()) {
                             // The requested song plays first, shuffled or not ("Aleatório" buttons pick a random start themselves).
                             val startIdx = kept.indexOfFirst { it.index >= start }.coerceAtLeast(0)
-                            playPlan(QueuePlan(kept.map { it.value }, startIdx, src, isSmart), shuffle)
+                            playPlan(QueuePlan(kept.map { it.value }, startIdx, src, isSmart), shuffle, keepCurrent)
                         }
                     }
                 }

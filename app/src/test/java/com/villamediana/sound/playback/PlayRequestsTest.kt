@@ -3,6 +3,7 @@ package com.villamediana.sound.playback
 import com.villamediana.sound.data.asTransientTrack
 import com.villamediana.sound.data.db.Track
 import com.villamediana.sound.online.RemoteTrack
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -31,5 +32,18 @@ class PlayRequestsTest {
         val radio = PlaySource(PlaySource.Type.RADIO, "Rádio de Iris", "iris1234567")
         assertTrue(PlayRequests.keepsCurrent(song, radio, streamed, radio))
         assertTrue(PlayRequests.keepsCurrent(streamed, radio, streamed, radio))
+    }
+
+    @Test fun aRadioPlaysInItsOwnOrderAndGoesOnFromTheSongPlaying() {
+        val radio = PlaySource(PlaySource.Type.RADIO, "Rádio de Iris", "iris1234567")
+        // Shuffle off for a radio, a mix, a genre list: "next" is the next song they show.
+        assertEquals(SessionProtocol.SHUFFLE_OFF, PlayRequests.shuffleMode(false, radio))
+        assertEquals(SessionProtocol.SHUFFLE_OFF, PlayRequests.shuffleMode(false, PlaySource(PlaySource.Type.MIX, "Mix", "m")))
+        assertEquals(SessionProtocol.SHUFFLE_KEEP, PlayRequests.shuffleMode(false, list))
+        assertEquals(SessionProtocol.SHUFFLE_ON, PlayRequests.shuffleMode(true, radio))
+        // Started from the song playing, the radio continues it; from another song it starts that one.
+        assertTrue(PlayRequests.continuesCurrent(song, song, radio))
+        assertFalse(PlayRequests.continuesCurrent(song, other, radio))
+        assertFalse(PlayRequests.continuesCurrent(song, song, list))
     }
 }

@@ -227,6 +227,8 @@ internal fun SongRow(
     subtitle: String = defaultSubtitle(track),
     showDuration: Boolean = false,
     contentPadding: PaddingValues = PaddingValues(horizontal = Dimens.Gutter),
+    trailing: (@Composable () -> Unit)? = null,
+    likedMark: Boolean = true,
 ) {
     val haptic = LocalHapticFeedback.current
     TrackRow(
@@ -247,6 +249,8 @@ internal fun SongRow(
         subtitle = subtitle,
         showDuration = showDuration,
         contentPadding = contentPadding,
+        trailing = trailing,
+        likedMark = likedMark,
     )
 }
 

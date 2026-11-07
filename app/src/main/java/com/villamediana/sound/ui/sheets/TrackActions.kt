@@ -258,7 +258,9 @@ fun TrackActionsSheet(
                         TrackSheetAction.RADIO -> SheetAction(Icons.Rounded.Sensors, stringResource(R.string.sheet_start_radio), dimmed = dimmed, onClick = {
                             when {
                                 dimmed -> offline()
-                                t.isOnline -> {
+                                // Online, a song from YouTube gets YouTube Music's radio (new songs alike);
+                                // offline, the radio of what is on the phone.
+                                t.isOnline || (t.videoId != null && online) -> {
                                     startOnlineRadio(t, graph, feedback, res)
                                     closeThen(onDismiss)
                                 }

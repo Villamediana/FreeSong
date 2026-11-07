@@ -86,6 +86,26 @@ class AppGraph(context: Context) {
     val discover: com.villamediana.sound.discover.DiscoverRepository by lazy {
         com.villamediana.sound.discover.DiscoverRepository(youTube, appContext.filesDir.resolve("discover.json"))
     }
+
+    /** "Feitos pra você": the day's genre mixes (your songs + new ones alike). */
+    val madeForYou: com.villamediana.sound.smart.MadeForYouStore by lazy {
+        com.villamediana.sound.smart.MadeForYouStore(
+            library = library,
+            discover = discover,
+            labels = {
+                val res = appContext.resources
+                com.villamediana.sound.smart.MadeForYou.Labels(
+                    title = { genre -> res.getString(com.villamediana.sound.R.string.home_foryou_title, genre) },
+                    untitled = res.getString(com.villamediana.sound.R.string.home_foryou_untitled),
+                    subtitle = { artists ->
+                        if (artists.isBlank()) res.getString(com.villamediana.sound.R.string.home_foryou_subtitle_plain)
+                        else res.getString(com.villamediana.sound.R.string.home_foryou_subtitle, artists)
+                    },
+                )
+            },
+            scope = scope,
+        )
+    }
     // ---------------------------------------------------------------- hearts & removal
     // Every heart and every "remove from the phone" goes through here, so the rules hold everywhere.
 

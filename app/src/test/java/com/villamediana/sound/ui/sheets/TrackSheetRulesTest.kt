@@ -31,39 +31,34 @@ class TrackSheetRulesTest {
     )
     private val streamed = RemoteTrack("xyz", "https://music.youtube.com/watch?v=xyz", "Prófugos", "Soda Stereo", fromMusicCatalog = true).asTransientTrack()
 
-    @Test fun `a downloaded song gets the whole menu, video and both ways to share`() {
-        assertEquals(
-            listOf(LIKE, PLAY_NEXT, ENQUEUE, ADD_TO_PLAYLIST, RADIO, GO_ALBUM, GO_ARTIST, VIDEO, SHARE, SEND_FILE, EDIT, DELETE),
-            TrackSheetRules.actionsFor(downloaded, fileExists = true, inPlaylist = false, fromPlayer = false),
-        )
+    private val SLEEP = TrackSheetAction.SLEEP_TIMER
+    private val gone = listOf(LIKE, DOWNLOAD, VIDEO, SEND_FILE, EDIT, EQUALIZER)
+
+    @Test fun `every song gets the same short menu, wherever it is opened`() {
+        val menu = listOf(PLAY_NEXT, ENQUEUE, ADD_TO_PLAYLIST, RADIO, GO_ALBUM, GO_ARTIST, SHARE, SLEEP, DELETE)
+        assertEquals(menu, TrackSheetRules.actionsFor(downloaded, fileExists = true, inPlaylist = false, fromPlayer = false))
+        assertEquals(menu, TrackSheetRules.actionsFor(downloaded, fileExists = true, inPlaylist = false, fromPlayer = true))
+        // Heart and download on the rows/player, video from the cover, no file sending, no editing.
+        for (g in gone) assertFalse(g.name, g in TrackSheetRules.actionsFor(downloaded, true, false, false))
     }
 
-    @Test fun `the player's sheet leaves out what the player shows and a playlist row can be removed`() {
-        val fromPlayer = TrackSheetRules.actionsFor(downloaded, fileExists = true, inPlaylist = false, fromPlayer = true)
-        // Heart beside the title, equalizer button below, and "play next" of the song playing: not here.
-        for (gone in listOf(LIKE, PLAY_NEXT, EQUALIZER, VIDEO)) assertFalse(gone.name, gone in fromPlayer)
-        assertTrue(TrackSheetAction.SLEEP_TIMER in fromPlayer)
+    @Test fun `a playlist row can leave the playlist`() {
         val inPlaylist = TrackSheetRules.actionsFor(downloaded, fileExists = true, inPlaylist = true, fromPlayer = false)
-        assertEquals(listOf(EDIT, REMOVE_FROM_PLAYLIST, DELETE), inPlaylist.takeLast(3))
-        assertFalse(EQUALIZER in inPlaylist)
+        assertEquals(listOf(SLEEP, REMOVE_FROM_PLAYLIST, DELETE), inPlaylist.takeLast(3))
     }
 
-    @Test fun `no file, no youtube id, no album means fewer lines`() {
+    @Test fun `no youtube id, no album means fewer lines`() {
         val imported = Track(id = 8, title = "Demo", artist = "Banda", filePath = "/gone.mp3")
         assertEquals(
-            listOf(LIKE, PLAY_NEXT, ENQUEUE, ADD_TO_PLAYLIST, RADIO, GO_ARTIST, EDIT, DELETE),
+            listOf(PLAY_NEXT, ENQUEUE, ADD_TO_PLAYLIST, RADIO, GO_ARTIST, SLEEP, DELETE),
             TrackSheetRules.actionsFor(imported, fileExists = false, inPlaylist = false, fromPlayer = false),
         )
     }
 
-    @Test fun `a streamed song only gets what works without a library row`() {
-        // From the player: heart and download sit beside the title already.
-        val actions = TrackSheetRules.actionsFor(streamed, fileExists = false, inPlaylist = true, fromPlayer = true)
-        assertEquals(listOf(ENQUEUE, RADIO, SHARE, TrackSheetAction.SLEEP_TIMER), actions)
-        for (hidden in listOf(LIKE, DOWNLOAD, PLAY_NEXT, EQUALIZER, VIDEO, ADD_TO_PLAYLIST, EDIT, DELETE, REMOVE_FROM_PLAYLIST, SEND_FILE, GO_ALBUM, GO_ARTIST)) {
-            assertFalse(hidden.name, hidden in actions)
-        }
-        assertEquals(listOf(LIKE, DOWNLOAD, PLAY_NEXT, ENQUEUE, RADIO, VIDEO, SHARE), TrackSheetRules.actionsFor(streamed, false, false, false))
+    @Test fun `a streamed song has no playlist, album, artist page or delete here`() {
+        val expected = listOf(PLAY_NEXT, ENQUEUE, RADIO, SHARE, SLEEP)
+        assertEquals(expected, TrackSheetRules.actionsFor(streamed, fileExists = false, inPlaylist = true, fromPlayer = true))
+        assertEquals(expected, TrackSheetRules.actionsFor(streamed, false, false, false))
     }
 
     @Test fun `what needs the internet`() {

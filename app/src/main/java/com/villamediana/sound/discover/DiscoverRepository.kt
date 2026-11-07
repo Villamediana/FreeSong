@@ -127,6 +127,19 @@ class DiscoverRepository(
             Entry(slot(), songs = list.map { it.toSong() })
         }
 
+    /**
+     * A list made once for [day] under [key] (the made-for-you mixes' new songs): the same all day,
+     * remade the next. Offline / on failure: the last one made.
+     */
+    suspend fun daily(key: String, day: Long, make: suspend () -> List<RemoteTrack>): List<RemoteTrack> {
+        val cached = lock.withLock { load() }.lists[key]
+        if (cached != null && cached.slot == day) return cached.songs.map { it.toRemote() }
+        val fresh = runCatching { make() }.getOrNull().orEmpty()
+        if (fresh.isEmpty()) return cached?.songs?.map { it.toRemote() }.orEmpty()
+        update { it.copy(lists = it.lists + (key to Entry(day, songs = fresh.map { s -> s.toSong() }))) }
+        return fresh
+    }
+
     /** Albums/playlists for [query] ([filter] ALBUMS or PLAYLISTS), cached like [songs]. */
     suspend fun collections(key: String, query: String, filter: SearchFilter, size: Int = 6): List<RemoteCollection> =
         cachedOrFetch(key, false, { it.cols.mapNotNull { c -> c.toRemote() } }) {

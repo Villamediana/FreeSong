@@ -339,7 +339,13 @@ class MediaPlayerConnection(
             remember(tracks)
             clearError()
         }
-        send(SessionProtocol.PLAY, playArgs(tracks, start, source, if (shuffle) SessionProtocol.SHUFFLE_ON else SessionProtocol.SHUFFLE_KEEP, smart = smart))
+        send(
+            SessionProtocol.PLAY,
+            playArgs(
+                tracks, start, source, PlayRequests.shuffleMode(shuffle, source), smart = smart,
+                continueCurrent = PlayRequests.continuesCurrent(_state.value.current, tracks[start], source),
+            ),
+        )
     }
 
     override fun playOnline(tracks: List<RemoteTrack>, startIndex: Int, source: PlaySource) {
@@ -365,13 +371,21 @@ class MediaPlayerConnection(
             } ?: return@launch
             remember(plan.tracks)
             clearError()
-            send(SessionProtocol.PLAY, playArgs(plan.tracks, plan.startIndex, plan.source, SessionProtocol.SHUFFLE_OFF, smart = plan.smart))
+            val startTrack = plan.tracks.getOrNull(plan.startIndex)
+            send(
+                SessionProtocol.PLAY,
+                playArgs(
+                    plan.tracks, plan.startIndex, plan.source, SessionProtocol.SHUFFLE_OFF, smart = plan.smart,
+                    continueCurrent = startTrack != null && PlayRequests.continuesCurrent(_state.value.current, startTrack, plan.source),
+                ),
+            )
         }
     }
 
-    private fun playArgs(tracks: List<Track>, start: Int, source: PlaySource?, shuffle: Int, smart: Boolean) = Bundle().apply {
+    private fun playArgs(tracks: List<Track>, start: Int, source: PlaySource?, shuffle: Int, smart: Boolean, continueCurrent: Boolean = false) = Bundle().apply {
         putLongArray(SessionProtocol.ARG_IDS, tracks.map { it.id }.toLongArray())
         putInt(SessionProtocol.ARG_START, start)
+        putBoolean(SessionProtocol.ARG_CONTINUE, continueCurrent)
         putInt(SessionProtocol.ARG_SHUFFLE, shuffle)
         putBoolean(SessionProtocol.ARG_SMART, smart)
         SessionProtocol.putSource(this, source)

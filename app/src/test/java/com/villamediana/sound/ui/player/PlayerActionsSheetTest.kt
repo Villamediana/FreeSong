@@ -67,17 +67,14 @@ class PlayerActionsSheetTest {
         compose.onNode(expandMini).performClick()
         compose.waitForIdle()
         compose.onAllNodesWithContentDescription("Mais opções").onFirst().performClick()
-        waitFor(hasText("Editar informações"))
-        compose.onNode(hasText("Editar informações")).performClick()
-        waitFor(hasSetTextAction() and hasText("Aurora"))
-        compose.onNode(hasSetTextAction() and hasText("Aurora")).performTextReplacement("Aurora (ao vivo)")
-        compose.waitForIdle()
+        waitFor(hasText("Adicionar à fila"))
+        // The same short menu as everywhere: no editing, no sending the file.
+        compose.onNode(hasText("Editar informações")).assertDoesNotExist()
+        compose.onNode(hasText("Enviar arquivo")).assertDoesNotExist()
 
-        // The song ends and the next one starts while the dialog is open.
+        // The song ends and the next one starts while the sheet is open: it stays on its song.
         player.stateFlow.value = playing.copy(current = tracks[1], queueIndex = 1)
         compose.waitForIdle()
-
-        compose.onNode(hasSetTextAction() and hasText("Aurora (ao vivo)")).assertExists()
-        compose.onNode(hasText("Tocar a seguir")).assertDoesNotExist()
+        compose.onAllNodes(hasText("Aurora")).fetchSemanticsNodes().isNotEmpty().let { check(it) { "the sheet left its song" } }
     }
 }

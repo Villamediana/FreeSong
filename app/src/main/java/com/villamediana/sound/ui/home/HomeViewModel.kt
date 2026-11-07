@@ -33,7 +33,6 @@ data class HomeUiState(
 class HomeViewModel(app: Application) : AndroidViewModel(app) {
     private val graph = SoundApplication.graph
     private val library = graph.library
-    private val labels = homeMixLabels(app.resources)
 
     val playback: StateFlow<PlaybackState> = graph.player.state
 
@@ -54,10 +53,15 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     /** The staggered fade-in runs once per screen lifetime, not on every return to the tab. */
     var introPlayed: Boolean = false
 
-    /** Mixes depend only on the songs (and play history, which moves the songs too). */
-    private val mixes: Flow<List<Mix>> = library.tracks
-        .mapLatest { tracks -> if (tracks.isEmpty()) emptyList() else buildMixes(tracks) }
-        .flowOn(Dispatchers.Default)
+    /** "Feitos pra você": the day's genre mixes, made once a day (see MadeForYouStore). */
+    private val mixes: Flow<List<Mix>> = graph.madeForYou.mixes
+
+    init {
+        graph.madeForYou.refresh()
+    }
+
+    /** The Home shows: today's mixes (remade when the day turns). */
+    fun refreshMixes() = graph.madeForYou.refresh()
 
     val state: StateFlow<HomeUiState> = combine(library.tracks, library.albums, mixes) { tracks, albums, mixes ->
         HomeUiState(
@@ -68,17 +72,15 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         )
     }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
 
-    private suspend fun buildMixes(tracks: List<Track>): List<Mix> {
-        val now = System.currentTimeMillis()
-        val taste = buildTaste(library.playCountsSince(now - TASTE_WINDOW_MS), library.recentEvents(), now)
-        // Ids key the carousel items: never let a duplicate reach the LazyRow.
-        return SmartMixes.build(tracks, taste, labels).distinctBy { it.id }
-    }
-
     // ------------------------------------------------------------------ actions
 
     fun playSmartLibrary() = graph.player.playSmart(SmartSeed.Library)
-    fun playMix(id: String) = graph.player.playSmart(SmartSeed.Mix(id))
+    /** Plays the mix exactly as its card and page show it (your songs and the new ones). */
+    fun playMix(id: String) {
+        val mix = graph.madeForYou.byId(id) ?: return
+        if (mix.tracks.isEmpty()) return
+        graph.player.play(mix.tracks, 0, PlaySource(PlaySource.Type.MIX, mix.title, mix.id))
+    }
     fun togglePlayPause() = graph.player.togglePlayPause()
 
     fun playSongs(tracks: List<Track>, index: Int, sourceTitle: String) {

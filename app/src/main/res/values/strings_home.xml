@@ -154,4 +154,8 @@
     <string name="home_settings_theme_light">Claro</string>
     <string name="home_settings_theme_dark">Escuro</string>
     <string name="home_settings_theme_system">Sistema</string>
+    <string name="home_foryou_title">Mix %1$s</string>
+    <string name="home_foryou_untitled">Seu mix</string>
+    <string name="home_foryou_subtitle">%1$s e mais</string>
+    <string name="home_foryou_subtitle_plain">Suas músicas e novidades</string>
 </resources>

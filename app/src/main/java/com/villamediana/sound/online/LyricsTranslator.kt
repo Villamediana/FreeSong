@@ -32,6 +32,8 @@ class LyricsTranslator(
     private val target: () -> String = { Locale.getDefault().language },
 ) {
     private val json = Json { ignoreUnknownKeys = true }
+    /** Google answers 429 to this endpoint over HTTP/2 from OkHttp; over HTTP/1.1 it answers. */
+    private val client: OkHttpClient = http.newBuilder().protocols(listOf(okhttp3.Protocol.HTTP_1_1)).build()
     private val lock = Mutex()
     /** key → translated lines; an empty list = already in the phone's language. */
     private var cache: LinkedHashMap<String, List<String>>? = null
@@ -43,14 +45,18 @@ class LyricsTranslator(
      * already in the phone's language or it could not be translated.
      */
     suspend fun translate(lines: List<String>): List<String?>? {
-        if (lines.none { it.isNotBlank() }) return null
+        // Only the lines with words go out: blank ones (pauses, ♪) at the start or the end are
+        // dropped by the translator, and then the lines no longer line up.
+        val worded = lines.indices.filter { lines[it].isNotBlank() }
+        if (worded.isEmpty()) return null
+        val texts = worded.map { lines[it].trim() }
         val lang = target()
-        val key = lang + ":" + lines.joinToString("\n").hashCode().toString(16) + ":" + lines.size
-        lock.withLock { load()[key] }?.let { return it.ifEmpty { null }?.let { t -> align(lines, t) } }
+        val key = lang + ":v2:" + texts.joinToString("\n").hashCode().toString(16) + ":" + texts.size
+        lock.withLock { load()[key] }?.let { return place(lines, worded, it) }
         val job = lock.withLock {
             inFlight.getOrPut(key) {
                 kotlinx.coroutines.CoroutineScope(Dispatchers.IO).async {
-                    val result = runCatching { request(lines, lang) }.getOrNull()
+                    val result = runCatching { requestAll(texts, lang) }.getOrNull()
                     lock.withLock {
                         inFlight.remove(key)
                         if (result != null) {
@@ -65,7 +71,37 @@ class LyricsTranslator(
             }
         }
         val result = job.await() ?: return null
-        return result.ifEmpty { null }?.let { align(lines, it) }
+        return place(lines, worded, result)
+    }
+
+    /** The worded lines' translations put back at their lines; null when there is nothing to show. */
+    private fun place(lines: List<String>, worded: List<Int>, translated: List<String>): List<String?>? {
+        if (translated.isEmpty()) return null
+        val out = arrayOfNulls<String>(lines.size)
+        worded.forEachIndexed { k, i ->
+            out[i] = translated.getOrNull(k)?.trim()?.takeIf { it.isNotEmpty() && !it.equals(lines[i].trim(), ignoreCase = true) }
+        }
+        return out.toList().takeIf { list -> list.any { it != null } }
+    }
+
+    /**
+     * The whole song in one request; when the lines don't come back one for one, in small parts
+     * (a part that still doesn't line up stays untranslated, the rest shows). Empty = already in [lang].
+     */
+    private suspend fun requestAll(texts: List<String>, lang: String): List<String> {
+        when (val whole = request(texts, lang)) {
+            Answer.Same -> return emptyList()
+            is Answer.Lines -> return whole.lines
+            Answer.Misaligned -> Unit
+        }
+        val out = ArrayList<String>(texts.size)
+        texts.chunked(CHUNK).forEach { part ->
+            out += when (val a = request(part, lang)) {
+                is Answer.Lines -> a.lines
+                else -> List(part.size) { "" }
+            }
+        }
+        return out
     }
 
     /** Forgets every translation (Ajustes › Armazenamento). */
@@ -76,23 +112,28 @@ class LyricsTranslator(
 
     fun bytes(): Long = file.takeIf { it.isFile }?.length() ?: 0L
 
-    /** Blank lines (pauses, ♪) stay without a translation. */
-    private fun align(lines: List<String>, translated: List<String>): List<String?> =
-        lines.mapIndexed { i, l -> if (l.isBlank()) null else translated.getOrNull(i)?.trim()?.takeIf { it.isNotEmpty() && !it.equals(l.trim(), ignoreCase = true) } }
+    private sealed interface Answer {
+        data object Same : Answer
+        data object Misaligned : Answer
+        data class Lines(val lines: List<String>) : Answer
+    }
 
-    /** Translated lines, or an empty list when the lyrics are already in [lang]. Throws on failure. */
-    private suspend fun request(lines: List<String>, lang: String): List<String> = withContext(Dispatchers.IO) {
+    /** One request for [lines]. Throws on a network failure. */
+    private suspend fun request(lines: List<String>, lang: String): Answer = withContext(Dispatchers.IO) {
         val body = FormBody.Builder().add("q", lines.joinToString("\n")).build()
         val request = Request.Builder()
             .url("https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=$lang&dt=t")
             .post(body)
             .header("User-Agent", "Mozilla/5.0")
             .build()
-        val text = http.newCall(request).execute().use { r ->
+        val text = client.newCall(request).execute().use { r ->
             check(r.isSuccessful) { "HTTP ${r.code}" }
             r.body.string()
         }
-        parse(text, lang, lines.size) ?: error("Unexpected translation")
+        when (val parsed = parse(text, lang, lines.size)) {
+            null -> Answer.Misaligned
+            else -> if (parsed.isEmpty()) Answer.Same else Answer.Lines(parsed)
+        }
     }
 
     private fun load(): LinkedHashMap<String, List<String>> = cache ?: LinkedHashMap<String, List<String>>().also { map ->
@@ -111,6 +152,7 @@ class LyricsTranslator(
 
     companion object {
         private const val MAX_ENTRIES = 300
+        private const val CHUNK = 8
 
         /**
          * Reads the endpoint's answer: `[[["translated","original",…],…], null, "en", …]`. Empty

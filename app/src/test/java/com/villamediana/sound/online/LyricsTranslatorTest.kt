@@ -34,5 +34,12 @@ class LyricsTranslatorTest {
         assertNull(out[1])
         assertTrue(out[0]!!.contains("miséria", ignoreCase = true))
         assertNull(t.translate(listOf("Eu sei que vou te amar", "Por toda a minha vida")))
+        // Synced lyrics often start and end with blank lines (pauses): they must not break it.
+        val spanish = t.translate(listOf("", "No sé si es amor", "lo que siento por ti", "", ""))!!
+        println("LIVE spanish: $spanish")
+        assertEquals(5, spanish.size)
+        assertNull(spanish[0])
+        assertTrue(spanish[1]!!.isNotBlank() && spanish[2]!!.isNotBlank())
+        assertNull(spanish[4])
     }
 }

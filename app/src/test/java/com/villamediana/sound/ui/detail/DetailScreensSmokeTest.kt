@@ -140,8 +140,9 @@ class DetailScreensSmokeTest {
         compose.onAllNodesWithContentDescription("Mais opções")[1].performClick()
         waitForText("Tocar a seguir")
         assertShown("Ir para o artista")
-        assertShown("Editar informações")
+        assertShown("Timer para dormir")
         assertShown("Apagar do celular")
+        check(compose.onAllNodesWithText("Editar informações").fetchSemanticsNodes().isEmpty())
         shot("track-sheet")
     }
 

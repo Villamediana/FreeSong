@@ -13,45 +13,32 @@ enum class TrackSheetAction {
 /** Which lines the song sheet shows, in order. */
 object TrackSheetRules {
     /**
-     * A song on the phone gets the whole menu. A streamed song (transient, no row in the library)
-     * only gets what makes sense without one: like it (Curtidas keeps streamed songs), download it,
-     * queue it, a radio from it, share it, watch its video — nothing that edits, deletes or files
-     * it into a playlist.
+     * The same short menu for every song, wherever it is opened: play next, queue, playlist, radio,
+     * album, artist, share, sleep timer and — for a song on the phone — delete it. The heart and the
+     * download are on the rows and in the player, the video opens from the cover.
+     * A streamed song (transient, no row in the library) has no playlist, album or artist page here.
      *
-     * @param fileExists the audio file is on the phone (needed to send the file itself)
-     * @param inPlaylist the sheet was opened from a playlist row
-     * @param fromPlayer the sheet was opened from the player (adds the sleep timer; drops what the
-     *   player already shows: heart, download, equalizer, "play next")
+     * @param fileExists kept for callers (the file itself is no longer sent from here)
+     * @param inPlaylist the sheet was opened from a playlist row (it can leave the playlist)
+     * @param fromPlayer kept for callers (the menu is the same in the player)
      */
+    @Suppress("UNUSED_PARAMETER")
     fun actionsFor(track: Track, fileExists: Boolean, inPlaylist: Boolean, fromPlayer: Boolean): List<TrackSheetAction> = buildList {
-        val hasVideo = track.videoId != null
         val canShare = track.shareUrl != null
-        // From the player the heart and the download sit beside the title, the equalizer has its
-        // own button, the cover opens the video, and "play next" of the song playing makes no
-        // sense: none of them here.
+        add(TrackSheetAction.PLAY_NEXT)
+        add(TrackSheetAction.ENQUEUE)
         if (track.isOnline) {
-            if (hasVideo && !fromPlayer) add(TrackSheetAction.LIKE)
-            if (!fromPlayer) add(TrackSheetAction.DOWNLOAD)
-            if (!fromPlayer) add(TrackSheetAction.PLAY_NEXT)
-            add(TrackSheetAction.ENQUEUE)
-            if (hasVideo) add(TrackSheetAction.RADIO)
-            if (hasVideo && !fromPlayer) add(TrackSheetAction.VIDEO)
+            if (track.videoId != null) add(TrackSheetAction.RADIO)
             if (canShare) add(TrackSheetAction.SHARE)
-            if (fromPlayer) add(TrackSheetAction.SLEEP_TIMER)
+            add(TrackSheetAction.SLEEP_TIMER)
             return@buildList
         }
-        if (!fromPlayer) add(TrackSheetAction.LIKE)
-        if (!fromPlayer) add(TrackSheetAction.PLAY_NEXT)
-        add(TrackSheetAction.ENQUEUE)
         add(TrackSheetAction.ADD_TO_PLAYLIST)
         add(TrackSheetAction.RADIO)
         if (track.albumKey != null) add(TrackSheetAction.GO_ALBUM)
         add(TrackSheetAction.GO_ARTIST)
-        if (hasVideo && !fromPlayer) add(TrackSheetAction.VIDEO)
         if (canShare) add(TrackSheetAction.SHARE)
-        if (fileExists) add(TrackSheetAction.SEND_FILE)
-        if (fromPlayer) add(TrackSheetAction.SLEEP_TIMER)
-        add(TrackSheetAction.EDIT)
+        add(TrackSheetAction.SLEEP_TIMER)
         if (inPlaylist) add(TrackSheetAction.REMOVE_FROM_PLAYLIST)
         add(TrackSheetAction.DELETE)
     }
