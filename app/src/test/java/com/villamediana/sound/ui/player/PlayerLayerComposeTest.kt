@@ -20,6 +20,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -461,5 +462,34 @@ class PlayerLayerComposeTest {
         compose.waitForIdle()
         assertEquals(listOf(1L to true), likes)
         compose.onNodeWithContentDescription("Remover das curtidas").assertIsDisplayed()
+    }
+
+    /** Covers drawn on screen right now (the pager composes its neighbours off to the sides). */
+    private fun coversOnScreen(): List<String> {
+        val width = compose.onRoot().fetchSemanticsNode().size.width
+        return compose.onAllNodes(useUnmergedTree = true, matcher = SemanticsMatcher("cover") { n ->
+            n.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.ContentDescription)?.any { it.startsWith("Capa de ") } == true
+        }).fetchSemanticsNodes().filter { n ->
+            val b = n.boundsInRoot
+            b.width > 0f && b.right > 0f && b.left < width
+        }.flatMap { n -> n.config[androidx.compose.ui.semantics.SemanticsProperties.ContentDescription] }.distinct()
+    }
+
+    @Test
+    fun turningShuffleOnNeverFlashesAnotherSongsCover() {
+        val player = setUp()
+        expand()
+        assertEquals(listOf("Capa de Aurora"), coversOnScreen())
+        compose.mainClock.autoAdvance = false
+        // Shuffle on: the queue is reordered twice around the song playing (Aurora).
+        val orders = listOf(listOf(tracks[1], tracks[0], tracks[2]) to 1, listOf(tracks[2], tracks[1], tracks[0]) to 2)
+        for ((queue, index) in orders) {
+            player.state.update { it.copy(queue = queue, queueIndex = index, shuffle = true) }
+            repeat(20) {
+                compose.mainClock.advanceTimeByFrame()
+                assertEquals(listOf("Capa de Aurora"), coversOnScreen())
+            }
+        }
+        compose.mainClock.autoAdvance = true
     }
 }

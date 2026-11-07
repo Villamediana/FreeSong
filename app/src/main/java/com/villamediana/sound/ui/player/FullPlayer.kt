@@ -102,6 +102,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -400,8 +401,18 @@ private fun CoverPager(
     val currentIndex by rememberUpdatedState(index)
     val skip by rememberUpdatedState(if (inQueue) onSkipTo else { _: Int -> })
 
+    // The same song at another place in the queue = the queue moved around it (shuffle, reorder):
+    // the pager jumps with it in this very frame, so no other song's cover ever shows in its place.
+    val last = remember { longArrayOf(track.id, index.toLong()) }
+    val moved = track.id == last[0] && index.toLong() != last[1]
+    SideEffect {
+        if (moved && index in pages.indices) pagerState.requestScrollToPage(index)
+        last[0] = track.id
+        last[1] = index.toLong()
+    }
+
     LaunchedEffect(index, pages.size) {
-        if (index !in 0 until pages.size || pagerState.currentPage == index) return@LaunchedEffect
+        if (moved || index !in 0 until pages.size || pagerState.currentPage == index) return@LaunchedEffect
         if (visible() && abs(pagerState.currentPage - index) == 1) {
             pagerState.animateScrollToPage(index, animationSpec = spring(dampingRatio = 0.9f, stiffness = 380f))
         } else {
@@ -450,17 +461,18 @@ private fun CoverPager(
                 },
         ) {
             val openVideo = onOpenVideo?.takeIf { page == index }
+            // Described here, not by the image: a song without art (the colored tile) is "Capa de …" too.
+            val described = stringResource(R.string.player_cover, t.title)
             Cover(
                 com.villamediana.sound.ui.components.rememberSongCover(t),
                 Modifier
                     .fillMaxSize()
+                    .semantics { contentDescription = described }
                     .graphicsLayer { alpha = if (page == index) coverAlpha else neighbourAlpha }
                     .then(if (openVideo != null) Modifier.clickable(onClickLabel = stringResource(R.string.sheet_video), onClick = openVideo) else Modifier),
                 seed = t.album ?: t.title,
                 shape = RectangleShape,
-                contentDescription = stringResource(R.string.player_cover, t.title),
             )
-
         }
     }
 }
