@@ -79,7 +79,7 @@ fun TrackRow(
             }
         } else {
             Box {
-                Cover(track.coverPath, Modifier.size(Dimens.RowCover), seed = track.album ?: track.title)
+                Cover(rememberSongCover(track), Modifier.size(Dimens.RowCover), seed = track.album ?: track.title)
                 if (isCurrent) {
                     Box(
                         Modifier.size(Dimens.RowCover).clip(RoundedCornerShape(Dimens.CoverCorner)).background(Color(0x99000000)),

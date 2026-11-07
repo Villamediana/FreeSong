@@ -1,5 +1,6 @@
 package com.villamediana.sound.playback
 
+import com.villamediana.sound.data.isOnline
 import android.app.PendingIntent
 import android.content.Intent
 import android.os.Bundle
@@ -324,7 +325,15 @@ class PlaybackService : MediaLibraryService() {
      * Media3 item for a song: the library file, or the online stream at the current quality setting.
      * Its cover is a content:// uri: the queue reaches other apps too (car, system media controls).
      */
-    private fun mediaItemOf(track: Track): MediaItem = artwork.shareable(MediaItems.of(track, settings.audioQuality))
+    private fun mediaItemOf(track: Track): MediaItem = artwork.shareable(MediaItems.of(withAlbumArt(track), settings.audioQuality))
+
+    /** A streamed video upload shows its album cover (when the app found one) instead of a frame of the clip. */
+    private fun withAlbumArt(track: Track): Track {
+        val videoId = track.videoId ?: return track
+        if (!track.isOnline || (track.sourceUrl ?: track.filePath).contains("music.youtube.com")) return track
+        val art = runCatching { graph.covers.coverFor(videoId) }.getOrNull() ?: return track
+        return track.copy(coverPath = art)
+    }
 
     /** True when the queue's [item] already shows what [track] says. */
     private fun upToDate(item: MediaItem, track: Track): Boolean =

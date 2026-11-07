@@ -285,7 +285,10 @@ internal fun PlayerHost(
         if (streaming) shown.videoId?.let(deps.libraryTrack) ?: flowOf(null) else deps.trackFlow(shown.id)
     }.collectAsState(initial = null)
     val libraryCopy = live?.takeIf { if (streaming) it.videoId == shown.videoId else it.id == shown.id }
-    val track = libraryCopy ?: shown
+    val playingTrack = libraryCopy ?: shown
+    // A video upload streamed: its album cover instead of a frame of the clip (once found).
+    val albumArt = com.villamediana.sound.ui.components.rememberSongCover(playingTrack)
+    val track = if (albumArt != playingTrack.coverPath) playingTrack.copy(coverPath = albumArt) else playingTrack
     val download by remember(track.id, track.videoId) {
         val videoId = track.videoId
         if (track.isOnline && videoId != null) deps.downloads.map { it.stateOf(videoId) }.distinctUntilChanged() else flowOf(ItemDownload.None)

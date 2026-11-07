@@ -240,7 +240,7 @@ private fun SongCard(t: RemoteTrack, playback: PlaybackState, onClick: () -> Uni
     val interaction = remember { MutableInteractionSource() }
     Column(Modifier.width(Dimens.CardCover).pressScale(interaction, 0.97f).clickable(interactionSource = interaction, indication = null, onClick = onClick)) {
         Box {
-            Cover(t.thumbnailUrl, Modifier.size(Dimens.CardCover), seed = t.title, shape = RoundedCornerShape(16.dp))
+            Cover(com.villamediana.sound.ui.components.rememberSongCover(t), Modifier.size(Dimens.CardCover), seed = t.title, shape = RoundedCornerShape(16.dp))
             if (current) {
                 Box(
                     Modifier.size(Dimens.CardCover).clip(RoundedCornerShape(16.dp)).background(Color.Black.copy(alpha = 0.35f)),

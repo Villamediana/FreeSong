@@ -69,7 +69,8 @@ class AppGraph(context: Context) {
      */
     fun likeOnline(remote: com.villamediana.sound.online.RemoteTrack, liked: Boolean) {
         scope.launch {
-            library.setLiked(remote, liked)
+            val art = if (remote.fromMusicCatalog) null else covers.coverFor(remote.videoId)
+            library.setLiked(if (art != null) remote.copy(thumbnailUrl = art) else remote, liked)
             val auto = settings.current().likeDownloads
             if (auto && liked) runCatching { downloads.download(listOf(remote)) }
             if (auto && !liked) removeFromPhone(remote.videoId)
@@ -103,6 +104,11 @@ class AppGraph(context: Context) {
 
     val effects: AudioEffectsController by lazy { DeviceAudioEffects(appContext, scope) }
     val video: VideoPlayback by lazy { YouTubeVideoPlayback(appContext, scope) }
+    /** Album covers for songs that came as video uploads (their thumbnail is a video frame). */
+    val covers: com.villamediana.sound.online.SongCovers by lazy {
+        com.villamediana.sound.online.SongCovers({ youTube }, appContext.filesDir.resolve("covers.json"), scope)
+    }
+
     /** The silent clip looping behind the cover of the full player. */
     val canvas: com.villamediana.sound.playback.video.VideoCanvas by lazy { com.villamediana.sound.playback.video.VideoCanvas(appContext, scope) }
 }

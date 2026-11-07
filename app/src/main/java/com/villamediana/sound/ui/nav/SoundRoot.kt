@@ -132,6 +132,7 @@ fun SoundRoot(incoming: MutableStateFlow<Inbound?>) {
 
     CompositionLocalProvider(
         LocalNavigator provides navigator,
+        com.villamediana.sound.ui.components.LocalSongCovers provides SoundApplication.graph.covers,
         LocalBottomInset provides barSpace + miniPlayerSpace + 16.dp,
     ) {
         Box(Modifier.fillMaxSize().background(SoundColors.Ink)) {

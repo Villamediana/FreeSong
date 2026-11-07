@@ -408,7 +408,8 @@ private fun CoverPager(
         beyondViewportPageCount = 1,
         verticalAlignment = Alignment.CenterVertically,
     ) { page ->
-        val t = pages.getOrNull(page) ?: return@HorizontalPager
+        // The song playing is drawn from [track] (its album cover may have been found since it was queued).
+        val t = (if (page == index) track else pages.getOrNull(page)) ?: return@HorizontalPager
         Box(
             Modifier
                 .size(coverSize)
@@ -425,7 +426,7 @@ private fun CoverPager(
         ) {
             val openVideo = onOpenVideo?.takeIf { page == index }
             Cover(
-                t.coverPath,
+                com.villamediana.sound.ui.components.rememberSongCover(t),
                 Modifier
                     .fillMaxSize()
                     .graphicsLayer { alpha = if (page == index) coverAlpha else 1f }
