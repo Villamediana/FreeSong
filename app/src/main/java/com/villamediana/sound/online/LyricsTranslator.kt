@@ -1,6 +1,7 @@
 package com.villamediana.sound.online
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -34,6 +35,8 @@ class LyricsTranslator(
     private val lock = Mutex()
     /** key → translated lines; an empty list = already in the phone's language. */
     private var cache: LinkedHashMap<String, List<String>>? = null
+    /** Songs being translated right now: a second view asking waits for the same answer. */
+    private val inFlight = HashMap<String, kotlinx.coroutines.Deferred<List<String>?>>()
 
     /**
      * The translation of [lines] (same size, null for blank lines), or null when the song is
@@ -44,13 +47,24 @@ class LyricsTranslator(
         val lang = target()
         val key = lang + ":" + lines.joinToString("\n").hashCode().toString(16) + ":" + lines.size
         lock.withLock { load()[key] }?.let { return it.ifEmpty { null }?.let { t -> align(lines, t) } }
-        val result = runCatching { request(lines, lang) }.getOrNull() ?: return null
-        lock.withLock {
-            val c = load()
-            c[key] = result
-            while (c.size > MAX_ENTRIES) c.remove(c.keys.first())
-            save(c)
+        val job = lock.withLock {
+            inFlight.getOrPut(key) {
+                kotlinx.coroutines.CoroutineScope(Dispatchers.IO).async {
+                    val result = runCatching { request(lines, lang) }.getOrNull()
+                    lock.withLock {
+                        inFlight.remove(key)
+                        if (result != null) {
+                            val c = load()
+                            c[key] = result
+                            while (c.size > MAX_ENTRIES) c.remove(c.keys.first())
+                            save(c)
+                        }
+                    }
+                    result
+                }
+            }
         }
+        val result = job.await() ?: return null
         return result.ifEmpty { null }?.let { align(lines, it) }
     }
 

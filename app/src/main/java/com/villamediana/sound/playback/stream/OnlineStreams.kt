@@ -200,13 +200,19 @@ internal object AudioCache {
     const val BYTES = 300L * 1024 * 1024
 
     @Volatile private var shared: androidx.media3.datasource.cache.SimpleCache? = null
+    @Volatile private var database: androidx.media3.database.StandaloneDatabaseProvider? = null
 
     fun get(context: Context): androidx.media3.datasource.cache.SimpleCache = shared ?: synchronized(this) {
         shared ?: androidx.media3.datasource.cache.SimpleCache(
             java.io.File(context.cacheDir, "audio"),
             androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor(BYTES),
-            androidx.media3.database.StandaloneDatabaseProvider(context.applicationContext),
+            databaseProvider(context),
         ).also { shared = it }
+    }
+
+    /** The one index database the media caches share (two open helpers on one file can lock it). */
+    fun databaseProvider(context: Context): androidx.media3.database.StandaloneDatabaseProvider = database ?: synchronized(this) {
+        database ?: androidx.media3.database.StandaloneDatabaseProvider(context.applicationContext).also { database = it }
     }
 }
 

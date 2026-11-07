@@ -122,6 +122,17 @@ fun SpotifyImportSheet(onDismiss: () -> Unit, onOpen: (RemoteCollection) -> Unit
         }
     }
 
+    // Done: open the playlist once (the step animation may draw the last step twice).
+    LaunchedEffect(run) {
+        val done = run as? SpotifyImporter.State.Done ?: return@LaunchedEffect
+        if (done.missing.isNotEmpty()) {
+            Toast.makeText(context, context.resources.getQuantityString(R.plurals.spotify_import_missing, done.missing.size, done.missing.size), Toast.LENGTH_LONG).show()
+        }
+        importer.reset()
+        onDismiss()
+        onOpen(done.collection)
+    }
+
     SoundSheet(onDismissRequest = onDismiss) {
         SheetTitle(stringResource(R.string.spotify_import_title))
         val step: Any = when {
@@ -139,15 +150,8 @@ fun SpotifyImportSheet(onDismiss: () -> Unit, onOpen: (RemoteCollection) -> Unit
                 when (s) {
                     is SpotifyPlaylist -> Preview(s, onImport = { importer.start(s) }, onOther = { preview = null })
                     is SpotifyImporter.State.Matching -> Matching(s)
-                    // Found: the sheet gives way to the playlist's page.
-                    is SpotifyImporter.State.Done -> LaunchedEffect(s) {
-                        if (s.missing.isNotEmpty()) {
-                            Toast.makeText(context, context.resources.getQuantityString(R.plurals.spotify_import_missing, s.missing.size, s.missing.size), Toast.LENGTH_LONG).show()
-                        }
-                        importer.reset()
-                        onDismiss()
-                        onOpen(s.collection)
-                    }
+                    // Found: the sheet gives way to the playlist's page (handled once, outside the animation).
+                    is SpotifyImporter.State.Done -> Matching(SpotifyImporter.State.Matching(s.playlist, s.playlist.tracks.size, s.found))
                     is SpotifyImporter.State.Failed -> Failed(s, onRetry = { importer.reset(); importer.start(s.playlist) }, onOther = { importer.reset(); preview = null })
                     else -> Input(
                         text = text,

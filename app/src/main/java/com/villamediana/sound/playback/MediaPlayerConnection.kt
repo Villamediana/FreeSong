@@ -328,6 +328,13 @@ class MediaPlayerConnection(
     private fun play(tracks: List<Track>, startIndex: Int, source: PlaySource, shuffle: Boolean, smart: Boolean) {
         if (tracks.isEmpty()) return
         val start = startIndex.coerceIn(0, tracks.lastIndex)
+        // The song already playing, tapped again in its own list: keep it going, don't start over
+        // (only turning shuffle on when that was asked).
+        if (PlayRequests.keepsCurrent(_state.value.current, _state.value.source, tracks[start], source)) {
+            if (shuffle && !_state.value.shuffle) setShuffle(true)
+            resume()
+            return
+        }
         main.launch {
             remember(tracks)
             clearError()

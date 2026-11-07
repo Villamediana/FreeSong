@@ -364,7 +364,7 @@ class VideoCanvas internal constructor(
             sharedCache ?: SimpleCache(
                 File(context.cacheDir, "canvas"),
                 LeastRecentlyUsedCacheEvictor(CACHE_BYTES),
-                StandaloneDatabaseProvider(context),
+                com.villamediana.sound.playback.stream.AudioCache.databaseProvider(context),
             ).also { sharedCache = it }
         }
     }
