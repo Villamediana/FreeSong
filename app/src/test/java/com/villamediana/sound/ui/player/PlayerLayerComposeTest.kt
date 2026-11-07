@@ -401,7 +401,7 @@ class PlayerLayerComposeTest {
         compose.waitForIdle()
         assertEquals(remote.videoId, canvas.shown.last())
 
-        // The clip is there: the cover gets its "Vídeo" tag.
+        // The clip is there: a tap on the cover opens the video.
         val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
         val clip = compose.runOnIdle { androidx.media3.exoplayer.ExoPlayer.Builder(context).build() }
         compose.runOnIdle {
@@ -409,7 +409,7 @@ class PlayerLayerComposeTest {
             canvas.videoId.value = remote.videoId
         }
         compose.waitForIdle()
-        compose.onNodeWithText("Vídeo").assertExists()
+        compose.onNode(SemanticsMatcher("opens the video") { it.config.getOrNull(SemanticsActions.OnClick)?.label == "Ver vídeo" }).assertExists()
 
         // Collapsed again: the clip stops.
         compose.onNodeWithContentDescription("Minimizar player").performClick()

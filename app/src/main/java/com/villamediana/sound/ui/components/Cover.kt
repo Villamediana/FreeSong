@@ -1,5 +1,6 @@
 package com.villamediana.sound.ui.components
 
+import com.villamediana.sound.ui.theme.sc
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.Canvas
@@ -54,7 +55,7 @@ fun Cover(
             else -> model
         }
     }
-    Box(modifier.clip(shape).background(SoundColors.Surface2)) {
+    Box(modifier.clip(shape).background(sc.Surface2)) {
         if (data == null) {
             CoverPlaceholder(seed, Modifier.fillMaxSize())
         } else {
@@ -63,7 +64,7 @@ fun Cover(
                 contentDescription = contentDescription,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
-                loading = { Box(Modifier.fillMaxSize().background(SoundColors.Surface2)) },
+                loading = { Box(Modifier.fillMaxSize().background(sc.Surface2)) },
                 error = { CoverPlaceholder(seed, Modifier.fillMaxSize()) },
             )
         }
@@ -110,7 +111,7 @@ private fun CoverPlaceholder(seed: String, modifier: Modifier) {
     Box(
         modifier.background(
             Brush.linearGradient(
-                if (SoundColors.isLight) listOf(lerp(tint, Color.White, 0.35f), tint) else listOf(tint, lerp(tint, Color.Black, 0.45f)),
+                if (sc.isLight) listOf(lerp(tint, Color.White, 0.35f), tint) else listOf(tint, lerp(tint, Color.Black, 0.45f)),
             ),
         ),
         contentAlignment = Alignment.Center,
@@ -134,9 +135,9 @@ fun Grooves(color: Color, modifier: Modifier = Modifier, rings: Int = 7) {
 /** "Curtidas" everywhere (Home, Library, its page): a tangerine sleeve with grooves and a big ink heart. */
 @Composable
 fun LikedArt(modifier: Modifier = Modifier, shape: Shape = RoundedCornerShape(Dimens.CoverCorner)) {
-    Box(modifier.clip(shape).background(SoundColors.Accent), contentAlignment = Alignment.Center) {
-        Grooves(SoundColors.OnAccent.copy(alpha = 0.10f), Modifier.fillMaxSize())
-        Icon(Icons.Rounded.Favorite, null, tint = SoundColors.OnAccent, modifier = Modifier.fillMaxSize(0.42f))
+    Box(modifier.clip(shape).background(sc.Accent), contentAlignment = Alignment.Center) {
+        Grooves(sc.OnAccent.copy(alpha = 0.10f), Modifier.fillMaxSize())
+        Icon(Icons.Rounded.Favorite, null, tint = sc.OnAccent, modifier = Modifier.fillMaxSize(0.42f))
     }
 }
 

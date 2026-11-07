@@ -1,5 +1,8 @@
 package com.villamediana.sound.ui.search
 
+import com.villamediana.sound.ui.theme.withAccent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxSize
 import android.app.Application
 import android.content.Context
 import androidx.compose.material3.Text
@@ -148,6 +151,38 @@ class SearchScreensSmokeTest {
         rule.onNodeWithText(context.resources.getQuantityString(R.plurals.search_download_n, 1, 1)).performClick()
         rule.waitUntil(20_000) { downloads.downloadCalls.size == 2 }
         assertEquals(listOf("bbbbbbbbbbb"), downloads.downloadCalls[1].map { it.videoId })
+    }
+
+    @Test
+    fun searchDrawsOnItsOwnColorWithTextInContrast() {
+        val before = com.villamediana.sound.ui.theme.SoundColors.palette
+        com.villamediana.sound.ui.theme.SoundColors.palette =
+            com.villamediana.sound.ui.theme.SoundPalettes.Dark.withAccent(com.villamediana.sound.ui.theme.SoundAccents.byId("purple"))
+        try {
+            insertTrack("lib1", "Persiana Americana", genre = "Rock en español")
+            youTube.onSearch = { q, f ->
+                SearchPage(q, f, listOf(SearchItem.Song(remoteTrack("aaaaaaaaaaa", "De Música Ligera")), SearchItem.Song(remoteTrack("lib1", "Persiana Americana"))))
+            }
+            val listener = object : com.villamediana.sound.recognition.SongListener {
+                override suspend fun recognize(onLevel: (Float) -> Unit, onSeconds: (Float) -> Unit) = com.villamediana.sound.recognition.Recognition.NotFound
+            }
+            harness.put(SearchViewModel(youTube, library, downloads, player, RecentSearchStore(context), online, true, listener = listener))
+            val colors = com.villamediana.sound.ui.theme.FixedColors(com.villamediana.sound.ui.theme.searchPalette(com.villamediana.sound.ui.theme.SoundColors.palette))
+            harness.show {
+                androidx.compose.runtime.CompositionLocalProvider(com.villamediana.sound.ui.theme.LocalSoundColors provides colors) {
+                    androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize().background(com.villamediana.sound.ui.theme.SoundColors.Search)) { SearchScreen() }
+                }
+            }
+            rule.waitUntil(20_000) { rule.onAllNodes(hasText("Rock en español")).fetchSemanticsNodes().isNotEmpty() }
+            rule.onNodeWithContentDescription(s(R.string.hear_button)).assertExists()
+            harness.screenshot("search_colored_idle")
+            rule.onNode(hasSetTextAction()).performTextInput("soda")
+            rule.onNode(hasSetTextAction()).performImeAction()
+            rule.waitUntil(20_000) { rule.onAllNodes(hasText("De Música Ligera")).fetchSemanticsNodes().isNotEmpty() }
+            harness.screenshot("search_colored_results")
+        } finally {
+            com.villamediana.sound.ui.theme.SoundColors.palette = before
+        }
     }
 
     @Test

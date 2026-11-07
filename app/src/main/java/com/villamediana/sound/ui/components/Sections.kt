@@ -1,5 +1,6 @@
 package com.villamediana.sound.ui.components
 
+import com.villamediana.sound.ui.theme.sc
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -39,16 +40,16 @@ fun SectionHeader(
     ) {
         Column(Modifier.weight(1f)) {
             if (subtitle != null) {
-                Text(subtitle.uppercase(), style = MaterialTheme.typography.labelSmall, color = SoundColors.TextFaint)
+                Text(subtitle.uppercase(), style = MaterialTheme.typography.labelSmall, color = sc.TextFaint)
                 Spacer(Modifier.height(3.dp))
             }
-            Text(title, style = MaterialTheme.typography.headlineSmall, color = SoundColors.Text)
+            Text(title, style = MaterialTheme.typography.headlineSmall, color = sc.Text)
         }
         if (action != null && onAction != null) {
             Text(
                 action,
                 style = MaterialTheme.typography.labelLarge,
-                color = SoundColors.TextMuted,
+                color = sc.TextMuted,
                 modifier = Modifier.clip(CircleShape).clickable(onClick = onAction).padding(horizontal = 8.dp, vertical = 4.dp),
             )
         }
@@ -69,11 +70,11 @@ fun EmptyState(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Icon(icon, null, tint = SoundColors.TextFaint, modifier = Modifier.size(40.dp))
+        Icon(icon, null, tint = sc.TextFaint, modifier = Modifier.size(40.dp))
         Spacer(Modifier.height(16.dp))
-        Text(title, style = MaterialTheme.typography.titleLarge, color = SoundColors.Text, textAlign = TextAlign.Center)
+        Text(title, style = MaterialTheme.typography.titleLarge, color = sc.Text, textAlign = TextAlign.Center)
         Spacer(Modifier.height(6.dp))
-        Text(body, style = MaterialTheme.typography.bodyMedium, color = SoundColors.TextMuted, textAlign = TextAlign.Center, modifier = Modifier.widthIn(max = 300.dp))
+        Text(body, style = MaterialTheme.typography.bodyMedium, color = sc.TextMuted, textAlign = TextAlign.Center, modifier = Modifier.widthIn(max = 300.dp))
         if (action != null) {
             Spacer(Modifier.height(20.dp))
             action()

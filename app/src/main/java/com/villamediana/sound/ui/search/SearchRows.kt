@@ -1,5 +1,6 @@
 package com.villamediana.sound.ui.search
 
+import com.villamediana.sound.ui.theme.sc
 import com.villamediana.sound.download.DownloadWait
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
@@ -112,7 +113,7 @@ fun RemoteSongRow(
     /** What a queued download waits for (its button says so). */
     wait: DownloadWait = DownloadWait.NONE,
 ) {
-    val bg by animateColorAsState(if (selected) SoundColors.AccentSoft else Color.Transparent, tween(180), label = "rowBg")
+    val bg by animateColorAsState(if (selected) sc.AccentSoft else Color.Transparent, tween(180), label = "rowBg")
     val dimmed = selecting && (state == ItemDownload.Done || state == ItemDownload.Queued || state is ItemDownload.Running)
     Row(
         modifier
@@ -126,7 +127,7 @@ fun RemoteSongRow(
         if (number != null) {
             Box(Modifier.width(32.dp), contentAlignment = Alignment.CenterStart) {
                 if (isCurrent) PlayingBars(isPlaying, Modifier.size(14.dp))
-                else Text("$number", style = MaterialTheme.typography.bodyMedium, color = SoundColors.TextMuted)
+                else Text("$number", style = MaterialTheme.typography.bodyMedium, color = sc.TextMuted)
             }
         } else {
             Box {
@@ -145,22 +146,22 @@ fun RemoteSongRow(
                 track.title,
                 style = MaterialTheme.typography.titleMedium,
                 color = when {
-                    dimmed -> SoundColors.TextFaint
-                    isCurrent -> SoundColors.Accent
-                    else -> SoundColors.Text
+                    dimmed -> sc.TextFaint
+                    isCurrent -> sc.Accent
+                    else -> sc.Text
                 },
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Spacer(Modifier.height(2.dp))
-            Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = if (dimmed) SoundColors.TextFaint else SoundColors.TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = if (dimmed) sc.TextFaint else sc.TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Spacer(Modifier.width(6.dp))
         if (selecting) {
             SelectMark(selected = selected, enabled = !dimmed)
         } else {
             // Filled = in Curtidas (white on the dark theme), like the filled download arrow beside it.
-            if (onLike != null) com.villamediana.sound.ui.player.LikeButton(liked = liked, onToggle = onLike, size = 44.dp, iconSize = 24.dp, likedTint = SoundColors.Text)
+            if (onLike != null) com.villamediana.sound.ui.player.LikeButton(liked = liked, onToggle = onLike, size = 44.dp, iconSize = 24.dp, likedTint = sc.Text)
             if (showDownload) DownloadIndicator(state, onIndicatorClick, wait = wait)
         }
     }
@@ -201,25 +202,26 @@ fun RemoteCollectionRow(collection: RemoteCollection, onClick: () -> Unit, modif
         )
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
-            Text(collection.title, style = MaterialTheme.typography.titleMedium, color = SoundColors.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(collection.title, style = MaterialTheme.typography.titleMedium, color = sc.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(2.dp))
-            Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = SoundColors.TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = sc.TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = SoundColors.TextFaint, modifier = Modifier.size(22.dp))
+        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = sc.TextFaint, modifier = Modifier.size(22.dp))
     }
 }
 
 /** Autocomplete line: what was typed stays light, the completion is bold. */
 @Composable
 fun SuggestionRow(text: String, typed: String, onClick: () -> Unit, onFill: () -> Unit, modifier: Modifier = Modifier) {
-    val annotated = remember(text, typed) {
+    val colors = sc
+    val annotated = remember(text, typed, colors) {
         val t = typed.trim()
         buildAnnotatedString {
             if (t.isNotEmpty() && text.sortKey().startsWith(t.sortKey()) && text.length >= t.length) {
-                withStyle(SpanStyle(color = SoundColors.TextMuted)) { append(text.substring(0, t.length)) }
-                withStyle(SpanStyle(color = SoundColors.Text, fontWeight = FontWeight.SemiBold)) { append(text.substring(t.length)) }
+                withStyle(SpanStyle(color = colors.TextMuted)) { append(text.substring(0, t.length)) }
+                withStyle(SpanStyle(color = colors.Text, fontWeight = FontWeight.SemiBold)) { append(text.substring(t.length)) }
             } else {
-                withStyle(SpanStyle(color = SoundColors.Text)) { append(text) }
+                withStyle(SpanStyle(color = colors.Text)) { append(text) }
             }
         }
     }
@@ -227,11 +229,11 @@ fun SuggestionRow(text: String, typed: String, onClick: () -> Unit, onFill: () -
         modifier.fillMaxWidth().height(52.dp).clickable(onClick = onClick).padding(start = Dimens.Gutter, end = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Rounded.Search, null, tint = SoundColors.TextFaint, modifier = Modifier.size(20.dp))
+        Icon(Icons.Rounded.Search, null, tint = colors.TextFaint, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(16.dp))
         Text(annotated, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         IconButton(onClick = onFill, modifier = Modifier.size(44.dp)) {
-            Icon(Icons.Rounded.NorthWest, stringResource(R.string.search_suggestion_fill, text), tint = SoundColors.TextFaint, modifier = Modifier.size(18.dp))
+            Icon(Icons.Rounded.NorthWest, stringResource(R.string.search_suggestion_fill, text), tint = colors.TextFaint, modifier = Modifier.size(18.dp))
         }
     }
 }
@@ -243,12 +245,12 @@ fun OpenLinkRow(onClick: () -> Unit, modifier: Modifier = Modifier) {
         modifier.fillMaxWidth().height(56.dp).clickable(onClick = onClick).padding(horizontal = Dimens.Gutter),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(36.dp).clip(CircleShape).background(SoundColors.AccentSoft), contentAlignment = Alignment.Center) {
-            Icon(Icons.Rounded.Link, null, tint = SoundColors.Accent, modifier = Modifier.size(20.dp))
+        Box(Modifier.size(36.dp).clip(CircleShape).background(sc.AccentSoft), contentAlignment = Alignment.Center) {
+            Icon(Icons.Rounded.Link, null, tint = sc.Accent, modifier = Modifier.size(20.dp))
         }
         Spacer(Modifier.width(14.dp))
-        Text(stringResource(R.string.search_open_link), style = MaterialTheme.typography.titleMedium, color = SoundColors.Text, modifier = Modifier.weight(1f))
-        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = SoundColors.TextFaint)
+        Text(stringResource(R.string.search_open_link), style = MaterialTheme.typography.titleMedium, color = sc.Text, modifier = Modifier.weight(1f))
+        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = sc.TextFaint)
     }
 }
 
@@ -258,11 +260,11 @@ fun RecentRow(text: String, onClick: () -> Unit, onRemove: () -> Unit, modifier:
         modifier.fillMaxWidth().height(50.dp).clickable(onClick = onClick).padding(start = Dimens.Gutter, end = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Rounded.History, null, tint = SoundColors.TextFaint, modifier = Modifier.size(20.dp))
+        Icon(Icons.Rounded.History, null, tint = sc.TextFaint, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(16.dp))
-        Text(text, style = MaterialTheme.typography.bodyLarge, color = SoundColors.Text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Text(text, style = MaterialTheme.typography.bodyLarge, color = sc.Text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         IconButton(onClick = onRemove, modifier = Modifier.size(44.dp)) {
-            Icon(Icons.Rounded.Close, stringResource(R.string.search_recent_remove, text), tint = SoundColors.TextFaint, modifier = Modifier.size(18.dp))
+            Icon(Icons.Rounded.Close, stringResource(R.string.search_recent_remove, text), tint = sc.TextFaint, modifier = Modifier.size(18.dp))
         }
     }
 }
@@ -275,19 +277,19 @@ fun LinkHintCard(modifier: Modifier = Modifier, onPaste: (() -> Unit)? = null) {
             .padding(horizontal = Dimens.Gutter)
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(SoundColors.Surface1)
+            .background(sc.Surface1)
             .then(if (onPaste != null) Modifier.clickable(onClick = onPaste) else Modifier)
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(42.dp).clip(CircleShape).background(SoundColors.AccentSoft), contentAlignment = Alignment.Center) {
-            Icon(Icons.Rounded.Link, null, tint = SoundColors.Accent, modifier = Modifier.size(22.dp))
+        Box(Modifier.size(42.dp).clip(CircleShape).background(sc.AccentSoft), contentAlignment = Alignment.Center) {
+            Icon(Icons.Rounded.Link, null, tint = sc.Accent, modifier = Modifier.size(22.dp))
         }
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
-            Text(stringResource(R.string.search_hint_overline).uppercase(), style = MaterialTheme.typography.labelSmall, color = SoundColors.TextFaint)
+            Text(stringResource(R.string.search_hint_overline).uppercase(), style = MaterialTheme.typography.labelSmall, color = sc.TextFaint)
             Spacer(Modifier.height(4.dp))
-            Text(stringResource(R.string.search_hint_body), style = MaterialTheme.typography.bodyMedium, color = SoundColors.TextMuted)
+            Text(stringResource(R.string.search_hint_body), style = MaterialTheme.typography.bodyMedium, color = sc.TextMuted)
         }
     }
 }
@@ -301,20 +303,20 @@ fun PasteLinkChip(onPaste: () -> Unit, onDismiss: () -> Unit, modifier: Modifier
             .height(38.dp)
             .pressScale(interaction, 0.96f)
             .clip(CircleShape)
-            .background(SoundColors.AccentSoft)
+            .background(sc.AccentSoft)
             .clickable(interactionSource = interaction, indication = null, onClick = onPaste)
             .padding(start = 14.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Rounded.ContentPaste, null, tint = SoundColors.Accent, modifier = Modifier.size(17.dp))
+        Icon(Icons.Rounded.ContentPaste, null, tint = sc.Accent, modifier = Modifier.size(17.dp))
         Spacer(Modifier.width(8.dp))
-        Text(stringResource(R.string.search_paste_link), style = MaterialTheme.typography.labelLarge, color = SoundColors.Accent)
+        Text(stringResource(R.string.search_paste_link), style = MaterialTheme.typography.labelLarge, color = sc.Accent)
         Spacer(Modifier.width(2.dp))
         Box(
             Modifier.size(30.dp).clip(CircleShape).clickable(onClick = onDismiss),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Rounded.Close, stringResource(R.string.search_paste_link_dismiss), tint = SoundColors.Accent.copy(alpha = 0.7f), modifier = Modifier.size(15.dp))
+            Icon(Icons.Rounded.Close, stringResource(R.string.search_paste_link_dismiss), tint = sc.Accent.copy(alpha = 0.7f), modifier = Modifier.size(15.dp))
         }
     }
 }
@@ -322,9 +324,10 @@ fun PasteLinkChip(onPaste: () -> Unit, onDismiss: () -> Unit, modifier: Modifier
 /** Genre tile of the idle Search screen — the color and one sleeve come from the genre's covers. */
 @Composable
 fun GenreTile(genre: GenreSummary, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val base = remember(genre.name, genre.accentColor) {
+    val colors = sc
+    val base = remember(genre.name, genre.accentColor, colors) {
         val c = genre.accentColor?.let { Color(it) } ?: seedColor(genre.name)
-        lerp(CoverColors.tune(c), SoundColors.Ink, 0.22f)
+        lerp(CoverColors.tune(c), colors.Ink, 0.22f)
     }
     val interaction = remember { MutableInteractionSource() }
     Box(
@@ -338,7 +341,7 @@ fun GenreTile(genre: GenreSummary, onClick: () -> Unit, modifier: Modifier = Mod
         Text(
             genre.name,
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, fontSize = 17.sp),
-            color = SoundColors.Text,
+            color = colors.Text,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(start = 14.dp, top = 12.dp, end = 64.dp),
@@ -369,8 +372,8 @@ fun BigButton(
     compact: Boolean = false,
 ) {
     val interaction = remember { MutableInteractionSource() }
-    val bg = if (filled) SoundColors.Accent else Color.Transparent
-    val fg = (if (filled) SoundColors.OnAccent else SoundColors.Text).let { if (enabled) it else it.copy(alpha = 0.45f) }
+    val bg = if (filled) sc.Accent else Color.Transparent
+    val fg = (if (filled) sc.OnAccent else sc.Text).let { if (enabled) it else it.copy(alpha = 0.45f) }
     Row(
         modifier
             .fillMaxWidth()
@@ -378,7 +381,7 @@ fun BigButton(
             .pressScale(interaction, 0.97f)
             .clip(CircleShape)
             .background(bg)
-            .then(if (filled) Modifier else Modifier.border(1.dp, SoundColors.Hairline, CircleShape))
+            .then(if (filled) Modifier else Modifier.border(1.dp, sc.Hairline, CircleShape))
             .clickable(interactionSource = interaction, indication = null, enabled = enabled, onClick = onClick)
             .padding(horizontal = if (compact) 14.dp else 20.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -401,12 +404,12 @@ fun ProgressPill(text: String, fraction: Float?, modifier: Modifier = Modifier, 
             .fillMaxWidth()
             .height(52.dp)
             .clip(CircleShape)
-            .then(if (fraction == null) Modifier.shimmer(CircleShape) else Modifier.background(SoundColors.Surface3))
+            .then(if (fraction == null) Modifier.shimmer(CircleShape) else Modifier.background(sc.Surface3))
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
         contentAlignment = Alignment.CenterStart,
     ) {
         if (fraction != null) {
-            Box(Modifier.fillMaxHeight().fillMaxWidth(animated).background(SoundColors.Accent.copy(alpha = 0.34f)))
+            Box(Modifier.fillMaxHeight().fillMaxWidth(animated).background(sc.Accent.copy(alpha = 0.34f)))
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
             if (fraction != null) {
@@ -415,7 +418,7 @@ fun ProgressPill(text: String, fraction: Float?, modifier: Modifier = Modifier, 
                 SpinningRing(18.dp)
             }
             Spacer(Modifier.width(10.dp))
-            Text(text, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = SoundColors.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(text, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = sc.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -437,8 +440,8 @@ fun LinkCardView(
             .padding(horizontal = Dimens.Gutter)
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
-            .background(SoundColors.Surface1)
-            .border(1.dp, SoundColors.Hairline, RoundedCornerShape(20.dp))
+            .background(sc.Surface1)
+            .border(1.dp, sc.Hairline, RoundedCornerShape(20.dp))
             .padding(14.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -451,29 +454,29 @@ fun LinkCardView(
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Rounded.Link, null, tint = SoundColors.Accent, modifier = Modifier.size(13.dp))
+                    Icon(Icons.Rounded.Link, null, tint = sc.Accent, modifier = Modifier.size(13.dp))
                     Spacer(Modifier.width(5.dp))
-                    Text(stringResource(R.string.search_link_overline).uppercase(), style = MaterialTheme.typography.labelSmall, color = SoundColors.Accent)
+                    Text(stringResource(R.string.search_link_overline).uppercase(), style = MaterialTheme.typography.labelSmall, color = sc.Accent)
                 }
                 Spacer(Modifier.height(5.dp))
                 if (track == null) {
-                    Text(stringResource(R.string.search_link_resolving), style = MaterialTheme.typography.titleMedium, color = SoundColors.TextMuted)
+                    Text(stringResource(R.string.search_link_resolving), style = MaterialTheme.typography.titleMedium, color = sc.TextMuted)
                     Spacer(Modifier.height(8.dp))
                     Box(Modifier.fillMaxWidth(0.5f).height(11.dp).shimmer())
                 } else {
-                    Text(track.title, style = MaterialTheme.typography.titleMedium, color = SoundColors.Text, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(track.title, style = MaterialTheme.typography.titleMedium, color = sc.Text, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     Spacer(Modifier.height(2.dp))
                     Text(
                         listOfNotNull(track.artist.takeIf { it.isNotBlank() }, track.durationMs?.takeIf { it > 0 }?.let(::formatDuration)).joinToString(" · "),
                         style = MaterialTheme.typography.bodyMedium,
-                        color = SoundColors.TextMuted,
+                        color = sc.TextMuted,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
             IconButton(onClick = onDismiss, modifier = Modifier.align(Alignment.Top).size(36.dp)) {
-                Icon(Icons.Rounded.Close, stringResource(R.string.search_link_dismiss), tint = SoundColors.TextFaint, modifier = Modifier.size(18.dp))
+                Icon(Icons.Rounded.Close, stringResource(R.string.search_link_dismiss), tint = sc.TextFaint, modifier = Modifier.size(18.dp))
             }
         }
         if (card is LinkCard.Found) {

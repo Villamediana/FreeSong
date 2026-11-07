@@ -1,5 +1,6 @@
 package com.villamediana.sound.ui.search
 
+import com.villamediana.sound.ui.theme.sc
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -36,6 +37,7 @@ import com.villamediana.sound.ui.theme.SoundColors
  */
 @Composable
 fun Modifier.shimmer(shape: Shape = RoundedCornerShape(4.dp)): Modifier {
+    val colors = sc
     val transition = rememberInfiniteTransition(label = "shimmer")
     val sweep = transition.animateFloat(
         initialValue = -0.6f,
@@ -48,12 +50,12 @@ fun Modifier.shimmer(shape: Shape = RoundedCornerShape(4.dp)): Modifier {
         .drawBehind {
             val x = size.width * sweep.value
             val band = size.width.coerceAtLeast(240f) * 0.6f
-            drawRect(SoundColors.Surface2)
+            drawRect(colors.Surface2)
             drawRect(
                 Brush.linearGradient(
-                    0f to SoundColors.Surface2,
-                    0.5f to SoundColors.Surface3,
-                    1f to SoundColors.Surface2,
+                    0f to colors.Surface2,
+                    0.5f to colors.Surface3,
+                    1f to colors.Surface2,
                     start = Offset(x - band, 0f),
                     end = Offset(x + band, size.height),
                 ),

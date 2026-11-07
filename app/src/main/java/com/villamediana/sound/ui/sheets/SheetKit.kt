@@ -1,5 +1,7 @@
 package com.villamediana.sound.ui.sheets
 
+import com.villamediana.sound.ui.theme.LocalSoundColors
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -77,7 +79,8 @@ fun SoundSheet(
         },
         contentWindowInsets = { WindowInsets(0) },
     ) {
-        content()
+        // A sheet is the app's own surface, even when opened from the search's colored page.
+        CompositionLocalProvider(LocalSoundColors provides SoundColors) { content() }
         Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars.union(WindowInsets.ime)))
         Spacer(Modifier.height(8.dp))
     }

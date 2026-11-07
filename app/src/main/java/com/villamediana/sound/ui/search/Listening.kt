@@ -1,5 +1,6 @@
 package com.villamediana.sound.ui.search
 
+import com.villamediana.sound.ui.theme.sc
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
@@ -71,18 +72,18 @@ import com.villamediana.sound.ui.theme.SoundColors
 internal fun MicButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
     val haptic = LocalHapticFeedback.current
     val interaction = remember { MutableInteractionSource() }
+    // Just the microphone (no box), in the page's text color, with a ripple when tapped.
     Box(
         modifier
-            .size(52.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(SoundColors.Surface3)
-            .clickable(interactionSource = interaction, indication = ripple(color = SoundColors.Accent)) {
+            .size(48.dp)
+            .clip(CircleShape)
+            .clickable(interactionSource = interaction, indication = ripple(bounded = false, radius = 24.dp, color = sc.Text)) {
                 haptic.performHapticFeedback(HapticFeedbackType.ContextClick)
                 onClick()
             },
         contentAlignment = Alignment.Center,
     ) {
-        Icon(Icons.Rounded.Mic, stringResource(R.string.hear_button), tint = SoundColors.Accent, modifier = Modifier.size(24.dp))
+        Icon(Icons.Rounded.Mic, stringResource(R.string.hear_button), tint = sc.Text, modifier = Modifier.size(26.dp))
     }
 }
 
@@ -102,13 +103,13 @@ internal fun ListeningScreen(
     Box(
         modifier
             .fillMaxSize()
-            .background(SoundColors.Search)
+            .background(sc.Ink)
             .pointerInput(Unit) { detectTapGestures { } } // nothing beneath takes taps
             .statusBarsPadding()
             .navigationBarsPadding(),
     ) {
         IconButton(onClick = onCancel, modifier = Modifier.align(Alignment.TopStart).padding(8.dp)) {
-            Icon(Icons.Rounded.Close, stringResource(R.string.hear_cancel), tint = SoundColors.Text)
+            Icon(Icons.Rounded.Close, stringResource(R.string.hear_cancel), tint = sc.Text)
         }
         AnimatedContent(
             targetState = hearing.kind(),
@@ -123,13 +124,13 @@ internal fun ListeningScreen(
                         val seconds = (hearing as? SearchViewModel.Hearing.Listening)?.seconds ?: 0f
                         HearingOrb(level, seconds / MicSongListener.MAX_SECONDS)
                         Spacer(Modifier.height(28.dp))
-                        Text(stringResource(R.string.hear_listening), style = MaterialTheme.typography.headlineSmall, color = SoundColors.Text)
+                        Text(stringResource(R.string.hear_listening), style = MaterialTheme.typography.headlineSmall, color = sc.Text)
                         Spacer(Modifier.height(6.dp))
-                        Text(stringResource(R.string.hear_listening_hint), style = MaterialTheme.typography.bodyMedium, color = SoundColors.TextMuted, textAlign = TextAlign.Center)
+                        Text(stringResource(R.string.hear_listening_hint), style = MaterialTheme.typography.bodyMedium, color = sc.TextMuted, textAlign = TextAlign.Center)
                     }
                     Kind.FOUND -> {
                         val match = (hearing as? SearchViewModel.Hearing.Found)?.match
-                        Text(stringResource(R.string.hear_found), style = MaterialTheme.typography.labelLarge, color = SoundColors.Accent)
+                        Text(stringResource(R.string.hear_found), style = MaterialTheme.typography.labelLarge, color = sc.Accent)
                         Spacer(Modifier.height(16.dp))
                         Cover(
                             match?.cover?.ifBlank { null },
@@ -138,11 +139,11 @@ internal fun ListeningScreen(
                             shape = RoundedCornerShape(20.dp),
                         )
                         Spacer(Modifier.height(22.dp))
-                        Text(match?.title.orEmpty(), style = MaterialTheme.typography.headlineSmall, color = SoundColors.Text, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text(match?.title.orEmpty(), style = MaterialTheme.typography.headlineSmall, color = sc.Text, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         Spacer(Modifier.height(4.dp))
-                        Text(match?.artist.orEmpty(), style = MaterialTheme.typography.titleMedium, color = SoundColors.TextMuted, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(match?.artist.orEmpty(), style = MaterialTheme.typography.titleMedium, color = sc.TextMuted, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Spacer(Modifier.height(14.dp))
-                        Text(stringResource(R.string.hear_playing_now), style = MaterialTheme.typography.labelLarge, color = SoundColors.TextFaint)
+                        Text(stringResource(R.string.hear_playing_now), style = MaterialTheme.typography.labelLarge, color = sc.TextFaint)
                     }
                     Kind.NOT_FOUND -> Outcome(Icons.Rounded.MusicOff, stringResource(R.string.hear_not_found), stringResource(R.string.hear_not_found_hint), onRetry)
                     Kind.OFFLINE -> Outcome(Icons.Rounded.WifiOff, stringResource(R.string.hear_offline), null, onRetry)
@@ -166,14 +167,14 @@ private fun SearchViewModel.Hearing.kind(): Kind = when (this) {
 
 @Composable
 private fun Outcome(icon: ImageVector, title: String, hint: String?, onRetry: () -> Unit) {
-    Box(Modifier.size(96.dp).clip(CircleShape).background(SoundColors.Surface2), contentAlignment = Alignment.Center) {
-        Icon(icon, null, tint = SoundColors.TextMuted, modifier = Modifier.size(40.dp))
+    Box(Modifier.size(96.dp).clip(CircleShape).background(sc.Surface2), contentAlignment = Alignment.Center) {
+        Icon(icon, null, tint = sc.TextMuted, modifier = Modifier.size(40.dp))
     }
     Spacer(Modifier.height(22.dp))
-    Text(title, style = MaterialTheme.typography.headlineSmall, color = SoundColors.Text, textAlign = TextAlign.Center)
+    Text(title, style = MaterialTheme.typography.headlineSmall, color = sc.Text, textAlign = TextAlign.Center)
     if (hint != null) {
         Spacer(Modifier.height(6.dp))
-        Text(hint, style = MaterialTheme.typography.bodyMedium, color = SoundColors.TextMuted, textAlign = TextAlign.Center)
+        Text(hint, style = MaterialTheme.typography.bodyMedium, color = sc.TextMuted, textAlign = TextAlign.Center)
     }
     Spacer(Modifier.height(26.dp))
     PillButton(text = stringResource(R.string.hear_retry), onClick = onRetry, icon = Icons.Rounded.Refresh, filled = true)
@@ -182,6 +183,7 @@ private fun Outcome(icon: ImageVector, title: String, hint: String?, onRetry: ()
 /** The orb: breathes with [level], rings ripple out of it, [progress] of the listening goes round. */
 @Composable
 private fun HearingOrb(level: Float, progress: Float) {
+    val colors = sc
     val loud by animateFloatAsState(level, spring(dampingRatio = 0.7f, stiffness = 320f), label = "loud")
     val turn by animateFloatAsState(progress.coerceIn(0f, 1f), tween(250), label = "progress")
     val ripple = rememberInfiniteTransition(label = "ripple")
@@ -195,13 +197,13 @@ private fun HearingOrb(level: Float, progress: Float) {
             for (i in 0 until 3) {
                 val p = (phase + i / 3f) % 1f
                 val r = core + (far - core) * p
-                drawCircle(SoundColors.Accent, radius = r, center = center, alpha = (1f - p) * (0.18f + 0.42f * loud), style = Stroke(width = (2.dp + 3.dp * loud).toPx()))
+                drawCircle(colors.Accent, radius = r, center = center, alpha = (1f - p) * (0.18f + 0.42f * loud), style = Stroke(width = (2.dp + 3.dp * loud).toPx()))
             }
             // The seconds heard, around the orb.
             val ring = core + 18.dp.toPx()
-            drawCircle(SoundColors.Text.copy(alpha = 0.12f), radius = ring, center = center, style = Stroke(width = 4.dp.toPx()))
+            drawCircle(colors.Text.copy(alpha = 0.12f), radius = ring, center = center, style = Stroke(width = 4.dp.toPx()))
             drawArc(
-                SoundColors.Accent,
+                colors.Accent,
                 startAngle = -90f,
                 sweepAngle = 360f * turn,
                 useCenter = false,
@@ -216,10 +218,10 @@ private fun HearingOrb(level: Float, progress: Float) {
                 .scale(1f + 0.14f * loud)
                 .shadow(18.dp, CircleShape)
                 .clip(CircleShape)
-                .background(SoundColors.Accent),
+                .background(colors.Accent),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Rounded.Mic, null, tint = SoundColors.OnAccent, modifier = Modifier.size(48.dp))
+            Icon(Icons.Rounded.Mic, null, tint = colors.OnAccent, modifier = Modifier.size(48.dp))
         }
     }
 }

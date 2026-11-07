@@ -1,5 +1,6 @@
 package com.villamediana.sound.ui.components
 
+import com.villamediana.sound.ui.theme.sc
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -75,7 +76,7 @@ fun TrackRow(
         if (number != null) {
             Box(Modifier.width(32.dp), contentAlignment = Alignment.CenterStart) {
                 if (isCurrent) PlayingBars(isPlaying, Modifier.size(14.dp))
-                else Text("$number", style = MaterialTheme.typography.bodyMedium, color = SoundColors.TextMuted)
+                else Text("$number", style = MaterialTheme.typography.bodyMedium, color = sc.TextMuted)
             }
         } else {
             Box {
@@ -93,26 +94,26 @@ fun TrackRow(
             Text(
                 track.title,
                 style = MaterialTheme.typography.titleMedium,
-                color = if (isCurrent) SoundColors.Accent else SoundColors.Text,
+                color = if (isCurrent) sc.Accent else sc.Text,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Spacer(Modifier.height(2.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (track.liked) {
-                    Icon(Icons.Rounded.Favorite, null, tint = SoundColors.Liked, modifier = Modifier.size(12.dp))
+                    Icon(Icons.Rounded.Favorite, null, tint = sc.Liked, modifier = Modifier.size(12.dp))
                     Spacer(Modifier.width(5.dp))
                 }
-                Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = SoundColors.TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = sc.TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
         if (showDuration) {
-            Text(formatDuration(track.durationMs), style = MaterialTheme.typography.bodySmall, color = SoundColors.TextFaint, modifier = Modifier.padding(start = 8.dp))
+            Text(formatDuration(track.durationMs), style = MaterialTheme.typography.bodySmall, color = sc.TextFaint, modifier = Modifier.padding(start = 8.dp))
         }
         trailing?.invoke()
         if (onMore != null) {
             IconButton(onClick = onMore, modifier = Modifier.padding(start = 2.dp).size(40.dp)) {
-                Icon(Icons.Rounded.MoreVert, stringResource(R.string.more_options), tint = SoundColors.TextMuted)
+                Icon(Icons.Rounded.MoreVert, stringResource(R.string.more_options), tint = sc.TextMuted)
             }
         }
     }
@@ -120,7 +121,7 @@ fun TrackRow(
 
 /** Three little bars bouncing — "this one is playing". Frozen when paused. */
 @Composable
-fun PlayingBars(playing: Boolean, modifier: Modifier = Modifier, color: Color = SoundColors.Accent, barWidth: Dp = 3.dp) {
+fun PlayingBars(playing: Boolean, modifier: Modifier = Modifier, color: Color = sc.Accent, barWidth: Dp = 3.dp) {
     // The infinite transition only exists while playing: it asks for a frame on every vsync for as
     // long as it lives, even when nobody reads its values.
     if (playing) BouncingBars(modifier, color, barWidth) else Bars(PausedBars, modifier, color, barWidth)

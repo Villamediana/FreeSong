@@ -1,5 +1,6 @@
 package com.villamediana.sound.ui.player
 
+import com.villamediana.sound.ui.theme.sc
 import androidx.compose.material3.ripple
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.drawscope.rotate
@@ -382,8 +383,8 @@ internal fun LikeButton(
     modifier: Modifier = Modifier,
     size: Dp = 48.dp,
     iconSize: Dp = 26.dp,
-    idleTint: Color = SoundColors.TextMuted,
-    likedTint: Color = SoundColors.Liked,
+    idleTint: Color = sc.TextMuted,
+    likedTint: Color = sc.Liked,
 ) {
     val haptic = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()

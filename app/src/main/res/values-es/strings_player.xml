@@ -66,5 +66,4 @@
     <string name="player_lyrics_offline_title">Sin internet</string>
     <string name="player_lyrics_offline_body">La letra aparece cuando vuelva la conexión.</string>
     <string name="player_equalizer">Ecualizador</string>
-    <string name="player_video_tag">Video</string>
 </resources>

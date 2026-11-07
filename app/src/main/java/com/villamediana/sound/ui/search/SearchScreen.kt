@@ -1,5 +1,6 @@
 package com.villamediana.sound.ui.search
 
+import com.villamediana.sound.ui.theme.sc
 import androidx.compose.runtime.DisposableEffect
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -155,6 +156,15 @@ fun SearchScreen() {
         else scope.launch { snackbar.showSnackbar(context.getString(R.string.hear_need_mic)) }
     }
     BackHandler(enabled = hearing != SearchViewModel.Hearing.Idle) { vm.stopListening() }
+    // Status bar icons in contrast with the colored page (and back to the theme's on the way out).
+    val view = androidx.compose.ui.platform.LocalView.current
+    val pageIsLight = sc.isLight
+    DisposableEffect(view, pageIsLight) {
+        val window = (view.context as? android.app.Activity)?.window
+        val bars = window?.let { androidx.core.view.WindowCompat.getInsetsController(it, view) }
+        bars?.isAppearanceLightStatusBars = pageIsLight
+        onDispose { bars?.isAppearanceLightStatusBars = SoundColors.isLight }
+    }
     // Listening takes the whole screen: no mini player over it.
     val listening = hearing != SearchViewModel.Hearing.Idle
     DisposableEffect(listening) {
@@ -213,7 +223,7 @@ fun SearchScreen() {
         )
     }
 
-    Box(Modifier.fillMaxSize().background(SoundColors.Search)) {
+    Box(Modifier.fillMaxSize().background(sc.Ink)) {
         Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)) {
             AnimatedVisibility(
                 visible = mode == SearchMode.Idle,
@@ -227,10 +237,10 @@ fun SearchScreen() {
                     val back = navigator()
                     if (back.controller.previousBackStackEntry != null) {
                         IconButton(onClick = { back.back() }, modifier = Modifier.padding(end = 4.dp).offset(x = (-12).dp)) {
-                            Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.back), tint = SoundColors.Text)
+                            Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.back), tint = sc.Text)
                         }
                     }
-                    Text(stringResource(R.string.search_title), style = MaterialTheme.typography.displaySmall, color = SoundColors.Text, modifier = Modifier.weight(1f))
+                    Text(stringResource(R.string.search_title), style = MaterialTheme.typography.displaySmall, color = sc.Text, modifier = Modifier.weight(1f))
                 }
             }
             if (mode != SearchMode.Idle) Spacer(Modifier.height(10.dp))
@@ -246,7 +256,7 @@ fun SearchScreen() {
                     modifier = Modifier.weight(1f),
                 )
                 if (vm.canListen) {
-                    Spacer(Modifier.width(10.dp))
+                    Spacer(Modifier.width(4.dp))
                     MicButton(onClick = {
                         dismissKeyboard()
                         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) vm.listen()
@@ -343,12 +353,12 @@ fun SearchScreen() {
             Text(
                 data.visuals.message,
                 style = MaterialTheme.typography.bodyMedium,
-                color = SoundColors.Text,
+                color = sc.Text,
                 modifier = Modifier
                     .padding(horizontal = 12.dp)
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(14.dp))
-                    .background(SoundColors.Surface3)
+                    .background(sc.Surface3)
                     .padding(horizontal = 18.dp, vertical = 15.dp),
             )
         }
@@ -404,15 +414,15 @@ private fun SearchField(
 ) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
-    val outline by animateColorAsState(if (focused) SoundColors.TextFaint else Color.Transparent, tween(180), label = "fieldOutline")
-    val iconTint by animateColorAsState(if (focused) SoundColors.Text else SoundColors.TextMuted, tween(180), label = "fieldIcon")
+    val outline by animateColorAsState(if (focused) sc.TextFaint else Color.Transparent, tween(180), label = "fieldOutline")
+    val iconTint by animateColorAsState(if (focused) sc.Text else sc.TextMuted, tween(180), label = "fieldIcon")
     BasicTextField(
         value = value,
         onValueChange = onChange,
         modifier = modifier.fillMaxWidth().height(52.dp),
         singleLine = true,
-        textStyle = MaterialTheme.typography.bodyLarge.copy(color = SoundColors.Text),
-        cursorBrush = SolidColor(SoundColors.Accent),
+        textStyle = MaterialTheme.typography.bodyLarge.copy(color = sc.Text),
+        cursorBrush = SolidColor(sc.Accent),
         keyboardOptions = KeyboardOptions(
             capitalization = KeyboardCapitalization.None,
             autoCorrectEnabled = false,
@@ -426,7 +436,7 @@ private fun SearchField(
                 Modifier
                     .fillMaxSize()
                     .clip(RoundedCornerShape(14.dp))
-                    .background(SoundColors.Surface3)
+                    .background(sc.Surface3)
                     .border(1.dp, outline, RoundedCornerShape(14.dp))
                     .padding(start = 14.dp, end = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -435,13 +445,13 @@ private fun SearchField(
                 Spacer(Modifier.width(12.dp))
                 Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
                     if (value.text.isEmpty()) {
-                        Text(stringResource(R.string.search_field_hint), style = MaterialTheme.typography.bodyLarge, color = SoundColors.TextFaint, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(stringResource(R.string.search_field_hint), style = MaterialTheme.typography.bodyLarge, color = sc.TextFaint, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     inner()
                 }
                 AnimatedVisibility(value.text.isNotEmpty(), enter = fadeIn(tween(140)) + scaleIn(initialScale = 0.6f), exit = fadeOut(tween(100)) + scaleOut(targetScale = 0.6f)) {
                     IconButton(onClick = onClear, modifier = Modifier.size(44.dp)) {
-                        Icon(Icons.Rounded.Close, stringResource(R.string.search_clear_field), tint = SoundColors.TextMuted, modifier = Modifier.size(20.dp))
+                        Icon(Icons.Rounded.Close, stringResource(R.string.search_clear_field), tint = sc.TextMuted, modifier = Modifier.size(20.dp))
                     }
                 }
             }
@@ -460,33 +470,33 @@ private fun SelectionBar(count: Int, onDownload: () -> Unit, onCancel: () -> Uni
             .fillMaxWidth()
             .height(62.dp)
             .clip(RoundedCornerShape(31.dp))
-            .background(SoundColors.Surface2)
-            .border(1.dp, SoundColors.Hairline, RoundedCornerShape(31.dp))
+            .background(sc.Surface2)
+            .border(1.dp, sc.Hairline, RoundedCornerShape(31.dp))
             .padding(horizontal = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(onClick = onCancel) {
-            Icon(Icons.Rounded.Close, stringResource(R.string.search_select_cancel), tint = SoundColors.TextMuted)
+            Icon(Icons.Rounded.Close, stringResource(R.string.search_select_cancel), tint = sc.TextMuted)
         }
         AnimatedContent(count, transitionSpec = { fadeIn(tween(120)) togetherWith fadeOut(tween(90)) }, label = "selCount", modifier = Modifier.weight(1f)) { n ->
-            Text(pluralStringResource(R.plurals.search_selected, n, n), style = MaterialTheme.typography.titleSmall, color = SoundColors.Text, maxLines = 1)
+            Text(pluralStringResource(R.plurals.search_selected, n, n), style = MaterialTheme.typography.titleSmall, color = sc.Text, maxLines = 1)
         }
         Row(
             Modifier
                 .height(48.dp)
                 .pressScale(interaction, 0.95f)
                 .clip(CircleShape)
-                .background(SoundColors.Accent)
+                .background(sc.Accent)
                 .clickable(interactionSource = interaction, indication = null, onClick = onDownload)
                 .padding(horizontal = 18.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.Rounded.Download, null, tint = SoundColors.OnAccent, modifier = Modifier.size(19.dp))
+            Icon(Icons.Rounded.Download, null, tint = sc.OnAccent, modifier = Modifier.size(19.dp))
             Spacer(Modifier.width(8.dp))
             Text(
                 pluralStringResource(R.plurals.search_download_n, count, count),
                 style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                color = SoundColors.OnAccent,
+                color = sc.OnAccent,
                 maxLines = 1,
             )
         }
@@ -594,9 +604,9 @@ private fun OfflineNote(modifier: Modifier = Modifier) {
         modifier.fillMaxWidth().padding(horizontal = Dimens.Gutter, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Rounded.CloudOff, null, tint = SoundColors.TextFaint, modifier = Modifier.size(18.dp))
+        Icon(Icons.Rounded.CloudOff, null, tint = sc.TextFaint, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(12.dp))
-        Text(stringResource(R.string.search_typing_offline), style = MaterialTheme.typography.bodyMedium, color = SoundColors.TextMuted)
+        Text(stringResource(R.string.search_typing_offline), style = MaterialTheme.typography.bodyMedium, color = sc.TextMuted)
     }
 }
 
@@ -670,9 +680,9 @@ private fun LocalRow(cover: @Composable () -> Unit, title: String, subtitle: Str
         cover()
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, color = SoundColors.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(title, style = MaterialTheme.typography.titleMedium, color = sc.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(2.dp))
-            Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = SoundColors.TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = sc.TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -750,7 +760,7 @@ private fun ErrorState(error: SearchError, detail: String?, onRetry: () -> Unit,
                         Text(
                             if (showDetail) detail else stringResource(R.string.search_error_details),
                             style = MaterialTheme.typography.bodySmall,
-                            color = SoundColors.TextFaint,
+                            color = sc.TextFaint,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                             modifier = Modifier.padding(top = 18.dp).clickable { showDetail = !showDetail }.padding(8.dp),
                         )
@@ -880,7 +890,7 @@ private fun ResultsList(vm: SearchViewModel, r: ResultsState, lookup: DownloadLo
                     Modifier.fillMaxWidth().padding(horizontal = Dimens.Gutter, vertical = 16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(stringResource(R.string.search_more_error), style = MaterialTheme.typography.bodyMedium, color = SoundColors.TextMuted, modifier = Modifier.weight(1f))
+                    Text(stringResource(R.string.search_more_error), style = MaterialTheme.typography.bodyMedium, color = sc.TextMuted, modifier = Modifier.weight(1f))
                     PillButton(stringResource(R.string.search_retry), vm::retry, icon = Icons.Rounded.Refresh)
                 }
             }

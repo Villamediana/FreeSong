@@ -1,5 +1,6 @@
 package com.villamediana.sound.ui.components
 
+import com.villamediana.sound.ui.theme.sc
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
@@ -51,8 +52,8 @@ fun PlayPauseButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     size: Dp = 56.dp,
-    container: Color = SoundColors.Accent,
-    content: Color = SoundColors.OnAccent,
+    container: Color = sc.Accent,
+    content: Color = sc.OnAccent,
     contentDescription: String? = null,
 ) {
     val interaction = remember { MutableInteractionSource() }
@@ -87,8 +88,8 @@ fun PillButton(
     big: Boolean = false,
 ) {
     val interaction = remember { MutableInteractionSource() }
-    val bg = if (filled) SoundColors.Accent else SoundColors.Surface1
-    val fg = if (filled) SoundColors.OnAccent else SoundColors.Accent
+    val bg = if (filled) sc.Accent else sc.Surface1
+    val fg = if (filled) sc.OnAccent else sc.Accent
     Row(
         modifier
             .height(if (big) 54.dp else 44.dp)
@@ -125,7 +126,7 @@ fun FilterPill(text: String, selected: Boolean, onClick: () -> Unit, modifier: M
             .height(38.dp)
             .pressScale(interaction, 0.95f)
             .clip(CircleShape)
-            .background(if (selected) SoundColors.Accent else SoundColors.Surface1)
+            .background(if (selected) sc.Accent else sc.Surface1)
             .selectable(
                 selected = selected,
                 interactionSource = interaction,
@@ -137,6 +138,6 @@ fun FilterPill(text: String, selected: Boolean, onClick: () -> Unit, modifier: M
             .padding(horizontal = 18.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(text, style = MaterialTheme.typography.labelLarge, color = if (selected) SoundColors.OnAccent else SoundColors.TextMuted)
+        Text(text, style = MaterialTheme.typography.labelLarge, color = if (selected) sc.OnAccent else sc.TextMuted)
     }
 }

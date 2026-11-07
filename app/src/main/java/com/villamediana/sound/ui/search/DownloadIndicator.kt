@@ -1,5 +1,6 @@
 package com.villamediana.sound.ui.search
 
+import com.villamediana.sound.ui.theme.sc
 import androidx.compose.material3.ripple
 import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.Wifi
@@ -78,7 +79,7 @@ fun DownloadIndicator(
     modifier: Modifier = Modifier,
     size: Dp = 26.dp,
     /** Color of the "not downloaded" arrow (the player draws it over the cover's color). */
-    idleTint: Color = SoundColors.TextMuted,
+    idleTint: Color = sc.TextMuted,
     /** Queued but waiting for a connection / the Wi-Fi: says so instead of spinning. */
     wait: DownloadWait = DownloadWait.NONE,
 ) {
@@ -131,11 +132,11 @@ fun DownloadIndicator(
                 }
                 Glyph.Running -> ProgressRing(progress, size)
                 // On the phone: the same arrow, filled (white on the dark theme). Tapping again removes it.
-                Glyph.Done -> Box(Modifier.size(size).clip(CircleShape).background(SoundColors.Text), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Rounded.ArrowDownward, null, tint = SoundColors.Ink, modifier = Modifier.size(size * 0.6f))
+                Glyph.Done -> Box(Modifier.size(size).clip(CircleShape).background(sc.Text), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Rounded.ArrowDownward, null, tint = sc.Ink, modifier = Modifier.size(size * 0.6f))
                 }
-                Glyph.Failed -> Box(Modifier.size(size).border(1.6.dp, SoundColors.Danger, CircleShape), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Rounded.Refresh, null, tint = SoundColors.Danger, modifier = Modifier.size(size * 0.62f))
+                Glyph.Failed -> Box(Modifier.size(size).border(1.6.dp, sc.Danger, CircleShape), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Rounded.Refresh, null, tint = sc.Danger, modifier = Modifier.size(size * 0.62f))
                 }
             }
         }
@@ -145,6 +146,7 @@ fun DownloadIndicator(
 /** Waiting in the queue: a short accent arc circling a quiet track. */
 @Composable
 fun SpinningRing(size: Dp, modifier: Modifier = Modifier) {
+    val colors = sc
     val transition = rememberInfiniteTransition(label = "queued")
     val angle = transition.animateFloat(0f, 360f, infiniteRepeatable(tween(1100, easing = LinearEasing), RepeatMode.Restart), label = "angle")
     Box(modifier.size(size), contentAlignment = Alignment.Center) {
@@ -153,18 +155,19 @@ fun SpinningRing(size: Dp, modifier: Modifier = Modifier) {
             val inset = stroke / 2
             val arcSize = androidx.compose.ui.geometry.Size(this.size.width - stroke, this.size.height - stroke)
             val topLeft = androidx.compose.ui.geometry.Offset(inset, inset)
-            drawArc(SoundColors.Hairline, 0f, 360f, false, topLeft, arcSize, style = Stroke(stroke))
+            drawArc(colors.Hairline, 0f, 360f, false, topLeft, arcSize, style = Stroke(stroke))
             rotate(angle.value) {
-                drawArc(SoundColors.Accent, -90f, 80f, false, topLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
+                drawArc(colors.Accent, -90f, 80f, false, topLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
             }
         }
-        Icon(Icons.Rounded.ArrowDownward, null, tint = SoundColors.Accent.copy(alpha = 0.75f), modifier = Modifier.size(size * 0.48f))
+        Icon(Icons.Rounded.ArrowDownward, null, tint = colors.Accent.copy(alpha = 0.75f), modifier = Modifier.size(size * 0.48f))
     }
 }
 
 /** Downloading: the ring fills clockwise from the top. */
 @Composable
 fun ProgressRing(progress: Float, size: Dp, modifier: Modifier = Modifier) {
+    val colors = sc
     val animated by animateFloatAsState(progress.coerceIn(0f, 1f), Motion.soft(), label = "ring")
     Box(modifier.size(size), contentAlignment = Alignment.Center) {
         Canvas(Modifier.size(size)) {
@@ -172,10 +175,10 @@ fun ProgressRing(progress: Float, size: Dp, modifier: Modifier = Modifier) {
             val inset = stroke / 2
             val arcSize = androidx.compose.ui.geometry.Size(this.size.width - stroke, this.size.height - stroke)
             val topLeft = androidx.compose.ui.geometry.Offset(inset, inset)
-            drawArc(SoundColors.AccentSoft, 0f, 360f, false, topLeft, arcSize, style = Stroke(stroke))
-            drawArc(SoundColors.Accent, -90f, 360f * animated.coerceAtLeast(0.02f), false, topLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
+            drawArc(colors.AccentSoft, 0f, 360f, false, topLeft, arcSize, style = Stroke(stroke))
+            drawArc(colors.Accent, -90f, 360f * animated.coerceAtLeast(0.02f), false, topLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
         }
-        Box(Modifier.size(size * 0.26f).clip(androidx.compose.foundation.shape.RoundedCornerShape(1.5.dp)).background(SoundColors.Accent))
+        Box(Modifier.size(size * 0.26f).clip(androidx.compose.foundation.shape.RoundedCornerShape(1.5.dp)).background(colors.Accent))
     }
 }
 
@@ -190,11 +193,11 @@ fun SelectMark(selected: Boolean, enabled: Boolean, modifier: Modifier = Modifie
             label = "select",
         ) { on ->
             if (on) {
-                Box(Modifier.size(size).clip(CircleShape).background(SoundColors.Accent), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Rounded.Check, null, tint = SoundColors.OnAccent, modifier = Modifier.size(size * 0.7f))
+                Box(Modifier.size(size).clip(CircleShape).background(sc.Accent), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Rounded.Check, null, tint = sc.OnAccent, modifier = Modifier.size(size * 0.7f))
                 }
             } else {
-                Box(Modifier.size(size).border(1.6.dp, if (enabled) SoundColors.TextMuted else SoundColors.Hairline, CircleShape))
+                Box(Modifier.size(size).border(1.6.dp, if (enabled) sc.TextMuted else sc.Hairline, CircleShape))
             }
         }
     }

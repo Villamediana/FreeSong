@@ -1,5 +1,8 @@
 package com.villamediana.sound.ui.nav
 
+import com.villamediana.sound.ui.theme.LocalSoundColors
+import com.villamediana.sound.ui.theme.searchPalette
+import com.villamediana.sound.ui.theme.FixedColors
 import androidx.compose.ui.graphics.Color
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.EnterTransition
@@ -176,7 +179,13 @@ fun SoundRoot(incoming: MutableStateFlow<Inbound?>) {
                 },
             ) {
                 composable<HomeRoute> { Page { com.villamediana.sound.ui.library.MainScreen() } }
-                composable<SearchRoute> { entry -> CircularReveal(entry, navigator) { Page(SoundColors.Search) { SearchScreen() } } }
+                composable<SearchRoute> { entry ->
+                    // Search draws on the highlight color: its own scheme, text and controls in contrast.
+                    val searchColors = remember(SoundColors.palette) { FixedColors(searchPalette(SoundColors.palette)) }
+                    CompositionLocalProvider(LocalSoundColors provides searchColors) {
+                        CircularReveal(entry, navigator) { Page(SoundColors.Search) { SearchScreen() } }
+                    }
+                }
                 composable<LibraryRoute> { Page { LibraryScreen() } }
                 composable<AlbumRoute> { Page { AlbumScreen(it.toRoute()) } }
                 composable<ArtistRoute> { Page { ArtistScreen(it.toRoute()) } }
