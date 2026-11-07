@@ -90,9 +90,12 @@ fun HomeScreen() {
     val vm: HomeViewModel = viewModel()
     val discoverVm: DiscoverViewModel = viewModel()
     val discover by discoverVm.state.collectAsStateWithLifecycle()
-    LaunchedEffect(Unit) {
+    // Every time the Home shows again (back from another screen, the app back from the background):
+    // what failed is asked again and what changed since (songs heard, a new day) comes in.
+    androidx.lifecycle.compose.LifecycleResumeEffect(Unit) {
         discoverVm.onShown()
         vm.refreshMixes()
+        onPauseOrDispose { }
     }
     val state by vm.state.collectAsStateWithLifecycle()
     val playback by vm.playback.collectAsStateWithLifecycle()

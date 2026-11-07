@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.assertIsNotSelected
@@ -121,6 +122,17 @@ class HomeScreensSmokeTest {
         listOf("Curtidas", "Aleatório inteligente", "Adicionadas recentemente", "Por gênero", "Seus artistas").forEach {
             check(compose.onAllNodesWithText(it).fetchSemanticsNodes().isEmpty()) { "$it on the Home" }
         }
+    }
+
+    @Test
+    fun songsBeforeAnyGenreStillLeaveAWayToChooseThem() {
+        seed()
+        compose.setContent { Host { HomeScreen() } }
+        waitForText("Suas músicas")
+        val feed = androidx.compose.ui.test.hasScrollAction() and androidx.compose.ui.test.hasAnyDescendant(androidx.compose.ui.test.hasText("Suas músicas"))
+        compose.onNode(feed).performScrollToNode(androidx.compose.ui.test.hasText("Escolher gêneros"))
+        compose.onNodeWithText("Escolher gêneros").performClick()
+        waitForText("O que você curte?")
     }
 
     @Test

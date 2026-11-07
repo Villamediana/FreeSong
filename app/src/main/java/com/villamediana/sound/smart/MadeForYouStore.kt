@@ -16,6 +16,7 @@ import kotlinx.coroutines.launch
  * The day's made-for-you mixes, shared by the Home cards, the mix page and the player (what the
  * card shows is what plays). Made once a day: your songs show at once, the new ones join as their
  * radios arrive (kept on disk for the day, so reopening the app keeps the same mix until midnight).
+ * A library just starting out gets its mixes as its songs come in, not only the next day.
  */
 class MadeForYouStore(
     private val library: LibraryRepository,
@@ -27,48 +28,62 @@ class MadeForYouStore(
     private val _mixes = MutableStateFlow<List<Mix>>(emptyList())
     val mixes: StateFlow<List<Mix>> = _mixes.asStateFlow()
 
-    private var builtFor = -1L
+    /** What the current mixes were made from: the day, and each mix with how many of your songs it had. */
+    private var built: Pair<Long, List<Pair<String, Int>>>? = null
+    /** Every mix that can have new songs got them (a failure is tried again on the next refresh). */
+    private var complete = false
+    private val again = java.util.concurrent.atomic.AtomicBoolean(false)
     private var job: Job? = null
 
-    /** Makes the day's mixes when there are none for today yet (cheap otherwise). */
+    /**
+     * Makes the mixes when there are none for today yet, or when the library changed what they'd be
+     * made of (a new genre, songs still filling a young mix): a mix lasts the day once it is full.
+     */
     fun refresh() {
-        val day = SmartMixes.dayNumber(clock())
-        if (builtFor == day || job?.isActive == true) return
+        if (job?.isActive == true) {
+            again.set(true) // asked while making: look again once done
+            return
+        }
         job = scope.launch {
-            // Never let a failure here take the app down: the mixes just wait for the next try.
-            runCatching { make(day) }
+            do {
+                again.set(false)
+                // Never let a failure here take the app down: the mixes just wait for the next try.
+                runCatching { make(SmartMixes.dayNumber(clock())) }
+            } while (again.get())
         }
     }
 
     private suspend fun make(day: Long) {
-        run {
-            val tracks = library.allTracks()
-            val plans = MadeForYou.plan(tracks, library.loadTaste(), day)
-            val l = labels()
-            if (plans.isEmpty()) {
-                _mixes.value = emptyList()
-                builtFor = day
-                return
-            }
-            // Your songs first (instant), then with the new ones.
-            _mixes.value = plans.map { MadeForYou.assemble(it, emptyList(), l) }
-            val inLibrary = tracks.mapNotNullTo(HashSet()) { it.videoId }
-            val full = coroutineScope {
-                plans.map { plan ->
-                    async {
-                        val new = discover.daily("foryou:" + plan.id, day) {
-                            val radios = plan.seeds.mapNotNull { seed ->
-                                seed.videoId?.let { id -> runCatching { discover.related(id, RADIO_SIZE) }.getOrNull() }
-                            }
-                            MadeForYou.pickNew(radios, inLibrary)
-                        }.filter { it.videoId !in inLibrary }
-                        MadeForYou.assemble(plan, new, l)
-                    }
-                }.awaitAll()
-            }
-            _mixes.value = full
-            builtFor = day
+        val tracks = library.allTracks()
+        val plans = MadeForYou.plan(tracks, library.loadTaste(), day)
+        val shape = day to plans.map { it.id to it.own.size }
+        if (shape == built && complete) return
+        val l = labels()
+        if (plans.isEmpty()) {
+            _mixes.value = emptyList()
+            built = shape
+            complete = true
+            return
         }
+        // Your songs first (instant) when there is nothing on screen yet, then with the new ones.
+        if (_mixes.value.isEmpty()) _mixes.value = plans.map { MadeForYou.assemble(it, emptyList(), l) }
+        val inLibrary = tracks.mapNotNullTo(HashSet()) { it.videoId }
+        val made = coroutineScope {
+            plans.map { plan ->
+                async {
+                    val new = discover.daily("foryou:" + plan.id, day) {
+                        val radios = plan.seeds.mapNotNull { seed ->
+                            seed.videoId?.let { id -> runCatching { discover.related(id, RADIO_SIZE) }.getOrNull() }
+                        }
+                        MadeForYou.pickNew(radios, inLibrary)
+                    }.filter { it.videoId !in inLibrary }
+                    plan to MadeForYou.assemble(plan, new, l)
+                }
+            }.awaitAll()
+        }
+        _mixes.value = made.map { it.second }
+        built = shape
+        complete = made.all { (plan, mix) -> plan.seeds.isEmpty() || mix.tracks.size > plan.own.size }
     }
 
     fun byId(id: String): Mix? = _mixes.value.firstOrNull { it.id == id }

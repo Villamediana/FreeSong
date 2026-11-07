@@ -31,4 +31,5 @@
     <string name="discover_artists">Artistas pra você</string>
     <string name="discover_playlists">Playlists pra você</string>
     <string name="discover_edit_genres">Editar gêneros</string>
+    <string name="discover_pick_genres">Escolher gêneros</string>
 </resources>

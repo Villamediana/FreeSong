@@ -211,11 +211,11 @@ internal fun LazyListScope.discoverSections(
             SongRow(title, shelf.tracks, playback) { i -> onPlay(shelf.tracks, i, title, "genre:" + shelf.genre.id); Chrome.openPlayer() }
         }
     }
-    if (state.favorites.isNotEmpty()) {
-        item(key = "d-edit", contentType = "footer") {
-            Box(Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 8.dp), contentAlignment = Alignment.Center) {
-                PillButton(stringResource(R.string.discover_edit_genres), onEdit, icon = Icons.Rounded.Tune)
-            }
+    // No genres yet (songs came in before the picker was answered): the way to choose them.
+    item(key = "d-edit", contentType = "footer") {
+        Box(Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 8.dp), contentAlignment = Alignment.Center) {
+            val label = if (state.favorites.isNotEmpty()) R.string.discover_edit_genres else R.string.discover_pick_genres
+            PillButton(stringResource(label), onEdit, icon = Icons.Rounded.Tune)
         }
     }
 }

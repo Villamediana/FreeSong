@@ -17,7 +17,9 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -51,6 +53,7 @@ data class DiscoverUiState(
     val hasContent: Boolean get() = because.isNotEmpty() || shelves.isNotEmpty()
 }
 
+@OptIn(kotlinx.coroutines.FlowPreview::class)
 class DiscoverViewModel(app: Application) : AndroidViewModel(app) {
     private val graph = SoundApplication.graph
     private val repo = graph.discover
@@ -59,6 +62,8 @@ class DiscoverViewModel(app: Application) : AndroidViewModel(app) {
     val state: StateFlow<DiscoverUiState> = _state
 
     private var loadJob: Job? = null
+    /** The song "Porque você ouviu…" was made from. */
+    private var becauseFor: String? = null
 
     init {
         viewModelScope.launch {
@@ -68,6 +73,14 @@ class DiscoverViewModel(app: Application) : AndroidViewModel(app) {
                 load(force = false)
             }
         }
+        // "Porque você ouviu…" follows what is being heard (a song kept for a few seconds, not every skip).
+        viewModelScope.launch {
+            graph.player.state.map { it.current?.videoId?.takeIf(String::isNotBlank) }
+                .distinctUntilChanged()
+                .filterNotNull()
+                .debounce(BECAUSE_AFTER_MS)
+                .collect { if (_state.value.favorites.isNotEmpty() && loadJob?.isActive != true) loadBecause() }
+        }
         viewModelScope.launch {
             // Cached covers first (instant), then the stale ones from the network.
             _state.update { it.copy(covers = repo.covers(GenreCatalog.all, refresh = false)) }
@@ -76,8 +89,14 @@ class DiscoverViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Called whenever the Home shows: lists follow their 6-hour slot (cheap when nothing changed). */
-    fun onShown() = load(force = false)
+    /**
+     * Called whenever the Home shows (opening, coming back to it): lists follow their 6-hour slot
+     * and what failed is asked again (cheap when nothing changed). A load under way carries on.
+     */
+    fun onShown() {
+        if (loadJob?.isActive == true) return
+        load(force = false)
+    }
 
     fun refresh() = load(force = true)
 
@@ -112,14 +131,28 @@ class DiscoverViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Radio of the last song heard (now playing, else the library's last played). */
+    /** Radio of the last song heard: the one playing, else the last one listened (yours or streamed). */
     private suspend fun loadBecause() {
-        val current = graph.player.state.value.current?.takeIf { it.videoId != null }
-        val last = current ?: runCatching { graph.library.allTracks() }.getOrDefault(emptyList())
-            .filter { it.videoId != null && it.lastPlayedAt != null }.maxByOrNull { it.lastPlayedAt!! }
-        val videoId = last?.videoId ?: return
+        val (videoId, title) = lastHeard() ?: return
+        if (videoId == becauseFor && _state.value.because.isNotEmpty()) return
         val list = runCatching { repo.related(videoId) }.getOrDefault(emptyList())
-        _state.update { it.copy(becauseTitle = last.title, because = list) }
+        if (list.isEmpty()) return // keep what shows; asked again next time
+        becauseFor = videoId
+        _state.update { it.copy(becauseTitle = title, because = list) }
+    }
+
+    private suspend fun lastHeard(): Pair<String, String>? {
+        graph.player.state.value.current?.let { t -> t.videoId?.takeIf(String::isNotBlank)?.let { return it to t.title } }
+        val mine = runCatching { graph.library.allTracks() }.getOrDefault(emptyList())
+            .filter { !it.videoId.isNullOrBlank() && it.lastPlayedAt != null }
+            .maxByOrNull { it.lastPlayedAt!! }
+        val streamed = runCatching { graph.library.onlinePlaysListSince(System.currentTimeMillis() - HEARD_WITHIN_MS) }
+            .getOrDefault(emptyList()).firstOrNull()
+        return when {
+            streamed != null && (mine == null || streamed.playedAt > mine.lastPlayedAt!!) -> streamed.videoId to streamed.title
+            mine != null -> mine.videoId!! to mine.title
+            else -> null
+        }
     }
 
     fun toggle(id: String) = _state.update { s -> s.copy(selection = if (id in s.selection) s.selection - id else s.selection + id) }
@@ -136,6 +169,11 @@ class DiscoverViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun edit() = _state.update { it.copy(editing = true, selection = it.favorites.toSet()) }
+
+    private companion object {
+        const val BECAUSE_AFTER_MS = 8_000L
+        const val HEARD_WITHIN_MS = 30L * 24 * 3_600_000L
+    }
 
     /**
      * Home lists play as smart queues: a genre shelf, then the radio of where it ends;

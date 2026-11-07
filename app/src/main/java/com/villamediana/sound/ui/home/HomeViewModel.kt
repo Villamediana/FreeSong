@@ -18,6 +18,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
@@ -58,6 +62,14 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         graph.madeForYou.refresh()
+        // Songs coming in (or leaving) can change the mixes: a first song, a new genre.
+        viewModelScope.launch {
+            library.tracks
+                .map { list -> list.size to list.mapNotNullTo(HashSet()) { it.genre?.trim()?.lowercase() } }
+                .distinctUntilChanged()
+                .drop(1)
+                .collect { graph.madeForYou.refresh() }
+        }
     }
 
     /** The Home shows: today's mixes (remade when the day turns). */
