@@ -20,7 +20,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.util.Locale
 
 /** One "Rock pra você" row. */
 data class Shelf(val genre: GenreDef, val tracks: List<RemoteTrack>)
@@ -48,14 +47,13 @@ data class DiscoverUiState(
     /** "Porque você ouviu <title>". */
     val becauseTitle: String? = null,
     val because: List<RemoteTrack> = emptyList(),
-    val trending: List<RemoteTrack> = emptyList(),
     val artists: List<ArtistPick> = emptyList(),
     val playlists: List<RemoteCollection> = emptyList(),
     val shelves: List<Shelf> = emptyList(),
     val loading: Boolean = false,
 ) {
     val showPicker: Boolean get() = ready && (!chosen || editing)
-    val hasContent: Boolean get() = mixes.isNotEmpty() || because.isNotEmpty() || trending.isNotEmpty() || shelves.isNotEmpty()
+    val hasContent: Boolean get() = mixes.isNotEmpty() || because.isNotEmpty() || shelves.isNotEmpty()
 }
 
 class DiscoverViewModel(app: Application) : AndroidViewModel(app) {
@@ -92,7 +90,7 @@ class DiscoverViewModel(app: Application) : AndroidViewModel(app) {
         val genres = _state.value.favorites.mapNotNull(GenreCatalog::byId)
         loadJob?.cancel()
         if (genres.isEmpty()) {
-            _state.update { it.copy(mixes = emptyList(), because = emptyList(), becauseTitle = null, trending = emptyList(), artists = emptyList(), playlists = emptyList(), shelves = emptyList(), loading = false) }
+            _state.update { it.copy(mixes = emptyList(), because = emptyList(), becauseTitle = null, artists = emptyList(), playlists = emptyList(), shelves = emptyList(), loading = false) }
             return
         }
         val seed = GenreCatalog.slotOf(System.currentTimeMillis())
@@ -118,10 +116,6 @@ class DiscoverViewModel(app: Application) : AndroidViewModel(app) {
                     }.awaitAll()
                     kind to lists
                 }
-            }
-            launch {
-                val trending = runCatching { repo.songs("trending", trendingQuery(), 20, force) }.getOrDefault(emptyList())
-                _state.update { it.copy(trending = trending) }
             }
             launch {
                 val lists = genres.map { g -> async { runCatching { repo.collections("playlists:${g.id}", "${g.term} playlist", SearchFilter.PLAYLISTS, 3) }.getOrDefault(emptyList()) } }.awaitAll()
@@ -158,11 +152,6 @@ class DiscoverViewModel(app: Application) : AndroidViewModel(app) {
         MixKind.CLASSICS -> "${g.term} classics"
         MixKind.CHILL -> "${g.term} acoustic chill"
         MixKind.YOURS -> g.query
-    }
-
-    private fun trendingQuery(): String {
-        val country = Locale.getDefault().getDisplayCountry(Locale.ENGLISH).ifBlank { "Brazil" }
-        return "top 50 $country"
     }
 
     fun toggle(id: String) = _state.update { s -> s.copy(selection = if (id in s.selection) s.selection - id else s.selection + id) }

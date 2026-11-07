@@ -199,12 +199,6 @@ internal fun LazyListScope.discoverSections(
             SongRow(title, state.because, playback) { i -> onPlay(state.because, i, title, "because") }
         }
     }
-    if (state.trending.isNotEmpty()) {
-        item(key = "d-trending", contentType = "row") {
-            val title = stringResource(R.string.discover_trending)
-            SongRow(title, state.trending, playback) { i -> onPlay(state.trending, i, title, "trending") }
-        }
-    }
     if (state.artists.isNotEmpty()) {
         item(key = "d-artists", contentType = "row") {
             DiscoverRow(stringResource(R.string.discover_artists)) {
