@@ -161,6 +161,12 @@ object SoundColors {
     val BrandRoyal = Color(0xFF2341C9)
     val BrandMint = Color(0xFF8CF5D9)
 
+    /**
+     * The search page: the ink deepened with the highlight color. The circle that opens it from
+     * the magnifier is this same color, so opening and closing read as one surface.
+     */
+    val Search: Color get() = lerp(palette.ink, palette.accent, if (palette.isLight) 0.12f else 0.2f)
+
     /** The mini player card: the theme's raised surface with a hint of the cover. */
     fun miniBackground(cover: Color): Color = lerp(palette.surface2, cover, if (palette.isLight) 0.14f else 0.2f)
 

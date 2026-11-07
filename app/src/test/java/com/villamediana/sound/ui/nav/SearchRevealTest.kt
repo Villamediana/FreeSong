@@ -32,7 +32,7 @@ import org.robolectric.annotation.GraphicsMode
 import java.io.File
 import kotlin.math.abs
 
-/** The search circle is the page itself (no color switching at the end), over a dimming screen. */
+/** The search circle is the search page in its own color: the color it opens in is the color it keeps. */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [35])
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -40,7 +40,7 @@ class SearchRevealTest {
     @get:Rule val compose = createComposeRule()
 
     @Test
-    fun midwayThePageGrowsInItsOwnColorOverADimmedScreen() {
+    fun midwayTheCircleIsTheSearchPageInItsOwnColor() {
         lateinit var navigator: Navigator
         compose.setContent {
             SoundTheme {
@@ -50,7 +50,7 @@ class SearchRevealTest {
                     NavHost(nav, startDestination = HomeRoute, enterTransition = { EnterTransition.None }, exitTransition = { ExitTransition.KeepUntilTransitionsFinished }) {
                         composable<HomeRoute> { Box(Modifier.fillMaxSize().background(SoundColors.Ink)) { Text("home") } }
                         composable<SearchRoute> { entry ->
-                            CircularReveal(entry, navigator) { Box(Modifier.fillMaxSize().background(SoundColors.Ink)) { Text("search") } }
+                            CircularReveal(entry, navigator) { Box(Modifier.fillMaxSize().background(SoundColors.Search)) { Text("search") } }
                         }
                     }
                 }
@@ -66,13 +66,17 @@ class SearchRevealTest {
             File("build/screenshots").apply { mkdirs() }.resolve("search_reveal_mid.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
         }
         val ink = SoundColors.Ink.toArgb()
-        fun diff(p: Int) = abs(android.graphics.Color.red(p) - android.graphics.Color.red(ink)) +
-            abs(android.graphics.Color.green(p) - android.graphics.Color.green(ink)) +
-            abs(android.graphics.Color.blue(p) - android.graphics.Color.blue(ink))
-        // Inside: the search page in its own color (nothing tinting it that would switch at the end).
-        assertTrue("inside is the page itself (diff ${diff(bmp.getPixel(240, 90))})", diff(bmp.getPixel(240, 90)) < 12)
-        // Outside: the page beneath dims while the circle grows, so the circle reads.
-        assertTrue("outside is dimmed (diff ${diff(bmp.getPixel(8, bmp.height - 8))})", diff(bmp.getPixel(8, bmp.height - 8)) > 30)
+        val search = SoundColors.Search.toArgb()
+        fun diff(p: Int, to: Int) = abs(android.graphics.Color.red(p) - android.graphics.Color.red(to)) +
+            abs(android.graphics.Color.green(p) - android.graphics.Color.green(to)) +
+            abs(android.graphics.Color.blue(p) - android.graphics.Color.blue(to))
+        val inside = bmp.getPixel(240, 90)
+        val outside = bmp.getPixel(8, bmp.height - 8)
+        // Inside: the search page's own color — the color it keeps once open (nothing switches).
+        assertTrue("inside is the search color (diff ${diff(inside, search)})", diff(inside, search) < 12)
+        assertTrue("which is not the screen beneath (diff ${diff(inside, ink)})", diff(inside, ink) > 20)
+        // Outside: the screen beneath, a little dimmed.
+        assertTrue("outside is the screen beneath, dimmed (diff ${diff(outside, ink)})", diff(outside, ink) in 8..120)
         compose.mainClock.autoAdvance = true
     }
 }

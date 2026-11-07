@@ -1,5 +1,6 @@
 package com.villamediana.sound.ui.nav
 
+import androidx.compose.ui.graphics.Color
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.EnterTransition
 import androidx.compose.runtime.mutableStateOf
@@ -175,7 +176,7 @@ fun SoundRoot(incoming: MutableStateFlow<Inbound?>) {
                 },
             ) {
                 composable<HomeRoute> { Page { com.villamediana.sound.ui.library.MainScreen() } }
-                composable<SearchRoute> { entry -> CircularReveal(entry, navigator) { Page { SearchScreen() } } }
+                composable<SearchRoute> { entry -> CircularReveal(entry, navigator) { Page(SoundColors.Search) { SearchScreen() } } }
                 composable<LibraryRoute> { Page { LibraryScreen() } }
                 composable<AlbumRoute> { Page { AlbumScreen(it.toRoute()) } }
                 composable<ArtistRoute> { Page { ArtistScreen(it.toRoute()) } }
@@ -217,6 +218,6 @@ private fun NavDestination.isTab(): Boolean =
 
 /** Every page is opaque, so a page sliding over another never shows both at once. */
 @Composable
-private fun Page(content: @Composable () -> Unit) {
-    Box(Modifier.fillMaxSize().background(SoundColors.Ink)) { content() }
+private fun Page(color: Color = SoundColors.Ink, content: @Composable () -> Unit) {
+    Box(Modifier.fillMaxSize().background(color)) { content() }
 }

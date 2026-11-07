@@ -194,7 +194,7 @@ fun SearchScreen() {
         )
     }
 
-    Box(Modifier.fillMaxSize().background(SoundColors.Ink)) {
+    Box(Modifier.fillMaxSize().background(SoundColors.Search)) {
         Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)) {
             AnimatedVisibility(
                 visible = mode == SearchMode.Idle,
