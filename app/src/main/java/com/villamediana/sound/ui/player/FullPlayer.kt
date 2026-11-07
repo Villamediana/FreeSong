@@ -281,7 +281,7 @@ internal fun FullPlayer(
                 // steps aside and the clip is the picture (the cover stays offline / without a video).
                 var clipShowing by remember { mutableStateOf(false) }
                 if (clip == null) clipShowing = false
-                ClipLayer(clip, visible, Modifier.fillMaxWidth().fillMaxHeight(0.7f), onShowing = { clipShowing = it })
+                ClipLayer(clip, visible, { SoundColors.playerBackground(wash.value) }, Modifier.fillMaxWidth().fillMaxHeight(0.66f), onShowing = { clipShowing = it })
                 Column(Modifier.fillMaxSize().padding(top = statusTop)) {
                     TopBar(state.source, actions, hasVideo = track.videoId != null, online = stream.online, onClip = clip != null)
                     BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -468,11 +468,11 @@ private fun VideoTag(onClick: () -> Unit) {
 
 /** [clip] fading in when it comes and out when it goes (the last one stays while it fades). */
 @Composable
-private fun ClipLayer(clip: Player?, visible: () -> Boolean, modifier: Modifier = Modifier, onShowing: (Boolean) -> Unit = {}) {
+private fun ClipLayer(clip: Player?, visible: () -> Boolean, backdrop: () -> Color, modifier: Modifier = Modifier, onShowing: (Boolean) -> Unit = {}) {
     var last by remember { mutableStateOf(clip) }
     if (clip != null) last = clip
     AnimatedVisibility(visible = clip != null, enter = fadeIn(tween(600)), exit = fadeOut(tween(400)), modifier = modifier) {
-        last?.let { CanvasBackdrop(it, visible, Modifier.fillMaxSize(), onShowing) }
+        last?.let { CanvasBackdrop(it, visible, backdrop, Modifier.fillMaxSize(), onShowing) }
     }
 }
 
@@ -482,26 +482,25 @@ private fun ClipLayer(clip: Player?, visible: () -> Boolean, modifier: Modifier 
  */
 @OptIn(UnstableApi::class)
 @Composable
-private fun CanvasBackdrop(player: Player, visible: () -> Boolean, modifier: Modifier = Modifier, onShowing: (Boolean) -> Unit = {}) {
+private fun CanvasBackdrop(player: Player, visible: () -> Boolean, backdrop: () -> Color, modifier: Modifier = Modifier, onShowing: (Boolean) -> Unit = {}) {
     val presentation = rememberPresentationState(player)
     val shown by animateFloatAsState(if (presentation.coverSurface) 0f else 1f, tween(700), label = "clip")
     val showing = !presentation.coverSurface
     LaunchedEffect(showing) { onShowing(showing) }
     DisposableEffect(Unit) { onDispose { onShowing(false) } }
+    // Everything is painted over the video (a TextureView ignores layer alpha and masks): darkened,
+    // then melting into the player's own backdrop well before the title, and faded in with that same
+    // backdrop on top while the first frames arrive.
     BoxWithConstraints(
         modifier
             .clipToBounds()
-            .graphicsLayer {
-                alpha = shown * (if (visible()) 1f else 0f)
-                compositingStrategy = CompositingStrategy.Offscreen
-            }
             .drawWithContent {
                 drawContent()
+                val bg = backdrop()
                 drawRect(Color.Black.copy(alpha = 0.3f))
-                drawRect(
-                    Brush.verticalGradient(0f to Color.Black, 0.62f to Color.Black, 1f to Color.Transparent),
-                    blendMode = BlendMode.DstIn,
-                )
+                drawRect(Brush.verticalGradient(0f to bg.copy(alpha = 0f), 0.42f to bg.copy(alpha = 0f), 0.9f to bg, 1f to bg))
+                val hide = 1f - shown * (if (visible()) 1f else 0f)
+                if (hide > 0f) drawRect(bg.copy(alpha = hide))
             },
     ) {
         val video = presentation.videoSizeDp

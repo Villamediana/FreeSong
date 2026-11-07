@@ -1,5 +1,11 @@
 package com.villamediana.sound.ui.search
 
+import kotlinx.coroutines.delay
+import com.villamediana.sound.online.CoverMatch
+import com.villamediana.sound.recognition.SongMatch
+import com.villamediana.sound.recognition.Recognition
+import com.villamediana.sound.recognition.MicSongListener
+import com.villamediana.sound.recognition.SongListener
 import com.villamediana.sound.download.DownloadWait
 import com.villamediana.sound.playback.SmartSeed
 import com.villamediana.sound.ui.nav.Chrome
@@ -153,6 +159,8 @@ class SearchViewModel(
     private val onLike: (RemoteTrack, Boolean) -> Unit = { _, _ -> },
     /** The download button of a song on the phone or on its way (AppGraph.removeDownload). */
     private val onRemoveDownload: (String) -> Unit = {},
+    /** The microphone button: names the song playing nearby. Null = no microphone search. */
+    private val listener: SongListener? = null,
 ) : ViewModel() {
 
     val online: StateFlow<Boolean> = onlineFlow.stateIn(viewModelScope, SharingStarted.Eagerly, initiallyOnline)
@@ -207,6 +215,74 @@ class SearchViewModel(
 
     val genres: StateFlow<List<GenreSummary>> = library.genres
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    // ------------------------------------------------------------------ "what's playing?" (microphone)
+
+    /** The listening screen: idle, listening (seconds heard), found, not found, failed. */
+    sealed interface Hearing {
+        data object Idle : Hearing
+        data class Listening(val seconds: Float) : Hearing
+        data class Found(val match: SongMatch) : Hearing
+        data object NotFound : Hearing
+        data class Failed(val noMicrophone: Boolean) : Hearing
+    }
+
+    private val _hearing = MutableStateFlow<Hearing>(Hearing.Idle)
+    val hearing: StateFlow<Hearing> = _hearing
+
+    /** Loudness heard right now, 0..1 (the rings breathe with it). */
+    val hearingLevel = MutableStateFlow(0f)
+
+    private var hearJob: Job? = null
+
+    val canListen: Boolean get() = listener != null
+
+    /**
+     * Listens to the room and names the song: the music of the app pauses (it would hear itself),
+     * the found song goes into the search with its results, and plays — as a radio, with the
+     * player open.
+     */
+    fun listen() {
+        val l = listener ?: return
+        hearJob?.cancel()
+        player.pause()
+        hearJob = viewModelScope.launch {
+            _hearing.value = Hearing.Listening(0f)
+            val outcome = l.recognize(
+                onLevel = { hearingLevel.value = it },
+                onSeconds = { sec -> if (_hearing.value is Hearing.Listening) _hearing.value = Hearing.Listening(sec) },
+            )
+            hearingLevel.value = 0f
+            when (outcome) {
+                is Recognition.Found -> {
+                    _hearing.value = Hearing.Found(outcome.match)
+                    playFound(outcome.match)
+                }
+                Recognition.NotFound -> _hearing.value = Hearing.NotFound
+                is Recognition.Failed -> _hearing.value = Hearing.Failed(outcome.noMicrophone)
+            }
+        }
+    }
+
+    fun stopListening() {
+        hearJob?.cancel()
+        hearJob = null
+        hearingLevel.value = 0f
+        _hearing.value = Hearing.Idle
+    }
+
+    private suspend fun playFound(match: SongMatch) {
+        val q = "${match.artist} ${match.title}".trim()
+        submit(q)
+        val songs = attempt { youTube.search(q, SearchFilter.SONGS).items.filterIsInstance<SearchItem.Song>().map { it.track } }.getOrNull().orEmpty()
+        val song = songs.firstOrNull { CoverMatch.same(match.title, match.artist, it.title, it.artist) } ?: songs.firstOrNull()
+        delay(FOUND_SHOWN_MS) // the found card stays a moment
+        if (song != null) {
+            player.playOnline(listOf(song), 0, PlaySource(PlaySource.Type.RADIO, radioTitle(song.title), song.videoId))
+            Chrome.openPlayer()
+        }
+        _hearing.value = Hearing.Idle
+    }
 
     fun onFieldChange(value: TextFieldValue) {
         query = value
@@ -554,6 +630,9 @@ class SearchViewModel(
     }
 
     companion object {
+        /** How long the found song is shown before it plays. */
+        const val FOUND_SHOWN_MS = 1_400L
+
         fun create(): SearchViewModel {
             val g = SoundApplication.graph
             return SearchViewModel(
@@ -569,6 +648,7 @@ class SearchViewModel(
                 likeDownloadsFlow = g.settings.settings.map { it.likeDownloads }.distinctUntilChanged(),
                 onLike = g::likeOnline,
                 onRemoveDownload = g::removeDownload,
+                listener = MicSongListener(),
             )
         }
     }

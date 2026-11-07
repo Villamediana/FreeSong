@@ -190,4 +190,16 @@
     <string name="search_remote_share">Compartir</string>
     <string name="search_dl_removed">Eliminada del teléfono</string>
     <string name="search_dl_remove">Quitar del teléfono</string>
+    <string name="hear_button">Reconocer la música que suena</string>
+    <string name="hear_listening">Escuchando…</string>
+    <string name="hear_listening_hint">Acerca el teléfono al sonido</string>
+    <string name="hear_found">¡La encontré!</string>
+    <string name="hear_playing_now">Va a sonar ahora</string>
+    <string name="hear_not_found">No la reconocí</string>
+    <string name="hear_not_found_hint">Prueba más cerca de la música, o en una parte con voz</string>
+    <string name="hear_offline">Sin conexión para reconocer</string>
+    <string name="hear_no_mic">No pude abrir el micrófono</string>
+    <string name="hear_retry">Intentar de nuevo</string>
+    <string name="hear_cancel">Parar</string>
+    <string name="hear_need_mic">Para reconocer por el sonido, FreeSong necesita el micrófono</string>
 </resources>

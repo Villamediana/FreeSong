@@ -1,5 +1,6 @@
 package com.villamediana.sound.ui.search
 
+import com.villamediana.sound.online.SearchPage
 import android.app.Application
 import android.content.Context
 import androidx.compose.ui.text.input.TextFieldValue
@@ -334,6 +335,52 @@ class SearchViewModelTest {
         assertEquals(SearchEvent.Message(R.string.search_play_offline), nextEvent())
         assertTrue(player.onlinePlays.isEmpty())
         assertTrue(downloads.downloadCalls.isEmpty())
+    }
+
+    /** Stand-in for the microphone: answers what the test says, after "hearing" a little. */
+    private class FakeListener(private val answer: com.villamediana.sound.recognition.Recognition) : com.villamediana.sound.recognition.SongListener {
+        override suspend fun recognize(onLevel: (Float) -> Unit, onSeconds: (Float) -> Unit): com.villamediana.sound.recognition.Recognition {
+            onLevel(0.5f)
+            onSeconds(4.5f)
+            return answer
+        }
+    }
+
+    private fun listeningVm(answer: com.villamediana.sound.recognition.Recognition): SearchViewModel {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        return SearchViewModel(
+            youTube, library, downloads, player, RecentSearchStore(context), online, initiallyOnline = true, playOnlineFlow = playOnline,
+            listener = FakeListener(answer),
+        )
+    }
+
+    @Test
+    fun aSongHeardIsSearchedAndPlaysAsARadioWithThePlayerOpen() {
+        val heard = com.villamediana.sound.recognition.SongMatch(title = "In the End", artist = "Linkin Park", cover = "https://shazam/cover.jpg")
+        youTube.onSearch = { q, f -> SearchPage(q, f, listOf(SearchItem.Song(remoteTrack("numb1234567", "Numb", "Linkin Park")), SearchItem.Song(remoteTrack("end12345678", "In the End", "Linkin Park")))) }
+        val listening = listeningVm(com.villamediana.sound.recognition.Recognition.Found(heard))
+        org.robolectric.shadows.ShadowSystemClock.advanceBy(java.time.Duration.ofMillis(50))
+        val openedBefore = com.villamediana.sound.ui.nav.Chrome.openPlayerAt
+        listening.listen()
+        // The music of the app is paused first: it would hear itself.
+        awaitUntil { player.onlinePlays.isNotEmpty() }
+        val play = player.onlinePlays.single()
+        assertEquals(listOf("end12345678"), play.tracks.map { it.videoId })
+        assertEquals(PlaySource.Type.RADIO, play.source.type)
+        assertTrue(com.villamediana.sound.ui.nav.Chrome.openPlayerAt != openedBefore)
+        // It is in the search too.
+        assertEquals("Linkin Park In the End", listening.query.text)
+        awaitUntil { listening.hearing.value == SearchViewModel.Hearing.Idle }
+    }
+
+    @Test
+    fun nothingRecognisedSaysSoAndCanTryAgain() {
+        val listening = listeningVm(com.villamediana.sound.recognition.Recognition.NotFound)
+        listening.listen()
+        awaitUntil { listening.hearing.value == SearchViewModel.Hearing.NotFound }
+        assertTrue(player.onlinePlays.isEmpty())
+        listening.stopListening()
+        assertEquals(SearchViewModel.Hearing.Idle, listening.hearing.value)
     }
 
     @Test

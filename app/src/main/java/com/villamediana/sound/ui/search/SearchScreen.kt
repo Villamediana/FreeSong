@@ -1,5 +1,11 @@
 package com.villamediana.sound.ui.search
 
+import androidx.compose.runtime.DisposableEffect
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.core.content.ContextCompat
+import android.content.pm.PackageManager
+import android.Manifest
 import androidx.compose.foundation.layout.offset
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.activity.compose.BackHandler
@@ -142,6 +148,19 @@ fun SearchScreen() {
     val focusManager = LocalFocusManager.current
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
+    val hearing by vm.hearing.collectAsStateWithLifecycle()
+    val hearingLevel by vm.hearingLevel.collectAsStateWithLifecycle()
+    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) vm.listen()
+        else scope.launch { snackbar.showSnackbar(context.getString(R.string.hear_need_mic)) }
+    }
+    BackHandler(enabled = hearing != SearchViewModel.Hearing.Idle) { vm.stopListening() }
+    // Listening takes the whole screen: no mini player over it.
+    val listening = hearing != SearchViewModel.Hearing.Idle
+    DisposableEffect(listening) {
+        if (listening) com.villamediana.sound.ui.nav.Chrome.hideMiniPlayer = true
+        onDispose { if (listening) com.villamediana.sound.ui.nav.Chrome.hideMiniPlayer = false }
+    }
     val bottomInset = LocalBottomInset.current
 
     val mode = vm.mode
@@ -215,15 +234,26 @@ fun SearchScreen() {
                 }
             }
             if (mode != SearchMode.Idle) Spacer(Modifier.height(10.dp))
-            SearchField(
-                value = vm.query,
-                onChange = vm::onFieldChange,
-                onSearch = {
-                    vm.submit()
-                    dismissKeyboard()
-                },
-                onClear = vm::clearField,
-            )
+            Row(Modifier.padding(horizontal = Dimens.Gutter), verticalAlignment = Alignment.CenterVertically) {
+                SearchField(
+                    value = vm.query,
+                    onChange = vm::onFieldChange,
+                    onSearch = {
+                        vm.submit()
+                        dismissKeyboard()
+                    },
+                    onClear = vm::clearField,
+                    modifier = Modifier.weight(1f),
+                )
+                if (vm.canListen) {
+                    Spacer(Modifier.width(10.dp))
+                    MicButton(onClick = {
+                        dismissKeyboard()
+                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) vm.listen()
+                        else micPermission.launch(Manifest.permission.RECORD_AUDIO)
+                    })
+                }
+            }
             AnimatedVisibility(
                 visible = pasteLink != null,
                 enter = expandVertically(tween(240)) + fadeIn(tween(240)),
@@ -325,6 +355,14 @@ fun SearchScreen() {
     }
 
     sheetTrack?.let { TrackActionsSheet(it, onDismiss = { sheetTrack = null }) }
+
+    AnimatedVisibility(
+        visible = hearing != SearchViewModel.Hearing.Idle,
+        enter = fadeIn(tween(220)) + scaleIn(tween(280), initialScale = 0.96f),
+        exit = fadeOut(tween(220)),
+    ) {
+        ListeningScreen(hearing = hearing, level = hearingLevel, onCancel = vm::stopListening, onRetry = vm::listen)
+    }
 }
 
 /** What the link card can do — kept stable so list items don't recompose for nothing. */
@@ -362,6 +400,7 @@ private fun SearchField(
     onChange: (TextFieldValue) -> Unit,
     onSearch: () -> Unit,
     onClear: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
@@ -370,7 +409,7 @@ private fun SearchField(
     BasicTextField(
         value = value,
         onValueChange = onChange,
-        modifier = Modifier.padding(horizontal = Dimens.Gutter).fillMaxWidth().height(52.dp),
+        modifier = modifier.fillMaxWidth().height(52.dp),
         singleLine = true,
         textStyle = MaterialTheme.typography.bodyLarge.copy(color = SoundColors.Text),
         cursorBrush = SolidColor(SoundColors.Accent),

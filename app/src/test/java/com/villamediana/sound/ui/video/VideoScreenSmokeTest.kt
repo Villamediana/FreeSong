@@ -214,7 +214,8 @@ class VideoScreenSmokeTest {
         val video = FakeVideo()
         show(video)
         val p = withPlayer(video)
-        compose.onNode(stage).performTouchInput { down(percentOffset(0.2f, 0.2f)) }
+        // Right half: 2× forward.
+        compose.onNode(stage).performTouchInput { down(percentOffset(0.8f, 0.2f)) }
         compose.mainClock.advanceTimeBy(900)
         compose.waitForIdle()
         assertEquals(listOf(2f), video.speeds)
@@ -222,6 +223,21 @@ class VideoScreenSmokeTest {
         compose.onNode(stage).performTouchInput { up() }
         compose.waitForIdle()
         assertEquals(listOf(2f, 1f), video.speeds)
+        compose.runOnIdle { p.release() }
+    }
+
+    @Test fun holdingTheLeftHalfRewinds() {
+        val video = FakeVideo()
+        show(video)
+        val p = withPlayer(video)
+        compose.onNode(stage).performTouchInput { down(percentOffset(0.2f, 0.2f)) }
+        compose.mainClock.advanceTimeBy(1_600)
+        compose.waitForIdle()
+        // Stepping back while held (nothing to go back from at 0 here: it stays at 0), no 2× speed.
+        assertTrue(video.speeds.isEmpty())
+        compose.onNode(stage).performTouchInput { up() }
+        compose.waitForIdle()
+        assertEquals(listOf(1f), video.speeds)
         compose.runOnIdle { p.release() }
     }
 
@@ -241,7 +257,8 @@ class VideoScreenSmokeTest {
         val video = FakeVideo()
         show(video)
         compose.waitUntil(5_000) { compose.onAllNodesWithText("Una verdad sin fin").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithText("DURAÇÃO").assertExists()
+        // No "Duração" under the lyrics.
+        compose.onNodeWithText("DURAÇÃO").assertDoesNotExist()
         screenshot("video_portrait_lyrics")
     }
 

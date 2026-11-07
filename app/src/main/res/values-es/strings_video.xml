@@ -24,5 +24,4 @@
     <string name="video_lyrics_none">Sin letra para esta canción</string>
     <string name="video_fact_album">Álbum</string>
     <string name="video_fact_year">Año</string>
-    <string name="video_fact_duration">Duración</string>
 </resources>

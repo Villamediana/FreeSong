@@ -255,12 +255,18 @@ internal fun PlayerHost(
 
     // A song tapped to play opens the player expanded, as soon as the player has it (the first
     // song of the session needs the service). A request that found no song in 5 s is dropped.
-    var handledOpen by remember { mutableStateOf(Chrome.openPlayerAt) }
+    // A request made just before the layer came (it was hidden, e.g. under the listening screen)
+    // still counts; older ones don't.
+    var handledOpen by remember {
+        val at = Chrome.openPlayerAt
+        val age = android.os.SystemClock.uptimeMillis() - at
+        mutableStateOf(if (at > 0L && age in 0 until OPEN_REQUEST_TTL_MS) -1L else at)
+    }
     val openAt = Chrome.openPlayerAt
     LaunchedEffect(openAt, state.hasMedia) {
         if (openAt != handledOpen && state.hasMedia) {
             handledOpen = openAt
-            if (android.os.SystemClock.uptimeMillis() - openAt < OPEN_REQUEST_TTL_MS) expand.animateTo(1f)
+            if (android.os.SystemClock.uptimeMillis() - openAt in 0 until OPEN_REQUEST_TTL_MS) expand.animateTo(1f)
         }
     }
 

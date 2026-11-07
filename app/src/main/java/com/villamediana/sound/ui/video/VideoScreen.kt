@@ -1,5 +1,8 @@
 package com.villamediana.sound.ui.video
 
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.material.icons.rounded.FastRewind
 import androidx.compose.material.icons.rounded.Lyrics
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.PaddingValues
@@ -229,7 +232,8 @@ internal fun VideoHost(route: VideoRoute, deps: VideoDeps, onLeave: () -> Unit) 
     }
 
     val turn = remember(activity) { VideoTurn(activity) }
-    ImmersiveWindow(activity, turn)
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    ImmersiveWindow(activity, turn, sideways = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE)
     PauseWhileInBackground(activity, video)
 
     val leaveNow by rememberUpdatedState(onLeave)
@@ -246,7 +250,10 @@ internal fun VideoHost(route: VideoRoute, deps: VideoDeps, onLeave: () -> Unit) 
     var tapPoint by remember { mutableStateOf<Offset?>(null) }
     // Held down: 2× while the finger stays. A single tap answers at once (controls); when a second
     // tap follows, that first tap meant a jump, not the controls — they go back to how they were.
-    var holding by remember { mutableStateOf(false) }
+    var holding by remember { mutableStateOf<SeekSide?>(null) }
+    var rewindJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    var rewoundFromPlaying by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     var beforeTap by remember { mutableStateOf<OverlayState?>(null) }
     val pinned = scrubbing || loading || error != null
 
@@ -324,11 +331,35 @@ internal fun VideoHost(route: VideoRoute, deps: VideoDeps, onLeave: () -> Unit) 
                 seekTap(side, at)
             }
 
-            override fun hold(active: Boolean) {
-                if (holding == active) return
-                holding = active
-                if (active) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                video.setSpeed(if (active) FAST_SPEED else 1f)
+            override fun hold(active: Boolean, side: SeekSide) {
+                if (active == (holding != null)) return
+                holding = if (active) side else null
+                rewindJob?.cancel()
+                rewindJob = null
+                if (!active) {
+                    video.setSpeed(1f)
+                    if (rewoundFromPlaying) video.togglePlayPause()
+                    rewoundFromPlaying = false
+                    return
+                }
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                if (side == SeekSide.FORWARD) {
+                    video.setSpeed(FAST_SPEED)
+                    return
+                }
+                // Rewinding: paused, stepping back half a second every quarter second (2× backwards).
+                val p = player ?: return
+                rewoundFromPlaying = state.playing
+                if (state.playing) video.togglePlayPause()
+                rewindJob = scope.launch {
+                    var at = p.currentPosition
+                    while (at > 0) {
+                        at = (at - REWIND_STEP_MS).coerceAtLeast(0)
+                        video.seekTo(at)
+                        pending = PendingSeek(at, now())
+                        delay(REWIND_TICK_MS)
+                    }
+                }
             }
 
             override fun swipe(up: Boolean) {
@@ -438,8 +469,8 @@ internal interface StageActions {
     fun rotate()
     /** The second tap of a double tap on a side: jump 10 s (the first tap's controls undone). */
     fun doubleTap(side: SeekSide, at: Offset)
-    /** Finger held on the video: 2× until it lifts. */
-    fun hold(active: Boolean)
+    /** Finger held on the video: 2× forward on the right half, rewinding on the left, until it lifts. */
+    fun hold(active: Boolean, side: SeekSide = SeekSide.FORWARD)
     /** Swipe on the video: up = sideways (full screen), down = upright. */
     fun swipe(up: Boolean)
     /** The ±10 s buttons of the controls. */
@@ -468,7 +499,7 @@ private fun Stage(
     tapPoint: Offset?,
     actions: StageActions,
     modifier: Modifier = Modifier,
-    holding: Boolean = false,
+    holding: SeekSide? = null,
 ) {
     val toggleLabel = stringResource(if (controlsVisible) R.string.video_hide_controls else R.string.video_show_controls)
     val interactive = error == null
@@ -560,20 +591,27 @@ private fun Stage(
         }
 
         SeekHint(streak, tapPoint)
-        // Held: a small "2×" tag up top while it lasts.
+        // Held: a small "2×" tag up top while it lasts (◀◀ rewinding on the left, ▶▶ on the right).
         AnimatedVisibility(
-            visible = holding,
+            visible = holding != null,
             enter = fadeIn(tween(150)) + scaleIn(tween(200), initialScale = 0.85f),
             exit = fadeOut(tween(200)),
             modifier = Modifier.align(Alignment.TopCenter).padding(top = 16.dp),
         ) {
+            val back = holding == SeekSide.BACK
             Row(
                 Modifier.clip(CircleShape).background(Color.Black.copy(alpha = 0.6f)).padding(horizontal = 12.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                if (back) {
+                    Icon(Icons.Rounded.FastRewind, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                }
                 Text("2×", style = MaterialTheme.typography.labelLarge, color = Color.White)
-                Spacer(Modifier.width(4.dp))
-                Icon(Icons.Rounded.FastForward, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                if (!back) {
+                    Spacer(Modifier.width(4.dp))
+                    Icon(Icons.Rounded.FastForward, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                }
             }
         }
         StageSpinner(loading, Modifier.align(Alignment.Center))
@@ -793,14 +831,12 @@ private fun VideoLyrics(lyrics: ParsedLyrics, synced: Boolean, positionMs: () ->
     }
 }
 
-/** Album, year and length under the lyrics, when known. */
+/** Album and year under the lyrics, when known. */
 @Composable
 private fun SongFacts(track: Track?, durationMs: Long) {
     val facts = buildList {
         track?.album?.takeIf { it.isNotBlank() }?.let { add(stringResource(R.string.video_fact_album) to it) }
         track?.year?.takeIf { it > 0 }?.let { add(stringResource(R.string.video_fact_year) to it.toString()) }
-        val length = durationMs.takeIf { it > 0 } ?: track?.durationMs?.takeIf { it > 0 }
-        length?.let { add(stringResource(R.string.video_fact_duration) to VideoTime.formatTotal(it)) }
     }
     if (facts.isEmpty()) return
     Spacer(Modifier.height(12.dp))
@@ -859,7 +895,7 @@ private fun rememberPlayerFlags(player: Player?): PlayerFlags {
  * when the activity is only being recreated for a rotation (the new screen takes over).
  */
 @Composable
-private fun ImmersiveWindow(activity: Activity?, turn: VideoTurn) {
+private fun ImmersiveWindow(activity: Activity?, turn: VideoTurn, sideways: Boolean) {
     val view = LocalView.current
     val previousOrientation = rememberSaveable { activity?.requestedOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED }
     DisposableEffect(activity, view) {
@@ -867,7 +903,6 @@ private fun ImmersiveWindow(activity: Activity?, turn: VideoTurn) {
         val controller = WindowCompat.getInsetsController(window, view)
         val previousBehavior = controller.systemBarsBehavior
         controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        controller.hide(WindowInsetsCompat.Type.systemBars())
         turn.start()
         onDispose {
             turn.stop()
@@ -876,6 +911,14 @@ private fun ImmersiveWindow(activity: Activity?, turn: VideoTurn) {
             controller.systemBarsBehavior = previousBehavior
             activity.requestedOrientation = previousOrientation
         }
+    }
+    // Full screen only sideways. Upright the bars stay: hidden, the first back gesture would only
+    // bring them back and it would take a second one to leave.
+    DisposableEffect(activity, view, sideways) {
+        val window = activity?.window ?: return@DisposableEffect onDispose { }
+        val controller = WindowCompat.getInsetsController(window, view)
+        if (sideways) controller.hide(WindowInsetsCompat.Type.systemBars()) else controller.show(WindowInsetsCompat.Type.systemBars())
+        onDispose { }
     }
 }
 
@@ -962,6 +1005,8 @@ internal class VideoTurn(private val activity: Activity?) {
 }
 
 private const val FAST_SPEED = 2f
+private const val REWIND_STEP_MS = 500L
+private const val REWIND_TICK_MS = 250L
 
 /**
  * Taps, double taps, holds and vertical swipes on the video, told apart by hand so a single tap
@@ -986,9 +1031,9 @@ private suspend fun PointerInputScope.stageGestures(canSeek: Boolean, actions: S
                 awaitPointerEvent()
             }
             if (event == null) {
-                // Still down, not moving: held.
+                // Still down, not moving: held — forward on the right half, back on the left.
                 held = true
-                if (canSeek) actions.hold(true)
+                if (canSeek) actions.hold(true, VideoSeek.sideOf(down.position.x, size.width.toFloat()))
                 continue
             }
             val change = event.changes.firstOrNull { it.id == down.id } ?: break
