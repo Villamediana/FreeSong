@@ -1,5 +1,6 @@
 package com.villamediana.sound.data
 
+import com.villamediana.sound.data.db.LikedOnline
 import com.villamediana.sound.data.db.Track
 import com.villamediana.sound.online.RemoteTrack
 import kotlin.math.abs
@@ -35,3 +36,18 @@ fun RemoteTrack.asTransientTrack(): Track = Track(
 val Track.shareUrl: String?
     get() = sourceUrl?.takeIf { it.startsWith("http") }
         ?: videoId?.let { "https://music.youtube.com/watch?v=$it" }
+
+fun LikedOnline.Companion.of(remote: RemoteTrack): LikedOnline = LikedOnline(
+    videoId = remote.videoId,
+    url = remote.url,
+    title = remote.title,
+    artist = remote.artist,
+    album = remote.album,
+    durationMs = remote.durationMs,
+    thumbnailUrl = remote.thumbnailUrl,
+)
+
+fun LikedOnline.toRemote(): RemoteTrack = RemoteTrack(videoId, url, title, artist, album, durationMs, thumbnailUrl, fromMusicCatalog = "music.youtube.com" in url)
+
+/** A streamed like as the transient track Curtidas lists and plays. */
+fun LikedOnline.toTrack(): Track = toRemote().asTransientTrack()

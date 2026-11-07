@@ -1,8 +1,10 @@
 package com.villamediana.sound.data
 
+import com.villamediana.sound.online.YouTubeLinks
 import androidx.room.withTransaction
 import com.villamediana.sound.data.db.AlbumKey
 import com.villamediana.sound.data.db.AlbumPin
+import com.villamediana.sound.data.db.LikedOnline
 import com.villamediana.sound.data.db.PlayEvent
 import com.villamediana.sound.data.db.Playlist
 import com.villamediana.sound.data.db.PlaylistTrack
@@ -19,6 +21,7 @@ import com.villamediana.sound.data.model.PinnedItem
 import com.villamediana.sound.data.model.PlaylistDetail
 import com.villamediana.sound.data.model.PlaylistSummary
 import com.villamediana.sound.data.model.TrackSort
+import com.villamediana.sound.online.RemoteTrack
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -46,6 +49,7 @@ class LibraryRepository(
     private val playlistDao = db.playlists()
     private val pinDao = db.albumPins()
     private val eventDao = db.playEvents()
+    private val likedOnlineDao = db.likedOnline()
 
     /** All tracks, newest first. Shared: every derived flow reuses one Room query. */
     val tracks: Flow<List<Track>> = trackDao.observeAll()
@@ -148,6 +152,32 @@ class LibraryRepository(
 
     val liked: Flow<List<Track>> = tracks.map { all -> all.filter { it.liked }.sortedByDescending { it.likedAt ?: 0 } }
         .flowOn(Dispatchers.Default)
+
+    /** Streamed songs liked without downloading them, newest first. */
+    val likedOnline: Flow<List<LikedOnline>> = likedOnlineDao.observeAll()
+
+    /**
+     * Curtidas: the liked library songs plus the streamed ones (as transient tracks, which play
+     * online), newest like first. A streamed like whose song is on the phone already counts once.
+     */
+    val likedAll: Flow<List<Track>> = combine(tracks, likedOnline) { all, online ->
+        val onPhone = all.mapNotNullTo(HashSet()) { it.videoId }
+        val mine = all.filter { it.liked }.map { it to (it.likedAt ?: 0L) }
+        val streamed = online.filter { it.videoId !in onPhone }.map { it.toTrack() to it.likedAt }
+        (mine + streamed).sortedByDescending { it.second }.map { it.first }
+    }.flowOn(Dispatchers.Default)
+
+    /** Video ids of every liked song (on the phone or streamed): the hearts of online rows. */
+    val likedVideoIds: Flow<Set<String>> = combine(tracks, likedOnline) { all, online ->
+        all.filter { it.liked }.mapNotNullTo(HashSet()) { it.videoId } + online.map { it.videoId }
+    }.distinctUntilChanged().flowOn(Dispatchers.Default)
+
+    /** The heart of an online row: the library song when it is on the phone, else a streamed like. */
+    suspend fun setLiked(remote: RemoteTrack, liked: Boolean) = db.withTransaction {
+        val have = trackDao.byVideoId(remote.videoId)
+        if (have != null) trackDao.setLiked(have.id, liked, if (liked) System.currentTimeMillis() else null)
+        if (liked && have == null) likedOnlineDao.insert(LikedOnline.of(remote)) else likedOnlineDao.delete(remote.videoId)
+    }
 
     fun recentlyAdded(limit: Int = 20): Flow<List<Track>> = tracks.map { it.take(limit) }
 
@@ -271,7 +301,16 @@ class LibraryRepository(
 
     // ---------------------------------------------------------------- edits
 
-    suspend fun insertTrack(track: Track): Long = trackDao.insert(track)
+    /** A new library song; a streamed like of it becomes the song's own like. */
+    suspend fun insertTrack(track: Track): Long = db.withTransaction {
+        val id = trackDao.insert(track)
+        val like = track.videoId?.let { likedOnlineDao.get(it) }
+        if (like != null) {
+            trackDao.setLiked(id, true, like.likedAt)
+            likedOnlineDao.delete(like.videoId)
+        }
+        id
+    }
     suspend fun updateTrack(track: Track) = trackDao.update(track)
     suspend fun setAccentColor(trackId: Long, color: Int?) = trackDao.setAccentColor(trackId, color)
     suspend fun setLyrics(trackId: Long, path: String?, synced: Boolean) = trackDao.setLyrics(trackId, path, synced)
@@ -309,8 +348,27 @@ class LibraryRepository(
     }
 
     /** Deletes the rows and the files (audio, lyrics, and the cover if no other track uses it). */
+    /**
+     * Takes songs off the phone (file, lyrics, unused cover, row). A liked song that came from
+     * YouTube stays in Curtidas, streamed: removing a download is not unliking it.
+     */
     suspend fun deleteTracks(ids: List<Long>) = withContext(Dispatchers.IO) {
         val doomed = trackDao.getMany(ids)
+        doomed.filter { it.liked && !it.videoId.isNullOrBlank() }.forEach { t ->
+            val videoId = t.videoId!!
+            likedOnlineDao.insert(
+                LikedOnline(
+                    videoId = videoId,
+                    url = t.sourceUrl?.takeIf { it.startsWith("http") } ?: YouTubeLinks.watchUrl(videoId, music = true),
+                    title = t.title,
+                    artist = t.artist,
+                    album = t.album,
+                    durationMs = t.durationMs.takeIf { it > 0 },
+                    thumbnailUrl = db.downloads().thumbnailOf(videoId) ?: "https://i.ytimg.com/vi/$videoId/hqdefault.jpg",
+                    likedAt = t.likedAt ?: System.currentTimeMillis(),
+                ),
+            )
+        }
         val remainingCovers = trackDao.all().filter { it.id !in ids.toSet() }.mapNotNull { it.coverPath }.toSet()
         doomed.forEach { t ->
             trackDao.delete(t)

@@ -1,5 +1,8 @@
 package com.villamediana.sound.ui.player
 
+import com.villamediana.sound.ui.nav.Chrome
+import com.villamediana.sound.ui.nav.PlayerHooks
+import androidx.compose.runtime.MutableState
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -147,13 +150,18 @@ private object PlayerLyrics {
  * continuous drag-driven transition (the cover flies from the mini card to the big pager).
  */
 @Composable
-fun PlayerLayer(bottomBarHeight: Dp, modifier: Modifier = Modifier) {
+fun PlayerLayer(
+    bottomBarHeight: Dp,
+    expandedMemory: MutableState<Boolean>,
+    active: Boolean,
+    modifier: Modifier = Modifier,
+) {
     val deps = remember {
         val graph = SoundApplication.graph
         PlayerDeps(
             player = graph.player,
             trackFlow = { id -> graph.library.track(id) },
-            setLiked = { id, liked -> graph.scope.launch { graph.library.setLiked(id, liked) } },
+            setLiked = { id, liked -> graph.likeTrack(id, liked) },
             libraryTrack = { videoId -> graph.library.tracks.map { all -> all.firstOrNull { it.videoId == videoId } }.distinctUntilChanged() },
             downloads = combine(graph.library.downloadedVideoIds, graph.downloads.tasks) { done, tasks -> DownloadLookup.build(done, tasks) }
                 .flowOn(Dispatchers.Default),
@@ -163,17 +171,28 @@ fun PlayerLayer(bottomBarHeight: Dp, modifier: Modifier = Modifier) {
                 .stateIn(graph.scope, SharingStarted.WhileSubscribed(5_000), Connectivity.isOnline(graph.appContext)),
         )
     }
-    PlayerHost(deps, bottomBarHeight, modifier)
+    PlayerHost(deps, bottomBarHeight, modifier, expandedMemory, active)
 }
 
 /** How far the mini card sinks into the bottom bar's faded top edge. */
 private val MiniDockOverlap = 0.dp
 
+/** How long a tap on a song waits for the player to have it before opening it expanded. */
+private const val OPEN_REQUEST_TTL_MS = 5_000L
+
 /** Mini content is gone (not placed) past this expand progress. */
 private const val MINI_FADE_END = 0.16f
 
 @Composable
-internal fun PlayerHost(deps: PlayerDeps, bottomBarHeight: Dp, modifier: Modifier = Modifier) {
+internal fun PlayerHost(
+    deps: PlayerDeps,
+    bottomBarHeight: Dp,
+    modifier: Modifier = Modifier,
+    /** Open/closed, kept by the shell: the layer leaves while a full page is on screen. */
+    expandedMemory: MutableState<Boolean> = rememberSaveable { mutableStateOf(false) },
+    /** False while the layer fades out under a full page: back belongs to the page. */
+    active: Boolean = true,
+) {
     val player = deps.player
     val state by player.state.collectAsState()
     val sleep by player.sleepTimer.collectAsState()
@@ -182,7 +201,7 @@ internal fun PlayerHost(deps: PlayerDeps, bottomBarHeight: Dp, modifier: Modifie
     val context = LocalContext.current
     val density = LocalDensity.current
 
-    var savedExpanded by rememberSaveable { mutableStateOf(false) }
+    var savedExpanded by expandedMemory
     val expand = remember { ExpandState(if (savedExpanded) 1f else 0f, scope) }
     var queueOpen by rememberSaveable { mutableStateOf(false) }
     var sleepOpen by rememberSaveable { mutableStateOf(false) }
@@ -192,15 +211,37 @@ internal fun PlayerHost(deps: PlayerDeps, bottomBarHeight: Dp, modifier: Modifie
 
     LaunchedEffect(expand) { snapshotFlow { expand.target }.collect { savedExpanded = it == 1f } }
 
+    val hasMediaNow by rememberUpdatedState(state.hasMedia)
     DisposableEffect(navigator, expand) {
-        navigator.collapsePlayer = {
-            lyricsOpen = false
+        val closeSheets = {
             queueOpen = false
             sleepOpen = false
             actionsFor = null
-            if (expand.progress > 0f || expand.target > 0f) expand.animateTo(0f)
         }
-        onDispose { navigator.collapsePlayer = {} }
+        val hooks = PlayerHooks(
+            isOpen = { expand.target == 1f },
+            collapse = {
+                lyricsOpen = false
+                closeSheets()
+                if (expand.progress > 0f || expand.target > 0f) expand.animateTo(0f)
+            },
+            closeSheets = closeSheets,
+            expand = { if (hasMediaNow) expand.animateTo(1f) },
+        )
+        navigator.player = hooks
+        // A layer leaving late must not unhook the one that took its place.
+        onDispose { if (navigator.player === hooks) navigator.player = PlayerHooks() }
+    }
+
+    // A song tapped to play opens the player expanded, as soon as the player has it (the first
+    // song of the session needs the service). A request that found no song in 5 s is dropped.
+    var handledOpen by remember { mutableStateOf(Chrome.openPlayerAt) }
+    val openAt = Chrome.openPlayerAt
+    LaunchedEffect(openAt, state.hasMedia) {
+        if (openAt != handledOpen && state.hasMedia) {
+            handledOpen = openAt
+            if (android.os.SystemClock.uptimeMillis() - openAt < OPEN_REQUEST_TTL_MS) expand.animateTo(1f)
+        }
     }
 
     // Keep the last song so the exit animation still has something to draw.
@@ -315,7 +356,7 @@ internal fun PlayerHost(deps: PlayerDeps, bottomBarHeight: Dp, modifier: Modifie
     // query, a playlist leaving reorder mode) registered its own after ours, so ours are added
     // again whenever the player or the lyrics open: they sit on top while they are showing.
     key(expandedNow, lyricsOpen) {
-        PredictiveBackHandler(enabled = state.hasMedia && expandedNow && !lyricsOpen) { events ->
+        PredictiveBackHandler(enabled = active && state.hasMedia && expandedNow && !lyricsOpen) { events ->
             try {
                 events.collect { expand.backProgress(it.progress) }
                 expand.animateTo(0f)
@@ -324,7 +365,7 @@ internal fun PlayerHost(deps: PlayerDeps, bottomBarHeight: Dp, modifier: Modifie
                 throw e
             }
         }
-        BackHandler(enabled = lyricsOpen) { lyricsOpen = false }
+        BackHandler(enabled = active && lyricsOpen) { lyricsOpen = false }
     }
 
     BoxWithConstraints(modifier.fillMaxSize()) {

@@ -124,7 +124,12 @@ class PlayerLayerComposeTest {
     }
 
     /** [below] stands for the screen under the player (composed after it, as a NavHost page can be). */
-    private fun setUp(below: @Composable () -> Unit = {}): FakePlayer {
+    private fun setUp(
+        layerShown: () -> Boolean = { true },
+        memory: androidx.compose.runtime.MutableState<Boolean>? = null,
+        active: () -> Boolean = { true },
+        below: @Composable () -> Unit = {},
+    ): FakePlayer {
         val player = FakePlayer(
             PlaybackState(
                 current = tracks[0],
@@ -142,7 +147,10 @@ class PlayerLayerComposeTest {
                 val nav = rememberNavController()
                 backDispatcher = LocalOnBackPressedDispatcherOwner.current!!.onBackPressedDispatcher
                 CompositionLocalProvider(LocalNavigator provides Navigator(nav)) {
-                    PlayerHost(deps, bottomBarHeight = 64.dp)
+                    if (layerShown()) {
+                        if (memory != null) PlayerHost(deps, bottomBarHeight = 64.dp, expandedMemory = memory, active = active())
+                        else PlayerHost(deps, bottomBarHeight = 64.dp, active = active())
+                    }
                     below()
                 }
             }
@@ -172,6 +180,47 @@ class PlayerLayerComposeTest {
         compose.onNodeWithContentDescription("Minimizar player").performClick()
         compose.waitForIdle()
         compose.onNodeWithText("TOCANDO DE").assertDoesNotExist()
+    }
+
+    @Test
+    fun theOpenPlayerIsStillOpenAfterAFullPageHidItsLayer() {
+        val shown = androidx.compose.runtime.mutableStateOf(true)
+        val memory = androidx.compose.runtime.mutableStateOf(false)
+        setUp(layerShown = { shown.value }, memory = memory)
+        expand()
+        compose.onNodeWithText("TOCANDO DE").assertIsDisplayed()
+
+        // The equalizer is on screen: the layer leaves the composition.
+        compose.runOnIdle { shown.value = false }
+        compose.waitForIdle()
+        compose.onNodeWithText("TOCANDO DE").assertDoesNotExist()
+
+        // Back from it: the player comes back open.
+        compose.runOnIdle { shown.value = true }
+        compose.waitForIdle()
+        compose.onNodeWithText("TOCANDO DE").assertIsDisplayed()
+    }
+
+    @Test
+    fun whileItsLayerFadesOutUnderAFullPageBackIsThePages() {
+        var pageBacks = 0
+        val active = androidx.compose.runtime.mutableStateOf(true)
+        setUp(active = { active.value }, below = { androidx.activity.compose.BackHandler { pageBacks++ } })
+        expand()
+        compose.runOnIdle { active.value = false }
+        compose.waitForIdle()
+        pressBack()
+        assertEquals(1, pageBacks)
+        compose.onNodeWithText("TOCANDO DE").assertIsDisplayed()
+    }
+
+    @Test
+    fun aSongTappedToPlayOpensThePlayerExpanded() {
+        setUp()
+        compose.onNodeWithText("TOCANDO DE").assertDoesNotExist()
+        compose.runOnIdle { com.villamediana.sound.ui.nav.Chrome.openPlayer() }
+        compose.waitForIdle()
+        compose.onNodeWithText("TOCANDO DE").assertIsDisplayed()
     }
 
     @Test

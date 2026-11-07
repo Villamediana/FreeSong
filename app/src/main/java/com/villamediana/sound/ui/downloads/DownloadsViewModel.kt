@@ -1,5 +1,6 @@
 package com.villamediana.sound.ui.downloads
 
+import com.villamediana.sound.ui.nav.Chrome
 import androidx.annotation.StringRes
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -103,6 +104,7 @@ class DownloadsViewModel(
             else -> PlaySource(PlaySource.Type.SONGS, looseTitle)
         }
         player.play(tracks, index, source)
+        Chrome.openPlayer()
     }
 
     /** The playlist the batch filled, or the album its songs became. */

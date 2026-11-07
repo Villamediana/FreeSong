@@ -18,6 +18,7 @@ import com.villamediana.sound.online.ResolvedLink
 import com.villamediana.sound.online.SearchFilter
 import com.villamediana.sound.online.SearchItem
 import com.villamediana.sound.playback.PlaySource
+import com.villamediana.sound.playback.SmartSeed
 import com.villamediana.sound.playback.PlaybackState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -265,11 +266,11 @@ class SearchViewModelTest {
         insertTrack("c")
         awaitUntil { vm.lookup.value.isDownloaded("a") && vm.lookup.value.isDownloaded("c") }
         vm.onSongTap(remoteTrack("c"), listOf(remoteTrack("a"), remoteTrack("b"), remoteTrack("c")), "soda")
-        awaitUntil { player.plays.size == 1 }
-        val play = player.plays.single()
-        assertEquals(listOf("a", "c"), play.tracks.map { it.videoId })
-        assertEquals(1, play.index)
-        assertEquals(PlaySource(PlaySource.Type.SEARCH, "soda"), play.source)
+        // The copy on the phone and what sounds like it in the library — not the other results.
+        awaitUntil { player.smartPlays.size == 1 }
+        val seed = player.smartPlays.single() as SmartSeed.Radio
+        assertEquals("c", seed.track.videoId)
+        assertTrue(player.plays.isEmpty())
         assertTrue(player.onlinePlays.isEmpty())
 
         // Not downloaded → the tap downloads it, as before online play existed.
@@ -280,15 +281,17 @@ class SearchViewModelTest {
     }
 
     @Test
-    fun tappingASongStreamsTheVisibleResultsFromIt() {
+    fun tappingASongStreamsItsRadioNotTheOtherResults() {
         insertTrack("b") // downloaded songs stream too: the player picks the local copy itself
         awaitUntil { vm.lookup.value.isDownloaded("b") }
         val songs = listOf(remoteTrack("a"), remoteTrack("b"), remoteTrack("c"), remoteTrack("b"))
         vm.onSongTap(songs[1], songs, "soda")
+        // Results share a name, not a sound: the song alone, as a radio the player keeps going.
         val play = player.onlinePlays.single()
-        assertEquals(listOf("a", "b", "c"), play.tracks.map { it.videoId })
-        assertEquals(1, play.index)
-        assertEquals(PlaySource(PlaySource.Type.SEARCH, "soda"), play.source)
+        assertEquals(listOf("b"), play.tracks.map { it.videoId })
+        assertEquals(0, play.index)
+        assertEquals(PlaySource.Type.RADIO, play.source.type)
+        assertEquals("b", play.source.id)
         assertTrue(player.plays.isEmpty())
         assertTrue(downloads.downloadCalls.isEmpty())
 
@@ -307,8 +310,8 @@ class SearchViewModelTest {
         awaitUntil { !vm.online.value }
         val songs = listOf(remoteTrack("a"), remoteTrack("b"))
         vm.onSongTap(songs[0], songs, "soda")
-        awaitUntil { player.plays.size == 1 }
-        assertEquals(listOf("a"), player.plays.single().tracks.map { it.videoId })
+        awaitUntil { player.smartPlays.size == 1 }
+        assertEquals("a", (player.smartPlays.single() as SmartSeed.Radio).track.videoId)
 
         vm.onSongTap(songs[1], songs, "soda")
         assertEquals(SearchEvent.Message(R.string.search_play_offline), nextEvent())
@@ -323,7 +326,7 @@ class SearchViewModelTest {
         val play = player.onlinePlays.single()
         assertEquals(listOf(song), play.tracks)
         assertEquals(0, play.index)
-        assertEquals(PlaySource(PlaySource.Type.SEARCH, "Té para Tres"), play.source)
+        assertEquals(PlaySource.Type.RADIO, play.source.type)
     }
 
     @Test

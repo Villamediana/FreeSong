@@ -612,14 +612,12 @@ class PlaybackService : MediaLibraryService() {
     private fun saveNow() {
         saveJob?.cancel()
         val json = snapshot()?.encode() ?: return
-        ResumableQueue.set(this, true)
         persist(json)
     }
 
-    /** The queue is gone (emptied, or every song of the saved one deleted): nothing for the headset to resume. */
+    /** The queue is gone (emptied, or every song of the saved one deleted): nothing to bring back. */
     private fun forgetSavedQueue() {
         saveJob?.cancel()
-        ResumableQueue.set(this, false)
         persist(null)
     }
 

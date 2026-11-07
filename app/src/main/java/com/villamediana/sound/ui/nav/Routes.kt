@@ -1,5 +1,7 @@
 package com.villamediana.sound.ui.nav
 
+import androidx.navigation.NavDestination
+import androidx.navigation.NavDestination.Companion.hasRoute
 import kotlinx.serialization.Serializable
 
 /** Type-safe navigation destinations. */
@@ -25,3 +27,9 @@ import kotlinx.serialization.Serializable
 @Serializable data class VideoRoute(val videoId: String, val title: String? = null)
 @Serializable data object EqualizerRoute
 @Serializable data object ThemeRoute
+
+/** Pages that take the whole screen: no mini player over them, the player layer is hidden. */
+fun isFullPage(route: Any): Boolean = route is VideoRoute || route == SettingsRoute || route == EqualizerRoute || route == ThemeRoute
+
+fun NavDestination.isFullPage(): Boolean =
+    hasRoute(VideoRoute::class) || hasRoute(SettingsRoute::class) || hasRoute(EqualizerRoute::class) || hasRoute(ThemeRoute::class)

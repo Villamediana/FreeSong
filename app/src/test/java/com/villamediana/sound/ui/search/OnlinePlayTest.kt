@@ -42,9 +42,10 @@ class OnlinePlayTest {
     @Test fun `the trailing button is always about keeping the song`() {
         assertEquals(SongTapAction.Download, SongTapAction.ofIndicator(ItemDownload.None))
         assertEquals(SongTapAction.Retry(9), SongTapAction.ofIndicator(failed))
-        assertEquals(SongTapAction.PlayDownloaded, SongTapAction.ofIndicator(ItemDownload.Done))
-        assertEquals(SongTapAction.Busy, SongTapAction.ofIndicator(ItemDownload.Queued))
-        assertEquals(SongTapAction.Busy, SongTapAction.ofIndicator(running))
+        // Tapped again: a downloaded song leaves the phone, one on its way stops.
+        assertEquals(SongTapAction.RemoveDownload, SongTapAction.ofIndicator(ItemDownload.Done))
+        assertEquals(SongTapAction.RemoveDownload, SongTapAction.ofIndicator(ItemDownload.Queued))
+        assertEquals(SongTapAction.RemoveDownload, SongTapAction.ofIndicator(running))
     }
 
     @Test fun `a streamed song goes back to the remote track it came from`() {

@@ -72,7 +72,6 @@ class PlaybackServiceTest {
                 t.copy(id = graph.db.tracks().insert(t))
             }
         }
-        ResumableQueue.set(app, false)
     }
 
     private fun start() {
@@ -387,15 +386,26 @@ class PlaybackServiceTest {
 
     // ------------------------------------------------------------------ resuming with nothing saved
 
-    @Test fun emptyingTheQueueForgetsTheSavedOneAndTheHeadsetFlag() {
+    @Test fun emptyingTheQueueForgetsTheSavedOne() {
         start()
         play(tracks.map { it.id }, 0)
         player.pause()
-        idleUntil { savedJson() != null && ResumableQueue.available(app) }
+        idleUntil { savedJson() != null }
 
         player.clearMediaItems()
         idleUntil { savedJson() == null }
-        assertFalse(ResumableQueue.available(app))
+    }
+
+    /**
+     * Closing FreeSong closes the music for good: no media button receiver, so Media3 refuses the
+     * system's "recent" root and Android shows no resume card that could start it again.
+     */
+    @Test fun closedAppLeavesNothingForTheSystemToResume() {
+        val receivers = app.packageManager.queryBroadcastReceivers(
+            android.content.Intent(android.content.Intent.ACTION_MEDIA_BUTTON).setPackage(app.packageName),
+            0,
+        )
+        assertTrue(receivers.isEmpty())
     }
 
     @Test fun headsetPlayWithNothingSavedPlaysTheLibraryInsteadOfFailing() {
@@ -409,12 +419,10 @@ class PlaybackServiceTest {
         runBlocking {
             graph.settings.setLastQueueJson(QueueSnapshot(ids = listOf(9_999L, 9_998L), index = 0).encode())
         }
-        ResumableQueue.set(app, true)
         start()
         val result = await(callback.onPlaybackResumption(session, appController, true))
         assertEquals(6, result.mediaItems.size)
         idleUntil { savedJson() == null }
-        assertFalse(ResumableQueue.available(app))
     }
 
     @Test fun nothingToResumeForTheSystemCardIsAnError() {

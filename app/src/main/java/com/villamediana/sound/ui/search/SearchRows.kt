@@ -102,6 +102,12 @@ fun RemoteSongRow(
     /** The song the player is on: accent title + live bars. */
     isCurrent: Boolean = false,
     isPlaying: Boolean = false,
+    /** In Curtidas (on the phone or streamed). */
+    liked: Boolean = false,
+    /** The heart; null hides it. */
+    onLike: ((Boolean) -> Unit)? = null,
+    /** False with "Curtir já baixa" on: the heart alone stands for both. */
+    showDownload: Boolean = true,
 ) {
     val bg by animateColorAsState(if (selected) SoundColors.AccentSoft else Color.Transparent, tween(180), label = "rowBg")
     val dimmed = selecting && (state == ItemDownload.Done || state == ItemDownload.Queued || state is ItemDownload.Running)
@@ -150,7 +156,9 @@ fun RemoteSongRow(
         if (selecting) {
             SelectMark(selected = selected, enabled = !dimmed)
         } else {
-            DownloadIndicator(state, onIndicatorClick)
+            // Filled = in Curtidas (white on the dark theme), like the filled download arrow beside it.
+            if (onLike != null) com.villamediana.sound.ui.player.LikeButton(liked = liked, onToggle = onLike, size = 44.dp, iconSize = 24.dp, likedTint = SoundColors.Text)
+            if (showDownload) DownloadIndicator(state, onIndicatorClick)
         }
     }
 }

@@ -135,11 +135,11 @@ class SearchScreensSmokeTest {
         assertEquals(listOf("aaaaaaaaaaa"), downloads.downloadCalls.single().map { it.videoId })
         rule.waitUntil(20_000) { rule.onAllNodesWithContentDescription(s(R.string.search_dl_queued)).fetchSemanticsNodes().isNotEmpty() }
 
-        // A tap on a song streams the visible songs from it.
+        // A tap on a song streams its radio (what follows sounds like it, not the other results).
         rule.onNodeWithText("Persiana Americana").performClick()
         rule.waitUntil(20_000) { player.onlinePlays.isNotEmpty() }
-        assertEquals(listOf("aaaaaaaaaaa", "lib1", "bbbbbbbbbbb"), player.onlinePlays.single().tracks.map { it.videoId })
-        assertEquals(1, player.onlinePlays.single().index)
+        assertEquals(listOf("lib1"), player.onlinePlays.single().tracks.map { it.videoId })
+        assertEquals(com.villamediana.sound.playback.PlaySource.Type.RADIO, player.onlinePlays.single().source.type)
 
         // Long-press another song → selection bar.
         rule.onNodeWithText("Nada Personal").performTouchInput { longClick() }

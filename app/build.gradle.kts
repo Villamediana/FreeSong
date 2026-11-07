@@ -33,8 +33,8 @@ android {
         applicationId = "com.villamediana.sound"
         minSdk = 26
         targetSdk = 36
-        versionCode = 12
-        versionName = "1.2.1"
+        versionCode = 13
+        versionName = "1.3.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -93,6 +93,10 @@ android {
             )
         }
     }
+
+    // Room's exported schemas: the migration tests (Robolectric reads the debug variant's assets)
+    // open them from there. Debug builds only; the release APK doesn't carry them.
+    sourceSets.getByName("debug").assets.directories.add("$projectDir/schemas")
 
     testOptions {
         unitTests {

@@ -9,6 +9,8 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import android.view.animation.AccelerateInterpolator
+import android.view.animation.DecelerateInterpolator
 import androidx.lifecycle.lifecycleScope
 import com.villamediana.sound.ui.nav.ExternalRequest
 import com.villamediana.sound.ui.nav.Inbound
@@ -23,7 +25,16 @@ class MainActivity : ComponentActivity() {
     private val incoming = MutableStateFlow<Inbound?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        installSplashScreen()
+        val splash = installSplashScreen()
+        // Only called when the system showed the splash: the logo stays a moment over the ready
+        // app (it used to vanish with the first frame), then grows and fades away.
+        splash.setOnExitAnimationListener { provider ->
+            runCatching { provider.iconView }.getOrNull()?.animate()
+                ?.scaleX(1.18f)?.scaleY(1.18f)?.alpha(0f)
+                ?.setStartDelay(SPLASH_HOLD_MS)?.setDuration(SPLASH_EXIT_MS)?.setInterpolator(AccelerateInterpolator(1.4f))?.start()
+            provider.view.animate().alpha(0f).setStartDelay(SPLASH_HOLD_MS + SPLASH_EXIT_MS / 3).setDuration(SPLASH_EXIT_MS)
+                .setInterpolator(DecelerateInterpolator()).withEndAction { provider.remove() }.start()
+        }
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
@@ -66,3 +77,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+
+private const val SPLASH_HOLD_MS = 700L
+private const val SPLASH_EXIT_MS = 480L

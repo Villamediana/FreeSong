@@ -20,6 +20,8 @@ sealed interface SongTapAction {
     data object Busy : SongTapAction
     /** Online play wanted, no network and no local copy: say so. */
     data object Offline : SongTapAction
+    /** The download button of a song on the phone (or on its way): take it off / stop it. */
+    data object RemoveDownload : SongTapAction
 
     companion object {
         /**
@@ -35,12 +37,14 @@ sealed interface SongTapAction {
             else -> Busy
         }
 
-        /** The trailing download button: always about keeping the song on the phone. */
+        /**
+         * The trailing download button: keeps the song on the phone, or — tapped again on a
+         * downloaded song or one on its way — takes it off.
+         */
         fun ofIndicator(state: ItemDownload): SongTapAction = when (state) {
             ItemDownload.None -> Download
             is ItemDownload.Failed -> Retry(state.taskId)
-            ItemDownload.Done -> PlayDownloaded
-            ItemDownload.Queued, is ItemDownload.Running -> Busy
+            ItemDownload.Done, ItemDownload.Queued, is ItemDownload.Running -> RemoveDownload
         }
     }
 }

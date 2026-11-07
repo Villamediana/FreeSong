@@ -1,5 +1,6 @@
 package com.villamediana.sound.ui.sheets
 
+import androidx.compose.runtime.collectAsState
 import androidx.compose.material.icons.rounded.Bedtime
 import android.content.res.Resources
 import androidx.compose.animation.AnimatedContent
@@ -168,6 +169,9 @@ fun TrackActionsSheet(
     }.collectAsStateWithLifecycle(initialValue = ItemDownload.None)
     val fileExists = remember(t.filePath, t.isOnline) { !t.isOnline && runCatching { File(t.filePath).isFile }.getOrDefault(false) }
     val actions = TrackSheetRules.actionsFor(t, fileExists, inPlaylist = playlistContext != null, fromPlayer = showEqualizer)
+    // A streamed song is liked by its video id (Curtidas keeps it without a library row).
+    val likedIds by graph.library.likedVideoIds.collectAsState(initial = emptySet())
+    val isLiked = if (t.isOnline) t.videoId in likedIds else t.liked
 
     /** Slides the sheet away, then runs [next] (dismiss, navigate, open a dialog…). */
     fun closeThen(next: () -> Unit) {
@@ -195,13 +199,15 @@ fun TrackActionsSheet(
                     val dimmed = !online && TrackSheetRules.needsNetwork(action, t)
                     when (action) {
                         TrackSheetAction.LIKE -> SheetAction(
-                            icon = if (t.liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                            label = stringResource(if (t.liked) R.string.sheet_unlike else R.string.sheet_like),
-                            tint = if (t.liked) SoundColors.Liked else SoundColors.TextMuted,
+                            icon = if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                            label = stringResource(if (isLiked) R.string.sheet_unlike else R.string.sheet_like),
+                            tint = if (isLiked) SoundColors.Liked else SoundColors.TextMuted,
                             onClick = {
-                                val nowLiked = !t.liked
+                                val nowLiked = !isLiked
                                 haptic.performHapticFeedback(if (nowLiked) HapticFeedbackType.ToggleOn else HapticFeedbackType.ToggleOff)
-                                graph.scope.launch { library.setLiked(t.id, nowLiked) }
+                                val remote = if (t.isOnline) t.toRemoteTrack() else null
+                                if (remote != null) graph.likeOnline(remote, nowLiked)
+                                else graph.likeTrack(t.id, nowLiked)
                                 feedback.show(res.getString(if (nowLiked) R.string.sheet_liked_done else R.string.sheet_unliked_done))
                                 closeThen(onDismiss)
                             },

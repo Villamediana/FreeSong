@@ -11,4 +11,13 @@ object Chrome {
      * (music keeps playing).
      */
     var hideMiniPlayer: Boolean by mutableStateOf(false)
+
+    /** Uptime of the last tap on a song to play it: the player opens expanded once it has the song. */
+    var openPlayerAt: Long by mutableStateOf(0L)
+        private set
+
+    /** A song was tapped to play (rows of lists, search, Home, downloads — not Play buttons). */
+    fun openPlayer() {
+        openPlayerAt = android.os.SystemClock.uptimeMillis()
+    }
 }

@@ -169,8 +169,18 @@ class DiscoverViewModel(app: Application) : AndroidViewModel(app) {
 
     fun edit() = _state.update { it.copy(editing = true, selection = it.favorites.toSet()) }
 
-    fun play(tracks: List<RemoteTrack>, index: Int, title: String, id: String) =
-        graph.player.playOnline(tracks, index, PlaySource(PlaySource.Type.SEARCH, title, "discover:$id"))
+    /**
+     * Home lists play as smart queues: a mix or a genre shelf, then the radio of where it ends;
+     * "Porque você ouviu…" is a radio already.
+     */
+    fun play(tracks: List<RemoteTrack>, index: Int, title: String, id: String) {
+        val type = when {
+            id.startsWith("mix:") -> PlaySource.Type.MIX
+            id.startsWith("genre:") -> PlaySource.Type.GENRE
+            else -> PlaySource.Type.RADIO
+        }
+        graph.player.playOnline(tracks, index, PlaySource(type, title, "discover:$id"))
+    }
 
     /** Finds the artist's page (once) and hands it to [open]. */
     fun openArtist(name: String, open: (RemoteCollection) -> Unit) {

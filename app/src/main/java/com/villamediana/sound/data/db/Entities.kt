@@ -107,6 +107,24 @@ data class AlbumPin(
     val pinnedAt: Long = System.currentTimeMillis(),
 )
 
+/**
+ * A streamed song liked without downloading it: it shows in Curtidas and plays online. When the
+ * song is downloaded, the like moves to its library row ([com.villamediana.sound.data.LibraryRepository.insertTrack]).
+ */
+@Entity(tableName = "liked_online")
+data class LikedOnline(
+    @PrimaryKey val videoId: String,
+    val url: String,
+    val title: String,
+    val artist: String,
+    val album: String? = null,
+    val durationMs: Long? = null,
+    val thumbnailUrl: String? = null,
+    val likedAt: Long = System.currentTimeMillis(),
+) {
+    companion object
+}
+
 /** One listening session of one track — feeds "mais tocadas", smart shuffle and radio. */
 @Entity(
     tableName = "play_events",

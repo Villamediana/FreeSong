@@ -1,5 +1,9 @@
 package com.villamediana.sound.ui.nav
 
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.EnterTransition
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.animation.core.tween
@@ -116,9 +120,13 @@ fun SoundRoot(incoming: MutableStateFlow<Inbound?>) {
     // Full pages (video, settings, equalizer) and the genre intro: no bottom bar, no mini player.
     val entry by controller.currentBackStackEntryAsState()
     val dest = entry?.destination
-    val fullPage = dest != null && (dest.hasRoute(VideoRoute::class) || dest.hasRoute(SettingsRoute::class) || dest.hasRoute(EqualizerRoute::class) || dest.hasRoute(ThemeRoute::class))
+    val fullPage = dest?.isFullPage() == true
     val chromeHidden = fullPage || Chrome.hideMiniPlayer
     val miniPlayerSpace by animateDpAsState(if (playback.hasMedia && !chromeHidden) Dimens.MiniPlayerHeight + 8.dp else 0.dp, label = "mini")
+    // Back to the page the open player was on when a page was opened from it: open it again.
+    navigator.FollowBackStack()
+    // Open/closed player outlives the layer, hidden under full pages (equalizer, video…).
+    val playerExpanded = rememberSaveable { mutableStateOf(false) }
     // No bottom bar: the mini player sits at the bottom, just above the system navigation.
     val barSpace = navBarInset
 
@@ -134,25 +142,39 @@ fun SoundRoot(incoming: MutableStateFlow<Inbound?>) {
                 // Pages slide in full width and slide out on back (arrow or gesture: predictive back is
                 // off in the manifest, so both play this same animation), the page below moving a
                 // little behind; tab switches just cross-fade.
+                // Search grows out of the magnifier as a circle (CircularReveal) over the page that
+                // stays still beneath, and shrinks back into it on the way out.
                 enterTransition = {
-                    if (initialState.destination.isTab() && targetState.destination.isTab()) fadeIn(tween(220))
-                    else slideInHorizontally(tween(PAGE_MS, easing = Motion.Emphasized)) { it }
+                    when {
+                        targetState.destination.isSearch() && !initialState.destination.isSearch() -> EnterTransition.None
+                        initialState.destination.isTab() && targetState.destination.isTab() -> fadeIn(tween(220))
+                        else -> slideInHorizontally(tween(PAGE_MS, easing = Motion.Emphasized)) { it }
+                    }
                 },
                 exitTransition = {
-                    if (initialState.destination.isTab() && targetState.destination.isTab()) fadeOut(tween(160))
-                    else slideOutHorizontally(tween(PAGE_MS, easing = Motion.Emphasized)) { -it / 4 }
+                    when {
+                        targetState.destination.isSearch() && !initialState.destination.isSearch() -> ExitTransition.KeepUntilTransitionsFinished
+                        initialState.destination.isTab() && targetState.destination.isTab() -> fadeOut(tween(160))
+                        else -> slideOutHorizontally(tween(PAGE_MS, easing = Motion.Emphasized)) { -it / 4 }
+                    }
                 },
                 popEnterTransition = {
-                    if (initialState.destination.isTab() && targetState.destination.isTab()) fadeIn(tween(220))
-                    else slideInHorizontally(tween(PAGE_MS, easing = Motion.Emphasized)) { -it / 4 }
+                    when {
+                        initialState.destination.isSearch() -> EnterTransition.None
+                        initialState.destination.isTab() && targetState.destination.isTab() -> fadeIn(tween(220))
+                        else -> slideInHorizontally(tween(PAGE_MS, easing = Motion.Emphasized)) { -it / 4 }
+                    }
                 },
                 popExitTransition = {
-                    if (initialState.destination.isTab() && targetState.destination.isTab()) fadeOut(tween(160))
-                    else slideOutHorizontally(tween(PAGE_MS, easing = Motion.Emphasized)) { it }
+                    when {
+                        initialState.destination.isSearch() -> ExitTransition.KeepUntilTransitionsFinished
+                        initialState.destination.isTab() && targetState.destination.isTab() -> fadeOut(tween(160))
+                        else -> slideOutHorizontally(tween(PAGE_MS, easing = Motion.Emphasized)) { it }
+                    }
                 },
             ) {
                 composable<HomeRoute> { Page { com.villamediana.sound.ui.library.MainScreen() } }
-                composable<SearchRoute> { Page { SearchScreen() } }
+                composable<SearchRoute> { entry -> CircularReveal(entry, navigator) { Page { SearchScreen() } } }
                 composable<LibraryRoute> { Page { LibraryScreen() } }
                 composable<AlbumRoute> { Page { AlbumScreen(it.toRoute()) } }
                 composable<ArtistRoute> { Page { ArtistScreen(it.toRoute()) } }
@@ -176,6 +198,8 @@ fun SoundRoot(incoming: MutableStateFlow<Inbound?>) {
             ) {
                 PlayerLayer(
                     bottomBarHeight = bottomBarTotal,
+                    expandedMemory = playerExpanded,
+                    active = !chromeHidden,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -184,6 +208,8 @@ fun SoundRoot(incoming: MutableStateFlow<Inbound?>) {
 }
 
 private const val PAGE_MS = 340
+
+private fun NavDestination.isSearch(): Boolean = hasRoute(SearchRoute::class)
 
 private fun NavDestination.isTab(): Boolean =
     hasRoute(HomeRoute::class) || hasRoute(LibraryRoute::class)

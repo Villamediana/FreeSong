@@ -339,9 +339,9 @@ class MediaPlayerConnection(
         val songs = tracks.filter { it.videoId.isNotBlank() }.distinctBy { it.videoId }
         if (songs.isEmpty()) return
         val start = tracks.getOrNull(startIndex)?.videoId?.let { id -> songs.indexOfFirst { it.videoId == id } }?.takeIf { it >= 0 } ?: 0
-        // An online radio is a smart queue: it keeps going with YouTube Music's "up next" even when
-        // "Continuar com músicas parecidas" is off.
-        play(songs.map { OnlineItem.of(it).toTrack() }, start, source, shuffle = false, smart = source.type == PlaySource.Type.RADIO)
+        // An online radio, mix or genre list is a smart queue: it keeps going with YouTube Music's
+        // "up next" (same genre and style) even when "Continuar com músicas parecidas" is off.
+        play(songs.map { OnlineItem.of(it).toTrack() }, start, source, shuffle = false, smart = source.type in SMART_ONLINE)
     }
 
     override fun playSmart(seed: SmartSeed) {
@@ -473,3 +473,6 @@ class MediaPlayerConnection(
         const val ERROR_VISIBLE_MS = 5_000L
     }
 }
+
+/** Online queues that never just end: they flow into the radio of their last song. */
+private val SMART_ONLINE = setOf(PlaySource.Type.RADIO, PlaySource.Type.MIX, PlaySource.Type.GENRE)

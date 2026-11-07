@@ -328,12 +328,13 @@ internal fun LikeButton(
     size: Dp = 48.dp,
     iconSize: Dp = 26.dp,
     idleTint: Color = SoundColors.TextMuted,
+    likedTint: Color = SoundColors.Liked,
 ) {
     val haptic = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     val pop = remember { Animatable(1f) }
     val interaction = remember { MutableInteractionSource() }
-    val tint by animateColorAsState(if (liked) SoundColors.Liked else idleTint, tween(200), label = "heart")
+    val tint by animateColorAsState(if (liked) likedTint else idleTint, tween(200), label = "heart")
     val label = stringResource(if (liked) R.string.player_unlike else R.string.player_like)
     Box(
         modifier

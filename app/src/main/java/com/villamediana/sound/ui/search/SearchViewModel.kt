@@ -1,5 +1,7 @@
 package com.villamediana.sound.ui.search
 
+import com.villamediana.sound.playback.SmartSeed
+import com.villamediana.sound.ui.nav.Chrome
 import androidx.annotation.StringRes
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -142,6 +144,14 @@ class SearchViewModel(
     initiallyOnline: Boolean,
     /** Settings.playOnlineByDefault: a tap streams the song (true) or downloads it (false). */
     playOnlineFlow: Flow<Boolean> = flowOf(true),
+    /** "Rádio de %s": what the player says a tapped search result plays from. */
+    private val radioTitle: (String) -> String = { it },
+    /** "Curtir já baixa" (Settings): rows show the heart alone. */
+    likeDownloadsFlow: Flow<Boolean> = flowOf(false),
+    /** The heart of a row (AppGraph.likeOnline: Curtidas, and the download rule). */
+    private val onLike: (RemoteTrack, Boolean) -> Unit = { _, _ -> },
+    /** The download button of a song on the phone or on its way (AppGraph.removeDownload). */
+    private val onRemoveDownload: (String) -> Unit = {},
 ) : ViewModel() {
 
     val online: StateFlow<Boolean> = onlineFlow.stateIn(viewModelScope, SharingStarted.Eagerly, initiallyOnline)
@@ -331,6 +341,15 @@ class SearchViewModel(
     /** Songs the user just asked for — shown as queued until the queue has them. */
     private val requested = MutableStateFlow<Set<String>>(emptySet())
 
+    /** Video ids in Curtidas: the hearts of the rows. */
+    val likedIds: StateFlow<Set<String>> = library.likedVideoIds
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
+
+    /** "Curtir já baixa": rows show the heart alone. */
+    val likeDownloads: StateFlow<Boolean> = likeDownloadsFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    fun like(track: RemoteTrack, liked: Boolean) = onLike(track, liked)
+
     val lookup: StateFlow<DownloadLookup> = combine(library.downloadedVideoIds, tasks, requested) { done, all, asked ->
         DownloadLookup.build(done, all, asked)
     }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DownloadLookup.Empty)
@@ -394,14 +413,27 @@ class SearchViewModel(
 
     private fun perform(action: SongTapAction, track: RemoteTrack, songs: List<RemoteTrack>, sourceTitle: String) {
         when (action) {
+            // Results share a name, not a sound ("Perfect" by Simple Plan, then by Ed Sheeran): what
+            // follows the tapped song is its radio — YouTube Music's up-next, same genre and style.
             SongTapAction.PlayOnline -> {
-                val list = songs.distinctBy { it.videoId }.takeIf { l -> l.any { it.videoId == track.videoId } } ?: listOf(track)
-                player.playOnline(list, list.indexOfFirst { it.videoId == track.videoId }, PlaySource(PlaySource.Type.SEARCH, sourceTitle))
+                player.playOnline(listOf(track), 0, PlaySource(PlaySource.Type.RADIO, radioTitle(track.title), track.videoId))
+                Chrome.openPlayer()
             }
-            SongTapAction.PlayDownloaded -> playDownloaded(track.videoId, songs.map { it.videoId }, sourceTitle)
+            // The copy on the phone, followed by what sounds like it in the library (no streaming).
+            SongTapAction.PlayDownloaded -> {
+                viewModelScope.launch {
+                    val local = library.trackByVideoId(track.videoId) ?: return@launch
+                    player.playSmart(SmartSeed.Radio(local))
+                    Chrome.openPlayer()
+                }
+            }
             SongTapAction.Download -> download(listOf(track))
             is SongTapAction.Retry -> retry(action.taskId, track.videoId)
             SongTapAction.Offline -> _events.trySend(SearchEvent.Message(R.string.search_play_offline))
+            SongTapAction.RemoveDownload -> {
+                onRemoveDownload(track.videoId)
+                _events.trySend(SearchEvent.Message(R.string.search_dl_removed))
+            }
             SongTapAction.Busy -> Unit
         }
     }
@@ -515,6 +547,10 @@ class SearchViewModel(
                 onlineFlow = Connectivity.online(g.appContext),
                 initiallyOnline = Connectivity.isOnline(g.appContext),
                 playOnlineFlow = g.settings.settings.map { it.playOnlineByDefault }.distinctUntilChanged(),
+                radioTitle = { title -> g.appContext.getString(R.string.playback_source_radio, title) },
+                likeDownloadsFlow = g.settings.settings.map { it.likeDownloads }.distinctUntilChanged(),
+                onLike = g::likeOnline,
+                onRemoveDownload = g::removeDownload,
             )
         }
     }

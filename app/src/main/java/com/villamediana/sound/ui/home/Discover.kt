@@ -1,5 +1,6 @@
 package com.villamediana.sound.ui.home
 
+import com.villamediana.sound.ui.nav.Chrome
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -196,7 +197,7 @@ internal fun LazyListScope.discoverSections(
     if (state.because.isNotEmpty() && state.becauseTitle != null) {
         item(key = "d-because", contentType = "row") {
             val title = stringResource(R.string.discover_because, state.becauseTitle)
-            SongRow(title, state.because, playback) { i -> onPlay(state.because, i, title, "because") }
+            SongRow(title, state.because, playback) { i -> onPlay(state.because, i, title, "because"); Chrome.openPlayer() }
         }
     }
     if (state.artists.isNotEmpty()) {
@@ -216,7 +217,7 @@ internal fun LazyListScope.discoverSections(
     state.shelves.forEach { shelf ->
         item(key = "shelf:" + shelf.genre.id, contentType = "row") {
             val title = shelfTitle(shelf.genre)
-            SongRow(title, shelf.tracks, playback) { i -> onPlay(shelf.tracks, i, title, "genre:" + shelf.genre.id) }
+            SongRow(title, shelf.tracks, playback) { i -> onPlay(shelf.tracks, i, title, "genre:" + shelf.genre.id); Chrome.openPlayer() }
         }
     }
     if (state.favorites.isNotEmpty()) {

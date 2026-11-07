@@ -50,6 +50,7 @@ class NavigatorTest {
             SoundTheme {
                 val nav = rememberNavController()
                 navigator = remember(nav) { Navigator(nav) }
+                navigator.FollowBackStack()
                 CompositionLocalProvider(LocalNavigator provides navigator) {
                     Box {
                         NavHost(nav, startDestination = HomeRoute) {
@@ -67,6 +68,7 @@ class NavigatorTest {
                                 Text("artist ${vm.title}")
                             }
                             composable<LikedRoute> { Text("liked") }
+                            composable<EqualizerRoute> { Text("equalizer") }
                             composable<DownloadsRoute> { Text("downloads") }
                             composable<RemoteCollectionRoute> { Text("remote ${it.toRoute<RemoteCollectionRoute>().title}") }
                         }
@@ -141,7 +143,99 @@ class NavigatorTest {
         assertEquals(listOf("HomeRoute", "SearchRoute"), routesOnStack())
     }
 
+    @Test
+    fun theSearchCircleGrowsOnlyWhenSearchIsOpenedNotWhenItIsComeBackTo() {
+        setUp()
+        SearchReveal.armed = false
+        nav { openSearchScreen() }
+        assertTrue("pushed: grows from the magnifier", SearchReveal.armed)
+
+        SearchReveal.armed = false
+        nav { openRemote(remote("A")) }
+        nav { openSearchScreen() }
+        compose.onNodeWithText("search").assertExists()
+        assertEquals("back to it: no circle", false, SearchReveal.armed)
+    }
+
     private fun routesOnStack(): List<String> = controller.currentBackStack.value
         .mapNotNull { e -> e.destination.route?.takeIf { e.destination !is androidx.navigation.NavGraph } }
         .map { it.substringAfterLast('.').substringBefore('/').substringBefore('?') }
+
+    // ------------------------------------------------------------------ pages opened from the player
+
+    /** Stand-in for the player layer: open/closed and what navigation asked of it. */
+    private class FakePlayerLayer {
+        var open = false
+        var expands = 0
+        var sheetsClosed = 0
+        val hooks = PlayerHooks(
+            isOpen = { open },
+            collapse = { open = false },
+            closeSheets = { sheetsClosed++ },
+            expand = {
+                open = true
+                expands++
+            },
+        )
+    }
+
+    private fun playerLayer(): FakePlayerLayer = FakePlayerLayer().also { p -> compose.runOnIdle { navigator.player = p.hooks } }
+
+    @Test
+    fun backFromAPageOpenedInThePlayerOpensThePlayerAgain() {
+        setUp()
+        val player = playerLayer()
+        player.open = true
+        nav { openArtist("Soda Stereo") }
+        compose.onNodeWithText("artist Soda Stereo").assertExists()
+        assertEquals(false, player.open)
+
+        // Deeper and back: only the page under the player brings it back.
+        nav { openAlbum(AlbumKey("Soda Stereo", "Signos")) }
+        nav { back() }
+        assertEquals(0, player.expands)
+        nav { back() }
+        compose.onNodeWithText("home").assertExists()
+        assertEquals(1, player.expands)
+        assertTrue(player.open)
+    }
+
+    @Test
+    fun theEqualizerGoesOverTheOpenPlayerWithoutClosingIt() {
+        setUp()
+        val player = playerLayer()
+        player.open = true
+        nav { openEqualizer() }
+        compose.onNodeWithText("equalizer").assertExists()
+        assertTrue("the player stays open under the full page", player.open)
+        assertEquals(1, player.sheetsClosed)
+        nav { back() }
+        compose.onNodeWithText("home").assertExists()
+        assertTrue(player.open)
+        assertEquals(0, player.expands)
+    }
+
+    @Test
+    fun aPageOpenedWithThePlayerClosedLeavesItClosedOnBack() {
+        setUp()
+        val player = playerLayer()
+        nav { openArtist("Soda Stereo") }
+        nav { back() }
+        compose.onNodeWithText("home").assertExists()
+        assertEquals(0, player.expands)
+        assertEquals(false, player.open)
+    }
+
+    @Test
+    fun switchingTabsForgetsTheWayBackToThePlayer() {
+        setUp()
+        val player = playerLayer()
+        player.open = true
+        nav { openArtist("Soda Stereo") }
+        nav { switchTab(LibraryRoute) }
+        compose.onNodeWithText("library").assertExists()
+        nav { back() }
+        compose.onNodeWithText("home").assertExists()
+        assertEquals(0, player.expands)
+    }
 }

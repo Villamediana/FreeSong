@@ -1,5 +1,8 @@
 package com.villamediana.sound.ui.home
 
+import com.villamediana.sound.ui.nav.Chrome
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -59,6 +62,14 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         .mapLatest { tracks -> if (tracks.isEmpty()) emptyList() else buildMixes(tracks) }
         .flowOn(Dispatchers.Default)
 
+    private data class Lib(
+        val tracks: List<Track>,
+        val albums: List<com.villamediana.sound.data.model.AlbumSummary>,
+        val playlists: List<com.villamediana.sound.data.model.PlaylistSummary>,
+        val pinned: List<com.villamediana.sound.data.model.PinnedItem>,
+        val index: LibraryIndex,
+    )
+
     private data class Base(
         val tracks: List<Track>,
         val quick: List<QuickTile>,
@@ -67,12 +78,17 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         val index: LibraryIndex,
     )
 
-    private val base: Flow<Base> = combine(library.tracks, library.albums, library.playlists, library.pinned, index) { tracks, albums, playlists, pinned, index ->
+    private val likedCount: Flow<Int> = library.likedAll.map { it.size }.distinctUntilChanged()
+
+    private val base: Flow<Base> = combine(
+        combine(library.tracks, library.albums, library.playlists, library.pinned, index) { t, a, p, pin, i -> Lib(t, a, p, pin, i) },
+        likedCount,
+    ) { (tracks, albums, playlists, pinned, index), liked ->
         val byKey = albums.associateBy { it.key.normalized }
         Base(
             tracks = tracks,
-            quick = if (tracks.isEmpty() && playlists.isEmpty()) emptyList()
-            else buildQuickAccess(tracks.count { it.liked }, pinned, albums, playlists, index),
+            quick = if (tracks.isEmpty() && playlists.isEmpty() && liked == 0) emptyList()
+            else buildQuickAccess(liked, pinned, albums, playlists, index),
             recentlyPlayed = recentlyPlayedItems(tracks, byKey),
             recentlyAdded = recentlyAddedItems(tracks, byKey),
             index = index,
@@ -109,5 +125,6 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     fun playSongs(tracks: List<Track>, index: Int, sourceTitle: String) {
         if (tracks.isEmpty()) return
         graph.player.play(tracks, index.coerceIn(0, tracks.lastIndex), PlaySource(PlaySource.Type.SONGS, sourceTitle))
+        Chrome.openPlayer()
     }
 }

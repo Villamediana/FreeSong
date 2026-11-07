@@ -81,7 +81,7 @@
     <string name="search_dl_download">Descargar</string>
     <string name="search_dl_queued">En cola</string>
     <string name="search_dl_running">Descargando, %1$d%%</string>
-    <string name="search_dl_done">En el teléfono. Reproducir</string>
+    <string name="search_dl_done">En el teléfono</string>
     <string name="search_dl_failed">Falló. Reintentar</string>
     <string name="search_dl_selected">Seleccionada</string>
     <string name="search_dl_not_selected">No seleccionada</string>
@@ -191,4 +191,6 @@
     <string name="search_remote_play">Reproducir todo</string>
     <string name="search_remote_shuffle">Reproducir en orden aleatorio</string>
     <string name="search_remote_share">Compartir</string>
+    <string name="search_dl_removed">Eliminada del teléfono</string>
+    <string name="search_dl_remove">Quitar del teléfono</string>
 </resources>

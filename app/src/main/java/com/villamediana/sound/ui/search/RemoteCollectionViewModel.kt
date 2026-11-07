@@ -1,5 +1,6 @@
 package com.villamediana.sound.ui.search
 
+import com.villamediana.sound.ui.nav.Chrome
 import androidx.annotation.StringRes
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -87,6 +88,12 @@ class RemoteCollectionViewModel(
     /** Settings.playOnlineByDefault: a tap on a song streams the page from it (true) or downloads it (false). */
     playOnlineFlow: Flow<Boolean> = flowOf(true),
     private val random: Random = Random.Default,
+    /** "Curtir já baixa" (Settings): rows show the heart alone. */
+    likeDownloadsFlow: Flow<Boolean> = flowOf(false),
+    /** The heart of a row (AppGraph.likeOnline: Curtidas, and the download rule). */
+    private val onLike: (RemoteTrack, Boolean) -> Unit = { _, _ -> },
+    /** The download button of a song on the phone or on its way (AppGraph.removeDownload). */
+    private val onRemoveDownload: (String) -> Unit = {},
 ) : ViewModel() {
 
     val kind: CollectionKind = CollectionKind.entries.firstOrNull { it.name == route.kind } ?: CollectionKind.PLAYLIST
@@ -117,6 +124,15 @@ class RemoteCollectionViewModel(
         private set
 
     private val requested = MutableStateFlow<Set<String>>(emptySet())
+
+    /** Video ids in Curtidas: the hearts of the rows. */
+    val likedIds: StateFlow<Set<String>> = library.likedVideoIds
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
+
+    /** "Curtir já baixa": rows show the heart alone. */
+    val likeDownloads: StateFlow<Boolean> = likeDownloadsFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    fun like(track: RemoteTrack, liked: Boolean) = onLike(track, liked)
 
     val lookup: StateFlow<DownloadLookup> = combine(library.downloadedVideoIds, downloads.tasks, requested) { done, tasks, asked ->
         DownloadLookup.build(done, tasks, asked)
@@ -238,7 +254,10 @@ class RemoteCollectionViewModel(
     fun onSongTap(track: RemoteTrack) {
         when (val action = SongTapAction.of(lookup.value.stateOf(track.videoId), playOnline.value, online.value)) {
             // Keeps the page's shuffle when it is already the one playing.
-            SongTapAction.PlayOnline -> streamFrom(track.videoId, shuffle = here.value?.shuffle ?: false)
+            SongTapAction.PlayOnline -> {
+                streamFrom(track.videoId, shuffle = here.value?.shuffle ?: false)
+                Chrome.openPlayer()
+            }
             else -> runIndicator(action, track)
         }
     }
@@ -252,7 +271,14 @@ class RemoteCollectionViewModel(
             is SongTapAction.Retry -> retry(action.taskId, track.videoId)
             SongTapAction.PlayDownloaded -> play(track.videoId, shuffle = false)
             SongTapAction.Offline -> _events.trySend(RemoteEvent.Message(R.string.search_play_offline))
-            SongTapAction.PlayOnline -> streamFrom(track.videoId, shuffle = here.value?.shuffle ?: false)
+            SongTapAction.PlayOnline -> {
+                streamFrom(track.videoId, shuffle = here.value?.shuffle ?: false)
+                Chrome.openPlayer()
+            }
+            SongTapAction.RemoveDownload -> {
+                onRemoveDownload(track.videoId)
+                _events.trySend(RemoteEvent.Message(R.string.search_dl_removed))
+            }
             SongTapAction.Busy -> Unit
         }
     }
@@ -314,6 +340,7 @@ class RemoteCollectionViewModel(
             }
             if (index < 0) return@launch
             player.play(tracks, index, PlaySource(sourceType(), detail.collection.title.ifBlank { route.title }, localPlaylistId?.toString()), shuffle)
+            if (videoId != null) Chrome.openPlayer() // a song tapped, not the page's Play
         }
     }
 
@@ -369,6 +396,9 @@ class RemoteCollectionViewModel(
                 onlineFlow = Connectivity.online(g.appContext),
                 initiallyOnline = Connectivity.isOnline(g.appContext),
                 playOnlineFlow = g.settings.settings.map { it.playOnlineByDefault }.distinctUntilChanged(),
+                likeDownloadsFlow = g.settings.settings.map { it.likeDownloads }.distinctUntilChanged(),
+                onLike = g::likeOnline,
+                onRemoveDownload = g::removeDownload,
             )
         }
     }

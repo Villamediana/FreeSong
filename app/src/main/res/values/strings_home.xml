@@ -155,6 +155,8 @@
     <!-- Ajustes: tocar online, equalizador; compartilhar playlist (segunda leva) -->
     <string name="home_settings_play_online">Tocar online ao tocar resultados da busca</string>
     <string name="home_settings_play_online_sub">Toca na hora, sem baixar. Desligado, o toque baixa a música.</string>
+    <string name="home_settings_like_downloads">Curtir já baixa</string>
+    <string name="home_settings_like_downloads_sub">Ao curtir, a música é baixada em segundo plano e só o coração aparece nas listas. Vale a partir de agora: o que já está nas Curtidas não é baixado.</string>
     <string name="home_settings_equalizer">Equalizador</string>
     <string name="home_settings_equalizer_sub">Graves, agudos e presets para o seu fone.</string>
     <string name="home_settings_equalizer_on">Ligado</string>

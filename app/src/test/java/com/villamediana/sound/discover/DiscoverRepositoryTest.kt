@@ -94,6 +94,13 @@ class DiscoverMixesTest {
         assertNotEquals(m0.map { it.videoId }, DiscoverMixes.blend(listOf(a, b), 10, seed = 1).map { it.videoId })
     }
 
+    @Test fun blendKeepsAFewSongsOfOneGenreTogether() {
+        val rock = (1..8).map { t("r$it") }
+        val mpb = (1..8).map { t("m$it") }
+        val mix = DiscoverMixes.blend(listOf(rock, mpb), 12, seed = 0, run = 4)
+        assertEquals(listOf("r", "r", "r", "r", "m", "m", "m", "m", "r", "r", "r", "r"), mix.map { it.videoId.take(1) })
+    }
+
     @Test fun topArtistsCountsMainArtistAcrossLists() {
         val lists = listOf(listOf(t("1", "Bad Bunny"), t("2", "Bad Bunny, Jhayco"), t("3", "Ozuna")), listOf(t("4", "Ozuna & Anuel"), t("5", "Bad Bunny")))
         val top = DiscoverMixes.topArtists(lists, 2)

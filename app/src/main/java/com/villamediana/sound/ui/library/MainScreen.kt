@@ -1,5 +1,6 @@
 package com.villamediana.sound.ui.library
 
+import com.villamediana.sound.ui.nav.searchRevealOrigin
 import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -91,7 +92,7 @@ fun MainScreen() {
                             Icon(Icons.Rounded.Add, stringResource(R.string.home_lib_new_playlist), tint = SoundColors.Text, modifier = Modifier.size(28.dp))
                         }
                     }
-                    IconButton(onClick = { nav.openSearchScreen() }) {
+                    IconButton(onClick = { nav.openSearchScreen() }, modifier = Modifier.searchRevealOrigin()) {
                         Icon(Icons.Rounded.Search, stringResource(R.string.tab_search), tint = SoundColors.Text, modifier = Modifier.size(27.dp))
                     }
                     HeaderActions(downloads, nav)

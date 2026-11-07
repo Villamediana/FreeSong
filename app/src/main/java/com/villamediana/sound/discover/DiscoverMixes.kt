@@ -8,20 +8,31 @@ object DiscoverMixes {
      * Interleaves [lists] (one song from each in turn), drops repeats and starts each list at a
      * [seed]-dependent offset, so a mix of the same genres changes from one slot to the next.
      */
-    fun blend(lists: List<List<RemoteTrack>>, size: Int, seed: Long): List<RemoteTrack> {
+    /**
+     * Up to [size] songs from [lists] (one per genre), no repeats, rotated by [seed] so the mix
+     * changes every slot. Genres take turns in runs of [run] songs — a few of one sound, then the
+     * next — instead of jumping genre at every song.
+     */
+    fun blend(lists: List<List<RemoteTrack>>, size: Int, seed: Long, run: Int = 4): List<RemoteTrack> {
         val sources = lists.filter { it.isNotEmpty() }.mapIndexed { i, l ->
             val offset = ((seed + i * 7) % l.size).toInt().let { if (it < 0) it + l.size else it }
             l.drop(offset) + l.take(offset)
         }
         val seen = HashSet<String>()
         val out = ArrayList<RemoteTrack>(size)
-        var round = 0
-        while (out.size < size && sources.any { round < it.size }) {
-            for (src in sources) {
-                if (round < src.size && seen.add(src[round].videoId)) out += src[round]
+        val taken = IntArray(sources.size)
+        while (out.size < size && sources.indices.any { taken[it] < sources[it].size }) {
+            for ((i, src) in sources.withIndex()) {
+                var added = 0
+                while (added < run && taken[i] < src.size && out.size < size) {
+                    if (seen.add(src[taken[i]].videoId)) {
+                        out += src[taken[i]]
+                        added++
+                    }
+                    taken[i]++
+                }
                 if (out.size == size) break
             }
-            round++
         }
         return out
     }

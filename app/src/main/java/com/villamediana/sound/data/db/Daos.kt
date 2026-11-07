@@ -139,6 +139,21 @@ interface AlbumPinDao {
 }
 
 @Dao
+interface LikedOnlineDao {
+    @Query("SELECT * FROM liked_online ORDER BY likedAt DESC")
+    fun observeAll(): Flow<List<LikedOnline>>
+
+    @Query("SELECT * FROM liked_online WHERE videoId = :videoId")
+    suspend fun get(videoId: String): LikedOnline?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(like: LikedOnline)
+
+    @Query("DELETE FROM liked_online WHERE videoId = :videoId")
+    suspend fun delete(videoId: String)
+}
+
+@Dao
 interface PlayEventDao {
     @Insert
     suspend fun insert(event: PlayEvent): Long
@@ -172,6 +187,10 @@ interface DownloadDao {
 
     @Query("SELECT * FROM downloads WHERE id = :id")
     suspend fun get(id: Long): DownloadTask?
+
+    /** The cover url a song was downloaded with (its library row keeps only the local file). */
+    @Query("SELECT thumbnailUrl FROM downloads WHERE videoId = :videoId AND thumbnailUrl IS NOT NULL ORDER BY id DESC LIMIT 1")
+    suspend fun thumbnailOf(videoId: String): String?
 
     @Query("SELECT * FROM downloads WHERE id = :id")
     fun observe(id: Long): Flow<DownloadTask?>

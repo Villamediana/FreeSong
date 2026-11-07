@@ -1,5 +1,7 @@
 package com.villamediana.sound
 
+import com.villamediana.sound.data.db.DownloadState
+import kotlinx.coroutines.flow.first
 import android.content.Context
 import com.villamediana.sound.data.LibraryRepository
 import com.villamediana.sound.data.SettingsStore
@@ -23,6 +25,7 @@ import com.villamediana.sound.playback.video.YouTubeVideoPlayback
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 
@@ -56,6 +59,48 @@ class AppGraph(context: Context) {
     val discover: com.villamediana.sound.discover.DiscoverRepository by lazy {
         com.villamediana.sound.discover.DiscoverRepository(youTube, appContext.filesDir.resolve("discover.json"))
     }
+    // ---------------------------------------------------------------- hearts & removal
+    // Every heart and every "remove from the phone" goes through here, so the rules hold everywhere.
+
+    /**
+     * The heart of a streamed song (rows, song sheet). With "Curtir já baixa" on, a like also
+     * downloads it in the background and unliking takes it off the phone (or stops its download).
+     * Turning the setting on later touches only what is liked from then on.
+     */
+    fun likeOnline(remote: com.villamediana.sound.online.RemoteTrack, liked: Boolean) {
+        scope.launch {
+            library.setLiked(remote, liked)
+            val auto = settings.current().likeDownloads
+            if (auto && liked) runCatching { downloads.download(listOf(remote)) }
+            if (auto && !liked) removeFromPhone(remote.videoId)
+        }
+    }
+
+    /** The heart of a library song (player, song sheet): same rule for unliking with "Curtir já baixa". */
+    fun likeTrack(trackId: Long, liked: Boolean) {
+        scope.launch {
+            val track = library.getTrack(trackId) ?: return@launch
+            library.setLiked(trackId, liked)
+            val videoId = track.videoId
+            if (!liked && videoId != null && settings.current().likeDownloads) removeFromPhone(videoId)
+        }
+    }
+
+    /** The download button of a song that is on the phone (or on its way): take it off. */
+    fun removeDownload(videoId: String) {
+        scope.launch { removeFromPhone(videoId) }
+    }
+
+    /** Stops its download if one is going and deletes the song; a liked one stays in Curtidas, streamed. */
+    private suspend fun removeFromPhone(videoId: String) {
+        runCatching {
+            downloads.tasks.first()
+                .filter { it.videoId == videoId && (it.state == DownloadState.QUEUED || it.state == DownloadState.RUNNING) }
+                .forEach { downloads.cancel(it.id) }
+        }
+        library.trackByVideoId(videoId)?.let { library.deleteTracks(listOf(it.id)) }
+    }
+
     val effects: AudioEffectsController by lazy { DeviceAudioEffects(appContext, scope) }
     val video: VideoPlayback by lazy { YouTubeVideoPlayback(appContext, scope) }
 }

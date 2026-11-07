@@ -14,8 +14,9 @@ enum class TrackSheetAction {
 object TrackSheetRules {
     /**
      * A song on the phone gets the whole menu. A streamed song (transient, no row in the library)
-     * only gets what makes sense without one: download it, queue it, a radio from it, share it,
-     * watch its video — nothing that edits, likes, deletes or files it into a playlist.
+     * only gets what makes sense without one: like it (Curtidas keeps streamed songs), download it,
+     * queue it, a radio from it, share it, watch its video — nothing that edits, deletes or files
+     * it into a playlist.
      *
      * @param fileExists the audio file is on the phone (needed to send the file itself)
      * @param inPlaylist the sheet was opened from a playlist row
@@ -25,6 +26,7 @@ object TrackSheetRules {
         val hasVideo = track.videoId != null
         val canShare = track.shareUrl != null
         if (track.isOnline) {
+            if (hasVideo) add(TrackSheetAction.LIKE)
             add(TrackSheetAction.DOWNLOAD)
             add(TrackSheetAction.PLAY_NEXT)
             add(TrackSheetAction.ENQUEUE)

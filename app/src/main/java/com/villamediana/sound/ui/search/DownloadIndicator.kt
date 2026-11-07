@@ -60,7 +60,8 @@ private fun ItemDownload.glyph() = when (this) {
 
 /**
  * The trailing download button of an online song: arrow (not downloaded) → spinning ring (queued)
- * → filling ring (downloading) → accent check (on the phone) → red retry (failed).
+ * → filling ring (downloading) → filled arrow (on the phone) → red retry (failed). Tapped again
+ * while on its way or on the phone, it takes the song off.
  */
 @Composable
 fun DownloadIndicator(
@@ -78,6 +79,7 @@ fun DownloadIndicator(
         ItemDownload.Done -> stringResource(R.string.search_dl_done)
         is ItemDownload.Failed -> stringResource(R.string.search_dl_failed)
     }
+    val removeLabel = stringResource(R.string.search_dl_remove)
     val progress = (state as? ItemDownload.Running)?.progress ?: 0f
     val interaction = remember { MutableInteractionSource() }
     Box(
@@ -85,7 +87,13 @@ fun DownloadIndicator(
             .size(44.dp)
             .pressScale(interaction, 0.86f)
             .clip(CircleShape)
-            .clickable(interactionSource = interaction, indication = null, enabled = onClick != null, role = Role.Button) { onClick?.invoke() }
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                enabled = onClick != null,
+                role = Role.Button,
+                onClickLabel = removeLabel.takeIf { state == ItemDownload.Done || state == ItemDownload.Queued || state is ItemDownload.Running },
+            ) { onClick?.invoke() }
             .semantics { contentDescription = description },
         contentAlignment = Alignment.Center,
     ) {
@@ -104,8 +112,9 @@ fun DownloadIndicator(
                 }
                 Glyph.Queued -> SpinningRing(size)
                 Glyph.Running -> ProgressRing(progress, size)
-                Glyph.Done -> Box(Modifier.size(size).clip(CircleShape).background(SoundColors.Accent), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Rounded.Check, null, tint = SoundColors.OnAccent, modifier = Modifier.size(size * 0.68f))
+                // On the phone: the same arrow, filled (white on the dark theme). Tapping again removes it.
+                Glyph.Done -> Box(Modifier.size(size).clip(CircleShape).background(SoundColors.Text), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Rounded.ArrowDownward, null, tint = SoundColors.Ink, modifier = Modifier.size(size * 0.6f))
                 }
                 Glyph.Failed -> Box(Modifier.size(size).border(1.6.dp, SoundColors.Danger, CircleShape), contentAlignment = Alignment.Center) {
                     Icon(Icons.Rounded.Refresh, null, tint = SoundColors.Danger, modifier = Modifier.size(size * 0.62f))

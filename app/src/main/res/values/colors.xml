@@ -3,4 +3,6 @@
     <color name="ink">#F7F8FB</color>
     <color name="accent">#4F7DFF</color>
     <color name="royal">#2341C9</color>
+    <!-- Splash: always the dark ink (the logo is graphite), whatever the theme -->
+    <color name="splash_ink">#0E0F14</color>
 </resources>

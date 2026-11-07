@@ -1,14 +1,16 @@
 package com.villamediana.sound.data.db
 
 import android.content.Context
+import androidx.room.AutoMigration
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
 @Database(
-    entities = [Track::class, Playlist::class, PlaylistTrack::class, AlbumPin::class, PlayEvent::class, DownloadTask::class],
-    version = 1,
+    entities = [Track::class, Playlist::class, PlaylistTrack::class, AlbumPin::class, PlayEvent::class, DownloadTask::class, LikedOnline::class],
+    version = 2,
     exportSchema = true,
+    autoMigrations = [AutoMigration(from = 1, to = 2)],
 )
 abstract class SoundDatabase : RoomDatabase() {
     abstract fun tracks(): TrackDao
@@ -16,6 +18,7 @@ abstract class SoundDatabase : RoomDatabase() {
     abstract fun albumPins(): AlbumPinDao
     abstract fun playEvents(): PlayEventDao
     abstract fun downloads(): DownloadDao
+    abstract fun likedOnline(): LikedOnlineDao
 
     companion object {
         fun build(context: Context): SoundDatabase =

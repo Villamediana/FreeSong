@@ -237,6 +237,13 @@ private fun PlaybackGroup(s: Settings, vm: SettingsViewModel, onEqualizer: () ->
             onChange = vm::setPlayOnline,
         )
         Hairline()
+        SwitchRow(
+            title = stringResource(R.string.home_settings_like_downloads),
+            subtitle = stringResource(R.string.home_settings_like_downloads_sub),
+            checked = s.likeDownloads,
+            onChange = vm::setLikeDownloads,
+        )
+        Hairline()
         SettingRow(
             title = stringResource(R.string.home_settings_equalizer),
             subtitle = null,

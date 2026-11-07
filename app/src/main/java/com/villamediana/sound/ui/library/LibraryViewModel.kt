@@ -1,5 +1,6 @@
 package com.villamediana.sound.ui.library
 
+import com.villamediana.sound.ui.nav.Chrome
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -76,12 +77,15 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
     private data class Built(val view: View, val sections: LibrarySections, val empty: Boolean, val likedCount: Int, val songCount: Int)
 
     /** Sorting/grouping only reruns when the library or the view changes — not on download progress. */
-    private val built: Flow<Built> = combine(source, view) { src, v ->
+    /** Curtidas counts streamed likes too. */
+    private val likedCount: Flow<Int> = library.likedAll.map { it.size }.distinctUntilChanged()
+
+    private val built: Flow<Built> = combine(source, view, likedCount) { src, v, liked ->
         Built(
             view = v,
             sections = buildSections(src, v.filter, v.sort),
-            empty = src.tracks.isEmpty() && src.playlists.isEmpty(),
-            likedCount = src.tracks.count { it.liked },
+            empty = src.tracks.isEmpty() && src.playlists.isEmpty() && liked == 0,
+            likedCount = liked,
             songCount = src.tracks.size,
         )
     }.flowOn(Dispatchers.Default)
@@ -128,5 +132,6 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
     fun playSongs(tracks: List<Track>, index: Int, sourceTitle: String) {
         if (tracks.isEmpty()) return
         graph.player.play(tracks, index.coerceIn(0, tracks.lastIndex), PlaySource(PlaySource.Type.SONGS, sourceTitle))
+        Chrome.openPlayer()
     }
 }

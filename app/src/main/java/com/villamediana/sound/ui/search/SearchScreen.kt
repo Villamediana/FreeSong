@@ -791,6 +791,8 @@ private fun OfflineResults(vm: SearchViewModel, lookup: DownloadLookup, actions:
 
 @Composable
 private fun ResultsList(vm: SearchViewModel, r: ResultsState, lookup: DownloadLookup, actions: LinkActions, onScroll: () -> Unit) {
+    val likedIds by vm.likedIds.collectAsStateWithLifecycle()
+    val likeDownloads by vm.likeDownloads.collectAsStateWithLifecycle()
     val navigator = navigator()
     val haptics = LocalHapticFeedback.current
     // Fresh per search/filter, but saved: Back from an album or playlist returns to the same row.
@@ -852,6 +854,9 @@ private fun ResultsList(vm: SearchViewModel, r: ResultsState, lookup: DownloadLo
                         },
                         selecting = selecting,
                         selected = track.videoId in selection,
+                        liked = track.videoId in likedIds,
+                        onLike = { vm.like(track, it) },
+                        showDownload = !likeDownloads,
                         modifier = Modifier.animateItem(),
                     )
                 }

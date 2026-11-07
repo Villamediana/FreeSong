@@ -1,5 +1,6 @@
 package com.villamediana.sound.ui.home
 
+import com.villamediana.sound.ui.nav.searchRevealOrigin
 import com.villamediana.sound.ui.nav.Chrome
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.graphics.Brush
@@ -509,7 +510,7 @@ private fun EmptyHome(downloads: DownloadSummary, nav: Navigator, intro: Boolean
                 onClick = { nav.openSearchScreen() },
                 icon = Icons.Rounded.Search,
                 filled = true,
-                modifier = Modifier.staggerIn(2, intro),
+                modifier = Modifier.staggerIn(2, intro).searchRevealOrigin(),
             )
         }
     }

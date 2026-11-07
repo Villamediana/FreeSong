@@ -26,8 +26,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 
 internal class LikedViewModel : ViewModel() {
-    /** Newest liked first (the repository's order). Never "missing": empty is a valid state. */
-    val liked: StateFlow<Load<List<Track>>> = graph.library.liked.map { Load.Ready(it) }.stateIn(this)
+    /**
+     * Newest liked first: songs on the phone and streamed ones (they play online). Never
+     * "missing": empty is a valid state.
+     */
+    val liked: StateFlow<Load<List<Track>>> = graph.library.likedAll.map { Load.Ready(it) }.stateIn(this)
 }
 
 @Composable

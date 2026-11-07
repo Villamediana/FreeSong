@@ -1,5 +1,6 @@
 package com.villamediana.sound.ui.detail
 
+import com.villamediana.sound.ui.nav.Chrome
 import android.content.Context
 import android.content.res.Resources
 import android.widget.Toast
@@ -229,7 +230,10 @@ internal fun SongRow(
     val haptic = LocalHapticFeedback.current
     TrackRow(
         track = track,
-        onClick = onClick,
+        onClick = {
+            onClick()
+            Chrome.openPlayer()
+        },
         modifier = modifier,
         onLongClick = {
             haptic.longPress()

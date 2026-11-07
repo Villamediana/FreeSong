@@ -75,11 +75,15 @@ class RemoteCollectionViewModelTest {
         Dispatchers.resetMain()
     }
 
+    /** Video ids whose download button asked to take the song off the phone. */
+    private val removed = mutableListOf<String>()
+
     private fun viewModel(kind: CollectionKind, url: String = playlistUrl, playOnline: Boolean = true): RemoteCollectionViewModel {
         val vm = RemoteCollectionViewModel(
             RemoteCollectionRoute(url, kind.name, "Rock nacional", "Sound"),
             youTube, library, downloads, player, online, initiallyOnline = online.value,
             playOnlineFlow = MutableStateFlow(playOnline), random = Random(7),
+            onRemoveDownload = { removed += it },
         )
         vms += vm
         scope.launch { vm.lookup.collect { } }
@@ -146,20 +150,25 @@ class RemoteCollectionViewModelTest {
     fun albumOpensTheLocalAlbumAndPlaysInPageOrder() {
         insertTrack("a", album = "Signos")
         insertTrack("c", album = "Signos")
-        val vm = viewModel(CollectionKind.ALBUM, "https://music.youtube.com/browse/MPREb_signos")
+        val vm = viewModel(CollectionKind.ALBUM, "https://music.youtube.com/browse/MPREb_signos", playOnline = false)
         awaitUntil { vm.load.value is RemoteLoad.Loaded && vm.progress.value.done == 2 }
         assertEquals(PrimaryAction.Download(1, 3), vm.action())
 
         vm.openInLibrary()
         assertEquals(RemoteEvent.Open(LocalDestination.Album(AlbumKey("Soda Stereo", "Signos"))), vm.nextEvent())
 
-        // The check of a downloaded song plays the local copies, in page order.
-        vm.onIndicatorTap(tracks[2])
+        // A tap on a downloaded song (online play off) plays the local copies, in page order.
+        vm.onSongTap(tracks[2])
         awaitUntil { player.plays.size == 1 }
         val play = player.plays.single()
         assertEquals(listOf("a", "c"), play.tracks.map { it.videoId })
         assertEquals(1, play.index)
         assertEquals(PlaySource.Type.ALBUM, play.source.type)
+
+        // Its download button, tapped again, takes it off the phone.
+        vm.onIndicatorTap(tracks[2])
+        assertEquals(listOf("c"), removed)
+        assertEquals(RemoteEvent.Message(R.string.search_dl_removed), vm.nextEvent())
 
         vm.downloadAll()
         awaitUntil { downloads.collectionCalls.size == 1 }

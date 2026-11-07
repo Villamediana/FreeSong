@@ -79,7 +79,7 @@
     <string name="search_dl_download">Baixar</string>
     <string name="search_dl_queued">Na fila</string>
     <string name="search_dl_running">Baixando, %1$d%%</string>
-    <string name="search_dl_done">No celular. Tocar</string>
+    <string name="search_dl_done">No celular</string>
     <string name="search_dl_failed">Falhou. Tentar de novo</string>
     <string name="search_dl_selected">Selecionada</string>
     <string name="search_dl_not_selected">Não selecionada</string>
@@ -181,4 +181,6 @@
     <string name="search_remote_play">Tocar tudo</string>
     <string name="search_remote_shuffle">Tocar em ordem aleatória</string>
     <string name="search_remote_share">Compartilhar</string>
+    <string name="search_dl_removed">Removida do aparelho</string>
+    <string name="search_dl_remove">Remover do aparelho</string>
 </resources>
