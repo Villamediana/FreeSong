@@ -24,4 +24,6 @@
     <string name="settings_cache_home">Sugestões do Início</string>
     <string name="settings_cache_clear">Limpar</string>
     <string name="settings_cache_clear_all">Limpar tudo</string>
+    <string name="sheet_album_not_found">Álbum não encontrado.</string>
+    <string name="sheet_artist_not_found">Artista não encontrado.</string>
 </resources>

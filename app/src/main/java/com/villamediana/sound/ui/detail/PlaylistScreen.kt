@@ -170,7 +170,7 @@ internal class PlaylistViewModel(private val id: Long) : ViewModel() {
     }
 
     fun restore(entry: PlaylistEntry) {
-        graph.scope.launch { library.addToPlaylistAt(id, entry.track.id, entry.position) }
+        graph.scope.launch { library.putBackInPlaylist(id, entry.track, entry.position) }
     }
 
     fun rename(name: String, description: String?) {

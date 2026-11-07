@@ -1,5 +1,7 @@
 package com.villamediana.sound.data
 
+import com.villamediana.sound.data.db.PlaylistEntry
+import com.villamediana.sound.data.db.PlaylistOnline
 import com.villamediana.sound.data.db.OnlinePlay
 import com.villamediana.sound.data.db.ImportedPlaylist
 import com.villamediana.sound.online.CollectionDetail
@@ -58,6 +60,7 @@ class LibraryRepository(
     private val likedOnlineDao = db.likedOnline()
     private val importedDao = db.importedPlaylists()
     private val onlinePlayDao = db.onlinePlays()
+    private val playlistOnlineDao = db.playlistOnline()
 
     /** All tracks, newest first. Shared: every derived flow reuses one Room query. */
     val tracks: Flow<List<Track>> = trackDao.observeAll()
@@ -248,19 +251,64 @@ class LibraryRepository(
 
     // ---------------------------------------------------------------- playlists
 
-    val playlists: Flow<List<PlaylistSummary>> = combine(playlistDao.observeAll(), playlistDao.observeAllEntries(), tracks) { lists, entries, all ->
+    val playlists: Flow<List<PlaylistSummary>> = combine(
+        playlistDao.observeAll(), playlistDao.observeAllEntries(), tracks, playlistOnlineDao.observeAll(),
+    ) { lists, entries, all, online ->
         val byId = all.associateBy { it.id }
         val byPlaylist = entries.groupBy { it.playlistId }
+        val onlineByPlaylist = online.groupBy { it.playlistId }
         lists.map { p ->
-            val rows = byPlaylist[p.id].orEmpty().sortedWith(compareBy({ it.position }, { it.rowId }))
-            val ts = rows.mapNotNull { byId[it.trackId] }
+            // Songs on the phone and streamed ones, in the playlist's order.
+            val local = byPlaylist[p.id].orEmpty().mapNotNull { r -> byId[r.trackId]?.let { r.position to it } }
+            val streamed = onlineByPlaylist[p.id].orEmpty().map { it.position to it.toTrack() }
+            val ts = (local + streamed).sortedBy { it.first }.map { it.second }
             PlaylistSummary(p, ts.size, ts.sumOf { it.durationMs }, ts.mapNotNull { it.coverPath }.distinct().take(4))
         }
     }.flowOn(Dispatchers.Default).shareIn(scope, SharingStarted.WhileSubscribed(5_000), replay = 1)
 
-    fun playlist(id: Long): Flow<PlaylistDetail?> = combine(playlists, playlistDao.observeEntries(id)) { lists, entries ->
+    fun playlist(id: Long): Flow<PlaylistDetail?> = combine(playlists, playlistDao.observeEntries(id), playlistOnlineDao.observeFor(id)) { lists, entries, online ->
         val summary = lists.firstOrNull { it.id == id } ?: return@combine null
-        PlaylistDetail(summary, entries)
+        // Streamed rows carry a negative rowId (−their own id): removing and moving tell them apart.
+        val streamed = online.map { PlaylistEntry(rowId = -it.rowId, position = it.position, entryAddedAt = it.addedAt, track = it.toTrack()) }
+        PlaylistDetail(summary, (entries + streamed).sortedWith(compareBy({ it.position }, { it.entryAddedAt })))
+    }
+
+    /** The next free position at the end of a playlist (both kinds of rows). */
+    private suspend fun nextPosition(playlistId: Long): Int =
+        maxOf(playlistDao.maxPosition(playlistId), playlistOnlineDao.maxPosition(playlistId)) + 1
+
+    /**
+     * A streamed song into a playlist, without downloading it (it plays online). A song already on
+     * the phone goes in as itself. False when it was already there.
+     */
+    suspend fun addOnlineToPlaylist(playlistId: Long, song: RemoteTrack): Boolean = db.withTransaction {
+        val have = trackDao.byVideoId(song.videoId)
+        if (have != null) return@withTransaction addToPlaylist(playlistId, listOf(have.id)) > 0
+        if (playlistOnlineDao.countOf(playlistId, song.videoId) > 0) return@withTransaction false
+        playlistOnlineDao.insert(PlaylistOnline.of(playlistId, song, nextPosition(playlistId)))
+        playlistDao.touch(playlistId, System.currentTimeMillis())
+        true
+    }
+
+    /** Puts a song back at [position] (undo of a removal): a library row, or a streamed one. */
+    suspend fun putBackInPlaylist(playlistId: Long, track: Track, position: Int?) {
+        val online = track.takeIf { it.id < 0 }?.let { t ->
+            t.videoId?.let { id -> RemoteTrack(id, t.sourceUrl ?: t.filePath, t.title, t.artist, t.album, t.durationMs.takeIf { it > 0 }, t.coverPath, (t.sourceUrl ?: "").contains("music.youtube.com")) }
+        }
+        when {
+            online != null && position != null -> addOnlineToPlaylistAt(playlistId, online, position)
+            online != null -> addOnlineToPlaylist(playlistId, online)
+            position != null -> addToPlaylistAt(playlistId, track.id, position)
+            else -> addToPlaylist(playlistId, listOf(track.id))
+        }
+    }
+
+    /** Puts a streamed song back at [position] (undo of a removal). */
+    suspend fun addOnlineToPlaylistAt(playlistId: Long, song: RemoteTrack, position: Int) = db.withTransaction {
+        if (playlistOnlineDao.countOf(playlistId, song.videoId) == 0) {
+            playlistOnlineDao.insert(PlaylistOnline.of(playlistId, song, position))
+            playlistDao.touch(playlistId, System.currentTimeMillis())
+        }
     }
 
     suspend fun getPlaylist(id: Long): Playlist? = playlistDao.get(id)
@@ -322,7 +370,7 @@ class LibraryRepository(
 
     /** Appends tracks to the end. Duplicates are skipped unless [allowDuplicates]. Returns how many were added. */
     suspend fun addToPlaylist(playlistId: Long, trackIds: List<Long>, allowDuplicates: Boolean = false): Int = db.withTransaction {
-        var pos = playlistDao.maxPosition(playlistId) + 1
+        var pos = nextPosition(playlistId)
         val now = System.currentTimeMillis()
         val rows = trackIds.distinct().filter { allowDuplicates || playlistDao.countOf(playlistId, it) == 0 }
             .map { PlaylistTrack(playlistId = playlistId, trackId = it, position = pos++, addedAt = now) }
@@ -342,16 +390,22 @@ class LibraryRepository(
     }
 
     suspend fun removeFromPlaylist(playlistId: Long, rowId: Long) {
-        playlistDao.deleteRow(rowId)
+        if (rowId < 0) playlistOnlineDao.delete(-rowId) else playlistDao.deleteRow(rowId)
         playlistDao.touch(playlistId, System.currentTimeMillis())
     }
 
-    /** Moves the row at [from] to [to] (indexes in the current order) and renumbers 0..n. */
+    /** Moves the row at [from] to [to] (indexes in the current order, both kinds of rows) and renumbers 0..n. */
     suspend fun movePlaylistEntry(playlistId: Long, from: Int, to: Int) = db.withTransaction {
-        val rows = playlistDao.rows(playlistId).toMutableList()
+        // Library rows by their rowId, streamed ones by −rowId (as the screen sees them).
+        val rows = (
+            playlistDao.rows(playlistId).map { Triple(it.rowId, it.position, it.addedAt) } +
+                playlistOnlineDao.rows(playlistId).map { Triple(-it.rowId, it.position, it.addedAt) }
+            ).sortedWith(compareBy({ it.second }, { it.third })).map { it.first }.toMutableList()
         if (from !in rows.indices || to !in rows.indices || from == to) return@withTransaction
         rows.add(to, rows.removeAt(from))
-        playlistDao.rewritePositions(rows.map { it.rowId })
+        rows.forEachIndexed { i, rowId ->
+            if (rowId < 0) playlistOnlineDao.setPosition(-rowId, i) else playlistDao.setPosition(rowId, i)
+        }
         playlistDao.touch(playlistId, System.currentTimeMillis())
     }
 
@@ -367,6 +421,15 @@ class LibraryRepository(
     /** A new library song; a streamed like of it becomes the song's own like. */
     suspend fun insertTrack(track: Track): Long = db.withTransaction {
         val id = trackDao.insert(track)
+        // Streamed in some playlists: the downloaded song takes its place there.
+        track.videoId?.let { videoId ->
+            playlistOnlineDao.byVideo(videoId).forEach { row ->
+                if (playlistDao.countOf(row.playlistId, id) == 0) {
+                    playlistDao.insertRows(listOf(PlaylistTrack(playlistId = row.playlistId, trackId = id, position = row.position, addedAt = row.addedAt)))
+                }
+                playlistOnlineDao.delete(row.rowId)
+            }
+        }
         val like = track.videoId?.let { likedOnlineDao.get(it) }
         if (like != null) {
             trackDao.setLiked(id, true, like.likedAt)
@@ -525,3 +588,20 @@ internal fun listenOutcome(listenedMs: Long, durationMs: Long): Pair<Boolean, Bo
     val skipped = !completed && (listenedMs < 30_000 || (durationMs > 0 && listenedMs < durationMs / 3))
     return completed to skipped
 }
+
+/** A streamed playlist row as the transient track the screens show and play. */
+internal fun PlaylistOnline.toTrack(): Track =
+    RemoteTrack(videoId, url, title, artist, album, durationMs, thumbnailUrl, catalog).asTransientTrack()
+
+internal fun PlaylistOnline.Companion.of(playlistId: Long, song: RemoteTrack, position: Int) = PlaylistOnline(
+    playlistId = playlistId,
+    videoId = song.videoId,
+    url = song.url,
+    title = song.title,
+    artist = song.artist,
+    album = song.album,
+    durationMs = song.durationMs,
+    thumbnailUrl = song.thumbnailUrl,
+    catalog = song.fromMusicCatalog,
+    position = position,
+)

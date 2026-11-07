@@ -271,14 +271,33 @@ fun TrackActionsSheet(
                                 }
                             }
                         })
-                        TrackSheetAction.GO_ALBUM -> t.albumKey?.let { key ->
-                            SheetAction(Icons.Rounded.Album, stringResource(R.string.sheet_go_album), onClick = {
-                                closeThen { onDismiss(); navigator.openAlbum(key) }
+                        TrackSheetAction.GO_ALBUM -> when {
+                            // A streamed song: its album's page on YouTube Music.
+                            t.isOnline -> t.album?.takeIf { it.isNotBlank() }?.let { album ->
+                                SheetAction(Icons.Rounded.Album, stringResource(R.string.sheet_go_album), dimmed = dimmed, onClick = {
+                                    if (dimmed) offline() else openOnline(graph, feedback, res.getString(R.string.sheet_album_not_found), navigator, onDismiss) {
+                                        graph.discover.album(album, com.villamediana.sound.stats.Recaps.mainArtist(t.artist))
+                                    }
+                                })
+                            }
+                            else -> t.albumKey?.let { key ->
+                                SheetAction(Icons.Rounded.Album, stringResource(R.string.sheet_go_album), onClick = {
+                                    closeThen { onDismiss(); navigator.openAlbum(key) }
+                                })
+                            }
+                        }
+                        TrackSheetAction.GO_ARTIST -> if (t.isOnline) {
+                            // A streamed song: the artist's page on YouTube Music.
+                            SheetAction(Icons.Rounded.Person, stringResource(R.string.sheet_go_artist), dimmed = dimmed, onClick = {
+                                if (dimmed) offline() else openOnline(graph, feedback, res.getString(R.string.sheet_artist_not_found), navigator, onDismiss) {
+                                    graph.discover.artist(com.villamediana.sound.stats.Recaps.mainArtist(t.artist))
+                                }
+                            })
+                        } else {
+                            SheetAction(Icons.Rounded.Person, stringResource(R.string.sheet_go_artist), onClick = {
+                                closeThen { onDismiss(); navigator.openArtist(t.artist) }
                             })
                         }
-                        TrackSheetAction.GO_ARTIST -> SheetAction(Icons.Rounded.Person, stringResource(R.string.sheet_go_artist), onClick = {
-                            closeThen { onDismiss(); navigator.openArtist(t.artist) }
-                        })
                         TrackSheetAction.VIDEO -> t.videoId?.let { videoId ->
                             SheetAction(Icons.Rounded.MusicVideo, stringResource(R.string.sheet_video), dimmed = dimmed, onClick = {
                                 if (dimmed) offline() else closeThen { onDismiss(); navigator.openVideo(videoId, t.title) }
@@ -317,7 +336,12 @@ fun TrackActionsSheet(
             }
         }
 
-        TrackSheetStage.AddToPlaylist -> AddToPlaylistSheet(trackIds = listOf(t.id), onDismiss = onDismiss)
+        TrackSheetStage.AddToPlaylist -> AddToPlaylistSheet(
+            trackIds = listOf(t.id),
+            onDismiss = onDismiss,
+            // A streamed song goes in as itself (it plays online; nothing is downloaded).
+            online = if (t.isOnline) t.toRemoteTrack() else null,
+        )
 
         TrackSheetStage.Edit -> EditTrackDialog(
             track = t,
@@ -382,9 +406,30 @@ private fun removeFromPlaylist(
         withContext(Dispatchers.Main) {
             feedback.show(message, undo) {
                 appScope.launch {
-                    if (position != null) library.addToPlaylistAt(ctx.playlistId, track.id, position)
-                    else library.addToPlaylist(ctx.playlistId, listOf(track.id))
+                    library.putBackInPlaylist(ctx.playlistId, track, position)
                 }
+            }
+        }
+    }
+}
+
+/** Finds an online page (album, artist) and opens it; says so when there is none. */
+private fun openOnline(
+    graph: AppGraph,
+    feedback: SheetFeedback,
+    notFound: String,
+    navigator: com.villamediana.sound.ui.nav.Navigator,
+    onDismiss: () -> Unit,
+    find: suspend () -> com.villamediana.sound.online.RemoteCollection?,
+) {
+    graph.scope.launch {
+        val page = runCatching { find() }.getOrNull()
+        withContext(Dispatchers.Main) {
+            if (page != null) {
+                onDismiss()
+                navigator.openRemote(page)
+            } else {
+                feedback.show(notFound)
             }
         }
     }
@@ -396,7 +441,7 @@ data class PlaylistContext(val playlistId: Long, val rowId: Long)
 /** Picker to add songs to an existing or new playlist. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddToPlaylistSheet(trackIds: List<Long>, onDismiss: () -> Unit) {
+fun AddToPlaylistSheet(trackIds: List<Long>, onDismiss: () -> Unit, online: com.villamediana.sound.online.RemoteTrack? = null) {
     val graph = SoundApplication.graph
     val library = graph.library
     val feedback = rememberSheetFeedback()
@@ -423,7 +468,9 @@ fun AddToPlaylistSheet(trackIds: List<Long>, onDismiss: () -> Unit) {
         haptic.performHapticFeedback(HapticFeedbackType.Confirm)
         scope.launch {
             // The write runs in the app scope: it finishes even if the sheet is swiped away meanwhile.
-            val added = graph.scope.async { library.addToPlaylist(p.id, ids) }.await()
+            val added = graph.scope.async {
+                if (online != null) (if (library.addOnlineToPlaylist(p.id, online)) 1 else 0) else library.addToPlaylist(p.id, ids)
+            }.await()
             delay(320) // let the check land before the sheet slides away
             finish(
                 if (added == 0) res.getString(R.string.sheet_already_in, p.name)
@@ -440,7 +487,11 @@ fun AddToPlaylistSheet(trackIds: List<Long>, onDismiss: () -> Unit) {
         scope.launch {
             val added = graph.scope.async {
                 val id = library.createPlaylist(playlistName)
-                if (ids.isEmpty()) 0 else library.addToPlaylist(id, ids)
+                when {
+                    online != null -> if (library.addOnlineToPlaylist(id, online)) 1 else 0
+                    ids.isEmpty() -> 0
+                    else -> library.addToPlaylist(id, ids)
+                }
             }.await()
             finish(
                 if (added == 0) res.getString(R.string.sheet_playlist_created, playlistName)

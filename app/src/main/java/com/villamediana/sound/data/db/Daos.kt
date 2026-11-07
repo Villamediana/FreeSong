@@ -261,3 +261,33 @@ interface OnlinePlayDao {
     @Query("DELETE FROM online_plays")
     suspend fun clear()
 }
+
+@Dao
+interface PlaylistOnlineDao {
+    @Query("SELECT * FROM playlist_online")
+    fun observeAll(): Flow<List<PlaylistOnline>>
+
+    @Query("SELECT * FROM playlist_online WHERE playlistId = :playlistId ORDER BY position, rowId")
+    fun observeFor(playlistId: Long): Flow<List<PlaylistOnline>>
+
+    @Query("SELECT * FROM playlist_online WHERE playlistId = :playlistId ORDER BY position, rowId")
+    suspend fun rows(playlistId: Long): List<PlaylistOnline>
+
+    @Query("SELECT * FROM playlist_online WHERE videoId = :videoId")
+    suspend fun byVideo(videoId: String): List<PlaylistOnline>
+
+    @Query("SELECT COALESCE(MAX(position), -1) FROM playlist_online WHERE playlistId = :playlistId")
+    suspend fun maxPosition(playlistId: Long): Int
+
+    @Query("SELECT COUNT(*) FROM playlist_online WHERE playlistId = :playlistId AND videoId = :videoId")
+    suspend fun countOf(playlistId: Long, videoId: String): Int
+
+    @Insert
+    suspend fun insert(row: PlaylistOnline): Long
+
+    @Query("DELETE FROM playlist_online WHERE rowId = :rowId")
+    suspend fun delete(rowId: Long)
+
+    @Query("UPDATE playlist_online SET position = :position WHERE rowId = :rowId")
+    suspend fun setPosition(rowId: Long, position: Int)
+}

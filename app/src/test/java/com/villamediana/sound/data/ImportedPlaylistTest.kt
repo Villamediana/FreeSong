@@ -1,5 +1,6 @@
 package com.villamediana.sound.data
 
+import com.villamediana.sound.data.isOnline
 import android.app.Application
 import androidx.room.testing.MigrationTestHelper
 import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
@@ -85,6 +86,49 @@ class ImportedPlaylistTest {
         assertEquals("Um", plays[0].title)
         library.clearHistory()
         assertTrue(library.onlinePlaysListSince(0).isEmpty())
+    }
+
+    @Test fun yourPlaylistsHoldStreamedSongsWithoutDownloading() = runBlocking {
+        val list = library.createPlaylist("Domingo")
+        val localId = library.insertTrack(com.villamediana.sound.data.db.Track(title = "No celular", artist = "Banda", filePath = "/x/a.m4a", videoId = "local000001"))
+        library.addToPlaylist(list, listOf(localId))
+        assertTrue(library.addOnlineToPlaylist(list, song("b2", "Online")))
+        // Twice is still once.
+        assertTrue(!library.addOnlineToPlaylist(list, song("b2", "Online")))
+        library.addOnlineToPlaylist(list, song("c3", "Outra online"))
+
+        var detail = library.playlist(list).first()!!
+        assertEquals(listOf("No celular", "Online", "Outra online"), detail.tracks.map { it.title })
+        assertEquals(3, detail.summary.trackCount)
+        assertTrue(detail.tracks[1].isOnline)
+        // Nothing was downloaded.
+        assertEquals(1, library.allTracks().size)
+
+        // Moving mixes both kinds; removing a streamed row and putting it back keeps its slot.
+        library.movePlaylistEntry(list, from = 2, to = 0)
+        detail = library.playlist(list).first()!!
+        assertEquals(listOf("Outra online", "No celular", "Online"), detail.tracks.map { it.title })
+        val online = detail.entries.first { it.track.title == "Online" }
+        library.removeFromPlaylist(list, online.rowId)
+        assertEquals(listOf("Outra online", "No celular"), library.playlist(list).first()!!.tracks.map { it.title })
+        library.putBackInPlaylist(list, online.track, online.position)
+        assertEquals(listOf("Outra online", "No celular", "Online"), library.playlist(list).first()!!.tracks.map { it.title })
+
+        // Downloaded later: it becomes the playlist's song on the phone, same slot.
+        library.insertTrack(com.villamediana.sound.data.db.Track(title = "Online", artist = "Banda", filePath = "/x/b.m4a", videoId = "b2"))
+        detail = library.playlist(list).first()!!
+        assertEquals(listOf("Outra online", "No celular", "Online"), detail.tracks.map { it.title })
+        assertTrue(!detail.tracks[2].isOnline)
+    }
+
+    @Test fun version4DatabasesGainStreamedPlaylistRows() {
+        migrations.createDatabase("migrate5.db", 4).close()
+        val v5 = migrations.runMigrationsAndValidate("migrate5.db", 5, true)
+        v5.query("SELECT COUNT(*) FROM playlist_online").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals(0, c.getInt(0))
+        }
+        v5.close()
     }
 
     @Test fun version3DatabasesGainTheOnlineHistory() {

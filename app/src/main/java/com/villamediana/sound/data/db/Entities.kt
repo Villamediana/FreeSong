@@ -232,3 +232,32 @@ data class OnlinePlay(
     val skipped: Boolean,
     val context: String? = null,
 )
+
+/**
+ * A streamed song in one of your playlists (not on the phone): it plays online, like an imported
+ * playlist's. Shares the playlist's positions with [PlaylistTrack]; downloaded later, it becomes a
+ * [PlaylistTrack] at the same position.
+ */
+@Entity(
+    tableName = "playlist_online",
+    foreignKeys = [
+        ForeignKey(entity = Playlist::class, parentColumns = ["id"], childColumns = ["playlistId"], onDelete = ForeignKey.CASCADE),
+    ],
+    indices = [Index("playlistId"), Index("videoId")],
+)
+data class PlaylistOnline(
+    @PrimaryKey(autoGenerate = true) val rowId: Long = 0,
+    val playlistId: Long,
+    val videoId: String,
+    val url: String,
+    val title: String,
+    val artist: String,
+    val album: String? = null,
+    val durationMs: Long? = null,
+    val thumbnailUrl: String? = null,
+    val catalog: Boolean = true,
+    val position: Int,
+    val addedAt: Long = System.currentTimeMillis(),
+) {
+    companion object
+}

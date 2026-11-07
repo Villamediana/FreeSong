@@ -55,10 +55,18 @@ class TrackSheetRulesTest {
         )
     }
 
-    @Test fun `a streamed song has no playlist, album, artist page or delete here`() {
-        val expected = listOf(PLAY_NEXT, ENQUEUE, RADIO, SHARE, SLEEP)
-        assertEquals(expected, TrackSheetRules.actionsFor(streamed, fileExists = false, inPlaylist = true, fromPlayer = true))
-        assertEquals(expected, TrackSheetRules.actionsFor(streamed, false, false, false))
+    @Test fun `a streamed song goes into playlists and opens its online album and artist, no delete`() {
+        assertEquals(
+            listOf(PLAY_NEXT, ENQUEUE, ADD_TO_PLAYLIST, RADIO, GO_ARTIST, SHARE, SLEEP),
+            TrackSheetRules.actionsFor(streamed, false, false, false),
+        )
+        val withAlbum = streamed.copy(album = "Signos")
+        assertEquals(
+            listOf(PLAY_NEXT, ENQUEUE, ADD_TO_PLAYLIST, RADIO, GO_ALBUM, GO_ARTIST, SHARE, SLEEP, REMOVE_FROM_PLAYLIST),
+            TrackSheetRules.actionsFor(withAlbum, fileExists = false, inPlaylist = true, fromPlayer = true),
+        )
+        assertTrue(TrackSheetRules.needsNetwork(GO_ARTIST, streamed))
+        assertFalse(TrackSheetRules.needsNetwork(GO_ARTIST, downloaded))
     }
 
     @Test fun `what needs the internet`() {

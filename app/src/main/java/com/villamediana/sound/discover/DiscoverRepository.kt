@@ -162,6 +162,19 @@ class DiscoverRepository(
         return found
     }
 
+    /** The online page of [album] by [artist] (YouTube Music), or null when no album has that name. */
+    suspend fun album(album: String, artist: String): RemoteCollection? {
+        val want = com.villamediana.sound.online.CoverMatch.key(album)
+        if (want.isEmpty()) return null
+        val found = runCatching {
+            gate.withPermit { youTube.search("$album $artist".trim(), SearchFilter.ALBUMS).items }
+                .filterIsInstance<SearchItem.Collection>().map { it.collection }
+                .filter { it.kind == CollectionKind.ALBUM }
+        }.getOrNull().orEmpty()
+        return found.firstOrNull { com.villamediana.sound.online.CoverMatch.key(it.title) == want }
+            ?: found.firstOrNull { val k = com.villamediana.sound.online.CoverMatch.key(it.title); k.startsWith(want) || want.startsWith(k) }
+    }
+
     /** What is cached under [key] right now, without the network (instant first paint). */
     suspend fun cachedSongs(key: String): List<RemoteTrack> = lock.withLock { load() }.lists[key]?.songs.orEmpty().map { it.toRemote() }
 

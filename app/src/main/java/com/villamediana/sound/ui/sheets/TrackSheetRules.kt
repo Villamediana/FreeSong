@@ -28,9 +28,15 @@ object TrackSheetRules {
         add(TrackSheetAction.PLAY_NEXT)
         add(TrackSheetAction.ENQUEUE)
         if (track.isOnline) {
+            // Streamed: it goes into a playlist as itself (no download); album and artist open
+            // their pages on YouTube Music.
+            add(TrackSheetAction.ADD_TO_PLAYLIST)
             if (track.videoId != null) add(TrackSheetAction.RADIO)
+            if (!track.album.isNullOrBlank()) add(TrackSheetAction.GO_ALBUM)
+            add(TrackSheetAction.GO_ARTIST)
             if (canShare) add(TrackSheetAction.SHARE)
             add(TrackSheetAction.SLEEP_TIMER)
+            if (inPlaylist) add(TrackSheetAction.REMOVE_FROM_PLAYLIST)
             return@buildList
         }
         add(TrackSheetAction.ADD_TO_PLAYLIST)
@@ -46,7 +52,9 @@ object TrackSheetRules {
     /** Lines that need the internet right now (dimmed, with a short message, when offline). */
     fun needsNetwork(action: TrackSheetAction, track: Track): Boolean = when (action) {
         TrackSheetAction.VIDEO -> true
-        TrackSheetAction.RADIO, TrackSheetAction.PLAY_NEXT, TrackSheetAction.ENQUEUE -> track.isOnline
+        TrackSheetAction.RADIO, TrackSheetAction.PLAY_NEXT, TrackSheetAction.ENQUEUE,
+        TrackSheetAction.GO_ALBUM, TrackSheetAction.GO_ARTIST,
+        -> track.isOnline
         else -> false
     }
 }

@@ -35,13 +35,20 @@ class MadeForYouStore(
         val day = SmartMixes.dayNumber(clock())
         if (builtFor == day || job?.isActive == true) return
         job = scope.launch {
+            // Never let a failure here take the app down: the mixes just wait for the next try.
+            runCatching { make(day) }
+        }
+    }
+
+    private suspend fun make(day: Long) {
+        run {
             val tracks = library.allTracks()
             val plans = MadeForYou.plan(tracks, library.loadTaste(), day)
             val l = labels()
             if (plans.isEmpty()) {
                 _mixes.value = emptyList()
                 builtFor = day
-                return@launch
+                return
             }
             // Your songs first (instant), then with the new ones.
             _mixes.value = plans.map { MadeForYou.assemble(it, emptyList(), l) }
