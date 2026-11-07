@@ -269,6 +269,10 @@ class HomeScreensSmokeTest {
         shot("settings")
         compose.onAllNodes(hasScrollToKeyAction())[0].performScrollToKey("about")
         waitForText("Limpar histórico")
+        // Everything kept to spare the internet, each with its size and "Limpar".
+        compose.onAllNodes(hasScrollToKeyAction())[0].performScrollToKey("about")
+        waitForText("Guardado pra economizar internet")
+        listOf("Músicas ouvidas", "Vídeos de fundo", "Capas", "Letras e traduções", "Sugestões do Início", "Limpar tudo").forEach { waitForText(it) }
         waitForText("músicas")
         shot("settings-bottom")
     }

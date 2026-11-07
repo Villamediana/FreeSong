@@ -56,6 +56,9 @@ class AppGraph(context: Context) {
     val enricher: MetadataEnricher by lazy { CatalogMetadataEnricher(http) }
     val lyrics: LyricsSource by lazy { LrclibLyricsSource(http) }
 
+    /** Every cache on the phone, measured and cleared from Ajustes › Armazenamento. */
+    val caches: com.villamediana.sound.data.AppCaches by lazy { com.villamediana.sound.data.AppCaches(appContext) }
+
     /** Lyrics in another language, translated under each line (Settings.translateLyrics). */
     val lyricsTranslator: com.villamediana.sound.online.LyricsTranslator by lazy {
         com.villamediana.sound.online.LyricsTranslator(

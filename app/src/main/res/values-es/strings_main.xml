@@ -15,4 +15,13 @@
     <string name="lyrics_translate">Traducción</string>
     <string name="settings_player_video">Video en el reproductor</string>
     <string name="settings_player_video_sub">Clip detrás de la portada</string>
+    <string name="settings_cache_title">Guardado para ahorrar internet</string>
+    <string name="settings_cache_sub">Vuelve solo cuando haga falta.</string>
+    <string name="settings_cache_songs">Canciones escuchadas</string>
+    <string name="settings_cache_videos">Videos de fondo</string>
+    <string name="settings_cache_covers">Portadas</string>
+    <string name="settings_cache_lyrics">Letras y traducciones</string>
+    <string name="settings_cache_home">Sugerencias de Inicio</string>
+    <string name="settings_cache_clear">Limpiar</string>
+    <string name="settings_cache_clear_all">Limpiar todo</string>
 </resources>

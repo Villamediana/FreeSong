@@ -54,6 +54,14 @@ class LyricsTranslator(
         return result.ifEmpty { null }?.let { align(lines, it) }
     }
 
+    /** Forgets every translation (Ajustes › Armazenamento). */
+    suspend fun clear() = lock.withLock {
+        cache = LinkedHashMap()
+        withContext(Dispatchers.IO) { runCatching { file.delete() } }
+    }
+
+    fun bytes(): Long = file.takeIf { it.isFile }?.length() ?: 0L
+
     /** Blank lines (pauses, ♪) stay without a translation. */
     private fun align(lines: List<String>, translated: List<String>): List<String?> =
         lines.mapIndexed { i, l -> if (l.isBlank()) null else translated.getOrNull(i)?.trim()?.takeIf { it.isNotEmpty() && !it.equals(l.trim(), ignoreCase = true) } }

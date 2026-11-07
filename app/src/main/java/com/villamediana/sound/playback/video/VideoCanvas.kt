@@ -356,6 +356,9 @@ class VideoCanvas internal constructor(
 
         @Volatile private var sharedCache: SimpleCache? = null
 
+        /** The clips kept on disk (Ajustes › Armazenamento shows and clears it). */
+        internal fun sharedCache(context: Context): SimpleCache = cache(context)
+
         /** One cache per process (a cache folder can't be opened twice). */
         private fun cache(context: Context): SimpleCache = sharedCache ?: synchronized(this) {
             sharedCache ?: SimpleCache(

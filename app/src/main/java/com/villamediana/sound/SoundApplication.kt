@@ -33,11 +33,7 @@ class SoundApplication : Application(), SingletonImageLoader.Factory {
 
     override fun newImageLoader(context: PlatformContext): ImageLoader =
         ImageLoader.Builder(context)
-            .components {
-                add(OkHttpNetworkFetcherFactory(callFactory = { graph.http }))
-                // Covers at the size they are drawn (rows don't download the 720 px art).
-                add(com.villamediana.sound.online.ThumbnailSizeInterceptor())
-            }
+            .components { add(OkHttpNetworkFetcherFactory(callFactory = { graph.http })) }
             .memoryCache { MemoryCache.Builder().maxSizePercent(context, 0.20).build() }
             .diskCache { DiskCache.Builder().directory(cacheDir.resolve("images")).maxSizeBytes(128L * 1024 * 1024).build() }
             .crossfade(180)

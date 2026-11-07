@@ -1,5 +1,9 @@
 package com.villamediana.sound.ui.settings
 
+import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.Lyrics
+import androidx.compose.material.icons.rounded.Image
+import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Schedule
@@ -89,6 +93,7 @@ fun SettingsScreen() {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val stats by vm.stats.collectAsStateWithLifecycle()
     val usedBytes by vm.usedBytes.collectAsStateWithLifecycle()
+    val caches by vm.caches.collectAsStateWithLifecycle()
     val freeBytes by vm.freeBytes.collectAsStateWithLifecycle()
     val cleared by vm.historyCleared.collectAsStateWithLifecycle()
     val nav = navigator()
@@ -183,6 +188,11 @@ fun SettingsScreen() {
                     StorageBlock(usedBytes, freeBytes, stats)
                     Hairline()
                     ClearHistoryRow(cleared, onClick = { confirmClear = true })
+                }
+                // What is kept to spare the internet: each kind with its size, cleared one by one or all.
+                Spacer(Modifier.height(10.dp))
+                Group {
+                    CacheRows(caches, onClear = vm::clearCache, onClearAll = vm::clearAllCaches)
                 }
             }
         }
@@ -525,6 +535,74 @@ private fun StatTile(icon: ImageVector, value: String, label: String, modifier: 
             Text(label, style = MaterialTheme.typography.bodySmall, color = SoundColors.TextMuted, maxLines = 1)
         }
     }
+}
+
+/** Every cache: what it is, its size, "Limpar"; then "Limpar tudo". Nothing here is lost for good. */
+@Composable
+private fun CacheRows(
+    sizes: Map<com.villamediana.sound.data.CacheKind, Long>?,
+    onClear: (com.villamediana.sound.data.CacheKind) -> Unit,
+    onClearAll: () -> Unit,
+) {
+    Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        Text(
+            stringResource(R.string.settings_cache_title),
+            style = MaterialTheme.typography.titleSmall,
+            color = SoundColors.Text,
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp),
+        )
+        Text(
+            stringResource(R.string.settings_cache_sub),
+            style = MaterialTheme.typography.bodySmall,
+            color = SoundColors.TextMuted,
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 6.dp),
+        )
+        com.villamediana.sound.data.CacheKind.entries.forEach { kind ->
+            val size = sizes?.get(kind)
+            Row(
+                Modifier.fillMaxWidth().padding(start = 16.dp, end = 6.dp).height(48.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(cacheIcon(kind), null, tint = SoundColors.TextMuted, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(12.dp))
+                Text(stringResource(cacheLabel(kind)), style = MaterialTheme.typography.bodyLarge, color = SoundColors.Text, modifier = Modifier.weight(1f))
+                Text(size?.let { formatBytes(it) } ?: "—", style = MaterialTheme.typography.bodyMedium, color = SoundColors.TextMuted)
+                androidx.compose.material3.TextButton(onClick = { onClear(kind) }, enabled = (size ?: 0L) > 0L) {
+                    Text(stringResource(R.string.settings_cache_clear), style = MaterialTheme.typography.labelLarge, color = if ((size ?: 0L) > 0L) SoundColors.Accent else SoundColors.TextFaint)
+                }
+            }
+        }
+        val total = sizes?.values?.sum() ?: 0L
+        Hairline()
+        Row(
+            Modifier.fillMaxWidth().clickable(enabled = total > 0L, onClick = onClearAll).padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                stringResource(R.string.settings_cache_clear_all),
+                style = MaterialTheme.typography.titleSmall,
+                color = if (total > 0L) SoundColors.Danger else SoundColors.TextFaint,
+                modifier = Modifier.weight(1f),
+            )
+            Text(formatBytes(total), style = MaterialTheme.typography.bodyMedium, color = SoundColors.TextMuted)
+        }
+    }
+}
+
+private fun cacheLabel(kind: com.villamediana.sound.data.CacheKind): Int = when (kind) {
+    com.villamediana.sound.data.CacheKind.SONGS -> R.string.settings_cache_songs
+    com.villamediana.sound.data.CacheKind.VIDEOS -> R.string.settings_cache_videos
+    com.villamediana.sound.data.CacheKind.COVERS -> R.string.settings_cache_covers
+    com.villamediana.sound.data.CacheKind.LYRICS -> R.string.settings_cache_lyrics
+    com.villamediana.sound.data.CacheKind.HOME -> R.string.settings_cache_home
+}
+
+private fun cacheIcon(kind: com.villamediana.sound.data.CacheKind): ImageVector = when (kind) {
+    com.villamediana.sound.data.CacheKind.SONGS -> Icons.Rounded.MusicNote
+    com.villamediana.sound.data.CacheKind.VIDEOS -> Icons.Rounded.Movie
+    com.villamediana.sound.data.CacheKind.COVERS -> Icons.Rounded.Image
+    com.villamediana.sound.data.CacheKind.LYRICS -> Icons.Rounded.Lyrics
+    com.villamediana.sound.data.CacheKind.HOME -> Icons.Rounded.Home
 }
 
 /** "Limpar histórico": a quiet row with its icon; the line under it says when it is done. */

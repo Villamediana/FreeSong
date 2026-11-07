@@ -73,6 +73,20 @@ class SongCovers(
         return hit?.thumbnailUrl.orEmpty()
     }
 
+    /** Forgets every match (Ajustes › Armazenamento): looked up again as songs come. */
+    fun clear() {
+        saveJob?.cancel()
+        synchronized(asked) { asked.clear() }
+        synchronized(this) {
+            _found.value = emptyMap()
+            loaded = true
+            runCatching { file.delete() }
+        }
+    }
+
+    /** Bytes kept on disk. */
+    fun bytes(): Long = file.takeIf { it.isFile }?.length() ?: 0L
+
     private fun load() {
         if (loaded) return
         synchronized(this) {

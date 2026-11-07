@@ -125,6 +125,16 @@ internal class OnlineLyricsCache(
     }
     private val missing = HashMap<String, Long>()
 
+    /** Forgets every lyrics, in memory and on disk (Ajustes › Armazenamento). */
+    suspend fun clear() = mutex.withLock {
+        found.clear()
+        missing.clear()
+        stored = LinkedHashMap()
+        runCatching { file?.delete() }
+    }
+
+    fun bytes(): Long = file?.takeIf { it.isFile }?.length() ?: 0L
+
     /** Already known: the lyrics, or [MISSING] when recently not found; null = never asked. */
     suspend fun peek(query: LyricsQuery): ParsedLyrics? = mutex.withLock {
         found[query.key]

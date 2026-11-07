@@ -70,6 +70,15 @@ class DiscoverRepository(
     private val gate = Semaphore(4)
     private var cache: Cache? = null
 
+    /** Forgets every list and cover (Ajustes › Armazenamento): the Home asks again. */
+    suspend fun clear() = lock.withLock {
+        cache = Cache()
+        withContext(Dispatchers.IO) { runCatching { file.delete() } }
+    }
+
+    /** Bytes kept on disk. */
+    fun bytes(): Long = file.takeIf { it.isFile }?.length() ?: 0L
+
     private suspend fun load(): Cache = cache ?: withContext(Dispatchers.IO) {
         runCatching { json.decodeFromString(Cache.serializer(), file.readText()) }.getOrDefault(Cache())
     }.also { cache = it }

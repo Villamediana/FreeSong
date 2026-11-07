@@ -49,6 +49,24 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
+    /** What each cache holds on the phone (measured on open and after a clean-up). */
+    private val _caches = MutableStateFlow<Map<com.villamediana.sound.data.CacheKind, Long>?>(null)
+    val caches: StateFlow<Map<com.villamediana.sound.data.CacheKind, Long>?> = _caches
+
+    init {
+        viewModelScope.launch { _caches.value = graph.caches.sizes() }
+    }
+
+    fun clearCache(kind: com.villamediana.sound.data.CacheKind) = viewModelScope.launch {
+        graph.caches.clear(kind)
+        _caches.value = graph.caches.sizes()
+    }
+
+    fun clearAllCaches() = viewModelScope.launch {
+        graph.caches.clearAll()
+        _caches.value = graph.caches.sizes()
+    }
+
     private val _historyCleared = MutableStateFlow(false)
     val historyCleared: StateFlow<Boolean> = _historyCleared
 

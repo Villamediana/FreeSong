@@ -1,5 +1,7 @@
 package com.villamediana.sound.ui.player
 
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
+import androidx.compose.material.icons.automirrored.rounded.Chat
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.derivedStateOf
@@ -418,6 +420,10 @@ private fun CoverPager(
         }
     }
 
+    // Over the clip, the covers beside the current one only show while the listener drags them (to
+    // skip a song): a queue that moves on its own (shuffle, reorder) never flashes covers over it.
+    val dragged by pagerState.interactionSource.collectIsDraggedAsState()
+    val neighbourAlpha by animateFloatAsState(if (coverHidden && !dragged) 0f else 1f, tween(if (dragged) 120 else 300), label = "neighbourAlpha")
     val side = ((containerWidth - coverSize) / 2).coerceAtLeast(0.dp)
     HorizontalPager(
         state = pagerState,
@@ -437,7 +443,7 @@ private fun CoverPager(
                     val s = coverScale.value
                     scaleX = s
                     scaleY = s
-                    val fade = if (page == index) coverAlpha else 1f
+                    val fade = if (page == index) coverAlpha else neighbourAlpha
                     shadowElevation = 20.dp.toPx() * fade
                     shape = RoundedCornerShape(BigCoverCorner)
                     clip = true
@@ -448,7 +454,7 @@ private fun CoverPager(
                 com.villamediana.sound.ui.components.rememberSongCover(t),
                 Modifier
                     .fillMaxSize()
-                    .graphicsLayer { alpha = if (page == index) coverAlpha else 1f }
+                    .graphicsLayer { alpha = if (page == index) coverAlpha else neighbourAlpha }
                     .then(if (openVideo != null) Modifier.clickable(onClickLabel = stringResource(R.string.sheet_video), onClick = openVideo) else Modifier),
                 seed = t.album ?: t.title,
                 shape = RectangleShape,
@@ -698,8 +704,8 @@ private fun BottomRow(outputName: String?, output: OutputRoute, sleep: SleepTime
 }
 
 /**
- * "Letra": one tap to the full-screen lyrics. Lit when there are lyrics (with a tangerine dot when
- * they follow the song), quiet otherwise; the screen itself explains when there are none.
+ * "Letra": one tap to the full-screen lyrics. Lit when there are lyrics, quiet otherwise; the
+ * screen itself explains when there are none.
  */
 @Composable
 private fun LyricsPill(lyrics: LyricsState, onClick: () -> Unit, modifier: Modifier = Modifier) {
@@ -719,12 +725,8 @@ private fun LyricsPill(lyrics: LyricsState, onClick: () -> Unit, modifier: Modif
             .padding(start = 16.dp, end = 20.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box {
-            Icon(Icons.Rounded.Lyrics, null, tint = if (ready != null) SoundColors.Mint else tint, modifier = Modifier.size(22.dp))
-            if (ready?.lyrics?.synced == true) {
-                Box(Modifier.align(Alignment.TopEnd).offset(x = 2.dp, y = (-1).dp).size(6.dp).clip(CircleShape).background(SoundColors.Lyric))
-            }
-        }
+        // The lyrics bubble, without the note and the dot.
+        Icon(Icons.AutoMirrored.Rounded.Chat, null, tint = if (ready != null) SoundColors.Mint else tint, modifier = Modifier.size(22.dp))
         Spacer(Modifier.width(9.dp))
         Text(stringResource(R.string.player_lyrics), style = MaterialTheme.typography.titleMedium, color = tint, maxLines = 1)
     }

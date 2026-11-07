@@ -1,11 +1,44 @@
+# --- Build e IDE
 .gradle/
 build/
+.kotlin/
+.idea/
+*.iml
+captures/
+.cxx/
+.externalNativeBuild/
+*.hprof
+*.log
+.DS_Store
+Thumbs.db
+
+# --- Caminhos locais da máquina (SDK)
 /local.properties
+
+# --- Assinatura: chaves e senhas NUNCA vão pro repositório
 /keystore.properties
 *.jks
 *.keystore
-.idea/
-*.iml
-.kotlin/
+*.p12
+*.pfx
+*.pem
+*.key
+*.der
+*.crt
+**/signing.properties
+**/*-keystore.properties
+
+# --- Segredos e variáveis de ambiente
+.env
+.env.*
+*.secret
+secrets.properties
+google-services.json
+
+# --- Binários gerados (as APKs vão nos Releases do GitHub, não no código)
 /dist/
-captures/
+*.apk
+*.aab
+*.apks
+*.idsig
+app/release/
