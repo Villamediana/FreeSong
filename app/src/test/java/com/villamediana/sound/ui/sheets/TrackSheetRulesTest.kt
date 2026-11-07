@@ -56,7 +56,7 @@ class TrackSheetRulesTest {
 
     @Test fun `a streamed song only gets what works without a library row`() {
         val actions = TrackSheetRules.actionsFor(streamed, fileExists = false, inPlaylist = true, fromPlayer = true)
-        assertEquals(listOf(DOWNLOAD, PLAY_NEXT, ENQUEUE, RADIO, VIDEO, SHARE, EQUALIZER), actions)
+        assertEquals(listOf(DOWNLOAD, PLAY_NEXT, ENQUEUE, RADIO, VIDEO, SHARE, EQUALIZER, TrackSheetAction.SLEEP_TIMER), actions)
         for (hidden in listOf(LIKE, ADD_TO_PLAYLIST, EDIT, DELETE, REMOVE_FROM_PLAYLIST, SEND_FILE, GO_ALBUM, GO_ARTIST)) {
             assertFalse(hidden.name, hidden in actions)
         }

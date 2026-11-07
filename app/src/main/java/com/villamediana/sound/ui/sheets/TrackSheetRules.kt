@@ -7,7 +7,7 @@ import com.villamediana.sound.data.shareUrl
 /** One line of the song sheet. */
 enum class TrackSheetAction {
     LIKE, DOWNLOAD, PLAY_NEXT, ENQUEUE, ADD_TO_PLAYLIST, RADIO, GO_ALBUM, GO_ARTIST,
-    VIDEO, SHARE, SEND_FILE, EQUALIZER, EDIT, REMOVE_FROM_PLAYLIST, DELETE,
+    VIDEO, SHARE, SEND_FILE, EQUALIZER, SLEEP_TIMER, EDIT, REMOVE_FROM_PLAYLIST, DELETE,
 }
 
 /** Which lines the song sheet shows, in order. */
@@ -32,6 +32,7 @@ object TrackSheetRules {
             if (hasVideo) add(TrackSheetAction.VIDEO)
             if (canShare) add(TrackSheetAction.SHARE)
             if (fromPlayer) add(TrackSheetAction.EQUALIZER)
+            if (fromPlayer) add(TrackSheetAction.SLEEP_TIMER)
             return@buildList
         }
         add(TrackSheetAction.LIKE)
@@ -45,6 +46,7 @@ object TrackSheetRules {
         if (canShare) add(TrackSheetAction.SHARE)
         if (fileExists) add(TrackSheetAction.SEND_FILE)
         if (fromPlayer) add(TrackSheetAction.EQUALIZER)
+        if (fromPlayer) add(TrackSheetAction.SLEEP_TIMER)
         add(TrackSheetAction.EDIT)
         if (inPlaylist) add(TrackSheetAction.REMOVE_FROM_PLAYLIST)
         add(TrackSheetAction.DELETE)

@@ -176,15 +176,12 @@ class PlaybackService : MediaLibraryService() {
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession = session
 
     override fun onTaskRemoved(rootIntent: Intent?) {
+        // Closing Sound from Recents closes the music too (the Miguel's call): the queue is saved,
+        // the listen recorded, the player paused and the service stopped.
         saveNow()
-        val playing = player.playWhenReady && player.mediaItemCount > 0 &&
-            player.playbackState != Player.STATE_ENDED && player.playbackState != Player.STATE_IDLE
-        if (!playing) {
-            // The app's own controller can keep the service bound, so onDestroy may never come before
-            // the process is killed: the listen of the paused song is recorded now.
-            finishListen()
-            pauseAllPlayersAndStopSelf()
-        }
+        finishListen()
+        player.pause()
+        pauseAllPlayersAndStopSelf()
     }
 
     override fun onDestroy() {

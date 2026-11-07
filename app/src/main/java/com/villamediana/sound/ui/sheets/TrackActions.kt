@@ -1,5 +1,6 @@
 package com.villamediana.sound.ui.sheets
 
+import androidx.compose.material.icons.rounded.Bedtime
 import android.content.res.Resources
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -121,7 +122,14 @@ private enum class TrackSheetStage { Actions, AddToPlaylist, Edit, ConfirmDelete
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TrackActionsSheet(track: Track, onDismiss: () -> Unit, playlistContext: PlaylistContext? = null, showEqualizer: Boolean = false) {
+fun TrackActionsSheet(
+    track: Track,
+    onDismiss: () -> Unit,
+    playlistContext: PlaylistContext? = null,
+    showEqualizer: Boolean = false,
+    /** From the player: "Timer para dormir" opens its sheet. */
+    onSleepTimer: (() -> Unit)? = null,
+) {
     val graph = SoundApplication.graph
     val library = graph.library
     val player = graph.player
@@ -271,6 +279,9 @@ fun TrackActionsSheet(track: Track, onDismiss: () -> Unit, playlistContext: Play
                         })
                         TrackSheetAction.SEND_FILE -> SheetAction(Icons.Rounded.AttachFile, stringResource(R.string.sheet_send_file), onClick = {
                             closeThen { onDismiss(); Share.trackFile(context, t) }
+                        })
+                        TrackSheetAction.SLEEP_TIMER -> SheetAction(Icons.Rounded.Bedtime, stringResource(R.string.sheet_sleep_timer), onClick = {
+                            closeThen { onDismiss(); onSleepTimer?.invoke() }
                         })
                         TrackSheetAction.EQUALIZER -> SheetAction(Icons.Rounded.Equalizer, stringResource(R.string.sheet_equalizer), onClick = {
                             closeThen { onDismiss(); navigator.openEqualizer() }

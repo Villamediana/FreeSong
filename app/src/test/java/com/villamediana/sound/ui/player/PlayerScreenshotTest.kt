@@ -93,7 +93,6 @@ class PlayerScreenshotTest {
         compose.waitForIdle()
         shot("player_streamed_mini")
         compose.onNode(SemanticsMatcher("opens the player") { it.config.getOrNull(SemanticsActions.OnClick)?.label == "Abrir player" }).performClick()
-        compose.waitUntil(10_000) { compose.onAllNodesWithText("Una verdad sin fin").fetchSemanticsNodes().isNotEmpty() }
         compose.waitForIdle()
         shot("player_streamed_full")
     }

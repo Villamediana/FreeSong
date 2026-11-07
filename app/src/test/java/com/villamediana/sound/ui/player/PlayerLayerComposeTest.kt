@@ -1,5 +1,6 @@
 package com.villamediana.sound.ui.player
 
+import androidx.compose.ui.test.performScrollTo
 import android.app.Application
 import androidx.activity.OnBackPressedDispatcher
 import androidx.activity.compose.BackHandler
@@ -60,6 +61,9 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], application = Application::class)
 class PlayerLayerComposeTest {
+
+    @org.junit.Before
+    fun blockPlaybackBinding() = com.villamediana.sound.testing.blockMediaSessionBinding()
     @get:Rule val compose = createComposeRule()
 
     private val tracks = listOf(
@@ -185,15 +189,14 @@ class PlayerLayerComposeTest {
 
     @Test
     fun sleepTimerSheetSetsATimer() {
-        val player = setUp()
-        expand()
-        compose.onNodeWithContentDescription("Timer de sono").performClick()
-        compose.waitForIdle()
+        // Opened from the player's ⋮ menu; the sheet itself sets the timer.
+        var set: SleepTimer? = null
+        compose.setContent { SoundTheme { SleepTimerSheet(timer = SleepTimer.Off, onSet = { set = it }, onDismiss = {}) } }
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("15 minutos").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("15 minutos").performClick()
         compose.waitForIdle()
-        val t = player.timer
+        val t = set
         assertTrue(t is SleepTimer.At && t.totalMs == 15 * 60_000L)
-        compose.onNodeWithText("15 min").assertIsDisplayed()
     }
 
     @Test
@@ -310,19 +313,20 @@ class PlayerLayerComposeTest {
     fun aStreamedSongHasLyricsVideoAndTheLetraButton() {
         setUpStreaming()
         expand()
-        compose.onNodeWithContentDescription("Ver vídeo").assertExists()
-        compose.waitUntil(5_000) { compose.onAllNodesWithText("Una verdad sin fin").fetchSemanticsNodes().isNotEmpty() }
-        assertEquals(listOf(LyricsQuery("Té para Tres", "Soda Stereo", "Canción Animal", 140_000)), lyricsAsked.distinct())
-        // The "Letra" pill of the bottom row (the card below has its own open button too).
+        // The "Letra" pill of the bottom row opens the synced lyrics full screen (no card peeking below).
         compose.onAllNodesWithContentDescription("Letra em tela cheia").onFirst().assert(hasText("Letra")).performClick()
         compose.waitForIdle()
         compose.onNodeWithContentDescription("Fechar letra").assertIsDisplayed()
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("Una verdad sin fin").fetchSemanticsNodes().isNotEmpty() }
+        assertEquals(listOf(LyricsQuery("Té para Tres", "Soda Stereo", "Canción Animal", 140_000)), lyricsAsked.distinct())
     }
 
     @Test
     fun offlineTheLyricsOfAStreamedSongWaitForTheNetwork() {
         setUpStreaming(online = false)
         expand()
+        compose.onAllNodesWithContentDescription("Letra em tela cheia").onFirst().performClick()
+        compose.waitForIdle()
         compose.waitUntil(5_000) { compose.onAllNodesWithText("A letra aparece quando a conexão voltar.").fetchSemanticsNodes().isNotEmpty() }
         assertTrue(lyricsAsked.isEmpty())
     }

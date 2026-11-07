@@ -614,7 +614,7 @@ internal fun PlayerHost(deps: PlayerDeps, bottomBarHeight: Dp, modifier: Modifie
         SleepTimerSheet(timer = sleep, onSet = { player.setSleepTimer(it) }, onDismiss = { sleepOpen = false })
     }
     actionsFor?.let { t ->
-        TrackActionsSheet(track = t, onDismiss = { actionsFor = null }, showEqualizer = true)
+        TrackActionsSheet(track = t, onDismiss = { actionsFor = null }, showEqualizer = true, onSleepTimer = { sleepOpen = true })
     }
 }
 

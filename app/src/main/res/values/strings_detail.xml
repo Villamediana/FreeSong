@@ -183,4 +183,5 @@
     <string name="sheet_offline">Sem internet agora.</string>
     <string name="sheet_radio_unavailable">Não deu para montar a rádio agora.</string>
     <string name="detail_menu_share">Compartilhar</string>
+    <string name="sheet_sleep_timer">Timer para dormir</string>
 </resources>

@@ -1,5 +1,11 @@
 package com.villamediana.sound.ui.player
 
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.withLink
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.material.icons.rounded.FastRewind
 import androidx.compose.material.icons.rounded.Tune
@@ -116,7 +122,6 @@ import kotlin.math.abs
 
 internal val PlayerGutter = 24.dp
 internal val BigCoverCorner = 8.dp
-private val LyricsPeek = 20.dp
 
 /** Everything the player can do, as stable callbacks (built once by the host). */
 internal class PlayerActions(
@@ -223,7 +228,7 @@ internal fun FullPlayer(
         val landscape = maxWidth > maxHeight
         val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-        val sectionHeight = maxHeight - navBottom - LyricsPeek
+        val sectionHeight = maxHeight - navBottom
         Column(Modifier.fillMaxSize().nestedScroll(connection).verticalScroll(scroll)) {
             val section = Modifier.fillMaxWidth().height(sectionHeight).padding(top = statusTop)
             val visible = { expand.progress >= 1f }
@@ -254,6 +259,8 @@ internal fun FullPlayer(
                     Spacer(Modifier.height(10.dp))
                 }
             }
+            // The lyrics wait below the fold: the player fills the screen and they show up only when
+            // you scroll down (no edge peeking at the bottom).
             LyricsCard(
                 lyrics = lyrics,
                 clock = clock,
@@ -294,15 +301,6 @@ private fun TopBar(source: PlaySource?, actions: PlayerActions, hasVideo: Boolea
             }
         }
         Row(Modifier.align(Alignment.CenterEnd), verticalAlignment = Alignment.CenterVertically) {
-            AnimatedVisibility(hasVideo, enter = fadeIn(tween(200)) + scaleIn(initialScale = 0.7f), exit = fadeOut(tween(140)) + scaleOut(targetScale = 0.7f)) {
-                PlayerIconButton(
-                    Icons.Rounded.SmartDisplay,
-                    stringResource(R.string.player_video),
-                    actions.openVideo,
-                    iconSize = 24.dp,
-                    tint = SoundColors.Text.copy(alpha = if (online) 0.9f else 0.4f),
-                )
-            }
             PlayerIconButton(Icons.Rounded.MoreVert, stringResource(R.string.more_options), actions.openActions, iconSize = 24.dp)
         }
     }
@@ -431,33 +429,24 @@ private fun TrackHeader(track: Track, stream: StreamUi, liked: Boolean, actions:
                 )
                 Spacer(Modifier.height(3.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    val link = MaterialTheme.typography.bodyLarge
-                    val dim = SoundColors.Text.copy(alpha = 0.7f)
                     StreamedMark(visible = t.isOnline, size = 16.dp, gap = 6.dp)
+                    // One line that scrolls when long (artist · album), both parts still tappable.
+                    val dim = SoundColors.Text.copy(alpha = 0.7f)
+                    val line = buildAnnotatedString {
+                        val style = TextLinkStyles(SpanStyle(color = dim))
+                        if (t.isOnline) append(t.artist) else withLink(LinkAnnotation.Clickable("artist", style) { actions.openArtist(t.artist) }) { append(t.artist) }
+                        if (t.hasAlbum) {
+                            withStyle(SpanStyle(color = SoundColors.Text.copy(alpha = 0.4f))) { append("  ·  ") }
+                            if (t.isOnline) append(t.album.orEmpty()) else withLink(LinkAnnotation.Clickable("album", style) { actions.openAlbum(t) }) { append(t.album.orEmpty()) }
+                        }
+                    }
                     Text(
-                        t.artist,
-                        style = link,
+                        line,
+                        style = MaterialTheme.typography.bodyLarge,
                         color = dim,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        // A streamed song's artist/album aren't in the library: no link to follow.
-                        modifier = Modifier
-                            .weight(1f, fill = false)
-                            .clickable(enabled = !t.isOnline, interactionSource = null, indication = null) { actions.openArtist(t.artist) },
+                        modifier = Modifier.weight(1f, fill = false).basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 2_200, repeatDelayMillis = 2_600),
                     )
-                    if (t.hasAlbum) {
-                        Text("  ·  ", style = link, color = SoundColors.Text.copy(alpha = 0.4f))
-                        Text(
-                            t.album.orEmpty(),
-                            style = link,
-                            color = dim,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier
-                                .weight(1f, fill = false)
-                                .clickable(enabled = !t.isOnline, interactionSource = null, indication = null) { actions.openAlbum(t) },
-                        )
-                    }
                 }
             }
         }
@@ -524,7 +513,6 @@ private fun BottomRow(outputName: String?, output: OutputRoute, sleep: SleepTime
             )
             LyricsPill(lyrics, actions.openLyrics, Modifier.align(Alignment.Center))
             Row(Modifier.align(Alignment.CenterEnd), verticalAlignment = Alignment.CenterVertically) {
-                SleepButton(sleep, actions.openSleep)
                 PlayerIconButton(Icons.AutoMirrored.Rounded.QueueMusic, stringResource(R.string.player_queue), actions.openQueue, size = 48.dp, iconSize = 26.dp, tint = SoundColors.Text.copy(alpha = 0.85f))
             }
         }

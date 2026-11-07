@@ -301,6 +301,15 @@ class PlaybackServiceTest {
         assertNull(listen.currentTrackId)
     }
 
+    @Test fun swipingTheAppAwayWhilePlayingStopsTheMusic() {
+        start()
+        play(tracks.map { it.id }, 0)
+        idleUntil { player.isPlaying }
+        service.get().onTaskRemoved(null)
+        idle(50)
+        assertFalse(player.isPlaying)
+    }
+
     // ------------------------------------------------------------------ resuming the saved queue
 
     /** What Media3 does with a resumption result for a play press (not started: Robolectric plays through songs in no time). */

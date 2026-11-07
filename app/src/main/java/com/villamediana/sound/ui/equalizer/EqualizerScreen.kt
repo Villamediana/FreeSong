@@ -1,5 +1,7 @@
 package com.villamediana.sound.ui.equalizer
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.rounded.Bedtime
 import androidx.compose.material.icons.rounded.Nature
@@ -95,9 +97,13 @@ fun EqualizerScreen() {
     val state by vm.state.collectAsStateWithLifecycle()
     val hasMedia by vm.hasMedia.collectAsStateWithLifecycle()
     val nav = navigator()
+    val playback by com.villamediana.sound.SoundApplication.graph.player.state.collectAsStateWithLifecycle()
     EqualizerContent(
         state = state,
         hasMedia = hasMedia,
+        nowPlaying = playback.current?.let { t ->
+            { NowPlayingStrip(t, playback.isPlaying, onToggle = { com.villamediana.sound.SoundApplication.graph.player.togglePlayPause() }) }
+        },
         onBack = nav::back,
         onEnabled = vm::setEnabled,
         onPreset = vm::selectPreset,
@@ -114,6 +120,8 @@ internal fun EqualizerContent(
     state: EqState,
     hasMedia: Boolean,
     onBack: () -> Unit,
+    /** The song playing, shown on top (cover, title, play/pause) like a player header. */
+    nowPlaying: (@Composable () -> Unit)? = null,
     onEnabled: (Boolean) -> Unit,
     onPreset: (EqPreset) -> Unit,
     onCustom: () -> Unit,
@@ -132,7 +140,26 @@ internal fun EqualizerContent(
             .verticalScroll(rememberScrollState())
             .padding(top = top),
     ) {
-        TopBar(enabled = state.enabled, onBack = onBack, onEnabled = onEnabled)
+        if (nowPlaying != null) {
+            Row(Modifier.fillMaxWidth().padding(start = 6.dp, end = Dimens.Gutter, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.back), tint = SoundColors.Text) }
+                Box(Modifier.weight(1f)) { nowPlaying() }
+            }
+            Spacer(Modifier.height(14.dp))
+        }
+        // The equalizer as a panel under the song (a sheet look, with its handle).
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                .background(SoundColors.Text.copy(alpha = if (SoundColors.isLight) 0.035f else 0.05f)),
+        ) {
+        if (nowPlaying != null) {
+            Box(Modifier.fillMaxWidth().padding(top = 10.dp), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(width = 36.dp, height = 4.dp).clip(CircleShape).background(SoundColors.Text.copy(alpha = 0.18f)))
+            }
+        }
+        TopBar(enabled = state.enabled, onBack = onBack, onEnabled = onEnabled, showBack = nowPlaying == null)
         Spacer(Modifier.height(18.dp))
 
         if (state.available) {
@@ -197,18 +224,33 @@ internal fun EqualizerContent(
         }
 
         Spacer(Modifier.height(LocalBottomInset.current))
+        }
+    }
+}
+
+/** Cover, title, artist and play/pause of the song playing (top of the equalizer). */
+@Composable
+private fun NowPlayingStrip(track: com.villamediana.sound.data.db.Track, playing: Boolean, onToggle: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        com.villamediana.sound.ui.components.Cover(track.coverPath, Modifier.size(64.dp), seed = track.album ?: track.title, shape = RoundedCornerShape(16.dp))
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(track.title, style = MaterialTheme.typography.titleLarge, color = SoundColors.Text, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+            Text(track.artist, style = MaterialTheme.typography.bodyMedium, color = SoundColors.TextMuted, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+        }
+        com.villamediana.sound.ui.components.PlayPauseButton(playing = playing, onClick = onToggle, size = 48.dp, container = SoundColors.Mint, content = SoundColors.OnMint)
     }
 }
 
 @Composable
-private fun TopBar(enabled: Boolean, onBack: () -> Unit, onEnabled: (Boolean) -> Unit) {
+private fun TopBar(enabled: Boolean, onBack: () -> Unit, onEnabled: (Boolean) -> Unit, showBack: Boolean = true) {
     val haptic = LocalHapticFeedback.current
     val switchLabel = stringResource(R.string.eq_enable)
     Row(
-        Modifier.fillMaxWidth().height(56.dp).padding(start = 6.dp, end = Dimens.Gutter),
+        Modifier.fillMaxWidth().height(60.dp).padding(start = if (showBack) 6.dp else Dimens.Gutter - 4.dp, end = Dimens.Gutter),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(onClick = onBack) {
+        if (showBack) IconButton(onClick = onBack) {
             Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.back), tint = SoundColors.Text)
         }
         Text(
