@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -39,6 +40,10 @@ data class Settings(
     /** Tapping a search result streams it right away (true) or downloads it (false). */
     val playOnlineByDefault: Boolean = true,
     val theme: ThemeMode = ThemeMode.LIGHT,
+    /** Genres picked on the first Home ("O que você curte?"), ids of [com.villamediana.sound.discover.GenreCatalog]. */
+    val favoriteGenres: Set<String> = emptySet(),
+    /** The genre picker was answered (or skipped): Home shows the suggestions from then on. */
+    val genresChosen: Boolean = false,
     val lastQueueJson: String? = null,
 )
 
@@ -54,6 +59,8 @@ class SettingsStore(private val context: Context) {
         val lastQueue = stringPreferencesKey("last_queue")
         val playOnline = booleanPreferencesKey("play_online_default")
         val theme = stringPreferencesKey("theme")
+        val genres = stringSetPreferencesKey("favorite_genres")
+        val genresChosen = booleanPreferencesKey("genres_chosen")
     }
 
     val settings: Flow<Settings> = context.dataStore.data.map { p ->
@@ -67,6 +74,8 @@ class SettingsStore(private val context: Context) {
             normalizeVolume = p[K.normalize] ?: false,
             playOnlineByDefault = p[K.playOnline] ?: true,
             theme = p[K.theme]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() } ?: ThemeMode.LIGHT,
+            favoriteGenres = p[K.genres].orEmpty(),
+            genresChosen = p[K.genresChosen] ?: false,
             lastQueueJson = p[K.lastQueue],
         )
     }
@@ -80,6 +89,10 @@ class SettingsStore(private val context: Context) {
     suspend fun setSmartShuffle(v: Boolean) = context.dataStore.edit { it[K.smartShuffle] = v }
     suspend fun setAutoplaySimilar(v: Boolean) = context.dataStore.edit { it[K.autoplay] = v }
     suspend fun setNormalizeVolume(v: Boolean) = context.dataStore.edit { it[K.normalize] = v }
+    suspend fun setFavoriteGenres(ids: Set<String>) = context.dataStore.edit {
+        it[K.genres] = ids
+        it[K.genresChosen] = true
+    }
     suspend fun setTheme(v: ThemeMode) = context.dataStore.edit { it[K.theme] = v.name }
     suspend fun setPlayOnlineByDefault(v: Boolean) = context.dataStore.edit { it[K.playOnline] = v }
     suspend fun setLastQueueJson(v: String?) = context.dataStore.edit { if (v == null) it.remove(K.lastQueue) else it[K.lastQueue] = v }

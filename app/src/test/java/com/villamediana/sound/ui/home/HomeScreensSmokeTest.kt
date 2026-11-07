@@ -95,9 +95,10 @@ class HomeScreensSmokeTest {
     @Test
     fun emptyHomeWelcomes() {
         compose.setContent { Host { HomeScreen() } }
-        waitForText("Sua música começa aqui")
-        compose.onAllNodesWithText("Buscar músicas").fetchSemanticsNodes().let { check(it.isNotEmpty()) }
-        shot("home-empty")
+        // First run: the genre picker instead of an empty page.
+        waitForText("O que você curte?")
+        waitForText("Reggaeton")
+        shot("home-picker")
     }
 
     @Test

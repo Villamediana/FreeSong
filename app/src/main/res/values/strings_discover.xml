@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="genre_pop">Pop</string>
+    <string name="genre_reggaeton">Reggaeton</string>
+    <string name="genre_rock">Rock</string>
+    <string name="genre_sertanejo">Sertanejo</string>
+    <string name="genre_funk">Funk</string>
+    <string name="genre_mpb">MPB</string>
+    <string name="genre_hiphop">Hip-hop</string>
+    <string name="genre_electronic">Eletrônica</string>
+    <string name="genre_latin">Latina</string>
+    <string name="genre_salsa">Salsa</string>
+    <string name="genre_pagode">Pagode</string>
+    <string name="genre_indie">Indie</string>
+    <string name="genre_rnb">R&amp;B</string>
+    <string name="genre_kpop">K-pop</string>
+    <string name="genre_gospel">Gospel</string>
+    <string name="genre_jazz">Jazz</string>
+    <string name="genre_classical">Clássica</string>
+    <string name="genre_eighties">Anos 80</string>
+    <string name="discover_pick_title">O que você curte?</string>
+    <string name="discover_pick_subtitle">Escolha alguns gêneros.</string>
+    <string name="discover_continue">Continuar</string>
+    <string name="discover_skip">Pular</string>
+    <string name="discover_for_you">%1$s pra você</string>
+    <string name="discover_title">Descobrir</string>
+    <string name="discover_edit">Editar</string>
+    <string name="discover_offline">Sem conexão. Mostrando as últimas sugestões.</string>
+    <string name="discover_selected">Selecionado</string>
+</resources>

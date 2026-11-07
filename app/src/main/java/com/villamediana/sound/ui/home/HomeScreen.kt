@@ -81,11 +81,14 @@ import com.villamediana.sound.ui.theme.SoundColors
 import kotlinx.coroutines.delay
 import java.time.LocalTime
 
-private enum class HomePhase { LOADING, EMPTY, FEED }
+private enum class HomePhase { LOADING, EMPTY, PICKER, DISCOVER, FEED }
 
 @Composable
 fun HomeScreen() {
     val vm: HomeViewModel = viewModel()
+    val discoverVm: DiscoverViewModel = viewModel()
+    val discover by discoverVm.state.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { discoverVm.onShown() }
     val state by vm.state.collectAsStateWithLifecycle()
     val playback by vm.playback.collectAsStateWithLifecycle()
     val downloads by vm.downloads.collectAsStateWithLifecycle()
@@ -105,10 +108,13 @@ fun HomeScreen() {
     var menuTarget by remember { mutableStateOf<CollectionTarget?>(null) }
 
     val phase = when {
-        !state.loaded -> HomePhase.LOADING
+        !state.loaded || !discover.ready -> HomePhase.LOADING
+        discover.showPicker && (state.empty || discover.editing) -> HomePhase.PICKER
+        state.empty && discover.favorites.isNotEmpty() -> HomePhase.DISCOVER
         state.empty -> HomePhase.EMPTY
         else -> HomePhase.FEED
     }
+    val playShelf: (Shelf, Int, String) -> Unit = { shelf, i, title -> discoverVm.play(shelf, i, title) }
 
     Box(Modifier.fillMaxSize().background(SoundColors.Ink)) {
         AnimatedContent(
@@ -119,6 +125,15 @@ fun HomeScreen() {
             when (p) {
                 HomePhase.LOADING -> Box(Modifier.fillMaxSize())
                 HomePhase.EMPTY -> EmptyHome(downloads, nav, intro)
+                HomePhase.PICKER -> GenrePicker(
+                    state = discover,
+                    downloads = downloads,
+                    nav = nav,
+                    onToggle = discoverVm::toggle,
+                    onContinue = discoverVm::confirm,
+                    onSkip = discoverVm::skip,
+                )
+                HomePhase.DISCOVER -> DiscoverHome(discover, playback, downloads, nav, onPlay = playShelf, onEdit = discoverVm::edit)
                 HomePhase.FEED -> HomeFeed(
                     state = state,
                     playback = playback,
@@ -128,6 +143,7 @@ fun HomeScreen() {
                     intro = intro,
                     onSong = { songSheet = it },
                     onMenu = { menuTarget = it },
+                    extra = { discoverShelves(discover, playback, titleFor = { shelfTitle(it) }, onPlay = playShelf, onEdit = discoverVm::edit) },
                 )
             }
         }
@@ -152,7 +168,7 @@ private fun rememberHour(): Int {
 }
 
 @Composable
-private fun greetingText(): String = stringResource(
+internal fun greetingText(): String = stringResource(
     when (greetingFor(rememberHour())) {
         Greeting.MORNING -> R.string.home_greeting_morning
         Greeting.AFTERNOON -> R.string.home_greeting_afternoon
@@ -161,7 +177,7 @@ private fun greetingText(): String = stringResource(
 )
 
 @Composable
-private fun HeaderActions(downloads: DownloadSummary, nav: Navigator) {
+internal fun HeaderActions(downloads: DownloadSummary, nav: Navigator) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         DownloadsIndicator(downloads, onClick = { nav.openDownloads() })
         IconButton(onClick = { nav.openSettings() }) {
@@ -182,6 +198,7 @@ private fun HomeFeed(
     intro: Boolean,
     onSong: (Track) -> Unit,
     onMenu: (CollectionTarget) -> Unit,
+    extra: LazyListScope.() -> Unit = {},
 ) {
     val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val listState = rememberLazyListState()
@@ -293,6 +310,8 @@ private fun HomeFeed(
                 }
             }
         }
+
+        extra()
     }
 }
 

@@ -53,6 +53,9 @@ class AppGraph(context: Context) {
 
     val downloads: DownloadController by lazy { WorkDownloadController(appContext, db, library, storage, settings) }
     val player: PlayerConnection by lazy { MediaPlayerConnection(appContext, library, settings, scope) }
+    val discover: com.villamediana.sound.discover.DiscoverRepository by lazy {
+        com.villamediana.sound.discover.DiscoverRepository(youTube, appContext.filesDir.resolve("discover.json"))
+    }
     val effects: AudioEffectsController by lazy { DeviceAudioEffects(appContext, scope) }
     val video: VideoPlayback by lazy { YouTubeVideoPlayback(appContext, scope) }
 }
