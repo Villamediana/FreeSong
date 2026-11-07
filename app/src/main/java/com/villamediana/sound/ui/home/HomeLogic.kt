@@ -3,15 +3,10 @@ package com.villamediana.sound.ui.home
 import com.villamediana.sound.data.db.PlayEvent
 import com.villamediana.sound.data.db.Track
 import com.villamediana.sound.data.model.AlbumSummary
-import com.villamediana.sound.data.model.ArtistSummary
-import com.villamediana.sound.data.model.PinnedItem
-import com.villamediana.sound.data.model.PlaylistSummary
-import com.villamediana.sound.data.sortKey
 import com.villamediana.sound.playback.PlaySource
 import com.villamediana.sound.playback.PlaybackState
 import com.villamediana.sound.smart.Taste
 import com.villamediana.sound.ui.library.LibItem
-import com.villamediana.sound.ui.library.LibraryIndex
 
 enum class Greeting { MORNING, AFTERNOON, NIGHT }
 
@@ -22,56 +17,7 @@ fun greetingFor(hour: Int): Greeting = when (hour) {
     else -> Greeting.NIGHT
 }
 
-/** A compact tile of the quick access grid at the top of Home. */
-sealed interface QuickTile {
-    val key: String
-
-    data class Liked(val count: Int) : QuickTile {
-        override val key get() = "liked"
-    }
-
-    data class PlaylistTile(val summary: PlaylistSummary) : QuickTile {
-        override val key get() = LibItem.playlistKey(summary.id)
-    }
-
-    data class AlbumTile(val summary: AlbumSummary) : QuickTile {
-        override val key get() = LibItem.albumKey(summary.key.normalized)
-    }
-}
-
-/**
- * Curtidas first, then pinned playlists/albums (pin order), then the most recent playlists/albums
- * (last played, added or changed — whichever is latest). Up to [limit] tiles, no repeats.
- */
-fun buildQuickAccess(
-    likedCount: Int,
-    pinned: List<PinnedItem>,
-    albums: List<AlbumSummary>,
-    playlists: List<PlaylistSummary>,
-    index: LibraryIndex,
-    limit: Int = 6,
-): List<QuickTile> {
-    val out = ArrayList<QuickTile>(limit)
-    val seen = HashSet<String>()
-    fun offer(tile: QuickTile) {
-        if (out.size < limit && seen.add(tile.key)) out += tile
-    }
-    offer(QuickTile.Liked(likedCount))
-    pinned.forEach {
-        when (it) {
-            is PinnedItem.PinnedPlaylist -> offer(QuickTile.PlaylistTile(it.summary))
-            is PinnedItem.PinnedAlbum -> offer(QuickTile.AlbumTile(it.summary))
-        }
-    }
-    if (out.size < limit) {
-        val recents = playlists.map { p -> QuickTile.PlaylistTile(p) to index.playlist(p.id, p.playlist.createdAt, p.playlist.updatedAt).recency } +
-            albums.map { a -> QuickTile.AlbumTile(a) to maxOf(a.lastPlayedAt ?: 0L, a.addedAt) }
-        recents.sortedByDescending { it.second }.forEach { offer(it.first) }
-    }
-    return out
-}
-
-/** An entry of the "Tocadas recentemente" / "Adicionadas recentemente" carousels. */
+/** An entry of the "Tocadas recentemente" carousel. */
 sealed interface HomeItem {
     val key: String
 
@@ -99,24 +45,6 @@ fun collapseToAlbums(tracks: List<Track>, albumsByKey: Map<String, AlbumSummary>
 
 fun recentlyPlayedItems(tracks: List<Track>, albumsByKey: Map<String, AlbumSummary>, limit: Int = 12): List<HomeItem> =
     collapseToAlbums(tracks.filter { it.lastPlayedAt != null }.sortedByDescending { it.lastPlayedAt }, albumsByKey, limit)
-
-fun recentlyAddedItems(tracks: List<Track>, albumsByKey: Map<String, AlbumSummary>, limit: Int = 12): List<HomeItem> =
-    collapseToAlbums(tracks.sortedByDescending { it.addedAt }, albumsByKey, limit)
-
-/** "Seus artistas": the ones you play the most, then the ones with more songs. */
-fun topArtists(artists: List<ArtistSummary>, index: LibraryIndex, limit: Int = 12): List<ArtistSummary> =
-    artists.sortedWith(
-        compareByDescending<ArtistSummary> { index.artist(it.name).plays }
-            .thenByDescending { it.trackCount }
-            .thenBy { it.name.sortKey() },
-    ).take(limit)
-
-/** Covers for the smart shuffle card: favourites first. */
-fun heroCovers(tracks: List<Track>, count: Int = 3): List<String> =
-    tracks.sortedWith(compareByDescending<Track> { it.liked }.thenByDescending { it.playCount }.thenByDescending { it.addedAt })
-        .mapNotNull { it.coverPath }
-        .distinct()
-        .take(count)
 
 const val TASTE_WINDOW_MS = 30L * 24 * 60 * 60 * 1000
 const val JUST_PLAYED_WINDOW_MS = 3L * 60 * 60 * 1000

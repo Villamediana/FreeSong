@@ -54,7 +54,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -66,7 +65,6 @@ import com.villamediana.sound.R
 import com.villamediana.sound.data.db.Track
 import com.villamediana.sound.download.DownloadSummary
 import com.villamediana.sound.playback.PlaybackState
-import com.villamediana.sound.ui.components.LikedArt
 import com.villamediana.sound.ui.components.PillButton
 import com.villamediana.sound.ui.components.PlayPauseButton
 import com.villamediana.sound.ui.components.SectionHeader
@@ -218,7 +216,6 @@ private fun HomeFeed(
     val top = if (embedded) 0.dp else WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val listState = rememberLazyListState()
     val playedTitle = stringResource(R.string.home_recently_played)
-    val addedTitle = stringResource(R.string.home_recently_added)
 
     LazyColumn(
         state = listState,
@@ -250,21 +247,13 @@ private fun HomeFeed(
           }
         }
 
-        if (state.quick.isNotEmpty()) {
-            val idx = order++
-            item(key = "quick", contentType = "quick") {
-                QuickAccess(state.quick, playback, nav, onMenu, Modifier.animateItem().staggerIn(idx, intro))
-            }
-        }
-
         val heroIdx = order++
         item(key = "hero", contentType = "hero") {
             val smartActive = playback.hasMedia && playback.isSmartLibrary()
             SmartShuffleHero(
-                cover = state.heroCovers.firstOrNull(),
                 playing = smartActive && playback.isPlaying,
                 onClick = { if (smartActive) vm.togglePlayPause() else vm.playSmartLibrary() },
-                modifier = Modifier.animateItem().staggerIn(heroIdx, intro).padding(top = if (state.quick.isEmpty()) 0.dp else Dimens.SectionGap - 6.dp),
+                modifier = Modifier.animateItem().staggerIn(heroIdx, intro),
             )
         }
 
@@ -291,37 +280,6 @@ private fun HomeFeed(
             item(key = "played", contentType = "carousel") {
                 Carousel(playedTitle, Modifier.animateItem().staggerIn(idx, intro)) {
                     homeItems(state.recentlyPlayed, playback, nav, playedTitle, vm, onSong, onMenu)
-                }
-            }
-        }
-
-        if (state.recentlyAdded.isNotEmpty()) {
-            val idx = order++
-            item(key = "added", contentType = "carousel") {
-                Carousel(addedTitle, Modifier.animateItem().staggerIn(idx, intro)) {
-                    homeItems(state.recentlyAdded, playback, nav, addedTitle, vm, onSong, onMenu)
-                }
-            }
-        }
-
-        if (state.genres.isNotEmpty()) {
-            val idx = order++
-            item(key = "genres", contentType = "carousel") {
-                Carousel(stringResource(R.string.home_by_genre), Modifier.animateItem().staggerIn(idx, intro)) {
-                    items(state.genres, key = { "g:" + it.name.lowercase() }) { genre ->
-                        GenreCard(genre, onClick = { nav.openGenre(genre.name) }, modifier = Modifier.animateItem())
-                    }
-                }
-            }
-        }
-
-        if (state.artists.isNotEmpty()) {
-            val idx = order++
-            item(key = "artists", contentType = "carousel") {
-                Carousel(stringResource(R.string.home_your_artists), Modifier.animateItem().staggerIn(idx, intro)) {
-                    items(state.artists, key = { "r:" + it.name.lowercase() }) { artist ->
-                        ArtistAvatar(artist.name, artist.coverPath, onClick = { nav.openArtist(artist.name) }, modifier = Modifier.animateItem())
-                    }
                 }
             }
         }
@@ -385,93 +343,36 @@ private fun LazyListScope.homeItems(
     }
 }
 
+/** "Suas músicas": the name and play beside it — one tap plays the library, weighted by taste. */
 @Composable
-private fun QuickAccess(
-    tiles: List<QuickTile>,
-    playback: PlaybackState,
-    nav: Navigator,
-    onMenu: (CollectionTarget) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val likedTitle = stringResource(R.string.home_liked)
-    QuickGrid(
-        modifier = modifier,
-        content = tiles.map { tile ->
-            @Composable { m: Modifier ->
-                when (tile) {
-                    is QuickTile.Liked -> QuickTileView(
-                        title = likedTitle,
-                        art = { LikedArt(it, shape = RectangleShape) },
-                        onClick = { nav.openLiked() },
-                        current = playback.hasMedia && playback.isFromLiked(),
-                        playing = playback.isPlaying,
-                        modifier = m,
-                    )
-                    is QuickTile.PlaylistTile -> {
-                        val p = tile.summary
-                        QuickTileView(
-                            title = p.name,
-                            art = { if (p.coverPath != null) TileCover(p.coverPath, p.name, it) else TileMosaic(p.mosaic, p.name, it) },
-                            onClick = { nav.openPlaylist(p.id) },
-                            onLongClick = { onMenu(CollectionTarget.Playlist(p)) },
-                            current = playback.hasMedia && playback.isFromPlaylist(p.id),
-                            playing = playback.isPlaying,
-                            modifier = m,
-                        )
-                    }
-                    is QuickTile.AlbumTile -> {
-                        val a = tile.summary
-                        QuickTileView(
-                            title = a.title,
-                            art = { TileCover(a.coverPath, a.title, it) },
-                            onClick = { nav.openAlbum(a.key) },
-                            onLongClick = { onMenu(CollectionTarget.Album(a)) },
-                            current = playback.isFromAlbum(a.key.normalized),
-                            playing = playback.isPlaying,
-                            modifier = m,
-                        )
-                    }
-                }
-            }
-        },
-    )
-}
-
-/** The smart shuffle hero: one tap plays the whole library, weighted by taste. */
-@Composable
-private fun SmartShuffleHero(cover: String?, playing: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun SmartShuffleHero(playing: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Box(modifier.fillMaxWidth().padding(horizontal = Dimens.Gutter)) {
         Row(
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(24.dp))
+                .clip(RoundedCornerShape(20.dp))
                 .background(Brush.linearGradient(listOf(SoundColors.SoftTop, SoundColors.SoftBottom)))
                 .pressable(onClick, pressed = 0.98f)
-                .padding(start = 22.dp, top = 22.dp, bottom = 22.dp, end = 18.dp),
+                .padding(start = 22.dp, top = 12.dp, bottom = 12.dp, end = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.home_smart_title), style = MaterialTheme.typography.headlineMedium, color = SoundColors.Text)
-                Spacer(Modifier.height(5.dp))
-                Text(
-                    stringResource(R.string.home_smart_subtitle),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = SoundColors.Text.copy(alpha = 0.75f),
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Spacer(Modifier.height(14.dp))
-                PlayPauseButton(
-                    playing = playing,
-                    onClick = onClick,
-                    size = 52.dp,
-                    container = SoundColors.Mint,
-                    content = SoundColors.OnMint,
-                    contentDescription = stringResource(if (playing) R.string.pause else R.string.play),
-                )
-            }
+            Text(
+                stringResource(R.string.home_smart_title),
+                style = MaterialTheme.typography.titleLarge,
+                color = SoundColors.Text,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
             Spacer(Modifier.size(12.dp))
-            com.villamediana.sound.ui.components.SoundBars(Modifier.size(96.dp), color = SoundColors.Mint)
+            PlayPauseButton(
+                playing = playing,
+                onClick = onClick,
+                size = 48.dp,
+                container = SoundColors.Mint,
+                content = SoundColors.OnMint,
+                contentDescription = stringResource(if (playing) R.string.pause else R.string.play),
+            )
         }
     }
 }

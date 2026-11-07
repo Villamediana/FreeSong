@@ -64,6 +64,8 @@ fun TrackRow(
     showDuration: Boolean = false,
     contentPadding: PaddingValues = PaddingValues(horizontal = Dimens.Gutter),
     trailing: (@Composable () -> Unit)? = null,
+    /** The little heart of a liked song (off where every song is liked). */
+    likedMark: Boolean = true,
 ) {
     Row(
         modifier
@@ -100,7 +102,7 @@ fun TrackRow(
             )
             Spacer(Modifier.height(2.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (track.liked) {
+                if (track.liked && likedMark) {
                     Icon(Icons.Rounded.Favorite, null, tint = sc.Liked, modifier = Modifier.size(12.dp))
                     Spacer(Modifier.width(5.dp))
                 }

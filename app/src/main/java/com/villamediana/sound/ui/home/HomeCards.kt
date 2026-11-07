@@ -245,45 +245,6 @@ fun MixCard(mix: Mix, playing: Boolean, onOpen: () -> Unit, onPlay: () -> Unit, 
     }
 }
 
-@Composable
-fun ArtistAvatar(name: String, cover: String?, onClick: () -> Unit, modifier: Modifier = Modifier, size: Dp = 112.dp) {
-    Column(modifier.width(size).pressable(onClick), horizontalAlignment = Alignment.CenterHorizontally) {
-        Cover(cover, Modifier.size(size), seed = name, shape = CircleShape)
-        Spacer(Modifier.height(9.dp))
-        Text(
-            name,
-            style = MaterialTheme.typography.titleSmall,
-            color = SoundColors.Text,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center,
-        )
-    }
-}
-
-@Composable
-fun GenreCard(genre: GenreSummary, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Box(modifier.size(width = 168.dp, height = 100.dp).pressable(onClick)) {
-        GenreArt(genre, Modifier.fillMaxSize(), coverFraction = 0.66f)
-        Column(Modifier.padding(12.dp).fillMaxWidth(0.72f)) {
-            Text(
-                genre.name,
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold),
-                color = SoundColors.Text,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                songCount(genre.trackCount),
-                style = MaterialTheme.typography.labelMedium,
-                color = SoundColors.Text.copy(alpha = 0.72f),
-                maxLines = 1,
-            )
-        }
-    }
-}
-
 /** Download icon wrapped in a progress ring, with a count — only while downloads are active or failed. */
 @Composable
 fun DownloadsIndicator(summary: DownloadSummary, onClick: () -> Unit, modifier: Modifier = Modifier) {
@@ -353,55 +314,3 @@ fun DownloadsIndicator(summary: DownloadSummary, onClick: () -> Unit, modifier: 
         }
     }
 }
-
-/** Two-column quick access grid. */
-@Composable
-fun QuickGrid(content: List<@Composable (Modifier) -> Unit>, modifier: Modifier = Modifier) {
-    Column(modifier.fillMaxWidth().padding(horizontal = Dimens.Gutter), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        content.chunked(2).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                row.forEach { it(Modifier.weight(1f)) }
-                if (row.size == 1) Spacer(Modifier.weight(1f))
-            }
-        }
-    }
-}
-
-/** Compact tile: art on the left, name, live bars when playing from it. */
-@Composable
-fun QuickTileView(
-    title: String,
-    art: @Composable (Modifier) -> Unit,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    onLongClick: (() -> Unit)? = null,
-    current: Boolean = false,
-    playing: Boolean = false,
-) {
-    Row(
-        modifier
-            .height(56.dp)
-            .clip(RoundedCornerShape(Dimens.CoverCorner))
-            .background(SoundColors.Surface1)
-            .pressable(onClick, onLongClick, pressed = 0.97f),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        art(Modifier.size(56.dp))
-        Text(
-            title,
-            style = MaterialTheme.typography.titleSmall,
-            color = if (current) SoundColors.Accent else SoundColors.Text,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f).padding(start = 10.dp, end = if (current) 4.dp else 10.dp),
-        )
-        if (current) PlayingBars(playing, Modifier.padding(end = 12.dp).size(12.dp))
-    }
-}
-
-/** Square tile cover for the quick grid (no rounding: the tile clips it). */
-@Composable
-fun TileCover(model: String?, seed: String, modifier: Modifier) = Cover(model, modifier, seed = seed, shape = RectangleShape)
-
-@Composable
-fun TileMosaic(covers: List<String>, seed: String, modifier: Modifier) = MosaicCover(covers, modifier, seed = seed, shape = RectangleShape)

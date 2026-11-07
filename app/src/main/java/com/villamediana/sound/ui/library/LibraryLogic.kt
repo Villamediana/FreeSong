@@ -63,11 +63,12 @@ sealed interface LibItem {
         override val pinned get() = false
     }
 
-    data class SongItem(val track: Track) : LibItem {
+    /** [likedAt]: in Músicas a song counts as added when it was liked. */
+    data class SongItem(val track: Track, val likedAt: Long? = null) : LibItem {
         override val key get() = "t:${track.id}"
         override val title get() = track.title
         override val artist get() = track.artist
-        override val activity get() = CollectionActivity(track.lastPlayedAt, track.playCount, track.addedAt)
+        override val activity get() = CollectionActivity(track.lastPlayedAt, track.playCount, likedAt ?: track.addedAt)
         override val pinned get() = false
     }
 
@@ -100,7 +101,12 @@ data class LibrarySource(
     val playlists: List<PlaylistSummary>,
     val pinned: List<PinnedItem>,
     val index: LibraryIndex,
+    /** Músicas: the liked songs, on the phone or streamed. */
+    val liked: List<LikedSong> = emptyList(),
 )
+
+/** A liked song and when it was liked. */
+data class LikedSong(val track: Track, val likedAt: Long)
 
 /** Pinned first (in pin order, only the kinds the filter shows), then the rest sorted. */
 data class LibrarySections(val pinned: List<LibItem>, val items: List<LibItem>)
@@ -125,10 +131,14 @@ fun buildSections(src: LibrarySource, filter: LibFilter?, sort: LibSort): Librar
         if (showsAlbums) src.albums.forEach { add(album(it)) }
         if (filter == null || filter == LibFilter.ARTISTS) src.artists.forEach { add(LibItem.ArtistItem(it, src.index.artist(it.name))) }
         if (filter == LibFilter.GENRES) src.genres.forEach { add(LibItem.GenreItem(it, src.index.genre(it.name))) }
-        if (filter == LibFilter.SONGS) src.tracks.forEach { add(LibItem.SongItem(it)) }
+        if (filter == LibFilter.SONGS) src.liked.forEach { add(LibItem.SongItem(it.track, it.likedAt)) }
     }
     return LibrarySections(pinned, sortItems(all.filter { it.key !in pinnedKeys }, effectiveSort(sort, filter)))
 }
+
+/** Músicas shows "Baixar" only for a liked song that is neither on the phone nor on its way. */
+fun canDownload(state: com.villamediana.sound.ui.search.ItemDownload): Boolean =
+    state == com.villamediana.sound.ui.search.ItemDownload.None || state is com.villamediana.sound.ui.search.ItemDownload.Failed
 
 /** The "Downloads" row at the top of the library. */
 data class DownloadsRowState(val active: Int, val failed: Int, val done: Int, val progress: Float?)
@@ -145,6 +155,6 @@ fun downloadsRow(tasks: List<DownloadTask>): DownloadsRowState? {
     )
 }
 
-/** Curtidas and the Downloads row live at the top of these views. */
-fun showsLiked(filter: LibFilter?): Boolean = filter == null || filter == LibFilter.PLAYLISTS
-fun showsDownloads(filter: LibFilter?): Boolean = filter == null || filter == LibFilter.PLAYLISTS || filter == LibFilter.SONGS
+/** Curtidas and the Downloads row: only on top of the whole library (the tabs list just their kind). */
+fun showsLiked(filter: LibFilter?): Boolean = filter == null
+fun showsDownloads(filter: LibFilter?): Boolean = filter == null

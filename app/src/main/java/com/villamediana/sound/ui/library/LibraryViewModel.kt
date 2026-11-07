@@ -24,6 +24,11 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.withTimeoutOrNull
+import com.villamediana.sound.data.isOnline
+import com.villamediana.sound.ui.search.DownloadLookup
+import com.villamediana.sound.ui.search.toRemoteTrack
 
 data class LibraryUiState(
     val loaded: Boolean = false,
@@ -37,7 +42,6 @@ data class LibraryUiState(
     val downloads: DownloadsRowState? = null,
     val pinned: List<LibItem> = emptyList(),
     val items: List<LibItem> = emptyList(),
-    val songCount: Int = 0,
 ) {
     val isEmptyView: Boolean get() = if (filter == null) libraryEmpty else pinned.isEmpty() && items.isEmpty()
 }
@@ -50,17 +54,29 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
     /** Selected pill (null = everything). Kept here so it survives tab switches. */
     val filter = MutableStateFlow<LibFilter?>(null)
 
+    /** A tab of the main screen shows one kind, always (no toggling back to everything). */
+    fun showOnly(f: LibFilter) {
+        filter.value = f
+    }
+
     val playback: StateFlow<PlaybackState> = graph.player.state
 
     private val index: Flow<LibraryIndex> =
         combine(library.tracks, graph.db.playlists().observeAllEntries()) { tracks, rows -> LibraryIndex.build(tracks, rows) }
             .flowOn(Dispatchers.Default)
 
+    /** Músicas: the liked songs (on the phone or streamed), each with when it was liked. */
+    private val likedSongs: Flow<List<LikedSong>> = combine(library.likedAll, library.likedOnline) { all, online ->
+        val streamedAt = online.associate { it.videoId to it.likedAt }
+        all.map { t -> LikedSong(t, if (t.isOnline) streamedAt[t.videoId] ?: 0L else t.likedAt ?: t.addedAt) }
+    }
+
     private val source: Flow<LibrarySource> = combine(
         combine(library.tracks, library.albums, library.artists, library.genres, library.playlists) { t, a, r, g, p -> Partial(t, a, r, g, p) },
         library.pinned,
         index,
-    ) { part, pinned, index -> LibrarySource(part.tracks, part.albums, part.artists, part.genres, part.playlists, pinned, index) }
+        likedSongs,
+    ) { part, pinned, index, liked -> LibrarySource(part.tracks, part.albums, part.artists, part.genres, part.playlists, pinned, index, liked) }
 
     private data class Partial(
         val tracks: List<Track>,
@@ -74,7 +90,7 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
 
     private val view: Flow<View> = combine(filter, prefs.sort, prefs.viewMode) { f, s, m -> View(f, s, m) }
 
-    private data class Built(val view: View, val sections: LibrarySections, val empty: Boolean, val likedCount: Int, val songCount: Int)
+    private data class Built(val view: View, val sections: LibrarySections, val empty: Boolean, val likedCount: Int)
 
     /** Sorting/grouping only reruns when the library or the view changes — not on download progress. */
     /** Curtidas counts streamed likes too. */
@@ -86,7 +102,6 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
             sections = buildSections(src, v.filter, v.sort),
             empty = src.tracks.isEmpty() && src.playlists.isEmpty() && liked == 0,
             likedCount = liked,
-            songCount = src.tracks.size,
         )
     }.flowOn(Dispatchers.Default)
 
@@ -105,7 +120,6 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
             downloads = if (showsDownloads(f)) dl else null,
             pinned = b.sections.pinned,
             items = b.sections.items,
-            songCount = b.songCount,
         )
     }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryUiState())
 
@@ -129,9 +143,35 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { onCreated(library.createPlaylist(name, description)) }
     }
 
-    fun playSongs(tracks: List<Track>, index: Int, sourceTitle: String) {
+    fun playSongs(tracks: List<Track>, index: Int, source: PlaySource) {
         if (tracks.isEmpty()) return
-        graph.player.play(tracks, index.coerceIn(0, tracks.lastIndex), PlaySource(PlaySource.Type.SONGS, sourceTitle))
+        graph.player.play(tracks, index.coerceIn(0, tracks.lastIndex), source)
         Chrome.openPlayer()
+    }
+
+    // ------------------------------------------------------------------ downloads of liked songs
+
+    /** Songs just asked for — hidden as queued until the queue has them. */
+    private val requested = MutableStateFlow<Set<String>>(emptySet())
+
+    /** Where each song stands: Músicas offers "Baixar" only to the ones not on the phone nor queued. */
+    val downloadLookup: StateFlow<DownloadLookup> =
+        combine(library.downloadedVideoIds, graph.downloads.tasks, requested) { done, tasks, asked -> DownloadLookup.build(done, tasks, asked) }
+            .flowOn(Dispatchers.Default)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DownloadLookup.Empty)
+
+    fun download(track: Track) {
+        val remote = track.toRemoteTrack() ?: return
+        val id = remote.videoId
+        if (!canDownload(downloadLookup.value.stateOf(id))) return
+        requested.update { it + id }
+        viewModelScope.launch {
+            try {
+                runCatching { graph.downloads.download(listOf(remote)) }
+                    .onSuccess { withTimeoutOrNull(5_000) { downloadLookup.first { it.isKnown(id) } } }
+            } finally {
+                requested.update { it - id }
+            }
+        }
     }
 }

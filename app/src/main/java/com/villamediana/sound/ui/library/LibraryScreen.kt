@@ -1,6 +1,5 @@
 package com.villamediana.sound.ui.library
 
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
@@ -90,6 +89,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.villamediana.sound.R
 import com.villamediana.sound.data.db.Track
 import com.villamediana.sound.playback.PlaybackState
+import com.villamediana.sound.playback.PlaySource
+import com.villamediana.sound.data.isOnline
+import com.villamediana.sound.ui.search.DownloadIndicator
+import com.villamediana.sound.ui.search.DownloadLookup
+import com.villamediana.sound.ui.search.ItemDownload
 import com.villamediana.sound.ui.components.Cover
 import com.villamediana.sound.ui.components.EmptyState
 import com.villamediana.sound.ui.components.FilterPill
@@ -116,10 +120,11 @@ import com.villamediana.sound.ui.theme.SoundColors
 
 @Composable
 fun LibraryScreen(embeddedFilter: LibFilter? = null) {
-    val vm: LibraryViewModel = viewModel()
-    // Inside the main screen: the filter comes from its pills, and its header replaces ours.
-    if (embeddedFilter != null) LaunchedEffect(embeddedFilter) { vm.selectFilter(embeddedFilter) }
+    // Inside the main screen: one view model per pill, showing that kind only (its header replaces ours).
+    val vm: LibraryViewModel = viewModel(key = embeddedFilter?.let { "library:" + it.name })
+    if (embeddedFilter != null) remember(vm, embeddedFilter) { vm.showOnly(embeddedFilter) }
     val state by vm.state.collectAsStateWithLifecycle()
+    val downloads by vm.downloadLookup.collectAsStateWithLifecycle()
     val selected by vm.filter.collectAsStateWithLifecycle()
     val playback by vm.playback.collectAsStateWithLifecycle()
     val nav = navigator()
@@ -163,6 +168,7 @@ fun LibraryScreen(embeddedFilter: LibFilter? = null) {
             ) { s ->
                 LibraryContent(
                     s = s,
+                    downloads = downloads,
                     playback = playback,
                     nav = nav,
                     vm = vm,
@@ -247,6 +253,7 @@ private fun sortLabel(s: LibSort): String = stringResource(
 @Composable
 private fun LibraryContent(
     s: LibraryUiState,
+    downloads: DownloadLookup,
     playback: PlaybackState,
     nav: Navigator,
     vm: LibraryViewModel,
@@ -258,7 +265,8 @@ private fun LibraryContent(
     val rowPad = if (grid) 0.dp else Dimens.Gutter
     val gridState = rememberLazyGridState()
     val songs = remember(s.items) { s.items.mapNotNull { (it as? LibItem.SongItem)?.track } }
-    val sourceTitle = stringResource(R.string.home_lib_title)
+    val songsTitle = stringResource(R.string.main_tab_songs)
+    val songsSource = remember(songsTitle) { PlaySource(PlaySource.Type.LIKED, songsTitle, "liked") }
     val entries = remember(s.pinned, s.items) { s.pinned + s.items }
 
     LazyVerticalGrid(
@@ -307,29 +315,6 @@ private fun LibraryContent(
             }
         }
 
-        if (s.filter == LibFilter.SONGS && songs.isNotEmpty()) {
-            item(key = "all-songs", span = { GridItemSpan(maxLineSpan) }, contentType = "row") {
-                LibraryRow(
-                    art = { IconArt(Icons.Outlined.MusicNote, it) },
-                    title = stringResource(R.string.home_lib_all_songs),
-                    subtitle = songCount(s.songCount),
-                    pinned = false,
-                    current = false,
-                    playing = false,
-                    onClick = { nav.openSongs() },
-                    trailing = {
-                        Box(Modifier.padding(start = 2.dp).size(40.dp), contentAlignment = Alignment.Center) {
-                            Icon(Icons.Rounded.ChevronRight, null, tint = SoundColors.TextFaint, modifier = Modifier.size(22.dp))
-                        }
-                    },
-                    // Same metrics as the TrackRows below it.
-                    artSize = Dimens.RowCover,
-                    height = Dimens.RowHeight,
-                    modifier = Modifier.animateItem(),
-                )
-            }
-        }
-
         items(
             entries,
             key = { it.key },
@@ -337,14 +322,19 @@ private fun LibraryContent(
         ) { item ->
             when (item) {
                 is LibItem.SongItem -> {
+                    // Músicas = the liked songs: no heart (all of them are), and "Baixar" only for
+                    // one that is not on the phone nor on its way — it goes once tapped.
                     val t = item.track
+                    val offer = t.isOnline && t.videoId?.let { canDownload(downloads.stateOf(it)) } == true
                     TrackRow(
                         track = t,
-                        onClick = { vm.playSongs(songs, songs.indexOfFirst { it.id == t.id }, sourceTitle) },
+                        onClick = { vm.playSongs(songs, songs.indexOfFirst { it.id == t.id }, songsSource) },
                         onLongClick = { onSong(t) },
                         onMore = { onSong(t) },
                         isCurrent = playback.current?.id == t.id,
                         isPlaying = playback.isPlaying,
+                        likedMark = false,
+                        trailing = { DownloadOffer(offer, onClick = { vm.download(t) }) },
                         modifier = Modifier.animateItem(),
                     )
                 }
@@ -525,9 +515,13 @@ private fun Subtitle(text: String, pinned: Boolean, small: Boolean = false) {
 }
 
 @Composable
-private fun IconArt(icon: ImageVector, modifier: Modifier) {
-    Box(modifier.clip(RoundedCornerShape(Dimens.CoverCorner)).background(SoundColors.Surface2), contentAlignment = Alignment.Center) {
-        Icon(icon, null, tint = SoundColors.TextMuted, modifier = Modifier.size(24.dp))
+private fun DownloadOffer(visible: Boolean, onClick: () -> Unit) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn() + expandHorizontally(),
+        exit = fadeOut() + shrinkHorizontally(),
+    ) {
+        DownloadIndicator(ItemDownload.None, onClick = onClick)
     }
 }
 

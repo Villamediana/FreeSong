@@ -115,6 +115,8 @@ class LibraryLogicTest {
             playlists = listOf(pinnedList, otherList),
             pinned = listOf(PinnedItem.PinnedAlbum(alpha, 20), PinnedItem.PinnedPlaylist(pinnedList, 10)),
             index = LibraryIndex.build(tracks, emptyList()),
+            // Músicas: only what was liked — a streamed like (never played here) counts from its like.
+            liked = listOf(LikedSong(tracks[0], likedAt = 50), LikedSong(track(-9, "streamed", addedAt = 0), likedAt = 60)),
         )
 
         val all = buildSections(src, null, LibSort.ALPHA)
@@ -134,8 +136,9 @@ class LibraryLogicTest {
         assertEquals(listOf("Rock"), titles(genres.items))
 
         val songsView = buildSections(src, LibFilter.SONGS, LibSort.RECENT)
-        assertEquals(listOf("c", "b", "a"), titles(songsView.items))
+        assertEquals(listOf("streamed", "a"), titles(songsView.items))
         assertTrue(songsView.items.all { it is LibItem.SongItem })
+        assertEquals(listOf("a", "streamed"), titles(buildSections(src, LibFilter.SONGS, LibSort.ALPHA).items))
     }
 
     @Test
@@ -162,12 +165,13 @@ class LibraryLogicTest {
     }
 
     @Test
-    fun likedAndDownloadsLiveAtTheTop() {
+    fun likedAndDownloadsOnlyInTheWholeLibrary() {
         assertTrue(showsLiked(null))
-        assertTrue(showsLiked(LibFilter.PLAYLISTS))
-        assertFalse(showsLiked(LibFilter.ALBUMS))
-        assertTrue(showsDownloads(LibFilter.SONGS))
-        assertFalse(showsDownloads(LibFilter.GENRES))
+        assertTrue(showsDownloads(null))
+        LibFilter.entries.forEach { f ->
+            assertFalse(showsLiked(f))
+            assertFalse(showsDownloads(f))
+        }
     }
 
     @Test

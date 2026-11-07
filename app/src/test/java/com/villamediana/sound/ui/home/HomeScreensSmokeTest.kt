@@ -107,14 +107,45 @@ class HomeScreensSmokeTest {
     fun homeShowsTheLibrary() {
         seed()
         compose.setContent { Host { HomeScreen() } }
-        waitForText("Aleatório inteligente")
-        waitForText("Curtidas")
+        waitForText("Suas músicas")
         waitForText("Tocadas recentemente")
         shot("home")
-        compose.onAllNodes(hasScrollToKeyAction())[0].performScrollToKey("artists")
-        waitForText("Seus artistas")
-        waitForText("Por gênero")
-        shot("home-bottom")
+        // The library has its own pills: no shortcuts, no added / genres / artists rows here.
+        listOf("Curtidas", "Aleatório inteligente", "Adicionadas recentemente", "Por gênero", "Seus artistas").forEach {
+            check(compose.onAllNodesWithText(it).fetchSemanticsNodes().isEmpty()) { "$it on the Home" }
+        }
+    }
+
+    @Test
+    fun songsTabListsTheLikedSongsOnly() {
+        seed()
+        // A streamed like: the only row offering "Baixar".
+        runBlocking {
+            SoundApplication.graph.library.setLiked(
+                com.villamediana.sound.online.RemoteTrack("zz1", "https://music.youtube.com/watch?v=zz1", "Streamed Love", "Online Artist"),
+                true,
+            )
+        }
+        compose.setContent { Host { com.villamediana.sound.ui.library.MainScreen() } }
+        compose.onAllNodesWithText("Músicas")[0].performClick()
+        waitForText("Velha Infância")
+        waitForText("Streamed Love")
+        check(compose.onAllNodesWithText("Té Para Tres").fetchSemanticsNodes().isEmpty()) { "a song not liked in Músicas" }
+        listOf("Downloads", "Curtidas", "Todas as músicas").forEach {
+            check(compose.onAllNodesWithText(it).fetchSemanticsNodes().isEmpty()) { "$it in Músicas" }
+        }
+        compose.waitUntil(5_000) { compose.onAllNodesWithContentDescription("Baixar").fetchSemanticsNodes().size == 1 }
+        shot("songs-tab")
+
+        compose.onAllNodesWithText("Playlists")[0].performClick()
+        waitForText("Domingo")
+        listOf("Downloads", "Curtidas").forEach {
+            check(compose.onAllNodesWithText(it).fetchSemanticsNodes().isEmpty()) { "$it in Playlists" }
+        }
+        // Back to Músicas: still the songs (the pill never toggles back to "everything").
+        compose.onAllNodesWithText("Músicas")[0].performClick()
+        waitForText("Velha Infância")
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("Domingo").fetchSemanticsNodes().isEmpty() }
     }
 
     @Test
@@ -136,7 +167,7 @@ class HomeScreensSmokeTest {
         compose.onNode(hasText("Playlists") and isSelectable()).assertIsNotSelected()
         shot("library-albums")
         compose.onAllNodesWithText("Músicas")[0].performClick()
-        waitForText("Todas as músicas")
+        waitForText("Velha Infância")
         shot("library-songs")
     }
 

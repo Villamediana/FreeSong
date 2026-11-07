@@ -6,13 +6,9 @@
     <string name="home_greeting_night">Buenas noches</string>
     <string name="home_settings">Ajustes</string>
     <string name="home_liked">Favoritas</string>
-    <string name="home_smart_title">Aleatorio inteligente</string>
-    <string name="home_smart_subtitle">Tu biblioteca, en el orden justo.</string>
+    <string name="home_smart_title">Tus canciones</string>
     <string name="home_made_for_you">Hechos para ti</string>
     <string name="home_recently_played">Escuchadas recientemente</string>
-    <string name="home_recently_added">Añadidas recientemente</string>
-    <string name="home_by_genre">Por género</string>
-    <string name="home_your_artists">Tus artistas</string>
     <string name="home_empty_line">Tu música empieza aquí</string>
     <string name="home_empty_action">Buscar música</string>
     <plurals name="home_downloads_active">
@@ -71,7 +67,6 @@
     <string name="home_lib_pin">Fijar en la biblioteca</string>
     <string name="home_lib_unpin">Dejar de fijar</string>
     <string name="home_lib_delete_playlist">Borrar playlist</string>
-    <string name="home_lib_all_songs">Todas las canciones</string>
     <string name="home_lib_downloads">Descargas</string>
     <plurals name="home_lib_dl_active">
         <item quantity="one">Descargando %d canción</item>
@@ -94,7 +89,7 @@
     <string name="home_lib_empty_artists_title">Aún no hay artistas</string>
     <string name="home_lib_empty_artists_body">Los artistas aparecen a medida que descargas canciones.</string>
     <string name="home_lib_empty_songs_title">Aún no hay canciones</string>
-    <string name="home_lib_empty_songs_body">Busca y descarga las canciones que quieras.</string>
+    <string name="home_lib_empty_songs_body">Dale me gusta a una canción y aparecerá aquí.</string>
     <string name="home_lib_empty_genres_title">Aún no hay géneros</string>
     <string name="home_lib_empty_genres_body">Los géneros aparecen cuando las canciones descargadas traen esa información.</string>
 
