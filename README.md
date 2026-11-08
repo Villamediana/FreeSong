@@ -6,7 +6,9 @@
 
 [**⬇ Baixar a APK**](../../releases/latest) · Android 8.0 ou mais novo
 
-<!-- Capturas de tela: docs/images/ -->
+<br>
+
+<img src="docs/images/inicio.jpg" width="24%" alt="Início"> <img src="docs/images/player.jpg" width="24%" alt="Player"> <img src="docs/images/letra-acordes.jpg" width="24%" alt="Letra com acordes"> <img src="docs/images/letra-traducao.jpg" width="24%" alt="Letra traduzida">
 
 </div>
 
@@ -55,6 +57,12 @@ quando ela existe ou são reconhecidos no próprio aparelho quando não existe.
 - **Retrospectiva** todo janeiro: as músicas, artistas e horas que você mais ouviu no ano.
 - **Economiza dados**: o que você já ouviu fica em cache no celular, e Ajustes › Armazenamento
   mostra o tamanho de cada cache para limpar quando quiser.
+
+<div align="center">
+
+<img src="docs/images/busca.jpg" width="24%" alt="Busca"> <img src="docs/images/album.jpg" width="24%" alt="Álbum"> <img src="docs/images/acorde.jpg" width="24%" alt="Desenho do acorde no piano"> <img src="docs/images/equalizador.jpg" width="24%" alt="Equalizador">
+
+</div>
 
 ## Como instalar
 
