@@ -74,7 +74,8 @@ internal fun chordStyleFor(lyric: TextStyle): TextStyle = lyric.copy(
  * sung lights up, the list keeps it [linesAbove] rows from the top, a touch pauses that for a few
  * seconds, a tap on a line seeks there); so do the rows of chords alone when there are no lyrics.
  * Lyrics without times stay still, as plain lyrics do: their chords sit at a guessed place, and
- * nothing pretends to know which line is being sung. A tap on a chord shows how to play it.
+ * nothing pretends to know which line is being sung. A player's written sheet puts its chords over
+ * the same words it wrote them over. A tap on a chord shows how to play it.
  */
 @Composable
 internal fun ChordLyricsLines(
@@ -92,12 +93,14 @@ internal fun ChordLyricsLines(
     horizontalPadding: Dp = 20.dp,
     lineGap: Dp = 10.dp,
 ) {
-    val rows = remember(lyrics, chart, durationMs) {
-        ChordLayout.rows(lyrics ?: ParsedLyrics(false, emptyList()), chart, durationMs)
+    val view = remember(lyrics, chart, durationMs) {
+        ChordLayout.view(lyrics ?: ParsedLyrics(false, emptyList()), chart, durationMs)
     }
+    val rows = view.rows
     val listState = rememberSaveable(rows, saver = LazyListState.Saver) { LazyListState() }
-    // Times known: synced lyrics, or no lyrics at all (the chords' own times). Not guessed ones.
-    val timed = lyrics == null || lyrics.synced || lyrics.lines.none { it.text.isNotBlank() }
+    // Times known: synced lyrics, or no lyrics at all (the heard chords' own times). Not guessed
+    // ones, nor a sheet shown as it is written.
+    val timed = view.follows
     val current by remember(rows, clock, timed) { derivedStateOf { if (timed) ChordLayout.rowAt(rows, clock.positionMs + PlayerMath.LYRICS_LEAD_MS) else -1 } }
     val dragged by listState.interactionSource.collectIsDraggedAsState()
     var resting by remember { mutableStateOf(true) }
@@ -114,8 +117,8 @@ internal fun ChordLyricsLines(
         if (current < 0) listState.animateScrollToItem(0) else listState.animateScrollToItem((current - linesAbove).coerceAtLeast(0))
     }
     val chordStyle = remember(textStyle) { chordStyleFor(textStyle) }
-    val names = remember(chart) { chart.chords.indices.map { chart.name(it) } }
-    val tap: (Int) -> Unit = { index -> onChord(chart.chords[index].chord) }
+    val names = remember(chart) { chart.labels() }
+    val tap: (Int) -> Unit = { index -> chart.chordAt(index)?.let(onChord) }
 
     LazyColumn(state = listState, modifier = modifier.testTag("chordLyrics"), contentPadding = contentPadding) {
         itemsIndexed(rows) { index, row ->

@@ -10,20 +10,34 @@ data class TimedChord(val startMs: Long, val endMs: Long, val root: Int, val qua
     val chord: Chord get() = Chord(root, quality, bass)
 }
 
-/** The chords heard in a song, in order, with its key (which also says how to spell them). */
+/**
+ * A song's chords with its key (which also says how to spell them): heard, in time ([chords]), or
+ * written by a player ([sheet], [chords] empty). [looked] says the written sheet was asked for and
+ * got an answer — a chart heard without that (no connection then) asks again later.
+ */
 @Serializable
 data class ChordChart(
     val chords: List<TimedChord>,
     val key: MusicKey? = null,
     val bpm: Double = 0.0,
     val version: Int = VERSION,
+    val sheet: WrittenSheet? = null,
+    val looked: Boolean = false,
 ) {
     val spelling: Spelling get() = Spelling.forKey(key)
 
+    val empty: Boolean get() = chords.isEmpty() && sheet?.names.isNullOrEmpty()
+
     /** Each chord once, in the order it first comes. */
-    val distinct: List<Chord> get() = chords.map { it.chord }.distinct()
+    val distinct: List<Chord> get() = (sheet?.names?.mapNotNull { Chord.closest(it) } ?: chords.map { it.chord }).distinct()
 
     fun name(index: Int): String = chords[index].chord.name(spelling)
+
+    /** What the rows' chord indices name: the heard chords in time, or the sheet's as written. */
+    fun labels(): List<String> = sheet?.names ?: chords.indices.map { name(it) }
+
+    /** The chord a row's index plays (a written one by its closest shape). */
+    fun chordAt(index: Int): Chord? = if (sheet != null) sheet.names.getOrNull(index)?.let { Chord.closest(it) } else chords.getOrNull(index)?.chord
 
     /** The chord ringing at [ms]: −1 before the first one. */
     fun indexAt(ms: Long): Int {
@@ -74,7 +88,20 @@ object ChordLayout {
     /** A pause shorter than this after a line is not a row of its own. */
     private const val MIN_GAP_ROW_MS = 3_000L
 
+    /** The rows, and whether they follow the song (known times) or stay still (guessed, or a sheet as written). */
+    data class View(val rows: List<ChordRow>, val follows: Boolean)
+
+    fun view(lyrics: ParsedLyrics, chart: ChordChart, durationMs: Long): View {
+        chart.sheet?.let { sheet ->
+            val (rows, follows) = SheetLayout.layout(lyrics, sheet, durationMs)
+            return View(rows, follows)
+        }
+        val hasWords = lyrics.lines.any { it.text.isNotBlank() }
+        return View(rows(lyrics, chart, durationMs), follows = lyrics.synced || !hasWords)
+    }
+
     fun rows(lyrics: ParsedLyrics, chart: ChordChart, durationMs: Long): List<ChordRow> {
+        chart.sheet?.let { return SheetLayout.layout(lyrics, it, durationMs).rows }
         if (lyrics.lines.none { it.text.isNotBlank() }) return timeline(chart)
         val chords = chart.chords
         if (chords.isEmpty()) return lyrics.lines.mapIndexed { i, l -> ChordRow.Lyric(i, l.text, l.timeMs, emptyList()) }

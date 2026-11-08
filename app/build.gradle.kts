@@ -33,8 +33,8 @@ android {
         applicationId = "com.villamediana.sound"
         minSdk = 26
         targetSdk = 36
-        versionCode = 53
-        versionName = "1.11.1"
+        versionCode = 54
+        versionName = "1.12.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -109,6 +109,7 @@ android {
                 it.systemProperty("sound.chords.dir", System.getenv("SOUND_CHORDS_DIR") ?: "")
                 it.systemProperty("sound.chords.variant", System.getenv("SOUND_CHORDS_VARIANT") ?: "")
                 it.systemProperty("sound.bench.dir", System.getenv("SOUND_BENCH_DIR") ?: "")
+                it.systemProperty("sound.cifra.dir", System.getenv("SOUND_CIFRA_DIR") ?: "")
                 // Robolectric 4.17 on JDK 21 at API 36 needs these to touch FileDescriptor internals.
                 it.jvmArgs(
                     "--add-opens=java.base/java.io=ALL-UNNAMED",

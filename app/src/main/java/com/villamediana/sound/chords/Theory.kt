@@ -21,6 +21,17 @@ enum class ChordQuality(val symbol: String, val intervals: IntArray, val dbSuffi
     ADD9("add9", intArrayOf(0, 2, 4, 7), "add9"),
     MIN_ADD9("madd9", intArrayOf(0, 2, 3, 7), "madd9"),
     DOM9("7(9)", intArrayOf(0, 2, 4, 7, 10), "9"),
+    // What written sheets use often enough to have a shape of its own.
+    MIN9("m7(9)", intArrayOf(0, 2, 3, 7, 10), "m9"),
+    MAJ9("7M(9)", intArrayOf(0, 2, 4, 7, 11), "maj9"),
+    SIX9("6(9)", intArrayOf(0, 2, 4, 7, 9), "69"),
+    MIN6_9("m6(9)", intArrayOf(0, 2, 3, 7, 9), "m69"),
+    MIN11("m7(11)", intArrayOf(0, 3, 5, 7, 10), "m11"),
+    DOM13("7(13)", intArrayOf(0, 4, 7, 9, 10), "13"),
+    DOM7_FLAT9("7(b9)", intArrayOf(0, 1, 4, 7, 10), "7b9"),
+    DOM7_SHARP9("7(#9)", intArrayOf(0, 3, 4, 7, 10), "7#9"),
+    DOM7_FLAT5("7(b5)", intArrayOf(0, 4, 6, 10), "7b5"),
+    AUG7("7(#5)", intArrayOf(0, 4, 8, 10), "aug7"),
     DIM("°", intArrayOf(0, 3, 6), "dim"),
     DIM7("°7", intArrayOf(0, 3, 6, 9), "dim7"),
     HALF_DIM("m7(b5)", intArrayOf(0, 3, 6, 10), "m7b5"),
@@ -31,7 +42,7 @@ enum class ChordQuality(val symbol: String, val intervals: IntArray, val dbSuffi
     /** The tones a shape must sound for the chord to read as itself (the fifth can go, but not here). */
     val essential: IntArray
         get() = when (this) {
-            POWER, DIM, DIM7, HALF_DIM, AUG -> intervals
+            POWER, DIM, DIM7, HALF_DIM, AUG, AUG7, DOM7_FLAT5 -> intervals
             else -> intervals.filter { it != 7 }.toIntArray()
         }
 }
@@ -86,6 +97,32 @@ data class Chord(val root: Int, val quality: ChordQuality, val bass: Int? = null
             return Chord(root, quality, bass?.takeIf { it != root })
         }
 
+        /**
+         * The chord a written name is closest to, for its shapes: [parse] when it can; otherwise the
+         * name with its extra notes taken off from the end ("F7M(2/4+)" plays as F7M, "Bb5-" as Bb5),
+         * the bass kept. Null only when it doesn't start like a chord.
+         */
+        fun closest(text: String): Chord? {
+            parse(text)?.let { return it }
+            val t = text.trim().replace('♯', '#').replace('♭', 'b')
+            val m = ROOT.find(t) ?: return null
+            val head = m.value
+            var rest = t.substring(m.range.last + 1)
+            var bass = ""
+            val slash = rest.lastIndexOf('/')
+            if (slash >= 0 && ROOT.matchEntire(rest.substring(slash + 1)) != null) {
+                bass = rest.substring(slash)
+                rest = rest.substring(0, slash)
+            }
+            // "(…)" groups first, whole; then a character at a time.
+            while (true) {
+                val group = Regex("\\([^()]*\\)$").find(rest)
+                rest = if (group != null) rest.substring(0, group.range.first) else rest.dropLast(1)
+                parse(head + rest + bass)?.let { return it }
+                if (rest.isEmpty()) return parse(head + bass) ?: parse(head)
+            }
+        }
+
         private val QUALITY_SPELLINGS: Map<String, ChordQuality> = buildMap {
             fun put(q: ChordQuality, vararg names: String) = names.forEach { put(it, q) }
             put(ChordQuality.MAJOR, "", "M", "maj", "major")
@@ -103,6 +140,16 @@ data class Chord(val root: Int, val quality: ChordQuality, val bass: Int? = null
             put(ChordQuality.ADD9, "add9", "9", "(9)", "add2", "9add")
             put(ChordQuality.MIN_ADD9, "madd9", "m9", "m(9)", "m(add9)", "madd2")
             put(ChordQuality.DOM9, "7(9)", "7/9", "79")
+            put(ChordQuality.MIN9, "m7(9)", "m7/9", "m79", "-7(9)", "min9")
+            put(ChordQuality.MAJ9, "7M(9)", "maj9", "maj7(9)", "M9", "7M/9", "Δ9")
+            put(ChordQuality.SIX9, "6(9)", "69", "6/9")
+            put(ChordQuality.MIN6_9, "m6(9)", "m69", "m6/9")
+            put(ChordQuality.MIN11, "m7(11)", "m11", "m7/11", "m7(4)")
+            put(ChordQuality.DOM13, "7(13)", "13", "7/13")
+            put(ChordQuality.DOM7_FLAT9, "7(b9)", "7b9", "7(9-)", "7/9-")
+            put(ChordQuality.DOM7_SHARP9, "7(#9)", "7#9", "7(9+)", "7/9+")
+            put(ChordQuality.DOM7_FLAT5, "7(b5)", "7b5", "7(5-)", "7/5-")
+            put(ChordQuality.AUG7, "7(#5)", "7#5", "7(5+)", "7/5+", "+7", "aug7")
             put(ChordQuality.DIM, "°", "º", "dim", "o")
             put(ChordQuality.DIM7, "°7", "º7", "dim7", "o7")
             put(ChordQuality.HALF_DIM, "m7(b5)", "m7b5", "ø", "ø7", "m7(5-)", "m7/5-", "-7b5")
@@ -232,6 +279,16 @@ object ChordSpeech {
                 ChordQuality.ADD9 -> "con novena"
                 ChordQuality.MIN_ADD9 -> "menor con novena"
                 ChordQuality.DOM9 -> "con séptima y novena"
+                ChordQuality.MIN9 -> "menor con séptima y novena"
+                ChordQuality.MAJ9 -> "con séptima mayor y novena"
+                ChordQuality.SIX9 -> "con sexta y novena"
+                ChordQuality.MIN6_9 -> "menor con sexta y novena"
+                ChordQuality.MIN11 -> "menor con séptima y oncena"
+                ChordQuality.DOM13 -> "con séptima y trecena"
+                ChordQuality.DOM7_FLAT9 -> "con séptima y novena menor"
+                ChordQuality.DOM7_SHARP9 -> "con séptima y novena aumentada"
+                ChordQuality.DOM7_FLAT5 -> "con séptima y quinta disminuida"
+                ChordQuality.AUG7 -> "aumentado con séptima"
                 ChordQuality.DIM -> "disminuido"
                 ChordQuality.DIM7 -> "disminuido con séptima"
                 ChordQuality.HALF_DIM -> "semidisminuido"
@@ -254,6 +311,16 @@ object ChordSpeech {
                 ChordQuality.ADD9 -> "com nona"
                 ChordQuality.MIN_ADD9 -> "menor com nona"
                 ChordQuality.DOM9 -> "com sétima e nona"
+                ChordQuality.MIN9 -> "menor com sétima e nona"
+                ChordQuality.MAJ9 -> "com sétima maior e nona"
+                ChordQuality.SIX9 -> "com sexta e nona"
+                ChordQuality.MIN6_9 -> "menor com sexta e nona"
+                ChordQuality.MIN11 -> "menor com sétima e décima primeira"
+                ChordQuality.DOM13 -> "com sétima e décima terceira"
+                ChordQuality.DOM7_FLAT9 -> "com sétima e nona menor"
+                ChordQuality.DOM7_SHARP9 -> "com sétima e nona aumentada"
+                ChordQuality.DOM7_FLAT5 -> "com sétima e quinta diminuta"
+                ChordQuality.AUG7 -> "aumentado com sétima"
                 ChordQuality.DIM -> "diminuto"
                 ChordQuality.DIM7 -> "diminuto com sétima"
                 ChordQuality.HALF_DIM -> "meio-diminuto"

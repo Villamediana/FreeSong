@@ -74,7 +74,11 @@
     <!-- Acordes sobre a letra -->
     <string name="lyrics_chords_show">Mostrar acordes</string>
     <string name="lyrics_chords_hide">Esconder acordes</string>
+    <string name="chords_looking">Procurando a cifra…</string>
     <string name="chords_listening">Ouvindo os acordes… %1$d%%</string>
+    <string name="chords_source">Cifra: %1$s</string>
+    <string name="chords_source_version">Cifra: %1$s · versão de %2$s</string>
+    <string name="chords_capo">Capotraste na %1$dª casa</string>
     <string name="chords_failed_error">Não deu pra ouvir os acordes desta música.</string>
     <string name="chords_failed_offline">Sem conexão pra ouvir os acordes.</string>
     <string name="chords_failed_too_long">Música longa demais pros acordes.</string>

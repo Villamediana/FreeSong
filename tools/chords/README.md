@@ -31,3 +31,20 @@ SOUND_CHORDS_DIR=$D SOUND_CHORDS_VARIANT=.phone ./gradlew :app:testDebugUnitTest
 ```
 
 Música com cifra (`Song.sheet`): compara acorde por acorde, na ordem, com a cifra.
+
+## Cifras do Cifra Club: `CifraClubLiveTest`
+
+A cifra de verdade sobre a letra de verdade (LRCLIB). O site recusa biblioteca HTTP, então as
+páginas são salvas antes por um navegador (uma por música, `<slug>.html`):
+
+```sh
+D=/tmp/cifras; mkdir -p $D
+google-chrome --headless=new --no-sandbox --timeout=20000 --dump-dom \
+  https://www.cifraclub.com.br/legiao-urbana/tempo-perdido/ > $D/tempo-perdido.html
+SOUND_LIVE=1 SOUND_CIFRA_DIR=$D ./gradlew :app:testDebugUnitTest --tests '*CifraClubLiveTest*' -i
+```
+
+Imprime cada música como o celular mostra e confere que a busca escolhe a cifra certa. Em 08/11:
+Si Usted la Viera (versão do Arjona pela letra), Tempo Perdido, Let It Be, Evidências e Perfect com
+36/36, 64/70, 177/167 (refrão repetido), 131/137 e 117/119 acordes no lugar.
+

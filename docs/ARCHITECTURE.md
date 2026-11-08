@@ -120,10 +120,32 @@ JSON: usar `kotlinx.serialization` (o `org.json` do Android vira stub nos testes
 - **Compartilhar** (`ui/components/Share.kt`): link (YouTube Music) ou o próprio arquivo de áudio
   (FileProvider `${applicationId}.files`), álbum/playlist remota.
 
-## Acordes (1.10.0, 2026-11-08; ouvido BTC desde 1.11.0)
+## Acordes (1.10.0, 2026-11-08; ouvido BTC desde 1.11.0; Cifra Club primeiro desde 1.12.0)
 
-Acordes em cima da letra, ouvidos **no celular** a partir do áudio da própria música (o Miguel
-escolheu isso; o Cifra Club recusa pedido de app e não vamos burlar a proteção do site).
+Acordes em cima da letra. **Primeiro a cifra do Cifra Club** (escrita por quem toca); só música sem
+cifra lá é **ouvida no celular** a partir do áudio (1.12.0, pedido do Miguel: "o oído como fallback").
+
+- **Cifra Club** (`chords/CifraClub.kt`): a busca (`solr.sscdn.co/cc/h2`) responde a qualquer um; a
+  página dá 403 (Akamai) a biblioteca HTTP pela forma da conexão, então é lida pelo motor de
+  navegador do próprio celular — `online/BrowserFetch` (WebView fora da tela, só arquivos do próprio
+  site, sem imagens, lida assim que o `<pre>` é montado), como a Luna faz. Foi o Miguel que decidiu
+  (antes, na 1.10.0, eu tinha decidido não fazer). Só vale cifra **desta** música: mesmo título e
+  artista (`CifraMatch`); se o site só tem a versão de outro artista (ex.: "Si Usted la Viera" do
+  Chacín → só a do Arjona), ela vale quando a letra dela bate com a nossa (`SheetLayout.fits`, 60%
+  das linhas) e a tela diz "versão de …". `CifraClubPage` lê o `<pre>` (acordes em `<b>`, espaço de
+  largura zero, partes de tab/dedilhado e acordes sobre tab fora), o tom ("com forma de" = tom
+  escrito) e o capotraste. Nada da página vai pro repo (testes com música inventada; páginas reais
+  em `SOUND_CIFRA_DIR` para `CifraClubLiveTest`).
+- `SheetLayout` encaixa a cifra **na nossa letra** (LRCLIB): cada linha da letra casa com a linha
+  (ou duas) da cifra num caminho de melhor custo (seguir é grátis, ficar/pular custa pouco, voltar —
+  refrão repetido que a cifra escreve uma vez — custa mais); dentro da linha as palavras são alinhadas
+  (sem acento, uma letra de diferença) e o acorde vai sobre a mesma letra em que foi escrito. Linhas
+  só de acordes entram onde a cifra tem: intro do início, solo na linha vazia da letra (com o tempo
+  dela), final. Letra que não bate (ou nenhuma letra): a cifra como está escrita, parada.
+- `ChordChart.sheet` guarda a cifra (nomes como escritos; a forma tocada é `Chord.closest`, que tira
+  extensões até achar um acorde conhecido); `looked` diz que o Cifra Club respondeu. Ouvida sem
+  resposta (sem internet) → pergunta de novo uma vez por sessão com os acordes abertos, e a cifra
+  achada substitui. `ChordState.Working(looking = true)` mostra "Procurando a cifra…".
 
 - `chords/` (puro Kotlin, testado, menos o que toca no Android):
   - `AudioChords` — o áudio da música: o arquivo baixado, ou o stream lido pelo mesmo `AudioCache`

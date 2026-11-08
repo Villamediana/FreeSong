@@ -263,13 +263,16 @@ internal fun ChordSheetHost(chart: ChordChart, chord: Chord?, instrument: Instru
     )
 }
 
-/** Under the lyrics header while the chords are on: how far the hearing is, or why it failed. */
+/**
+ * Under the lyrics header while the chords are on: looking for a sheet, how far the hearing is, or
+ * why it failed; once a player's sheet is shown, where it is from (a tap opens it) and its capo.
+ */
 @Composable
 internal fun ChordStatus(state: ChordState, onRetry: () -> Unit, modifier: Modifier = Modifier) {
     when (state) {
         is ChordState.Working -> Column(modifier.fillMaxWidth().testTag("chordProgress")) {
             Text(
-                stringResource(R.string.chords_listening, (state.progress * 100).toInt()),
+                if (state.looking) stringResource(R.string.chords_looking) else stringResource(R.string.chords_listening, (state.progress * 100).toInt()),
                 style = MaterialTheme.typography.labelLarge,
                 color = SoundColors.Text.copy(alpha = 0.72f),
             )
@@ -300,6 +303,28 @@ internal fun ChordStatus(state: ChordState, onRetry: () -> Unit, modifier: Modif
                     color = SoundColors.Mint,
                     modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable(role = Role.Button, onClick = onRetry).padding(horizontal = 10.dp, vertical = 6.dp),
                 )
+            }
+        }
+        is ChordState.Ready -> state.chart.sheet?.let { sheet ->
+            val uri = androidx.compose.ui.platform.LocalUriHandler.current
+            Row(modifier.fillMaxWidth().testTag("chordSource"), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    if (sheet.versionOf.isNotBlank()) stringResource(R.string.chords_source_version, sheet.source, sheet.versionOf)
+                    else stringResource(R.string.chords_source, sheet.source),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = SoundColors.Text.copy(alpha = 0.6f),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable(role = Role.Button) { runCatching { uri.openUri(sheet.url) } }
+                        .padding(vertical = 4.dp),
+                )
+                if (sheet.capo > 0) {
+                    Text(
+                        "  ·  " + stringResource(R.string.chords_capo, sheet.capo),
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                        color = SoundColors.Text.copy(alpha = 0.78f),
+                    )
+                }
             }
         }
         else -> Unit

@@ -69,12 +69,31 @@ class AppGraph(context: Context) {
                 r.run()
             }, "chords")
         }
+        // A player's sheet first (Cifra Club, its page read through the phone's browser engine).
+        val cifraClub = com.villamediana.sound.chords.CifraClub(http) { url ->
+            com.villamediana.sound.online.BrowserFetch.html(appContext, url, ready = "pre")
+        }
         com.villamediana.sound.chords.ChordEngine(
             scope = scope,
             store = com.villamediana.sound.chords.ChordStore(appContext.filesDir.resolve("chords")),
             worker = worker.asCoroutineDispatcher(),
             analyze = audio::analyze,
+            find = { subject -> cifraClub.lookup(subject.title, subject.artist) { songLyrics(subject) } },
         )
+    }
+
+    /** A song's lyrics for the chords (to check another artist's sheet): its own file, or the player's lookup. */
+    private suspend fun songLyrics(subject: com.villamediana.sound.chords.ChordSubject): com.villamediana.sound.data.ParsedLyrics? {
+        subject.lyricsPath?.let { java.io.File(it) }?.takeIf { it.isFile }?.let { f ->
+            return runCatching { com.villamediana.sound.data.Lrc.parse(f.readText().removePrefix("\uFEFF")) }.getOrNull()
+        }
+        val query = com.villamediana.sound.ui.player.LyricsQuery(
+            title = subject.title,
+            artist = subject.artist,
+            album = subject.album?.takeIf { it.isNotBlank() },
+            durationMs = subject.durationMs.takeIf { it > 0 },
+        )
+        return com.villamediana.sound.ui.player.PlayerLyrics.cache.get(query)
     }
 
     /** Chord shapes for the instruments (chords-db in assets, worked out for the rest). */

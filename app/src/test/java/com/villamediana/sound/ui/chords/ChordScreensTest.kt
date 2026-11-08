@@ -83,13 +83,14 @@ class ChordScreensTest {
     private val instrument = MutableStateFlow(Instrument.VIOLAO)
     private var heard = 0
 
-    private fun deps(chart: ChordChart?): ChordsDeps {
+    private fun deps(chart: ChordChart?, find: (suspend (com.villamediana.sound.chords.ChordSubject) -> com.villamediana.sound.chords.SheetLookup)? = null): ChordsDeps {
         val engine = ChordEngine(
             scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
             store = ChordStore(tmp.newFolder()),
             worker = Dispatchers.Main,
             analyze = { _, _ -> heard++; chart ?: ChordChart(emptyList()) },
             io = Dispatchers.Main,
+            find = find,
         )
         return ChordsDeps(
             engine = engine,
@@ -173,6 +174,38 @@ class ChordScreensTest {
         compose.onAllNodesWithText("D7").onFirst().performClick()
         compose.waitForIdle()
         compose.onNodeWithText("Ré com sétima").assertExists()
+    }
+
+    @Test fun aPlayersSheetComesFirstOverTheSameWords() {
+        // As a sheet writes it: the first two lines as one, chords over syllables, a capo.
+        val sheet = com.villamediana.sound.chords.WrittenSheet(
+            lines = listOf(
+                com.villamediana.sound.chords.SheetLine("", listOf(com.villamediana.sound.chords.SheetChord(0, "G7M"), com.villamediana.sound.chords.SheetChord(5, "A7(13)"))),
+                com.villamediana.sound.chords.SheetLine(
+                    "Olha que coisa mais linda, mais cheia de graça É ela a menina que vem e que passa",
+                    listOf(
+                        com.villamediana.sound.chords.SheetChord(0, "G7M"), com.villamediana.sound.chords.SheetChord(21, "A7(13)"),
+                        com.villamediana.sound.chords.SheetChord(48, "Am7(9)"), com.villamediana.sound.chords.SheetChord(66, "Ab7(b5)"),
+                    ),
+                ),
+                com.villamediana.sound.chords.SheetLine("Num doce balanço a caminho do mar", listOf(com.villamediana.sound.chords.SheetChord(4, "G7M"), com.villamediana.sound.chords.SheetChord(22, "Ab7(b5)"))),
+            ),
+            source = "Cifra Club",
+            url = "https://www.cifraclub.com.br/tom-jobim/garota-de-ipanema/",
+            capo = 2,
+        )
+        val written = ChordChart(emptyList(), MusicKey(7, false), sheet = sheet, looked = true)
+        show(deps(chart(), find = { com.villamediana.sound.chords.SheetLookup.Found(written) }))
+        assertEquals(0, heard)
+        compose.onNodeWithTag("chordLyrics").assertExists()
+        compose.onNodeWithText("Cifra: Cifra Club").assertExists()
+        compose.onNodeWithText("·  Capotraste na 2ª casa", substring = true).assertExists()
+        compose.onAllNodesWithText("Am7(9)").onFirst().assertExists()
+        shot("chords_written_sheet")
+        compose.onAllNodesWithText("A7(13)").onFirst().performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("Lá com sétima e décima terceira").assertExists()
+        shotDialog("chords_written_sheet_shape")
     }
 
     @Test fun theButtonTurnsChordsOnAndOff() {

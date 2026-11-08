@@ -72,4 +72,25 @@ class TheoryTest {
         val minor = listOf("Am", "Dm", "E7", "Am").map { p(it)!! }
         assertEquals(MusicKey(9, true), Keys.ofChords(minor))
     }
+
+    @Test fun readsWhatWrittenSheetsUse() {
+        assertEquals(Chord(9, ChordQuality.MIN9), p("Am7(9)"))
+        assertEquals(Chord(5, ChordQuality.MAJ9), p("F7M(9)"))
+        assertEquals(Chord(7, ChordQuality.DOM13), p("G7(13)"))
+        assertEquals(Chord(2, ChordQuality.SIX9), p("D6(9)"))
+        assertEquals(Chord(4, ChordQuality.MIN11), p("Em7(11)"))
+        assertEquals(Chord(11, ChordQuality.DOM7_FLAT9), p("B7(b9)"))
+        assertEquals(Chord(4, ChordQuality.AUG7, bass = 8), p("E7(#5)/G#"))
+        assertEquals("F7M(9)", Chord(5, ChordQuality.MAJ9).name())
+    }
+
+    @Test fun anyWrittenNamePlaysItsClosestChord() {
+        assertEquals(p("F7M"), Chord.closest("F7M(2/4+)"))
+        assertEquals(p("Bb5"), Chord.closest("Bb5-"))
+        assertEquals(p("E7/G#"), Chord.closest("E7(4/9)/G#"))
+        assertEquals(p("C#m7"), Chord.closest("C#m7(9/11)"))
+        assertEquals(p("A"), Chord.closest("Aadd11"))
+        assertEquals(p("Am"), Chord.closest("Am"))
+        assertEquals(null, Chord.closest("Refrão"))
+    }
 }

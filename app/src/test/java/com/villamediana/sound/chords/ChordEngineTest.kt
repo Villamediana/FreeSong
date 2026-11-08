@@ -27,12 +27,69 @@ class ChordEngineTest {
     private val chart = ChordChart(listOf(TimedChord(0, 4_000, 9, ChordQuality.MINOR), TimedChord(4_000, 8_000, 5, ChordQuality.MAJOR)), MusicKey(9, true), 90.0)
     private fun subject(key: String) = ChordSubject(key, videoId = key, path = null, durationMs = 200_000)
 
-    private fun TestScope.engine(analyze: suspend (ChordSubject, (Float) -> Unit) -> ChordChart): Pair<ChordEngine, ChordStore> {
+    private fun TestScope.engine(
+        find: (suspend (ChordSubject) -> SheetLookup)? = null,
+        store: ChordStore = ChordStore(tmp.newFolder()),
+        analyze: suspend (ChordSubject, (Float) -> Unit) -> ChordChart,
+    ): Pair<ChordEngine, ChordStore> {
         val dispatcher = StandardTestDispatcher(testScheduler)
-        val store = ChordStore(tmp.newFolder())
         // Not backgroundScope: advanceUntilIdle leaves background work alone.
         val scope = CoroutineScope(SupervisorJob() + dispatcher)
-        return ChordEngine(scope, store, dispatcher, analyze, io = dispatcher) to store
+        return ChordEngine(scope, store, dispatcher, analyze, io = dispatcher, find = find) to store
+    }
+
+    private val written = ChordChart(
+        emptyList(), MusicKey(7, false),
+        sheet = WrittenSheet(listOf(SheetLine("Uma linha", listOf(SheetChord(0, "G")))), "Cifra Club", "https://example.com/c"),
+        looked = true,
+    )
+
+    @Test fun aWrittenSheetComesFirstAndNothingIsHeard() = runTest {
+        var heard = 0
+        val seen = mutableListOf<ChordState>()
+        lateinit var engine: ChordEngine
+        val (made, store) = engine(find = { s ->
+            seen += engine.current(s.key)
+            SheetLookup.Found(written)
+        }) { _, _ -> heard++; chart }
+        engine = made
+        engine.request(subject("a"))
+        advanceUntilIdle()
+        assertEquals(ChordState.Working(0f, looking = true), seen.single())
+        assertEquals(ChordState.Ready(written), engine.current("a"))
+        assertEquals(0, heard)
+        assertEquals(written, store.read("a"))
+    }
+
+    @Test fun noSheetThenItIsHeardAndThatIsRemembered() = runTest {
+        var asked = 0
+        val (engine, store) = engine(find = { asked++; SheetLookup.Missing }) { _, _ -> chart }
+        engine.request(subject("a"))
+        advanceUntilIdle()
+        assertEquals(ChordState.Ready(chart.copy(looked = true)), engine.current("a"))
+        assertEquals(true, store.read("a")?.looked)
+        // Another session: read back, the sheet isn't asked for again.
+        val (again, _) = engine(find = { asked++; SheetLookup.Missing }, store = store) { _, _ -> error("heard again") }
+        again.request(subject("a"))
+        advanceUntilIdle()
+        assertEquals(1, asked)
+    }
+
+    @Test fun heardWhileTheSheetCouldNotBeAskedForItIsAskedAgainLater() = runTest {
+        var online = false
+        var heard = 0
+        val (engine, store) = engine(find = { if (online) SheetLookup.Found(written) else SheetLookup.Unreachable }) { _, _ -> heard++; chart }
+        engine.request(subject("a"))
+        advanceUntilIdle()
+        assertEquals(ChordState.Ready(chart), engine.current("a"))
+        assertEquals(false, store.read("a")?.looked)
+        // Back online, the chords opened again: the sheet takes the heard chords' place.
+        online = true
+        engine.request(subject("a"))
+        advanceUntilIdle()
+        assertEquals(ChordState.Ready(written), engine.current("a"))
+        assertEquals(written, store.read("a"))
+        assertEquals(1, heard)
     }
 
     @Test fun hearsOnceThenRemembers() = runTest {
