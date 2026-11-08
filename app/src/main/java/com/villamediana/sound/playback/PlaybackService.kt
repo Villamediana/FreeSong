@@ -86,6 +86,8 @@ class PlaybackService : MediaLibraryService() {
     private lateinit var streams: OnlineStreams
     private lateinit var artwork: ArtworkShare
     private val leveler = VolumeLeveler()
+    /** The quick crossfade of a tap on a lyric line ([SeekBlend]). */
+    private val seekBlend = SeekBlendProcessor()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val listen = ListenTracker { SystemClock.elapsedRealtime() }
 
@@ -127,7 +129,7 @@ class PlaybackService : MediaLibraryService() {
         strings = PlaybackStrings.from(this)
         streams = OnlineStreams(graph.scope, online = { hasInternet(this) }) { graph.youTube }
         artwork = ArtworkShare(this)
-        player = ExoPlayer.Builder(this)
+        player = ExoPlayer.Builder(this, SeekBlend.renderers(this, seekBlend))
             // The song playing is kept whole in memory (back buffer): going back in it, or seeking to
             // a part already heard, plays at once instead of downloading that part again.
             .setLoadControl(
@@ -1050,6 +1052,10 @@ class PlaybackService : MediaLibraryService() {
                     streams.prefetch(com.villamediana.sound.playback.stream.StreamUris.audio(id, settings.audioQuality))
                 }
                 SessionProtocol.RESTORE -> return serialized { restore() }
+                SessionProtocol.SEEK_BLEND -> {
+                    if (player.isPlaying) seekBlend.arm(player.currentPosition)
+                    player.seekTo(args.getLong(SessionProtocol.ARG_POSITION).coerceAtLeast(0))
+                }
                 else -> return Futures.immediateFuture(SessionResult(SessionResult.RESULT_ERROR_NOT_SUPPORTED))
             }
             return ok

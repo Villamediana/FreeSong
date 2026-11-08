@@ -29,6 +29,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.AlignmentLine
+import androidx.compose.ui.layout.FirstBaseline
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -182,7 +184,7 @@ internal fun ChordLyricsLines(
 /**
  * A lyric line with its chords over the words. The line may wrap: room for chords is made only
  * above the lines that have some, each chord sits over the character it belongs to, and chords that
- * would touch are pushed apart.
+ * would touch are pushed apart; more chords than the line is wide are set smaller, still one row.
  */
 @Composable
 private fun ChordedLine(
@@ -219,9 +221,33 @@ private fun ChordedLine(
         val gap = 4.dp.roundToPx()
         val lastLine = layout.lineCount - 1
         val lineOf = chords.map { c -> if (c.at >= text.length) lastLine else layout.getLineForOffset(c.at) }
+        // Across each printed line, in order, pushed apart, one row; more than fit are set smaller
+        // ([ChordPlacement]), never on top of each other.
+        val xs = IntArray(chords.size)
+        val scales = FloatArray(chords.size) { 1f }
+        for (l in lineOf.distinct()) {
+            val mine = chords.indices.filter { lineOf[it] == l }
+            val want = IntArray(mine.size) { k ->
+                val c = chords[mine[k]]
+                val x = if (c.at >= text.length) layout.getLineRight(lastLine) + gap * 2 else layout.getHorizontalPosition(c.at, true)
+                // The name's first letter lines up with the word's (the chip's padding hangs out to the left).
+                x.toInt() - pad
+            }
+            val placed = ChordPlacement.place(want, IntArray(mine.size) { placeables[mine[it]].width }, width, pad, gap)
+            mine.forEachIndexed { k, i ->
+                xs[i] = placed.x[k]
+                scales[i] = placed.scale
+            }
+        }
+        // All on one baseline: a name with a raised extension is taller, not set lower.
+        val baselines = IntArray(placeables.size) { i ->
+            placeables[i][FirstBaseline].takeIf { it != AlignmentLine.Unspecified } ?: placeables[i].height
+        }
+        val ascent = baselines.maxOrNull() ?: 0
+        val descent = placeables.indices.maxOfOrNull { placeables[it].height - baselines[it] } ?: 0
         // The chords sit close over their words (into the line's own leading), so a chord reads as
         // belonging to the line under it, not to the one above.
-        val room = (placeables.maxOfOrNull { it.height } ?: 0) - CHORD_TUCK.roundToPx()
+        val room = ascent + descent - CHORD_TUCK.roundToPx()
         // Each line goes down by the room made above it and above every line before it.
         val tops = IntArray(layout.lineCount)
         var shift = 0
@@ -234,29 +260,22 @@ private fun ChordedLine(
             val part = text.substring(layout.getLineStart(l), layout.getLineEnd(l, visibleEnd = true))
             drawn += measurer.measure(AnnotatedString(part), style, softWrap = false, maxLines = 1) to tops[l].toFloat()
         }
-        val xs = IntArray(chords.size)
-        for (i in chords.indices) {
-            val c = chords[i]
-            val x = if (c.at >= text.length) layout.getLineRight(lastLine) + gap * 2 else layout.getHorizontalPosition(c.at, true)
-            // The name's first letter lines up with the word's (the chip's padding hangs out to the left).
-            var at = x.toInt() - pad
-            val prev = (i - 1 downTo 0).firstOrNull { lineOf[it] == lineOf[i] }
-            if (prev != null) at = maxOf(at, xs[prev] + placeables[prev].width + gap)
-            xs[i] = at.coerceAtLeast(-pad)
-        }
-        // A crowded line's last chords that ran past the edge come back in, pushing the ones before
-        // them left instead of landing on top of each other.
-        for (l in lineOf.distinct()) {
-            var limit = width
-            for (i in chords.indices.reversed()) {
-                if (lineOf[i] != l) continue
-                if (xs[i] + placeables[i].width > limit) xs[i] = maxOf(-pad, limit - placeables[i].width)
-                limit = xs[i] - gap
-            }
-        }
         val height = layout.size.height + shift
         layout(width, height) {
-            placeables.forEachIndexed { i, p -> p.place(xs[i], tops[lineOf[i]] - room) }
+            placeables.forEachIndexed { i, p ->
+                val y = tops[lineOf[i]] - room + ascent - baselines[i]
+                val s = scales[i]
+                if (s == 1f) {
+                    p.place(xs[i], y)
+                } else {
+                    // Smaller around its baseline's left end: still over its word, on the same line as the others.
+                    p.placeWithLayer(xs[i], y) {
+                        scaleX = s
+                        scaleY = s
+                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, baselines[i].toFloat() / p.height.coerceAtLeast(1))
+                    }
+                }
+            }
         }
     }
 }

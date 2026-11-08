@@ -82,6 +82,8 @@ interface PlayerConnection {
     /** Restarts the track if more than ~3 s in, otherwise goes to the previous one. */
     fun previous()
     fun seekTo(positionMs: Long)
+    /** A tap on a lyric line: seeks with a quick crossfade from what was playing ([SeekBlend]). */
+    fun seekBlended(positionMs: Long) = seekTo(positionMs)
     fun skipTo(queueIndex: Int)
     fun setShuffle(enabled: Boolean)
     fun cycleRepeat()

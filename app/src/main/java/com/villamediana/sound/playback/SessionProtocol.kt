@@ -42,7 +42,14 @@ internal object SessionProtocol {
     const val PREFETCH = "sound.PREFETCH"
     const val ARG_VIDEO_IDS = "video_ids"
 
-    val appCommands = listOf(PLAY, QUEUE_ADD, QUEUE_MOVE, QUEUE_REMOVE, SLEEP, RESTORE, SET_SHUFFLE, PREFETCH)
+    /**
+     * Seek to [ARG_POSITION] with a quick crossfade from what is playing ([SeekBlend]): a tap on a
+     * lyric line. Paused, a plain seek.
+     */
+    const val SEEK_BLEND = "sound.SEEK_BLEND"
+    const val ARG_POSITION = "position"
+
+    val appCommands = listOf(PLAY, QUEUE_ADD, QUEUE_MOVE, QUEUE_REMOVE, SLEEP, RESTORE, SET_SHUFFLE, PREFETCH, SEEK_BLEND)
 
     fun command(action: String) = SessionCommand(action, Bundle.EMPTY)
 

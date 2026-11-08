@@ -18,6 +18,7 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.villamediana.sound.chords.ChordChart
 import com.villamediana.sound.chords.ChordEngine
@@ -164,9 +165,8 @@ class ChordScreensTest {
         assertEquals(Instrument.UKULELE, instrument.value)
         shotDialog("chords_sheet_ukulele")
 
-        compose.onNodeWithText("Cavaquinho").performClick()
-        compose.waitForIdle()
-        shotDialog("chords_sheet_cavaquinho")
+        // Set aside for now: Violão · Ukulele · Piano.
+        compose.onNodeWithText("Cavaquinho").assertDoesNotExist()
 
         compose.onNodeWithText("Piano").performClick()
         compose.waitForIdle()
@@ -261,6 +261,66 @@ class ChordScreensTest {
         compose.onNodeWithText("It's her, the girl who comes and goes by").assertExists()
         compose.onAllNodesWithText("Am7").onFirst().assertExists()
         shot("chords_translated")
+    }
+
+    @Test fun aShortLineUnderManyChordsNeverStacksThem() = crowdedLine(fontScale = 1f, name = "chords_crowded_line")
+
+    /** Bigger type (the phone's font size): the six don't fit across and are set smaller, still one row. */
+    @Test fun aShortLineUnderManyChordsStaysOneRowWhenTheyDontFit() = crowdedLine(fontScale = 1.3f, name = "chords_crowded_line_big")
+
+    private fun crowdedLine(fontScale: Float, name: String) {
+        // Sparks (Coldplay) on the phone: "I say, oh" under six chords; the first ones landed on one another.
+        val names = listOf("E7M(6/9)", "Em", "Em7", "F6(9/11+)", "C#m7(5-/9)", "C7M(9)")
+        val sheet = com.villamediana.sound.chords.WrittenSheet(
+            lines = listOf(
+                com.villamediana.sound.chords.SheetLine("I say, oh", names.mapIndexed { i, n -> com.villamediana.sound.chords.SheetChord(10 + i * 11, n) }),
+                com.villamediana.sound.chords.SheetLine("My heart is yours", listOf(com.villamediana.sound.chords.SheetChord(0, "G7M"), com.villamediana.sound.chords.SheetChord(9, "Em7"))),
+                com.villamediana.sound.chords.SheetLine("It's you that I hold on to", listOf(com.villamediana.sound.chords.SheetChord(0, "G7M"), com.villamediana.sound.chords.SheetChord(16, "Em7"), com.villamediana.sound.chords.SheetChord(24, "Am9"))),
+            ),
+            source = "Cifra Club",
+            url = "https://www.cifraclub.com.br/coldplay/sparks/",
+            capo = 6,
+        )
+        val sparks = ParsedLyrics(true, listOf(LyricLine(2_000, "I say, oh"), LyricLine(6_000, "My heart is yours"), LyricLine(10_000, "It's you that I hold on to")))
+        val chart = ChordChart(emptyList(), MusicKey(0, false), sheet = sheet, looked = true)
+        val d = deps(chart)
+        compose.setContent {
+            val density = androidx.compose.ui.platform.LocalDensity.current
+            SoundTheme(mode = com.villamediana.sound.data.ThemeMode.DARK) {
+                CompositionLocalProvider(LocalChords provides d, androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density.density, fontScale)) {
+                    androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.background(Color(0xFF4A3424))) {
+                        ChordLyricsLines(
+                            lyrics = sparks,
+                            chart = chart,
+                            durationMs = 227_000,
+                            clock = PlaybackClock().apply { onTick(2_500, 0L) },
+                            onSeek = {},
+                            onChord = {},
+                            textStyle = androidx.compose.material3.MaterialTheme.typography.displaySmall.copy(fontSize = 28.sp, lineHeight = 35.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
+                            colors = com.villamediana.sound.ui.player.LyricColors.over(Color(0xFF4A3424)),
+                            modifier = androidx.compose.ui.Modifier.fillMaxSize(),
+                            horizontalPadding = 28.dp,
+                            lineGap = 18.dp,
+                        )
+                    }
+                }
+            }
+        }
+        compose.waitForIdle()
+        shot(name)
+        val boxes = names.map { compose.onAllNodesWithText(it).onFirst().fetchSemanticsNode().boundsInRoot }
+        for (i in boxes.indices) for (j in 0 until i) {
+            assertTrue("${names[j]} and ${names[i]} overlap: ${boxes[j]} ${boxes[i]}", !boxes[i].overlaps(boxes[j]))
+        }
+        // All read above the words of their line (one 35 sp line at xxhdpi, the chords tucked 3 dp into it).
+        val words = compose.onNodeWithContentDescription("I say, oh").fetchSemanticsNode().boundsInRoot
+        val wordsTop = words.bottom - 35 * 3f * fontScale
+        boxes.forEach { assertTrue("$it sits on the words ($words)", it.bottom <= wordsTop + 12f) }
+        // One row, read left to right.
+        for (i in 1 until boxes.size) {
+            assertEquals(boxes[0].bottom, boxes[i].bottom, 1f)
+            assertTrue("${names[i]} reads before ${names[i - 1]}", boxes[i].left >= boxes[i - 1].right)
+        }
     }
 
     @Test fun theButtonTurnsChordsOnAndOff() {

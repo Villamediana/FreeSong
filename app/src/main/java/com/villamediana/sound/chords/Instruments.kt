@@ -22,7 +22,13 @@ enum class Instrument(
     val maxMuted: Int get() = if (strings.size >= 6) 2 else 0
 
     companion object {
-        fun fromId(id: String?): Instrument = entries.firstOrNull { it.name == id } ?: VIOLAO
+        /**
+         * The ones offered, in this order. The cavaquinho is set aside for now (Miguel's call): its
+         * shapes still work, it just isn't shown, and a saved choice of it reads as Violão.
+         */
+        val offered: List<Instrument> = listOf(VIOLAO, UKULELE, PIANO)
+
+        fun fromId(id: String?): Instrument = offered.firstOrNull { it.name == id } ?: VIOLAO
     }
 }
 

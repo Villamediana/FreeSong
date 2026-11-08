@@ -412,6 +412,10 @@ internal fun PlayerHost(
                 }
             },
             openEqualizer = { navigator.openEqualizer() },
+            seekLine = { pos ->
+                clock.seek(pos, System.nanoTime())
+                player.seekBlended(pos)
+            },
             openVideo = {
                 val t = latestTrack
                 val videoId = t.videoId
@@ -743,6 +747,7 @@ internal fun PlayerHost(
                 playing = playing,
                 durationMs = durationMs,
                 onSeek = actions.seek,
+                onLineSeek = actions.seekLine,
                 onTogglePlay = actions.togglePlay,
                 onClose = { lyricsOpen = false },
                 streamed = stream.streamed,

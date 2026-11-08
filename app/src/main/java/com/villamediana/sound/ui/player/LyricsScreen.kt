@@ -194,6 +194,8 @@ internal fun LyricsScreen(
     modifier: Modifier = Modifier,
     streamed: Boolean = false,
     online: Boolean = true,
+    /** A tap on a line (the seek bar uses [onSeek]). */
+    onLineSeek: (Long) -> Unit = onSeek,
 ) {
     val colors = LyricColors.over(lyricsBackground(washTarget))
     val chordsDeps = com.villamediana.sound.ui.chords.LocalChords.current
@@ -269,7 +271,7 @@ internal fun LyricsScreen(
                         chart = chart,
                         durationMs = durationMs,
                         clock = clock,
-                        onSeek = onSeek,
+                        onSeek = onLineSeek,
                         onChord = { sheetChord = it },
                         // A touch smaller than the plain lyrics: each line carries its chords too.
                         textStyle = MaterialTheme.typography.displaySmall.copy(fontSize = 28.sp, lineHeight = 35.sp, fontWeight = FontWeight.Bold),
@@ -286,7 +288,7 @@ internal fun LyricsScreen(
                     lyrics is LyricsState.Ready -> LyricsLines(
                         lyrics = lyrics.lyrics,
                         clock = clock,
-                        onSeek = onSeek,
+                        onSeek = onLineSeek,
                         textStyle = MaterialTheme.typography.displaySmall.copy(fontSize = 31.sp, lineHeight = 39.sp, fontWeight = FontWeight.Bold),
                         colors = colors,
                         modifier = Modifier.fillMaxSize(),

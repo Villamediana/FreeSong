@@ -433,6 +433,12 @@ class MediaPlayerConnection(
         _position.value = positionMs.coerceAtLeast(0)
     }
 
+    override fun seekBlended(positionMs: Long) {
+        val pos = positionMs.coerceAtLeast(0)
+        send(SessionProtocol.SEEK_BLEND, Bundle().apply { putLong(SessionProtocol.ARG_POSITION, pos) })
+        _position.value = pos
+    }
+
     override fun skipTo(queueIndex: Int) = withController { c ->
         val t = order.timelineIndexOf(playIndex(queueIndex))
         if (t < 0) return@withController

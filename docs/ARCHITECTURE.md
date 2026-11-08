@@ -119,6 +119,16 @@ JSON: usar `kotlinx.serialization` (o `org.json` do Android vira stub nos testes
   (`VideoRoute`, `navigator.openVideo(videoId, title)`); render com media3-ui-compose `PlayerSurface`.
 - **Compartilhar** (`ui/components/Share.kt`): link (YouTube Music) ou o próprio arquivo de áudio
   (FileProvider `${applicationId}.files`), álbum/playlist remota.
+- **Toque na letra com crossfade** (1.12.4, `playback/SeekBlend.kt`): tocar numa linha da letra vai
+  até ela com 300 ms de crossfade em vez de corte seco (a barra de progresso continua corte seco).
+  É um `AudioProcessor` no próprio sink do ExoPlayer (`SeekBlend.renderers`): guarda os últimos
+  1,5 s que entregou; o comando `SEEK_BLEND` arma com a posição ouvida e faz o seek; no flush desse
+  seek, o trecho entregue e ainda não ouvido (o buffer do AudioTrack, que o seek joga fora) é
+  misturado, saindo, no começo do trecho novo, entrando (potência igual). Sem segundo player, sem
+  atraso no toque. Pausado = seek normal. A posição vem do `StreamMetadata.positionOffsetUs` que o
+  `DefaultAudioSink` passa no 2º flush de cada seek (`SeekBlendSinkTest` confere no sink real; o
+  Media3 1.11 já faz uma rampa de ~20 ms depois de cada flush). Pra tirar: o renderers factory e o
+  comando no `PlaybackService`, `PlayerActions.seekLine` (a letra volta ao `seek`).
 
 ## Acordes (1.10.0, 2026-11-08; ouvido BTC desde 1.11.0; Cifra Club primeiro desde 1.12.0)
 
@@ -170,6 +180,12 @@ cifra lá é **ouvida no celular** a partir do áudio (1.12.0, pedido do Miguel:
   escuro, destaque no claro) — sem menta; piano com as teclas do acorde no acento e o baixo de acorde
   com barra num tom mais fundo; "POSIÇÃO 1 DE 4" e "NESTA MÚSICA" em caixa alta pequena; setas
   coladas ao rótulo e ponto da posição atual alongado; acordes da música tipografados, sem caixas.
+- 1.12.4: linha curta sob muitos acordes ("I say, oh" do Sparks com seis) empilhava os primeiros um
+  em cima do outro. `ChordPlacement`: sempre **uma fileira, da esquerda pra direita**; se não cabe, os
+  acordes daquela linha ficam menores só o necessário (escala pela linha de base). Duas fileiras foram
+  tentadas e o Miguel recusou: "empilhado não sei qual vem primeiro". Todos os acordes numa mesma
+  linha de base (`FirstBaseline`): o nome com extensão elevada fica mais alto, não mais baixo.
+  Cavaquinho fora da folha por enquanto (`Instrument.offered`: Violão · Ukulele · Piano).
 
 - `chords/` (puro Kotlin, testado, menos o que toca no Android):
   - `AudioChords` — o áudio da música: o arquivo baixado, ou o stream lido pelo mesmo `AudioCache`

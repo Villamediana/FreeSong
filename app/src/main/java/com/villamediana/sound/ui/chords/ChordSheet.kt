@@ -188,11 +188,11 @@ private fun QuietChoice(on: Boolean, onClick: () -> Unit, modifier: Modifier = M
     ) { content(ink) }
 }
 
-/** Violão · Ukulele · Cavaquinho · Piano as words, the chosen one on a soft pill. */
+/** Violão · Ukulele · Piano as words, the chosen one on a soft pill. */
 @Composable
 private fun InstrumentTabs(selected: Instrument, onSelect: (Instrument) -> Unit, modifier: Modifier = Modifier) {
     Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-        for (instrument in Instrument.entries) {
+        for (instrument in Instrument.offered) {
             val on = instrument == selected
             QuietChoice(on = on, onClick = { onSelect(instrument) }, role = Role.Tab) { ink ->
                 Text(

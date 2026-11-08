@@ -174,6 +174,8 @@ internal class PlayerActions(
     /** "Ver vídeo" (needs network). */
     val openVideo: () -> Unit = {},
     val openEqualizer: () -> Unit = {},
+    /** A tap on a lyric line: there with a quick crossfade (the seek bar stays a plain seek). */
+    val seekLine: (Long) -> Unit = seek,
 )
 
 /**
@@ -326,7 +328,7 @@ internal fun FullPlayer(
                 clock = clock,
                 wash = wash,
                 washTarget = washTarget,
-                onSeek = actions.seek,
+                onSeek = actions.seekLine,
                 onOpen = actions.openLyrics,
                 modifier = Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)),
                 streamed = stream.streamed,
