@@ -33,9 +33,15 @@ class ChordsLiveTest {
         // Played Am G C F with a capo on the first fret.
         Song("riptide", "Riptide Vance Joy", listOf("Bbm", "Ab", "Db", "Gb", "Ebm", "Fm")),
         Song("perfect", "Perfect Ed Sheeran", listOf("Ab", "Fm", "Db", "Eb", "Cm", "Bbm")),
+        // A sheet from ukulele-tabs.com that Miguel sent: intro and the three verses it writes out.
+        Song(
+            "si-usted-la-viera", "Si Usted la Viera Jorge Luis Chacin", listOf("Bb", "Bbm", "Eb", "Ebm", "F", "Gm7", "Gb7", "Gm", "Cm7", "Fm7"),
+            sheet = "Bb Bbm Eb Ebm | Bb F Ebm Gm7 Gb7 Bb F | Bb F Gm Gm7 Gb7 Bb F | Bb F Gm Gm7 Cm7 Ebm F Bb Gm Fm7 Cm7 Eb F Bb",
+        ),
     )
 
-    private data class Song(val slug: String, val query: String, val chords: List<String>)
+    /** [sheet]: the chords in order as a sheet writes them (bars "|" between sections), to compare one by one. */
+    private data class Song(val slug: String, val query: String, val chords: List<String>, val sheet: String? = null)
 
     @Test fun fetchesSongs() {
         assumeTrue(System.getProperty("sound.live") == "1" && dir.isNotBlank())
@@ -122,7 +128,54 @@ class ChordsLiveTest {
             )
             println("   on its chords: ${"%.0f".format(onKnown * 100)}% exact, ${"%.0f".format(loose * 100)}% same root and mode")
             println("   " + heard.chords.joinToString(" ") { "${it.chord.name(spelling)}@${"%.1f".format(it.startMs / 1000.0)}" })
+            song.sheet?.let { compare(it, heard.chords, spelling) }
         }
+    }
+
+    /**
+     * The sheet's chords against what was heard, one by one: aligned in order (Needleman–Wunsch;
+     * what is heard after the sheet's part is free), exact, same root and mode (Gm7 for Gm), or not.
+     */
+    private fun compare(sheet: String, heard: List<ChordHearing.Heard>, spelling: Spelling) {
+        val want = sheet.split(" ").filter { it.isNotBlank() && it != "|" }.map { Chord.parse(it)!! }
+        val got = heard.map { it.chord }
+        fun score(a: Chord, b: Chord) = when {
+            a == b -> 2
+            a.root == b.root && minor(a) == minor(b) -> 1
+            else -> -1
+        }
+        val gap = -1
+        val n = want.size
+        val m = got.size
+        val dp = Array(n + 1) { IntArray(m + 1) }
+        for (i in 1..n) dp[i][0] = dp[i - 1][0] + gap
+        for (j in 1..m) dp[0][j] = dp[0][j - 1] + gap
+        for (i in 1..n) for (j in 1..m) dp[i][j] = maxOf(dp[i - 1][j - 1] + score(want[i - 1], got[j - 1]), dp[i - 1][j] + gap, dp[i][j - 1] + gap)
+        // The sheet covers the start of the song: it may end anywhere in what was heard.
+        var j = (0..m).maxBy { dp[n][it] }
+        var i = n
+        val rows = ArrayList<String>()
+        while (i > 0 || j > 0) {
+            if (i > 0 && j > 0 && dp[i][j] == dp[i - 1][j - 1] + score(want[i - 1], got[j - 1])) {
+                val a = want[i - 1]; val b = heard[j - 1]
+                val mark = when (score(a, b.chord)) { 2 -> "✓ igual"; 1 -> "≈ mesma base"; else -> "✗ outro" }
+                rows += "%-5s  %-5s @%5.1fs  %s".format(a.name(spelling), b.chord.name(spelling), b.startMs / 1000.0, mark)
+                i--; j--
+            } else if (i > 0 && (j == 0 || dp[i][j] == dp[i - 1][j] + gap)) {
+                rows += "%-5s  %-13s  %s".format(want[i - 1].name(spelling), "—", "✗ não ouvido")
+                i--
+            } else {
+                val b = heard[j - 1]
+                rows += "%-5s  %-5s @%5.1fs  %s".format("—", b.chord.name(spelling), b.startMs / 1000.0, "+ a mais")
+                j--
+            }
+        }
+        rows.reverse()
+        println("   cifra  ouvido   ")
+        rows.forEach { println("   $it") }
+        val exact = rows.count { "✓" in it }
+        val close = rows.count { "≈" in it }
+        println("   ${want.size} acordes da cifra: $exact iguais, $close mesma base, ${want.size - exact - close} diferentes ou não ouvidos; ${rows.count { "+ a mais" in it }} a mais no meio")
     }
 
     private fun minor(c: Chord) = c.quality == ChordQuality.MINOR || c.quality == ChordQuality.MIN7

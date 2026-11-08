@@ -27,5 +27,11 @@ SOUND_CHORDS_DIR=$D SOUND_CHORDS_VARIANT=.phone ./gradlew :app:testDebugUnitTest
 
 Pelo caminho do celular (1.10.1): Let It Be 97%, Stand By Me 100%, Perfect 99%, Riptide 90%.
 
+Música com cifra (`Song.sheet`): o teste também compara acorde por acorde, na ordem, com a cifra.
+"Si Usted la Viera" (Jorge Luis Chacín, cifra do ukulele-tabs.com que o Miguel mandou): 85% do
+tempo nos acordes da cifra; dos 32 escritos na intro e nas três estrofes, 19 iguais. Os que faltam
+são os de passagem curtos (Ebm, Gm7, Fm7) e o Bbm da intro (ouvido Gm7). Trocas mais baratas ou
+acorde mínimo menor não melhoram de forma clara (20–21 de 32, mas o tempo certo cai para 83–84%).
+
 Resultado em 2026-11-08: Let It Be 96%, Stand By Me 100%, Perfect 99%, Riptide 88% (Riptide é
 tocada com capotraste na 1ª: soa Bbm–Ab–Db).
