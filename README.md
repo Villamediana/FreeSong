@@ -2,11 +2,11 @@
 
 # FreeSong
 
-**Música é pra ouvir. Não pra pagar de novo todo mês nem pra aguentar anúncio entre uma faixa e outra.**
+**Um player de música para Android sem conta, sem anúncio e sem assinatura.**
 
 [**⬇ Baixar a APK**](../../releases/latest) · Android 8.0 ou mais novo
 
-<!-- Capturas de tela: coloque aqui (por exemplo docs/images/player.png) -->
+<!-- Capturas de tela: docs/images/ -->
 
 </div>
 
@@ -14,101 +14,116 @@
 
 ## Por que esse app existe
 
-Gente, eu cansei.
+Ouvir música no celular virou uma escolha entre duas coisas ruins. Ou você paga uma assinatura
+todo mês, ou aceita anúncio interrompendo a música, não pode pular faixa nem escolher o que toca
+em seguida. E a biblioteca que você montou durante anos fica presa a uma conta: se a assinatura
+acaba, ela vai junto.
 
-Hoje pra ouvir música no celular você tem duas opções: paga uma assinatura todo mês, pra sempre,
-ou ouve de graça engolindo anúncio a cada três músicas, sem poder pular faixa, sem poder escolher
-a ordem, com a música parando no meio pra te vender alguma coisa. E se um dia você para de pagar,
-tudo o que você "tinha" some junto.
+Eu queria só um player bom. Abrir, procurar a música, tocar, montar as minhas playlists e ouvir
+offline quando estiver sem internet, sem criar conta e sem ninguém registrando o que eu escuto.
+Não achei um que fizesse isso do jeito que eu queria, então fiz o FreeSong.
 
-A música já está aí, de graça, no YouTube. O que falta é um player decente pra ouvir ela.
-Então eu fiz um.
+É um projeto pessoal, aberto, para quem tem a mesma vontade.
 
-O FreeSong é isso: um player bonito, rápido e completo, sem conta, sem assinatura, sem anúncio e
-sem ninguém olhando o que você escuta. Você abre, busca, toca. Se quiser, baixa pra ouvir sem
-internet. Fim.
+## Como funciona
 
-Fiz pra mim e tô dividindo com quem também cansou.
+O FreeSong é um cliente: ele não hospeda nem distribui música. A busca e a reprodução usam o
+catálogo público do YouTube Music por meio do [NewPipeExtractor](https://github.com/TeamNewPipe/NewPipeExtractor),
+a mesma biblioteca do [NewPipe](https://newpipe.net). Todo o resto (biblioteca, playlists,
+histórico, downloads e ajustes) fica no próprio celular, num banco de dados local.
+
+Por cima disso o app junta algumas fontes abertas: a letra vem do [LRCLIB](https://lrclib.net),
+o reconhecimento de música usa só a impressão digital do áudio, e os acordes vêm da cifra
+quando ela existe ou são reconhecidos no próprio aparelho quando não existe.
 
 ## O que ele faz
 
-- **Toca qualquer música** do YouTube Music na hora, sem baixar. Tocou uma, ele segue tocando
-  coisas do mesmo estilo, que nem uma rádio, e não qualquer coisa com o título parecido.
-- **Baixa pra ouvir offline**, uma por uma, no coração ou na setinha. Sem internet? Fica na fila
-  e baixa sozinho quando conectar (ou só no Wi-Fi, se você preferir).
-- **Letra sincronizada**, acompanhando a música, e **traduzida** verso por verso se ela for em
-  outro idioma.
-- **O clipe rodando atrás da capa**, em loop, bem de leve. Tocou na capa, abre o vídeo inteiro.
-  Não curtiu? Desliga nos Ajustes e fica só a capa.
-- **Crossfade** entre as músicas e **equalizador** de verdade.
-- **Descobre a música que está tocando** no ambiente, pelo microfone, estilo Shazam.
-- **Traz suas playlists e álbuns do Spotify**: cola o link (ou compartilha direto do app do
-  Spotify) e pronto, toca aqui.
-- **Sua retrospectiva**: todo janeiro, o seu ano em música. As que você mais ouviu, os artistas,
-  as horas, o seu horário favorito.
-- **Economiza sua internet**: o que você já ouviu fica guardado no celular e não é baixado de novo.
-  E tudo o que fica guardado aparece em Ajustes › Armazenamento, com o tamanho, pra você limpar o
-  que quiser.
+- **Busca e toca** qualquer música na hora, sem precisar baixar. Quando a lista acaba, ele segue
+  com músicas do mesmo estilo, como uma rádio.
+- **Ouve offline**: baixe uma música ou deixe o "curtir" já baixar. Sem internet ou fora do
+  Wi-Fi, o download espera na fila e começa sozinho depois.
+- **Letra sincronizada**, com **tradução** verso a verso para músicas em outro idioma.
+- **Acordes sobre a letra**, com transposição de tom, capotraste e o desenho do acorde para
+  violão, ukulele e piano. Sem cifra disponível, o app reconhece os acordes ouvindo a música
+  no próprio celular, e só quando você pede.
+- **Clipe atrás da capa**, em loop e discreto. Um toque na capa abre o vídeo inteiro. Dá para
+  desligar nos Ajustes.
+- **Crossfade** entre as faixas e **equalizador**.
+- **Reconhece a música que está tocando** no ambiente, pelo microfone.
+- **Importa playlists e álbuns do Spotify** a partir do link público (ou compartilhando direto
+  do app do Spotify).
+- **Retrospectiva** todo janeiro: as músicas, artistas e horas que você mais ouviu no ano.
+- **Economiza dados**: o que você já ouviu fica em cache no celular, e Ajustes › Armazenamento
+  mostra o tamanho de cada cache para limpar quando quiser.
 
 ## Como instalar
 
-1. Baixa a APK mais recente em [**Releases**](../../releases/latest).
-2. Abre o arquivo no celular. O Android vai perguntar se pode instalar de fora da loja: pode.
+1. Baixe a APK mais recente em [**Releases**](../../releases/latest).
+2. Abra o arquivo no celular e permita a instalação de fora da loja quando o Android pedir.
 
-Só isso. Não precisa criar conta, não pede seu e-mail, não pede nada.
+Não precisa de conta nem de e-mail.
 
-## Seus dados
+## Privacidade
 
-Não tem conta, não tem rastreamento, não tem anúncio. Sua biblioteca, seu histórico e seus
-ajustes ficam no seu celular.
+Não há conta, rastreamento, anúncio nem servidor próprio. Biblioteca, histórico e ajustes ficam
+no celular.
 
-O app só fala com a internet pro que precisa: buscar e tocar a música no YouTube, pegar a letra
-no LRCLIB, mandar a "impressão digital" do som pra descobrir qual música é (nunca a gravação),
-traduzir uma letra e ler uma playlist pública do Spotify quando você pede. Tudo por HTTPS.
+O app só acessa a internet para o que precisa, sempre por HTTPS:
 
-## Pra quem é dev
+| Para quê | Onde |
+|---|---|
+| Buscar e tocar músicas e clipes | YouTube Music (via NewPipeExtractor) |
+| Letras | LRCLIB |
+| Cifras | Cifra Club |
+| Reconhecer a música do ambiente | Shazam (só a impressão digital do áudio, nunca a gravação) |
+| Traduzir uma letra | Google Tradutor |
+| Ler uma playlist pública que você importou | Spotify |
+| Completar capa e dados do álbum | iTunes Search |
 
-O código tá todo aqui. Clona, compila e muda o que quiser.
+## Para desenvolvedores
 
-Precisa do **JDK 21** e do **Android SDK** com a plataforma **37**. O Gradle baixa o resto.
+Requisitos: **JDK 21** e **Android SDK** com a plataforma **37**. O Gradle baixa o resto.
 
 ```bash
-git clone <este repositório>
-cd <pasta>
+git clone https://github.com/Villamediana/FreeSong.git
+cd FreeSong
 export ANDROID_HOME=$HOME/Android/Sdk   # ou um local.properties com sdk.dir=...
 
 ./gradlew :app:assembleDebug
-# a APK sai em app/build/outputs/apk/debug/app-debug.apk
+# APK em app/build/outputs/apk/debug/app-debug.apk
 ```
 
-A versão debug instala do lado da normal (é outro pacote: `com.villamediana.sound.debug`).
+A versão debug instala ao lado da normal (pacote `com.villamediana.sound.debug`).
 
-Quer gerar a release assinada com a sua chave? Copia o `keystore.properties.example` pra
-`keystore.properties`, aponta pra sua chave e roda `./gradlew :app:assembleRelease`. Chave, senha
-e APK nunca vão pro repositório (tá tudo no `.gitignore`).
+Para gerar a release assinada com a sua chave, copie `keystore.properties.example` para
+`keystore.properties`, aponte para a sua chave e rode `./gradlew :app:assembleRelease`. Chaves,
+senhas e APKs ficam fora do repositório (`.gitignore`).
 
-Testes rodam no próprio computador, sem emulador:
+Os testes rodam na JVM, sem emulador:
 
 ```bash
-./gradlew :app:testDebugUnitTest                 # tudo, offline
-SOUND_LIVE=1 ./gradlew :app:testDebugUnitTest    # inclui os que batem na internet de verdade
+./gradlew :app:testDebugUnitTest                 # offline
+SOUND_LIVE=1 ./gradlew :app:testDebugUnitTest    # inclui os testes que acessam a internet
 ```
 
-Por dentro: Kotlin, Jetpack Compose, Media3 (ExoPlayer), Room, WorkManager, Coil, OkHttp e o
-[NewPipeExtractor](https://github.com/TeamNewPipe/NewPipeExtractor), que faz a ponte com o
-YouTube. Como o código é organizado está em [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+Stack: Kotlin, Jetpack Compose, Media3 (ExoPlayer), Room, WorkManager, Coil, OkHttp e
+NewPipeExtractor. A organização do código está em [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-## Papo reto
+## Aviso
 
-Isso aqui é um projeto pessoal, feito por um dev que gosta de música. Não tem nada a ver com
-YouTube, Google, Spotify ou Shazam. A ideia não é tirar nada de artista nenhum. É só ouvir música
-sem ser tratado como produto. Se você curte um artista, vai no show, compra o disco, apoia do
-jeito que der.
+Projeto pessoal, sem fins lucrativos e sem relação com YouTube, Google, Spotify, Shazam,
+Cifra Club ou qualquer gravadora. O FreeSong não hospeda conteúdo: ele reproduz o que já está
+publicamente disponível nesses serviços. Cada pessoa é responsável pelo uso que faz do app e por
+respeitar os termos dos serviços e as leis de direito autoral do seu país.
 
-## Valeu
+Se você gosta de um artista, apoie: vá ao show, compre o disco, siga e divulgue.
+
+## Créditos
 
 [NewPipeExtractor](https://github.com/TeamNewPipe/NewPipeExtractor) ·
 [LRCLIB](https://lrclib.net) ·
 [SongRec](https://github.com/marin-m/SongRec) e [ShazamIO](https://github.com/dotX12/ShazamIO) ·
+[BTC](https://github.com/jayg996/BTC-ISMIR19) (reconhecimento de acordes, MIT) ·
+[chords-db](https://github.com/tombatossals/chords-db) (MIT) ·
 [Media3](https://developer.android.com/media/media3) ·
 [Coil](https://coil-kt.github.io/coil/)
