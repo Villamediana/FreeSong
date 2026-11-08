@@ -381,7 +381,7 @@ internal fun PlayerHost(
             // opens its artist in the library.
             openArtist = { t ->
                 val name = com.villamediana.sound.stats.Recaps.mainArtist(t.artist)
-                if (latestOnline || t.isOnline) navigator.findArtist(name, deps.artistPicture(name)) else navigator.openArtist(t.artist)
+                if (latestOnline || t.isOnline) navigator.findArtist(name, deps.artistPicture(name)) else navigator.openLocalArtist(t.artist)
             },
             // A song of yours: its album in the library, which shows the rest of the album too.
             // A streamed one: the album's online page.

@@ -163,7 +163,7 @@ fun RemoteCollectionScreen(route: RemoteCollectionRoute) {
                 is RemoteEvent.Open -> when (val d = event.destination) {
                     is LocalDestination.Playlist -> navigator.openPlaylist(d.id)
                     is LocalDestination.Album -> navigator.openAlbum(d.key)
-                    is LocalDestination.Artist -> navigator.openArtist(d.name)
+                    is LocalDestination.Artist -> navigator.openLocalArtist(d.name)
                 }
                 is RemoteEvent.Message -> {
                     snackbar.currentSnackbarData?.dismiss()
@@ -235,6 +235,8 @@ fun RemoteCollectionScreen(route: RemoteCollectionRoute) {
                     canPlay = canPlay,
                     onPlay = { vm.playAll(shuffle = false) },
                     onShuffle = { vm.playAll(shuffle = true) },
+                    // An album's artist opens their profile, as everywhere else.
+                    onAuthor = if (kind == CollectionKind.ALBUM) author?.let { a -> { navigator.openArtist(a) } } else null,
                     modifier = Modifier.onSizeChanged { headerHeight = it.height },
                 )
             }
@@ -490,6 +492,7 @@ private fun RemoteHeader(
     canPlay: Boolean,
     onPlay: () -> Unit,
     onShuffle: () -> Unit,
+    onAuthor: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp
@@ -533,7 +536,14 @@ private fun RemoteHeader(
             )
             if (author != null) {
                 Spacer(Modifier.height(6.dp))
-                Text(author, style = MaterialTheme.typography.titleSmall, color = SoundColors.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    author,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = SoundColors.Text,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = if (onAuthor != null) Modifier.clickable(onClickLabel = author, role = Role.Button, onClick = onAuthor) else Modifier,
+                )
             }
             Spacer(Modifier.height(4.dp))
             if (tracks != null) {

@@ -43,13 +43,14 @@ class NavigatorTest {
     class PageViewModel(val title: String) : ViewModel()
 
     private lateinit var navigator: Navigator
+    private var online = true
     private val controller: NavHostController get() = navigator.controller
 
     private fun setUp() {
         compose.setContent {
             SoundTheme {
                 val nav = rememberNavController()
-                navigator = remember(nav) { Navigator(nav) }
+                navigator = remember(nav) { Navigator(nav, isOnline = { online }) }
                 navigator.FollowBackStack()
                 CompositionLocalProvider(LocalNavigator provides navigator) {
                     Box {
@@ -109,8 +110,8 @@ class NavigatorTest {
     @Test
     fun anotherArtistFromTheFullPlayerOpensItAndKeepsTheFirst() {
         setUp()
-        nav { openArtist("Soda Stereo") }
-        nav { openArtist("Gustavo Cerati") }
+        nav { openLocalArtist("Soda Stereo") }
+        nav { openLocalArtist("Gustavo Cerati") }
         compose.onNodeWithText("artist Gustavo Cerati").assertExists()
         nav { openLiked() }
         nav { openLiked() }
@@ -118,6 +119,37 @@ class NavigatorTest {
         compose.onNodeWithText("artist Gustavo Cerati").assertExists()
         nav { back() }
         compose.onNodeWithText("artist Soda Stereo").assertExists()
+    }
+
+    @Test
+    fun anArtistTappedAnywhereOpensTheirProfile() {
+        setUp()
+        nav { openArtist("Coldplay") }
+        val top = controller.currentBackStackEntry!!
+        assertTrue(top.destination.hasRoute(RemoteCollectionRoute::class))
+        val route = top.toRoute<RemoteCollectionRoute>()
+        assertEquals(CollectionKind.ARTIST.name, route.kind)
+        assertEquals("Coldplay", route.title)
+        assertTrue(RemoteFind.isFind(route.url))
+        compose.onNodeWithText("remote Coldplay").assertExists()
+    }
+
+    @Test
+    fun aSharedCreditOpensTheMainArtistsProfile() {
+        setUp()
+        nav { openArtist("Coldplay & Rihanna", picture = "https://example.com/coldplay.jpg") }
+        val route = controller.currentBackStackEntry!!.toRoute<RemoteCollectionRoute>()
+        assertEquals("Coldplay", route.title)
+        assertEquals("https://example.com/coldplay.jpg", route.thumbnailUrl)
+    }
+
+    @Test
+    fun offlineAnArtistOpensTheirSongsOnThePhone() {
+        setUp()
+        online = false
+        nav { openArtist("Coldplay") }
+        compose.onNodeWithText("artist Coldplay").assertExists()
+        assertTrue(controller.currentBackStackEntry!!.destination.hasRoute(ArtistRoute::class))
     }
 
     private fun remote(title: String) = RemoteCollection(CollectionKind.ALBUM, "https://music.youtube.com/browse/$title", title, "Soda Stereo")
@@ -186,7 +218,7 @@ class NavigatorTest {
         setUp()
         val player = playerLayer()
         player.open = true
-        nav { openArtist("Soda Stereo") }
+        nav { openLocalArtist("Soda Stereo") }
         compose.onNodeWithText("artist Soda Stereo").assertExists()
         assertEquals(false, player.open)
 
@@ -219,7 +251,7 @@ class NavigatorTest {
     fun aPageOpenedWithThePlayerClosedLeavesItClosedOnBack() {
         setUp()
         val player = playerLayer()
-        nav { openArtist("Soda Stereo") }
+        nav { openLocalArtist("Soda Stereo") }
         nav { back() }
         compose.onNodeWithText("home").assertExists()
         assertEquals(0, player.expands)
@@ -231,7 +263,7 @@ class NavigatorTest {
         setUp()
         val player = playerLayer()
         player.open = true
-        nav { openArtist("Soda Stereo") }
+        nav { openLocalArtist("Soda Stereo") }
         nav { switchTab(LibraryRoute) }
         compose.onNodeWithText("library").assertExists()
         nav { back() }

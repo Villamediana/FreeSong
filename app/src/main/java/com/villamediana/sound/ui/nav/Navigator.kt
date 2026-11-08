@@ -10,13 +10,20 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.toRoute
+import com.villamediana.sound.SoundApplication
 import com.villamediana.sound.data.db.AlbumKey
 import com.villamediana.sound.online.CollectionKind
 import com.villamediana.sound.online.RemoteCollection
+import com.villamediana.sound.stats.Recaps
+import com.villamediana.sound.ui.search.Connectivity
 
 /** Thin wrapper over NavController so screens don't depend on navigation details. */
 @Stable
-class Navigator(val controller: NavHostController) {
+class Navigator(
+    val controller: NavHostController,
+    /** Whether the online pages can load now (the artist's profile needs the network). */
+    private val isOnline: () -> Boolean = { Connectivity.isOnline(controller.context) },
+) {
     /** Set by the player layer while it is on screen. */
     var player: PlayerHooks = PlayerHooks()
 
@@ -60,7 +67,19 @@ class Navigator(val controller: NavHostController) {
     }
 
     fun openAlbum(key: AlbumKey) = go(AlbumRoute(key.artist, key.title))
-    fun openArtist(name: String) = go(ArtistRoute(name))
+
+    /**
+     * The artist's profile (the online page with all their songs), from anywhere an artist is
+     * tapped. Offline, their songs on the phone.
+     */
+    fun openArtist(name: String, picture: String? = null) {
+        if (!isOnline()) return openLocalArtist(name)
+        val main = Recaps.mainArtist(name)
+        findArtist(main, picture ?: runCatching { SoundApplication.graph.discover.peekArtist(main)?.thumbnailUrl }.getOrNull())
+    }
+
+    /** The artist's songs on the phone: only offline, or from "Na sua biblioteca" on the profile. */
+    fun openLocalArtist(name: String) = go(ArtistRoute(name))
     fun openPlaylist(id: Long) = go(PlaylistRoute(id))
     fun openGenre(name: String) = go(GenreRoute(name))
     fun openMix(id: String) = go(MixRoute(id))

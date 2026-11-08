@@ -383,13 +383,7 @@ private fun CollectionEntry(
     val photos = com.villamediana.sound.ui.components.LocalArtistPhotos.current
     // An artist opens their profile (the page with all their songs, as in the search); offline,
     // their songs on the phone.
-    val openArtistProfile: (String) -> Unit = { name ->
-        if (com.villamediana.sound.ui.search.Connectivity.isOnline(context)) {
-            nav.findArtist(com.villamediana.sound.stats.Recaps.mainArtist(name), photos?.peek(name))
-        } else {
-            nav.openArtist(name)
-        }
-    }
+    val openArtistProfile: (String) -> Unit = { name -> nav.openArtist(name, photos?.peek(name)) }
     var circle = false
     var current = false
     var onLongClick: (() -> Unit)? = null
