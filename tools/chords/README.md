@@ -15,6 +15,11 @@ preço por troca).
 | ouvido antigo (Basic Pitch + regras, até 1.10.4) | 64,0% | 47,1% |
 | BTC (1.11.0) | 77,4% | 61,3% |
 
+Tirar a voz antes (Demucs htdemucs, o melhor separador; `bench/sep_run.py`), nas 20 primeiras
+músicas da régua: mix inteiro 77,5% (59,6%); sem a voz 73,8% (54,3%); só baixo e harmonia 76,9%
+(54,3%). Piora — o BTC aprendeu com a música inteira e os resíduos da separação o confundem — e
+no celular custaria minutos por música. Não entrou.
+
 ## Músicas avulsas: `ChordsLiveTest`
 
 ```sh
