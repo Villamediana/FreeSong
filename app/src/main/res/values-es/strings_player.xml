@@ -76,9 +76,13 @@
     <string name="lyrics_chords_hide">Ocultar acordes</string>
     <string name="chords_looking">Buscando los acordes…</string>
     <string name="chords_listening">Escuchando los acordes… %1$d%%</string>
-    <string name="chords_source">Acordes: %1$s</string>
-    <string name="chords_source_version">Acordes: %1$s · versión de %2$s</string>
     <string name="chords_capo">Cejilla en el traste %1$d</string>
+    <string name="chords_version">Versión de %1$s</string>
+    <string name="chords_key">Tono %1$s</string>
+    <string name="chords_key_unknown">Tono</string>
+    <string name="chords_transpose_down">Medio tono abajo</string>
+    <string name="chords_transpose_up">Medio tono arriba</string>
+    <string name="chords_transpose_reset">Volver al tono original</string>
     <string name="chords_failed_error">No se pudieron escuchar los acordes de esta canción.</string>
     <string name="chords_failed_offline">Sin conexión para escuchar los acordes.</string>
     <string name="chords_failed_too_long">Canción demasiado larga para los acordes.</string>

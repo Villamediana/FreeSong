@@ -93,4 +93,13 @@ class TheoryTest {
         assertEquals(p("Am"), Chord.closest("Am"))
         assertEquals(null, Chord.closest("Refrão"))
     }
+
+    @Test fun writtenNamesMoveWithTheirExtrasKept() {
+        assertEquals("D#m7(9)/A#", Chord.transposeName("C#m7(9)/G#", 2, Spelling.SHARPS))
+        assertEquals("Ebm7(9)/Bb", Chord.transposeName("C#m7(9)/G#", 2, Spelling.FLATS))
+        assertEquals("G7M(2/4+)", Chord.transposeName("F7M(2/4+)", 2, Spelling.NEUTRAL))
+        assertEquals("A", Chord.transposeName("Bb", -1, Spelling.NEUTRAL))
+        assertEquals("Refrão", Chord.transposeName("Refrão", 3, Spelling.NEUTRAL))
+    }
 }
+

@@ -16,6 +16,9 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.unit.sp
 import com.villamediana.sound.chords.ChordChart
 import com.villamediana.sound.chords.ChordEngine
 import com.villamediana.sound.chords.ChordQuality
@@ -198,14 +201,64 @@ class ChordScreensTest {
         show(deps(chart(), find = { com.villamediana.sound.chords.SheetLookup.Found(written) }))
         assertEquals(0, heard)
         compose.onNodeWithTag("chordLyrics").assertExists()
-        compose.onNodeWithText("Cifra: Cifra Club").assertExists()
-        compose.onNodeWithText("·  Capotraste na 2ª casa", substring = true).assertExists()
+        // No source label (Miguel: not needed); the capo and the key are.
+        compose.onNodeWithText("Cifra Club", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("Capotraste na 2ª casa").assertExists()
+        compose.onNodeWithText("Tom G").assertExists()
         compose.onAllNodesWithText("Am7(9)").onFirst().assertExists()
         shot("chords_written_sheet")
+
+        // A whole step up: every name moves, the extras kept.
+        compose.onNodeWithContentDescription("Meio tom acima").performClick()
+        compose.onNodeWithContentDescription("Meio tom acima").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("Tom A").assertExists()
+        compose.onNodeWithText("+2", substring = true).assertExists()
+        compose.onAllNodesWithText("A7M").onFirst().assertExists()
+        compose.onAllNodesWithText("Bm7(9)").onFirst().assertExists()
+        compose.onAllNodesWithText("Am7(9)").fetchSemanticsNodes().let { assertTrue(it.isEmpty()) }
+        shot("chords_transposed")
+        // A tap on the key brings it back.
+        compose.onNodeWithText("Tom A").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("Tom G").assertExists()
+        compose.onAllNodesWithText("Am7(9)").onFirst().assertExists()
         compose.onAllNodesWithText("A7(13)").onFirst().performClick()
         compose.waitForIdle()
         compose.onNodeWithText("Lá com sétima e décima terceira").assertExists()
         shotDialog("chords_written_sheet_shape")
+    }
+
+    @Test fun chordsAndTranslationTogether() {
+        val d = deps(chart())
+        val translations = mapOf(
+            "Olha que coisa mais linda, mais cheia de graça" to "Look, what a beautiful thing, so full of grace",
+            "É ela a menina que vem e que passa" to "It's her, the girl who comes and goes by",
+        )
+        compose.setContent {
+            SoundTheme(mode = com.villamediana.sound.data.ThemeMode.DARK) {
+                CompositionLocalProvider(LocalChords provides d) {
+                    androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.background(Color(0xFF1F2B38))) {
+                        ChordLyricsLines(
+                            lyrics = lyrics,
+                            chart = chart(),
+                            durationMs = 200_000,
+                            clock = PlaybackClock().apply { onTick(13_000, 0L) },
+                            onSeek = {},
+                            onChord = {},
+                            textStyle = androidx.compose.material3.MaterialTheme.typography.displaySmall.copy(fontSize = 28.sp, lineHeight = 35.sp),
+                            colors = com.villamediana.sound.ui.player.LyricColors.over(Color(0xFF1F2B38)),
+                            modifier = androidx.compose.ui.Modifier.fillMaxSize(),
+                            translations = translations,
+                        )
+                    }
+                }
+            }
+        }
+        compose.waitForIdle()
+        compose.onNodeWithText("It's her, the girl who comes and goes by").assertExists()
+        compose.onAllNodesWithText("Am7").onFirst().assertExists()
+        shot("chords_translated")
     }
 
     @Test fun theButtonTurnsChordsOnAndOff() {

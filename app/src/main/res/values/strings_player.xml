@@ -76,9 +76,13 @@
     <string name="lyrics_chords_hide">Esconder acordes</string>
     <string name="chords_looking">Procurando a cifra…</string>
     <string name="chords_listening">Ouvindo os acordes… %1$d%%</string>
-    <string name="chords_source">Cifra: %1$s</string>
-    <string name="chords_source_version">Cifra: %1$s · versão de %2$s</string>
     <string name="chords_capo">Capotraste na %1$dª casa</string>
+    <string name="chords_version">Versão de %1$s</string>
+    <string name="chords_key">Tom %1$s</string>
+    <string name="chords_key_unknown">Tom</string>
+    <string name="chords_transpose_down">Meio tom abaixo</string>
+    <string name="chords_transpose_up">Meio tom acima</string>
+    <string name="chords_transpose_reset">Voltar ao tom original</string>
     <string name="chords_failed_error">Não deu pra ouvir os acordes desta música.</string>
     <string name="chords_failed_offline">Sem conexão pra ouvir os acordes.</string>
     <string name="chords_failed_too_long">Música longa demais pros acordes.</string>

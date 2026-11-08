@@ -89,7 +89,10 @@ internal fun LyricsCard(
     val colors = LyricColors.over(lyricsBackground(washTarget))
     val chordsOn = com.villamediana.sound.ui.chords.rememberChordsEnabled() && track != null
     val chordState = if (track != null) com.villamediana.sound.ui.chords.rememberChordState(track, listen = false, online = true) else ChordState.Idle
-    val chart = (chordState as? ChordState.Ready)?.chart?.takeIf { chordsOn }
+    // In the key the song was last played in.
+    val shift = if (track != null) com.villamediana.sound.ui.chords.rememberChordShift(track).first else 0
+    val found = (chordState as? ChordState.Ready)?.chart?.takeIf { chordsOn }
+    val chart = remember(found, shift) { found?.transposed(shift) }
     // The chord picked in this song: another song closes the sheet (and doesn't reopen it when its chords come).
     var sheetChord by remember(track?.id) { mutableStateOf<com.villamediana.sound.chords.Chord?>(null) }
     val instrument = com.villamediana.sound.ui.chords.rememberChordInstrument()
@@ -193,7 +196,9 @@ internal fun LyricsScreen(
     val chordsDeps = com.villamediana.sound.ui.chords.LocalChords.current
     val chordsOn = com.villamediana.sound.ui.chords.rememberChordsEnabled()
     val chordState = com.villamediana.sound.ui.chords.rememberChordState(track, listen = chordsOn, online = online)
-    val chart = (chordState as? ChordState.Ready)?.chart?.takeIf { chordsOn }
+    val (shift, setShift) = com.villamediana.sound.ui.chords.rememberChordShift(track)
+    val found = (chordState as? ChordState.Ready)?.chart?.takeIf { chordsOn }
+    val chart = remember(found, shift) { found?.transposed(shift) }
     var sheetChord by remember(track.id) { mutableStateOf<com.villamediana.sound.chords.Chord?>(null) }
     val instrument = com.villamediana.sound.ui.chords.rememberChordInstrument()
     val scope = androidx.compose.runtime.rememberCoroutineScope()
@@ -231,15 +236,16 @@ internal fun LyricsScreen(
                         tint = if (chordsOn) SoundColors.Mint else SoundColors.Text.copy(alpha = 0.4f),
                     )
                 }
-                // In the chords view the lines carry chords, not translations; until it shows (or when
-                // no chords were heard) the plain lyrics keep their translation and its switch.
-                if (lyrics is LyricsState.Ready && chart == null) TranslateToggle()
+                // Chords and translation go together: the chords over a line, its translation under it.
+                if (lyrics is LyricsState.Ready) TranslateToggle()
             }
             if (chordsOn) {
                 com.villamediana.sound.ui.chords.ChordStatus(
                     state = chordState,
                     onRetry = { com.villamediana.sound.chords.ChordSubject.of(track)?.let { chordsDeps?.engine?.request(it, force = true) } },
-                    modifier = Modifier.padding(horizontal = 28.dp).padding(bottom = 6.dp),
+                    modifier = Modifier.padding(start = 24.dp, end = 28.dp).padding(bottom = 6.dp),
+                    shift = shift,
+                    onShift = setShift,
                 )
             }
             Box(

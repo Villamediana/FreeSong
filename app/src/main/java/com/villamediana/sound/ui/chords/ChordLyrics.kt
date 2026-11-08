@@ -57,6 +57,8 @@ import com.villamediana.sound.data.ParsedLyrics
 import com.villamediana.sound.ui.player.LyricColors
 import com.villamediana.sound.ui.player.PlaybackClock
 import com.villamediana.sound.ui.player.PlayerMath
+import com.villamediana.sound.ui.player.rememberTranslation
+import com.villamediana.sound.ui.player.translationStyle
 import com.villamediana.sound.ui.theme.SoundColors
 import kotlinx.coroutines.delay
 
@@ -92,6 +94,8 @@ internal fun ChordLyricsLines(
     contentPadding: PaddingValues = PaddingValues(0.dp),
     horizontalPadding: Dp = 20.dp,
     lineGap: Dp = 10.dp,
+    /** Each lyric line's translation, by its text ("Tradução" on); the chords stay over the words. */
+    translations: Map<String, String>? = lyrics?.let { rememberTranslationsByText(it) },
 ) {
     val view = remember(lyrics, chart, durationMs) {
         ChordLayout.view(lyrics ?: ParsedLyrics(false, emptyList()), chart, durationMs)
@@ -137,16 +141,22 @@ internal fun ChordLyricsLines(
                 )
                 .padding(horizontal = horizontalPadding, vertical = lineGap / 2)
             when (row) {
-                is ChordRow.Lyric -> ChordedLine(
-                    text = row.text,
-                    chords = row.chords,
-                    names = names,
-                    textStyle = textStyle,
-                    chordStyle = chordStyle,
-                    color = { color },
-                    onChord = tap,
-                    modifier = rowModifier,
-                )
+                is ChordRow.Lyric -> {
+                    val translation = translations?.get(row.text.trim())
+                    if (translation == null) {
+                        ChordedLine(row.text, row.chords, names, textStyle, chordStyle, { color }, tap, rowModifier)
+                    } else {
+                        androidx.compose.foundation.layout.Column(rowModifier) {
+                            ChordedLine(row.text, row.chords, names, textStyle, chordStyle, { color }, tap, Modifier.fillMaxWidth())
+                            Text(
+                                text = translation,
+                                style = textStyle.translationStyle(),
+                                color = color.copy(alpha = color.alpha * 0.7f),
+                                modifier = Modifier.padding(top = 2.dp),
+                            )
+                        }
+                    }
+                }
                 is ChordRow.Instrumental -> InstrumentalRow(
                     chords = row.chords,
                     names = names,
@@ -259,6 +269,23 @@ private fun InstrumentalRow(
     ) {
         Text("♪", style = big, color = noteColor, modifier = Modifier.padding(end = 4.dp))
         for (k in chords) ChordChip(names[k], big, onClick = { onChord(k) })
+    }
+}
+
+/**
+ * The lyrics' translation while "Tradução" is on, by line text: the chords view moves lines around
+ * (rows of chords alone, a sheet's own lines), so each line finds its translation by its words.
+ */
+@Composable
+internal fun rememberTranslationsByText(lyrics: ParsedLyrics): Map<String, String>? {
+    val list = rememberTranslation(lyrics) ?: return null
+    return remember(lyrics, list) {
+        buildMap {
+            lyrics.lines.forEachIndexed { i, l ->
+                val t = list.getOrNull(i)
+                if (t != null && l.text.isNotBlank()) putIfAbsent(l.text.trim(), t)
+            }
+        }
     }
 }
 

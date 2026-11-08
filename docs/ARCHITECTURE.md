@@ -146,6 +146,12 @@ cifra lá é **ouvida no celular** a partir do áudio (1.12.0, pedido do Miguel:
   extensões até achar um acorde conhecido); `looked` diz que o Cifra Club respondeu. Ouvida sem
   resposta (sem internet) → pergunta de novo uma vez por sessão com os acordes abertos, e a cifra
   achada substitui. `ChordState.Working(looking = true)` mostra "Procurando a cifra…".
+- Faixa de acordes (1.12.1): **sem** "Cifra: Cifra Club" (o Miguel não quer o rótulo); fica o
+  transpositor e, numa cifra, o capotraste e "Versão de …". **Transpor** (`ChordChart.transposed`,
+  `Chord.transposeName`): −/+ meio tom, "Tom A +2", tocar no tom volta ao original; vale para ouvido e
+  cifra (nomes escritos mantêm as extensões, grafia pelo tom novo), as linhas não mudam. Guardado por
+  música em `filesDir/chord-shifts.json` (`ChordShifts`, ±11). **Tradução junto com acordes**: o botão
+  não some; a tradução vai embaixo da linha (`rememberTranslationsByText`, achada pelo texto da linha).
 
 - `chords/` (puro Kotlin, testado, menos o que toca no Android):
   - `AudioChords` — o áudio da música: o arquivo baixado, ou o stream lido pelo mesmo `AudioCache`

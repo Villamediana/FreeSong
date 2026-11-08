@@ -36,6 +36,24 @@ data class ChordChart(
     /** What the rows' chord indices name: the heard chords in time, or the sheet's as written. */
     fun labels(): List<String> = sheet?.names ?: chords.indices.map { name(it) }
 
+    /**
+     * The same chords [semitones] up (down when negative), the key with them and the names spelled
+     * for the new key; the rows don't move. A whole octave is the chart itself.
+     */
+    fun transposed(semitones: Int): ChordChart {
+        val n = Math.floorMod(semitones, 12)
+        if (n == 0) return this
+        val moved = key?.let { MusicKey(Math.floorMod(it.tonic + n, 12), it.minor) }
+        val spelling = Spelling.forKey(moved)
+        return copy(
+            chords = chords.map { c -> c.copy(root = (c.root + n) % 12, bass = c.bass?.let { (it + n) % 12 }) },
+            key = moved,
+            sheet = sheet?.let { s ->
+                s.copy(lines = s.lines.map { l -> l.copy(chords = l.chords.map { it.copy(name = Chord.transposeName(it.name, n, spelling)) }) })
+            },
+        )
+    }
+
     /** The chord a row's index plays (a written one by its closest shape). */
     fun chordAt(index: Int): Chord? = if (sheet != null) sheet.names.getOrNull(index)?.let { Chord.closest(it) } else chords.getOrNull(index)?.chord
 

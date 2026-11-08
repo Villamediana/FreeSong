@@ -20,8 +20,9 @@ import com.villamediana.sound.chords.Instrument
 import com.villamediana.sound.data.db.Track
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 
-/** What the chords need from the app: the engine, the shapes and the two settings. */
+/** What the chords need from the app: the engine, the shapes, the two settings and each song's key. */
 class ChordsDeps(
     val engine: ChordEngine,
     val fingerings: Fingerings,
@@ -29,6 +30,7 @@ class ChordsDeps(
     val instrument: Flow<Instrument>,
     val setEnabled: suspend (Boolean) -> Unit,
     val setInstrument: suspend (Instrument) -> Unit,
+    val shifts: com.villamediana.sound.chords.ChordShifts = com.villamediana.sound.chords.ChordShifts(null),
 )
 
 /** None in previews and in tests that don't give one: no chords button then. */
@@ -70,6 +72,20 @@ internal fun rememberChordState(track: Track, listen: Boolean, online: Boolean):
         onDispose { if (listening) deps.engine.stop(key) }
     }
     return if (subject == null) ChordState.Failed(ChordState.Reason.ERROR) else state
+}
+
+/**
+ * How far [track]'s chords are transposed (semitones) and how to change it; kept per song, the
+ * same for heard chords and a written sheet.
+ */
+@Composable
+internal fun rememberChordShift(track: Track): Pair<Int, (Int) -> Unit> {
+    val deps = LocalChords.current ?: return 0 to {}
+    val key = remember(track.id, track.videoId, track.filePath) { ChordSubject.of(track)?.key }
+        ?: return 0 to {}
+    val shift by remember(key) { deps.shifts.of(key) }.collectAsState(initial = deps.shifts.current(key))
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    return shift to { n: Int -> scope.launch { deps.shifts.set(key, n) }; Unit }
 }
 
 /** A chord box: the top of a fretboard with two fingers on it — the "Acordes" button. */

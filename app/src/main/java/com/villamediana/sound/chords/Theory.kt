@@ -98,6 +98,25 @@ data class Chord(val root: Int, val quality: ChordQuality, val bass: Int? = null
         }
 
         /**
+         * A written name moved [semitones] up, everything after the root kept as written and the
+         * root and bass spelled by [spelling] ("C#m7(9)/G#" up 2 in D: "D#m7(9)/A#"). A name that
+         * doesn't start like a chord stays as it is.
+         */
+        fun transposeName(name: String, semitones: Int, spelling: Spelling): String {
+            val t = name.trim()
+            val m = ROOT.find(t) ?: return name
+            val root = pitchClass(m.groupValues[1] + m.groupValues[2].replace('♯', '#').replace('♭', 'b')) ?: return name
+            var rest = t.substring(m.range.last + 1)
+            val slash = rest.lastIndexOf('/')
+            if (slash >= 0) {
+                val b = ROOT.matchEntire(rest.substring(slash + 1))
+                val bass = b?.let { pitchClass(it.groupValues[1] + it.groupValues[2].replace('♯', '#').replace('♭', 'b')) }
+                if (bass != null) rest = rest.substring(0, slash + 1) + spelling.name(bass + semitones)
+            }
+            return spelling.name(root + semitones) + rest
+        }
+
+        /**
          * The chord a written name is closest to, for its shapes: [parse] when it can; otherwise the
          * name with its extra notes taken off from the end ("F7M(2/4+)" plays as F7M, "Bb5-" as Bb5),
          * the bass kept. Null only when it doesn't start like a chord.

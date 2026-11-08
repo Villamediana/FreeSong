@@ -110,6 +110,7 @@ class AppGraph(context: Context) {
             instrument = settings.settings.map { com.villamediana.sound.chords.Instrument.fromId(it.chordInstrument) }.distinctUntilChanged(),
             setEnabled = { settings.setChords(it) },
             setInstrument = { settings.setChordInstrument(it.name) },
+            shifts = com.villamediana.sound.chords.ChordShifts(appContext.filesDir.resolve("chord-shifts.json")),
         )
     }
 

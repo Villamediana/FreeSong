@@ -104,4 +104,26 @@ class SheetLayoutTest {
     }
 
     private fun chart() = ChordChart(emptyList(), MusicKey(7, false), sheet = sheet, looked = true)
+
+    @Test fun transposingMovesTheNamesNotTheRows() {
+        val chart = chart()
+        val up = chart.transposed(2)
+        assertEquals(MusicKey(9, false), up.key)
+        assertEquals(listOf("A", "E", "F#m", "D"), up.labels().take(4))
+        assertEquals(ChordLayout.view(lyrics, chart, 60_000).rows, ChordLayout.view(lyrics, up, 60_000).rows)
+        // Down a half step from G is F#, written with sharps. Back by an octave: the chart itself.
+        assertEquals(listOf("F#", "C#", "D#m", "B"), chart.transposed(-1).labels().take(4))
+        assertEquals(listOf("F", "C", "Dm", "Bb"), chart.transposed(-2).labels().take(4))
+        assertTrue(chart.transposed(12) === chart)
+        assertEquals(Chord.parse("F#m"), up.chordAt(2))
+    }
+
+    @Test fun heardChordsTransposeToo() {
+        val heard = ChordChart(listOf(TimedChord(0, 1_000, 9, ChordQuality.MIN7), TimedChord(1_000, 2_000, 2, ChordQuality.DOM7, bass = 6)), MusicKey(9, true))
+        val down = heard.transposed(-2)
+        assertEquals(MusicKey(7, true), down.key)
+        assertEquals(listOf("Gm7", "C7/E"), down.labels())
+        assertEquals(heard.chords.map { it.startMs }, down.chords.map { it.startMs })
+    }
 }
+
