@@ -33,8 +33,8 @@ android {
         applicationId = "com.villamediana.sound"
         minSdk = 26
         targetSdk = 36
-        versionCode = 48
-        versionName = "1.10.1"
+        versionCode = 49
+        versionName = "1.10.2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Phones only: LiteRT's x86 libraries alone were 13 MB of the APK (no emulator here).
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }

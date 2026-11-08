@@ -17,6 +17,10 @@ import androidx.compose.ui.test.hasScrollToNodeAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -46,6 +50,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -99,6 +104,68 @@ class SearchScreensSmokeTest {
     }
 
     private fun searchViewModel() = SearchViewModel(youTube, library, downloads, player, RecentSearchStore(context), online, true)
+
+    /**
+     * Opened from the magnifier, the page comes in step by step after the circle: nothing at first,
+     * then the field, then the recent searches one by one, then the genre cards. Frames in
+     * build/screenshots/search_entrance_*.png.
+     */
+    @Test
+    fun theSearchPageComesInStepByStep() {
+        insertTrack("lib1", "Persiana Americana", genre = "Rock en español")
+        insertTrack("lib3", "Zona de Promesas", genre = "Pop")
+        val recents = listOf("charly garcía", "cerati", "soda stereo")
+        runBlocking { RecentSearchStore(context).clear(); recents.forEach { RecentSearchStore(context).add(it) } }
+        val vm = searchViewModel()
+        // The page's data as it is when the circle starts (DataStore and the library answer in milliseconds).
+        val warm = listOf(scope.launch { vm.recents.collect {} }, scope.launch { vm.genres.collect {} })
+        val deadline = System.currentTimeMillis() + 20_000
+        while (!(vm.recents.value.size == 3 && vm.genres.value.isNotEmpty()) && System.currentTimeMillis() < deadline) {
+            org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+            Thread.sleep(20)
+        }
+        harness.put(vm)
+        rule.mainClock.autoAdvance = false
+        harness.show {
+            androidx.compose.runtime.CompositionLocalProvider(com.villamediana.sound.ui.nav.LocalSearchEntrance provides com.villamediana.sound.ui.nav.SearchEntrance()) { SearchScreen() }
+        }
+        val background = com.villamediana.sound.ui.theme.SoundColors.Ink.toArgb()
+        fun inked(text: String, @Suppress("UNUSED_PARAMETER") at: Int): Int {
+            val bmp = rule.onRoot().captureToImage().asAndroidBitmap()
+            val b = rule.onAllNodes(hasText(text, substring = true)).fetchSemanticsNodes().first().boundsInRoot
+            var n = 0
+            for (x in b.left.toInt().coerceAtLeast(0) until b.right.toInt().coerceAtMost(bmp.width)) for (y in b.top.toInt().coerceAtLeast(0) until b.bottom.toInt().coerceAtMost(bmp.height)) {
+                val p = bmp.getPixel(x, y)
+                val d = kotlin.math.abs(android.graphics.Color.red(p) - android.graphics.Color.red(background)) + kotlin.math.abs(android.graphics.Color.green(p) - android.graphics.Color.green(background)) + kotlin.math.abs(android.graphics.Color.blue(p) - android.graphics.Color.blue(background))
+                if (d > 40) n++
+            }
+            return n
+        }
+        val field = s(R.string.search_field_hint)
+        var now = 0L
+        fun at(ms: Long) {
+            rule.mainClock.advanceTimeBy(ms - now)
+            now = ms
+            harness.screenshot("search_entrance_${ms}ms")
+        }
+        at(120)
+        // The circle is still growing: nothing on the page yet.
+        assertEquals(0, inked(field, 120))
+        assertEquals(0, inked("soda stereo", 120))
+        at(760)
+        // Field in; the newest search coming in, the oldest still to come; no genres yet.
+        assert(inked(field, 760) > 0)
+        assert(inked("soda stereo", 760) > 0)
+        assertEquals(0, inked("charly", 760))
+        assertEquals(0, inked("Rock en español", 760))
+        at(1_200)
+        assert(inked("charly", 1_200) > 0)
+        at(1_500)
+        at(2_400)
+        assert(inked("Rock en español", 2_400) > 0)
+        rule.mainClock.autoAdvance = true
+        warm.forEach { it.cancel() }
+    }
 
     @Test
     fun searchIdleThenResultsThenDownloadAndMultiSelect() {

@@ -124,6 +124,7 @@ import com.villamediana.sound.ui.components.pressScale
 import com.villamediana.sound.ui.downloads.DownloadOverview
 import com.villamediana.sound.ui.nav.Inbound
 import com.villamediana.sound.ui.nav.LinkInbox
+import com.villamediana.sound.ui.nav.entrance
 import com.villamediana.sound.ui.nav.navigator
 import com.villamediana.sound.ui.sheets.TrackActionsSheet
 import com.villamediana.sound.ui.theme.Dimens
@@ -231,7 +232,7 @@ fun SearchScreen() {
                 exit = shrinkVertically(tween(220)) + fadeOut(tween(160)),
             ) {
                 Row(
-                    Modifier.fillMaxWidth().padding(start = Dimens.Gutter, end = Dimens.Gutter - 8.dp, top = 18.dp, bottom = 14.dp),
+                    Modifier.fillMaxWidth().entrance(Entrance.HEADER).padding(start = Dimens.Gutter, end = Dimens.Gutter - 8.dp, top = 18.dp, bottom = 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     val back = navigator()
@@ -253,15 +254,18 @@ fun SearchScreen() {
                         dismissKeyboard()
                     },
                     onClear = vm::clearField,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).entrance(Entrance.FIELD),
                 )
                 if (vm.canListen) {
                     Spacer(Modifier.width(4.dp))
-                    MicButton(onClick = {
-                        dismissKeyboard()
-                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) vm.listen()
-                        else micPermission.launch(Manifest.permission.RECORD_AUDIO)
-                    })
+                    MicButton(
+                        onClick = {
+                            dismissKeyboard()
+                            if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) vm.listen()
+                            else micPermission.launch(Manifest.permission.RECORD_AUDIO)
+                        },
+                        modifier = Modifier.entrance(Entrance.MIC, rise = 0.dp, scaleFrom = 0.5f),
+                    )
                 }
             }
             AnimatedVisibility(
@@ -505,6 +509,28 @@ private fun SelectionBar(count: Int, onDownload: () -> Unit, onCancel: () -> Uni
 
 // ---------------------------------------------------------------------------- idle
 
+/**
+ * When each part of the search page comes in, in ms after the tap on the magnifier: the circle
+ * covers the page by ~500 ms, then the field and the mic, the recent searches one by one, and the
+ * genre cards. Past a few rows the rest come together (they're below the fold anyway).
+ */
+private object Entrance {
+    const val HEADER = 420
+    const val FIELD = 480
+    const val MIC = 560
+    const val RECENTS = 640
+    private const val STEP = 75
+    private const val GENRES_AFTER = 90
+    private const val GENRE_ROW = 90
+    private const val GENRE_SIDE = 55
+
+    fun recent(i: Int) = RECENTS + 50 + minOf(i, 7) * STEP
+
+    fun genres(recents: Int) = if (recents == 0) RECENTS else recent(recents - 1) + GENRES_AFTER
+
+    fun genreTile(genresAt: Int, row: Int, side: Int) = genresAt + 80 + minOf(row, 5) * GENRE_ROW + side * GENRE_SIDE
+}
+
 @Composable
 private fun IdleContent(
     vm: SearchViewModel,
@@ -524,25 +550,36 @@ private fun IdleContent(
                     title = stringResource(R.string.search_recent_title),
                     action = stringResource(R.string.search_recent_clear),
                     onAction = vm::clearRecents,
-                    modifier = Modifier.animateItem(),
+                    modifier = Modifier.animateItem().entrance(Entrance.RECENTS),
                 )
             }
-            items(recents, key = { "recent:$it" }) { q ->
-                RecentRow(q, onClick = { onRecent(q) }, onRemove = { vm.removeRecent(q) }, modifier = Modifier.animateItem())
+            itemsIndexed(recents, key = { _, q -> "recent:$q" }) { i, q ->
+                RecentRow(q, onClick = { onRecent(q) }, onRemove = { vm.removeRecent(q) }, modifier = Modifier.animateItem().entrance(Entrance.recent(i)))
             }
             item(key = "recent-gap") { Spacer(Modifier.height(Dimens.SectionGap - 8.dp).animateItem()) }
         }
         if (genres.isNotEmpty()) {
+            val genresAt = Entrance.genres(recents.size)
             if (recents.isEmpty()) item(key = "genres-gap") { Spacer(Modifier.height(8.dp)) }
             item(key = "genres-header") {
-                SectionHeader(title = stringResource(R.string.search_genres_title), subtitle = stringResource(R.string.search_genres_overline), modifier = Modifier.animateItem())
+                SectionHeader(
+                    title = stringResource(R.string.search_genres_title),
+                    subtitle = stringResource(R.string.search_genres_overline),
+                    modifier = Modifier.animateItem().entrance(genresAt),
+                )
             }
-            items(genres.take(16).chunked(2), key = { "genre:" + it.first().name }) { pair ->
+            itemsIndexed(genres.take(16).chunked(2), key = { _, pair -> "genre:" + pair.first().name }) { row, pair ->
                 Row(
                     Modifier.animateItem().padding(horizontal = Dimens.Gutter).padding(bottom = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    pair.forEach { g -> GenreTile(g, onClick = { onGenre(g.name) }, modifier = Modifier.weight(1f)) }
+                    pair.forEachIndexed { side, g ->
+                        GenreTile(
+                            g,
+                            onClick = { onGenre(g.name) },
+                            modifier = Modifier.weight(1f).entrance(Entrance.genreTile(genresAt, row, side), durationMs = 440, rise = 26.dp, scaleFrom = 0.92f),
+                        )
+                    }
                     if (pair.size == 1) Spacer(Modifier.weight(1f))
                 }
             }
