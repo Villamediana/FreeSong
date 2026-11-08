@@ -42,3 +42,4 @@ google-services.json
 *.apks
 *.idsig
 app/release/
+__pycache__/

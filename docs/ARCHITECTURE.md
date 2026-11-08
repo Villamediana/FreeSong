@@ -120,20 +120,25 @@ JSON: usar `kotlinx.serialization` (o `org.json` do Android vira stub nos testes
 - **Compartilhar** (`ui/components/Share.kt`): link (YouTube Music) ou o próprio arquivo de áudio
   (FileProvider `${applicationId}.files`), álbum/playlist remota.
 
-## Acordes (1.10.0, 2026-11-08)
+## Acordes (1.10.0, 2026-11-08; ouvido BTC desde 1.11.0)
 
 Acordes em cima da letra, ouvidos **no celular** a partir do áudio da própria música (o Miguel
 escolheu isso; o Cifra Club recusa pedido de app e não vamos burlar a proteção do site).
 
 - `chords/` (puro Kotlin, testado, menos o que toca no Android):
   - `AudioChords` — o áudio da música: o arquivo baixado, ou o stream lido pelo mesmo `AudioCache`
-    do player (música recém-ouvida não gasta dados); `AudioDecoder` decodifica em mono 22 kHz.
-  - `BeatTracker` — batidas da gravação (Ellis/librosa: força de ataque em bandas mel, tempo por
-    autocorrelação com viés em 120 BPM, programação dinâmica). Os acordes mudam na batida da banda.
-  - `BasicPitch` — modelo do Spotify (Apache 2.0, 200 KB, `assets/chords/nmp.tflite`, LiteRT,
-    2 threads) ouve as notas. Trazido do LauncherAI como estava.
-  - `ChordHearing` — notas → acordes maior/menor/7/m7 por batida (Viterbi, mínimo ~1,3 s por
-    acorde, tom da música pesa). Do LauncherAI, agora sobre as batidas reais.
+    do player (música recém-ouvida não gasta dados); `AudioDecoder` decodifica em mono 22 kHz
+    (`MonoResampler`, com anti-aliasing).
+  - **Ouvido (1.11.0): BTC** — `Cqt` calcula o espectro constant-Q igual ao `librosa.cqt` que o
+    modelo viu no treino (144 bins de C1, 24/oitava, hop 2048, pedaços de 10 s); `Btc` é o
+    Bi-directional Transformer for Chord recognition (Park et al., ISMIR 2019, MIT), reescrito em
+    Kotlin puro com os pesos em float16 (`assets/chords/btc_voca.bin`, 5,9 MB), 170 acordes
+    (12 tônicas × min, maj, dim, aug, min6, maj6, min7, minmaj7, maj7, 7, dim7, hdim7, sus2, sus4);
+    janelas de 108 quadros em até 4 threads de prioridade baixa. `ChordReading` lê os acordes com
+    Viterbi (preço 8 por troca) e o tom pelas notas mais longas. `BeatTracker` só dá o andamento.
+    Substituiu Basic Pitch + regras (`ChordHearing`) e o LiteRT.
+  - Régua: `tools/chords/bench` — 53 músicas do McGill Billboard com acordes marcados por músicos:
+    ouvido antigo 64,0% (47,1% com a sétima), BTC 77,4% (61,3%). Corrigir afinação não ajudou.
   - `ChordEngine` — um por vez numa thread de fundo, cancela ao trocar de música; `ChordStore`
     guarda em `filesDir/chords/<chave>.json` (chave = vídeo, então baixada e streamada dividem).
     Ajustes › Armazenamento tem "Acordes".
@@ -156,7 +161,5 @@ escolheu isso; o Cifra Club recusa pedido de app e não vamos burlar a proteçã
   letra, desligar o botão ou trocar de música para a análise na hora (`ChordEngine.stop`). O cartão
   de letra do player nunca ouve — só mostra acordes já ouvidos (`ChordEngine.recall`, lê o disco).
 - O áudio chega na taxa do decodificador (44,1/48 kHz, 16 bits ou float) e o `MonoResampler` desce
-  pra 22 kHz com filtro anti-aliasing (Butterworth de 8ª ordem); o modelo roda janela a janela
-  (sem copiar a música inteira em janelas) — música longa cabe na memória.
-- Validação com músicas reais: `tools/chords/README.md`. Pelo caminho do celular (decodificador +
-  `MonoResampler`): Let It Be 97%, Stand By Me 100%, Perfect 99%, Riptide 90% do tempo nos acordes certos.
+  pra 22 kHz com filtro anti-aliasing (Butterworth de 8ª ordem).
+- Validação: `tools/chords/README.md` (régua Billboard e músicas avulsas, inclusive comparação com cifra).

@@ -19,9 +19,9 @@ import java.util.Locale
 /**
  * The chords of real songs, end to end, on this machine (see tools/chords/README.md):
  * 1. `fetchesSongs` downloads their audio (SOUND_LIVE=1, SOUND_CHORDS_DIR=dir);
- * 2. ffmpeg decodes it to mono 22 kHz and basic_pitch_frames.py runs the app's model;
- * 3. `hearsRealSongs` runs the app's beat tracker, note creation and chord hearing on it and
- *    reports how much of each song sits on the chords it is known to have.
+ * 2. ffmpeg decodes it (and `resamplesLikeThePhone` brings it to 22 kHz as the phone does);
+ * 3. `hearsRealSongs` runs the app's hearing (Cqt, Btc, ChordReading) on it and reports how much of
+ *    each song sits on the chords it is known to have.
  */
 class ChordsLiveTest {
     private val dir = System.getProperty("sound.chords.dir").orEmpty()
@@ -83,7 +83,7 @@ class ChordsLiveTest {
             val native = File(dir, "${song.slug}.44100.f32").takeIf { it.isFile } ?: continue
             val audio = floats(native)
             for ((name, filter) in listOf("phone" to true, "nofilter" to false)) {
-                val r = MonoResampler(44_100, BasicPitch.RATE, antiAlias = filter)
+                val r = MonoResampler(44_100, Cqt.RATE, antiAlias = filter)
                 val out = java.io.ByteArrayOutputStream()
                 // In decoder-sized blocks, as the phone does.
                 var at = 0
@@ -103,32 +103,31 @@ class ChordsLiveTest {
     @Test fun hearsRealSongs() {
         assumeTrue(dir.isNotBlank())
         val variant = System.getProperty("sound.chords.variant").orEmpty()
+        val model = Btc(ByteBuffer.wrap(File("src/main/assets/chords/btc_voca.bin").readBytes()))
         for (song in songs) {
             val pcm = File(dir, "${song.slug}$variant.f32").takeIf { it.isFile } ?: continue
             val audio = floats(pcm)
-            val frames = matrix(File(dir, "${song.slug}$variant.frames.f32"))
-            val onsets = matrix(File(dir, "${song.slug}$variant.onsets.f32"))
             val t0 = System.nanoTime()
             val beats = BeatTracker.track(audio)
             val t1 = System.nanoTime()
-            val options = BasicPitch.Options(minNoteMs = 130f)
-            val notes = BasicPitch.eventsToNotes(BasicPitch.notes(frames, onsets, options, BasicPitch.minLen(options)), options)
+            val features = Cqt.features(audio)
+            val logp = model.logProbs(features)
             val t2 = System.nanoTime()
-            val heard = ChordHearing.hear(notes, beats.timesMs)
-            val t3 = System.nanoTime()
-            val spelling = Spelling.forKey(heard.key)
+            val heard = ChordReading.chords(logp)
+            val key = ChordReading.key(heard)
+            val spelling = Spelling.forKey(key)
             val known = song.chords.map { Chord.parse(it)!! }.toSet()
-            val total = heard.chords.sumOf { it.endMs - it.startMs }.toDouble()
-            val onKnown = heard.chords.filter { it.chord in known }.sumOf { it.endMs - it.startMs } / total
+            val total = heard.sumOf { it.endMs - it.startMs }.toDouble()
+            val onKnown = heard.filter { it.chord in known }.sumOf { it.endMs - it.startMs } / total
             // Same root and kind (a 7 or m7 where the triad is known counts too).
-            val loose = heard.chords.filter { h -> known.any { it.root == h.chord.root && minor(it) == minor(h.chord) } }.sumOf { it.endMs - it.startMs } / total
+            val loose = heard.filter { h -> known.any { it.root == h.root && minor(it) == minor(h.chord) } }.sumOf { it.endMs - it.startMs } / total
             println(
-                "\n== ${song.slug}: key ${heard.key?.name()} · ${"%.1f".format(beats.bpm)} BPM · ${beats.timesMs.size} beats · ${notes.size} notes · " +
-                    "beats ${(t1 - t0) / 1_000_000} ms, notes ${(t2 - t1) / 1_000_000} ms, chords ${(t3 - t2) / 1_000_000} ms",
+                "\n== ${song.slug}: key ${key?.name()} · ${"%.1f".format(beats.bpm)} BPM · ${heard.size} chords · " +
+                    "beats ${(t1 - t0) / 1_000_000} ms, chords ${(t2 - t1) / 1_000_000} ms",
             )
             println("   on its chords: ${"%.0f".format(onKnown * 100)}% exact, ${"%.0f".format(loose * 100)}% same root and mode")
-            println("   " + heard.chords.joinToString(" ") { "${it.chord.name(spelling)}@${"%.1f".format(it.startMs / 1000.0)}" })
-            song.sheet?.let { compare(it, heard.chords, spelling) }
+            println("   " + heard.joinToString(" ") { "${it.chord.name(spelling)}@${"%.1f".format(it.startMs / 1000.0)}" })
+            song.sheet?.let { compare(it, heard, spelling) }
         }
     }
 
@@ -136,7 +135,7 @@ class ChordsLiveTest {
      * The sheet's chords against what was heard, one by one: aligned in order (Needleman–Wunsch;
      * what is heard after the sheet's part is free), exact, same root and mode (Gm7 for Gm), or not.
      */
-    private fun compare(sheet: String, heard: List<ChordHearing.Heard>, spelling: Spelling) {
+    private fun compare(sheet: String, heard: List<TimedChord>, spelling: Spelling) {
         val want = sheet.split(" ").filter { it.isNotBlank() && it != "|" }.map { Chord.parse(it)!! }
         val got = heard.map { it.chord }
         fun score(a: Chord, b: Chord) = when {
@@ -178,15 +177,10 @@ class ChordsLiveTest {
         println("   ${want.size} acordes da cifra: $exact iguais, $close mesma base, ${want.size - exact - close} diferentes ou não ouvidos; ${rows.count { "+ a mais" in it }} a mais no meio")
     }
 
-    private fun minor(c: Chord) = c.quality == ChordQuality.MINOR || c.quality == ChordQuality.MIN7
+    private fun minor(c: Chord) = c.quality in setOf(ChordQuality.MINOR, ChordQuality.MIN7, ChordQuality.MIN6, ChordQuality.MIN_MAJ7, ChordQuality.MIN_ADD9, ChordQuality.DIM, ChordQuality.DIM7, ChordQuality.HALF_DIM)
 
     private fun floats(f: File): FloatArray {
         val bb = ByteBuffer.wrap(f.readBytes()).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer()
         return FloatArray(bb.remaining()).also { bb.get(it) }
-    }
-
-    private fun matrix(f: File): Array<FloatArray> {
-        val all = floats(f)
-        return Array(all.size / 88) { r -> all.copyOfRange(r * 88, r * 88 + 88) }
     }
 }

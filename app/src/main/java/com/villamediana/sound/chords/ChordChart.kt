@@ -38,8 +38,8 @@ data class ChordChart(
     }
 
     companion object {
-        /** Bumped when the hearing changes enough that charts saved before should be heard again. */
-        const val VERSION = 1
+        /** Bumped when the hearing changes enough that charts saved before should be heard again (2: BTC). */
+        const val VERSION = 2
     }
 }
 

@@ -4,8 +4,6 @@ import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import kotlin.math.PI
 import kotlin.math.sin
 import kotlin.math.sqrt
@@ -55,23 +53,5 @@ class MonoResamplerTest {
         val out = all(MonoResampler(16_000, 22_050), sine(300.0, 16_000, 1.0), 512)
         assertEquals(22_050.0, out.size.toDouble(), 2.0)
         assertEquals(0.707, rms(out), 0.01)
-    }
-
-    @Test fun modelWindowsOneAtATimeAreTheWholeCutWindows() {
-        // The reference: the audio padded with half an overlap and cut all at once.
-        val audio = FloatArray(200_000) { (it % 977) / 977f - 0.5f }
-        val window = 22_050 * 2 - 256
-        val step = window - 30 * 256
-        val padded = FloatArray(30 * 256 / 2 + audio.size).also { System.arraycopy(audio, 0, it, 30 * 256 / 2, audio.size) }
-        val reference = generateSequence(0) { it + step }.takeWhile { it < padded.size }.map { i ->
-            FloatArray(window).also { System.arraycopy(padded, i, it, 0, minOf(window, padded.size - i)) }
-        }.toList()
-        assertEquals(reference.size, BasicPitch.windowCount(audio.size))
-        val buf = ByteBuffer.allocateDirect(window * 4).order(ByteOrder.nativeOrder()).asFloatBuffer()
-        reference.forEachIndexed { w, expected ->
-            BasicPitch.window(audio, w, buf)
-            val got = FloatArray(window).also { buf.get(it) }
-            assertArrayEquals("window $w", expected, got, 0f)
-        }
     }
 }

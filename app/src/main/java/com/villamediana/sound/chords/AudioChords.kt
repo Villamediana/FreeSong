@@ -18,9 +18,9 @@ import java.io.IOException
 
 /**
  * Hears a song's chords on the phone: its audio (the file, or the stream read through the same
- * cache the player uses, so a song just heard costs no data), decoded to mono 22 kHz, its beats
- * found, its notes heard by Basic Pitch, and the chords read from those notes on those beats.
- * Nothing leaves the phone.
+ * cache the player uses, so a song just heard costs no data), decoded to mono 22 kHz, its
+ * constant-Q spectrum ([Cqt]) given to BTC ([Btc]), a chord recognition model, and its frame-by-frame
+ * chords read into the ones a player writes ([ChordReading]). Nothing leaves the phone.
  */
 @OptIn(UnstableApi::class)
 internal class AudioChords(
@@ -33,22 +33,27 @@ internal class AudioChords(
         val active = { context.isActive }
         val (file, temporary) = audioFile(subject, active) { progress(it * 0.22f) }
         try {
-            val audio = AudioDecoder.decodeMono(file, BasicPitch.RATE, MAX_MS, active) { progress(0.22f + it * 0.1f) }
-            if (audio.size < BasicPitch.RATE * 5) throw ChordFailure(ChordState.Reason.NOTHING_HEARD)
+            val audio = AudioDecoder.decodeMono(file, Cqt.RATE, MAX_MS, active) { progress(0.22f + it * 0.1f) }
+            if (audio.size < Cqt.RATE * 5) throw ChordFailure(ChordState.Reason.NOTHING_HEARD)
+            // The tempo, for the rows of bars when there are no lyrics.
             val beats = BeatTracker.track(audio, active)
             progress(0.36f)
-            val notes = BasicPitch.transcribe(this.context, audio, BasicPitch.Options(minNoteMs = 130f)) { progress(0.36f + it * 0.6f) }
-            if (notes.size < MIN_NOTES) throw ChordFailure(ChordState.Reason.NOTHING_HEARD)
-            val hearing = if (beats.timesMs.size >= MIN_BEATS) ChordHearing.hear(notes, beats.timesMs) else ChordHearing.hear(notes, beats.bpm.toInt())
+            val features = Cqt.features(audio, active)
+            progress(0.44f)
+            val chords = ChordReading.chords(model().logProbs(features, active, { progress(0.44f + it * 0.56f) }))
             progress(1f)
-            return ChordChart(
-                chords = hearing.chords.map { TimedChord(it.startMs, it.endMs, it.chord.root, it.chord.quality, it.chord.bass) },
-                key = hearing.key,
-                bpm = beats.bpm,
-            )
+            return ChordChart(chords = chords, key = ChordReading.key(chords), bpm = beats.bpm)
         } finally {
             if (temporary) file.delete()
         }
+    }
+
+    /** BTC's weights (5.9 MB, 12 MB in memory): read when a song is first heard, let go if memory runs short. */
+    private var btc: java.lang.ref.SoftReference<Btc>? = null
+
+    @Synchronized
+    private fun model(): Btc = btc?.get() ?: Btc(java.nio.ByteBuffer.wrap(context.assets.open(MODEL).use { it.readBytes() })).also {
+        btc = java.lang.ref.SoftReference(it)
     }
 
     /** The song's audio as a file: its own, or the stream copied out of the player's cache / the network. */
@@ -86,7 +91,6 @@ internal class AudioChords(
     private companion object {
         /** Twelve minutes: past that it is a live set or a mix, not a song to play along to. */
         const val MAX_MS = 12 * 60_000L
-        const val MIN_NOTES = 8
-        const val MIN_BEATS = 8
+        const val MODEL = "chords/btc_voca.bin"
     }
 }
