@@ -32,16 +32,22 @@ internal object ChordName {
         )
     }
 
-    /** [name] typeset: the extension smaller and raised. Not a chord name: as it is. */
-    fun typeset(name: String): AnnotatedString {
+    /**
+     * [name] typeset: the extension smaller and raised, its top about the chord letter's. Not a
+     * chord name: as it is. A big title ([display]) takes a smaller extension, or it weighs as
+     * much as the chord.
+     */
+    fun typeset(name: String, display: Boolean = false): AnnotatedString {
         val parts = split(name) ?: return AnnotatedString(name)
         if (parts.extension.isEmpty()) return AnnotatedString(name)
         return buildAnnotatedString {
             append(parts.head)
-            withStyle(EXTENSION) { append(parts.extension) }
+            withStyle(if (display) DISPLAY_EXTENSION else EXTENSION) { append(parts.extension) }
             append(parts.bass)
         }
     }
 
     private val EXTENSION = SpanStyle(fontSize = 0.7.em, baselineShift = BaselineShift(0.36f), letterSpacing = 0.02.em)
+    // The shift is measured on the chord's own size, not the extension's.
+    private val DISPLAY_EXTENSION = SpanStyle(fontSize = 0.5.em, baselineShift = BaselineShift(0.4f), letterSpacing = 0.01.em)
 }

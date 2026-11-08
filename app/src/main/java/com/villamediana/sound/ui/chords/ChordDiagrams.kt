@@ -34,7 +34,8 @@ import com.villamediana.sound.ui.theme.SoundColors
 /**
  * A chord box: the strings standing up, the nut (or the fret it starts at) on top, a dot where
  * each finger goes with its number, the barre across, ○ and × over open and silent strings, and
- * under each string the note it sounds. The root's dots are in the "playing" color.
+ * under each string the note it sounds. Drawn in ink, as the lyrics are; the root in the lyrics'
+ * accent (the sung line's color).
  */
 @Composable
 internal fun FretDiagram(chord: Chord, fingering: Fingering, instrument: Instrument, spelling: Spelling, description: String, modifier: Modifier = Modifier) {
@@ -42,14 +43,15 @@ internal fun FretDiagram(chord: Chord, fingering: Fingering, instrument: Instrum
     val ink = SoundColors.Text
     val faint = SoundColors.TextFaint
     val line = SoundColors.TextMuted.copy(alpha = 0.55f)
-    val root = SoundColors.Mint
-    val onRoot = SoundColors.OnMint
+    val fretLine = SoundColors.TextMuted.copy(alpha = 0.3f)
+    val root = SoundColors.Lyric
+    val onRoot = onColor(root)
     val other = SoundColors.Text
     val onOther = SoundColors.Surface2
     val strings = instrument.strings.size
     Canvas(
         modifier
-            .widthIn(max = if (strings >= 6) 290.dp else 230.dp)
+            .widthIn(max = if (strings >= 6) 272.dp else 220.dp)
             .fillMaxWidth()
             .aspectRatio(if (strings >= 6) 1.08f else 0.95f)
             .semantics { contentDescription = description },
@@ -70,10 +72,10 @@ internal fun FretDiagram(chord: Chord, fingering: Fingering, instrument: Instrum
         // Frets, then strings (the low ones a little thicker on a guitar).
         for (r in 0..rows) {
             val y = top + r * dy
-            drawLine(line, Offset(side, y), Offset(side + gridW, y), strokeWidth = 1.4.dp.toPx())
+            drawLine(fretLine, Offset(side, y), Offset(side + gridW, y), strokeWidth = 1.4.dp.toPx())
         }
         if (first == 1) {
-            drawLine(ink, Offset(side - 1.dp.toPx(), top), Offset(side + gridW + 1.dp.toPx(), top), strokeWidth = 6.dp.toPx(), cap = StrokeCap.Round)
+            drawLine(ink, Offset(side - 1.dp.toPx(), top), Offset(side + gridW + 1.dp.toPx(), top), strokeWidth = 5.dp.toPx(), cap = StrokeCap.Round)
         } else {
             label(measurer, "${first}ª", Offset(side - dot - 6.dp.toPx(), top + dy / 2), faint, 13f, alignRight = true)
         }
@@ -117,8 +119,8 @@ internal fun FretDiagram(chord: Chord, fingering: Fingering, instrument: Instrum
 }
 
 /**
- * Two octaves of keys (more for a wide chord), the chord's keys in the "playing" color with their
- * names; a slash chord's bass in the lyric color.
+ * Two octaves of keys (more for a wide chord), the chord's keys in the lyrics' accent with their
+ * names; a slash chord's bass in a deeper shade of it.
  */
 @Composable
 internal fun PianoDiagram(notes: List<Int>, bass: Int?, spelling: Spelling, description: String, modifier: Modifier = Modifier) {
@@ -126,10 +128,10 @@ internal fun PianoDiagram(notes: List<Int>, bass: Int?, spelling: Spelling, desc
     val keyLine = SoundColors.TextMuted.copy(alpha = 0.5f)
     val white = Color(0xFFF7F7F4)
     val black = Color(0xFF1B1C22)
-    val hit = SoundColors.Mint
-    val onHit = SoundColors.OnMint
-    val bassColor = SoundColors.Lyric
-    val onBass = if (bassColor.luminance() > 0.5f) Color(0xFF1B1C22) else Color.White
+    val hit = SoundColors.Lyric
+    val onHit = onColor(hit)
+    val bassColor = androidx.compose.ui.graphics.lerp(hit, Color.Black, 0.32f)
+    val onBass = onColor(bassColor)
     val low = notes.minOrNull() ?: 60
     val high = notes.maxOrNull() ?: 72
     val startC = low - Math.floorMod(low, 12)
@@ -174,6 +176,9 @@ internal fun PianoDiagram(notes: List<Int>, bass: Int?, spelling: Spelling, desc
         }
     }
 }
+
+/** Ink that reads on [c]: near-black on a light color, white on a deep one. */
+private fun onColor(c: Color): Color = if (c.luminance() > 0.45f) Color(0xFF1B1C22) else Color.White
 
 private fun isBlack(n: Int) = Math.floorMod(n, 12) in setOf(1, 3, 6, 8, 10)
 

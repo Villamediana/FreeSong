@@ -163,6 +163,13 @@ cifra lá é **ouvida no celular** a partir do áudio (1.12.0, pedido do Miguel:
     sobre − A⁺² + à esquerda, "CAPOTRASTE" sobre "2ª casa" (ou "VERSÃO DE") à direita — rótulo em
     caixa alta pequena como o "TOCANDO DE" do player. Entre o título e a letra só fica o estado
     enquanto procura/ouve/falhou. Botão de acordes ligado = tinta cheia, como o de tradução.
+- Folha do acorde (1.12.3), na mesma língua: nome tipografado grande (`ChordName.typeset(display =
+  true)`, extensão menor que na letra), dito e notas com a tônica no acento da letra; instrumentos
+  como palavras (`QuietChoice`: escolhido em tinta cheia sobre pílula translúcida, igual ao "Letra"
+  do player; sem caixa em volta); diagrama em tinta com a tônica em `SoundColors.Lyric` (amarelo no
+  escuro, destaque no claro) — sem menta; piano com as teclas do acorde no acento e o baixo de acorde
+  com barra num tom mais fundo; "POSIÇÃO 1 DE 4" e "NESTA MÚSICA" em caixa alta pequena; setas
+  coladas ao rótulo e ponto da posição atual alongado; acordes da música tipografados, sem caixas.
 
 - `chords/` (puro Kotlin, testado, menos o que toca no Android):
   - `AudioChords` — o áudio da música: o arquivo baixado, ou o stream lido pelo mesmo `AudioCache`

@@ -16,6 +16,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -67,9 +70,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * How to play a chord: the instrument on top (remembered), the chord's name, how it is said and
- * its notes, then where the hands go — a few places on the neck, or the piano's inversions,
- * swiped through — and the song's other chords at the bottom to go from one to the next.
+ * How to play a chord, in the lyrics' own language: the chord's name set as it is over the words
+ * (Am⁷), how it is said and its notes; the instrument (remembered) as a quiet row of words; where
+ * the hands go — a few places on the neck, or the piano's inversions, swiped through — drawn in ink
+ * with the root in the lyrics' accent; and the song's other chords at the bottom to go from one to
+ * the next. Small spaced capitals label the parts, as "TOM" does by the play button.
  */
 @OptIn(ExperimentalFoundationApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
@@ -86,100 +91,113 @@ internal fun ChordSheet(
     SoundSheet(onDismissRequest = onDismiss) {
       // Scrolls on a short screen; on most phones it all fits.
       Column(Modifier.fillMaxWidth().verticalScroll(androidx.compose.foundation.rememberScrollState())) {
-        InstrumentTabs(instrument, onInstrument, Modifier.padding(horizontal = 20.dp).padding(bottom = 18.dp))
         val language = LocalConfiguration.current.locales[0]?.language ?: "pt"
-        Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
+        val said = ChordSpeech.say(chord, spelling, language)
+        Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 4.dp)) {
             Text(
-                chord.name(spelling),
-                style = MaterialTheme.typography.displayMedium.copy(fontSize = 44.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.02).em),
+                ChordName.typeset(chord.name(spelling), display = true),
+                style = MaterialTheme.typography.displayMedium.copy(fontSize = 52.sp, lineHeight = 58.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.02).em),
                 color = SoundColors.Text,
                 modifier = Modifier.testTag("chordSheetName"),
             )
-            Text(ChordSpeech.say(chord, spelling, language), style = MaterialTheme.typography.titleMedium, color = SoundColors.TextMuted)
-            Spacer(Modifier.height(2.dp))
-            Text(chord.tones.joinToString("  ·  ") { spelling.name(it) }, style = MaterialTheme.typography.bodyMedium, color = SoundColors.TextFaint)
+            Text(said, style = MaterialTheme.typography.titleMedium, color = SoundColors.TextMuted)
+            Spacer(Modifier.height(6.dp))
+            ChordTones(chord, spelling)
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(18.dp))
+        InstrumentTabs(instrument, onInstrument, Modifier.padding(horizontal = 12.dp))
+        Spacer(Modifier.height(10.dp))
 
-        val description = ChordSpeech.say(chord, spelling, language)
         if (instrument.fretted) {
             val shapes = remember(chord, instrument) { fingerings.of(chord, instrument) }
             Variations(count = shapes.size, key = chord to instrument, label = { R.string.chords_position }) { page ->
-                FretDiagram(chord, shapes[page], instrument, spelling, description)
+                FretDiagram(chord, shapes[page], instrument, spelling, said)
             }
         } else {
             val voicings = remember(chord) { PianoVoicing.voicings(chord) }
             Variations(count = voicings.size, key = chord to instrument, label = { if (it == 0) R.string.chords_root_position else R.string.chords_inversion }) { page ->
-                PianoDiagram(voicings[page], chord.bass?.takeIf { it != chord.root }?.let { voicings[page].first() }, spelling, description, Modifier.padding(horizontal = 20.dp))
+                PianoDiagram(voicings[page], chord.bass?.takeIf { it != chord.root }?.let { voicings[page].first() }, spelling, said, Modifier.padding(horizontal = 20.dp))
             }
         }
 
         if (songChords.size > 1) {
-            Spacer(Modifier.height(14.dp))
-            Text(
-                stringResource(R.string.chords_in_song),
-                style = MaterialTheme.typography.labelLarge,
-                color = SoundColors.TextMuted,
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 6.dp),
-            )
+            Spacer(Modifier.height(22.dp))
+            SheetLabel(stringResource(R.string.chords_in_song), Modifier.padding(horizontal = 24.dp))
+            Spacer(Modifier.height(4.dp))
             val listState = rememberLazyListState()
             LaunchedEffect(chord) { songChords.indexOf(chord).takeIf { it >= 0 }?.let { listState.animateScrollToItem((it - 1).coerceAtLeast(0)) } }
             LazyRow(
                 state = listState,
-                contentPadding = PaddingValues(horizontal = 20.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
                 modifier = Modifier.keepHorizontalDrags(),
             ) {
                 items(songChords, key = { it.toString() }) { c ->
-                    val on = c == chord
-                    val bg by animateColorAsState(if (on) SoundColors.Mint else SoundColors.Surface3, tween(180), label = "songChord")
-                    Box(
-                        Modifier
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(bg)
-                            .clickable(role = Role.Button) { onChord(c) }
-                            .semantics { selected = on }
-                            .padding(horizontal = 16.dp, vertical = 10.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(c.name(spelling), style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = if (on) SoundColors.OnMint else SoundColors.Text)
+                    QuietChoice(on = c == chord, onClick = { onChord(c) }) { ink ->
+                        Text(
+                            ChordName.typeset(c.name(spelling)),
+                            style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp, fontWeight = FontWeight.Bold),
+                            color = ink,
+                            maxLines = 1,
+                        )
                     }
                 }
             }
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(14.dp))
       }
     }
 }
 
-/** Violão · Ukulele · Cavaquinho · Piano, the chosen one filled in. */
+/** A small spaced capital label ("NESTA MÚSICA"), as the lyrics' "TOM". */
+@Composable
+private fun SheetLabel(text: String, modifier: Modifier = Modifier) {
+    Text(text.uppercase(), style = MaterialTheme.typography.labelSmall, color = SoundColors.Text.copy(alpha = 0.55f), maxLines = 1, modifier = modifier)
+}
+
+/** The chord's notes, the root in the lyrics' accent (as on the neck and the keys below). */
+@Composable
+private fun ChordTones(chord: Chord, spelling: Spelling) {
+    val accent = SoundColors.Lyric
+    val faint = SoundColors.TextMuted
+    val text = androidx.compose.ui.text.buildAnnotatedString {
+        chord.tones.forEachIndexed { i, t ->
+            if (i > 0) withStyle(androidx.compose.ui.text.SpanStyle(color = faint.copy(alpha = 0.5f))) { append("  ·  ") }
+            withStyle(androidx.compose.ui.text.SpanStyle(color = if (t == chord.root) accent else faint)) { append(spelling.name(t)) }
+        }
+    }
+    Text(text, style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 0.04.em))
+}
+
+/**
+ * One of a few choices as a word: the chosen one in full ink on a translucent pill (the player's
+ * "Letra" button), the rest faint — no box around them all.
+ */
+@Composable
+private fun QuietChoice(on: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, role: Role = Role.Button, content: @Composable (Color) -> Unit) {
+    val bg by animateColorAsState(SoundColors.Text.copy(alpha = if (on) 0.09f else 0f), tween(200), label = "choiceBg")
+    val ink by animateColorAsState(if (on) SoundColors.Text else SoundColors.TextMuted, tween(200), label = "choiceInk")
+    Box(
+        modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(bg)
+            .clickable(role = role, onClick = onClick)
+            .semantics { selected = on }
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center,
+    ) { content(ink) }
+}
+
+/** Violão · Ukulele · Cavaquinho · Piano as words, the chosen one on a soft pill. */
 @Composable
 private fun InstrumentTabs(selected: Instrument, onSelect: (Instrument) -> Unit, modifier: Modifier = Modifier) {
-    Row(
-        modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .background(SoundColors.Surface3)
-            .padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
+    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
         for (instrument in Instrument.entries) {
             val on = instrument == selected
-            val bg by animateColorAsState(if (on) SoundColors.Surface2 else SoundColors.Surface3, tween(200), label = "tab")
-            val ink by animateColorAsState(if (on) SoundColors.Text else SoundColors.TextMuted, tween(200), label = "tabInk")
-            Box(
-                Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(bg)
-                    .clickable(role = Role.Tab) { onSelect(instrument) }
-                    .semantics { this.selected = on }
-                    .padding(vertical = 10.dp),
-                contentAlignment = Alignment.Center,
-            ) {
+            QuietChoice(on = on, onClick = { onSelect(instrument) }, role = Role.Tab) { ink ->
                 Text(
                     stringResource(instrument.label()),
-                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = if (on) FontWeight.Bold else FontWeight.Medium),
+                    style = MaterialTheme.typography.labelLarge.copy(fontSize = 15.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Medium),
                     color = ink,
                     maxLines = 1,
                 )
@@ -188,7 +206,10 @@ private fun InstrumentTabs(selected: Instrument, onSelect: (Instrument) -> Unit,
     }
 }
 
-/** The shapes of a chord, swiped through, with arrows and "Posição 2 de 4" under them. */
+/**
+ * The shapes of a chord, swiped through; under them, close together, ‹ "POSIÇÃO 2 DE 4" › with a
+ * dot per shape.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun Variations(count: Int, key: Any, label: (Int) -> Int, page: @Composable (Int) -> Unit) {
@@ -209,26 +230,26 @@ private fun Variations(count: Int, key: Any, label: (Int) -> Int, page: @Composa
     }
     // Another chord or instrument may have fewer shapes, for the frame before the pager goes back to the first.
     val shown = pager.currentPage.coerceIn(0, count - 1)
-    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = { scope.launch { pager.animateScrollToPage((shown - 1).coerceAtLeast(0)) } }, enabled = shown > 0) {
-            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, stringResource(R.string.chords_previous_shape), tint = if (shown > 0) SoundColors.Text else SoundColors.TextFaint.copy(alpha = 0.4f))
+    Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+        val canBack = shown > 0
+        val canOn = shown < count - 1
+        IconButton(onClick = { scope.launch { pager.animateScrollToPage((shown - 1).coerceAtLeast(0)) } }, enabled = canBack) {
+            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, stringResource(R.string.chords_previous_shape), tint = SoundColors.Text.copy(alpha = if (canBack) 0.85f else 0.2f))
         }
-        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                stringResource(label(shown), shown + 1, count, shown),
-                style = MaterialTheme.typography.labelLarge,
-                color = SoundColors.TextMuted,
-            )
-            Spacer(Modifier.height(6.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.widthIn(min = 132.dp).padding(horizontal = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            SheetLabel(stringResource(label(shown), shown + 1, count, shown))
+            Spacer(Modifier.height(7.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
                 repeat(count) { i ->
-                    val c by animateColorAsState(if (i == shown) SoundColors.Text else SoundColors.TextFaint.copy(alpha = 0.45f), tween(200), label = "dot")
-                    Box(Modifier.size(6.dp).clip(CircleShape).background(c))
+                    val on = i == shown
+                    val c by animateColorAsState(SoundColors.Text.copy(alpha = if (on) 0.9f else 0.22f), tween(200), label = "dot")
+                    val w by androidx.compose.animation.core.animateDpAsState(if (on) 14.dp else 5.dp, tween(220), label = "dotWidth")
+                    Box(Modifier.size(width = w, height = 5.dp).clip(CircleShape).background(c))
                 }
             }
         }
-        IconButton(onClick = { scope.launch { pager.animateScrollToPage((shown + 1).coerceAtMost(count - 1)) } }, enabled = shown < count - 1) {
-            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, stringResource(R.string.chords_next_shape), tint = if (shown < count - 1) SoundColors.Text else SoundColors.TextFaint.copy(alpha = 0.4f))
+        IconButton(onClick = { scope.launch { pager.animateScrollToPage((shown + 1).coerceAtMost(count - 1)) } }, enabled = canOn) {
+            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, stringResource(R.string.chords_next_shape), tint = SoundColors.Text.copy(alpha = if (canOn) 0.85f else 0.2f))
         }
     }
 }
