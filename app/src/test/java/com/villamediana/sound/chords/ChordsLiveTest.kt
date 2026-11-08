@@ -65,13 +65,43 @@ class ChordsLiveTest {
         }
     }
 
-    @Test fun hearsRealSongs() {
+    /**
+     * The audio as the phone gets it: [AudioDecoder] hands over the decoder's own rate, and
+     * [MonoResampler] brings it to 22 kHz. From `<song>.44100.f32` (ffmpeg -ac 1, native rate) to
+     * `<song>.phone.f32`, and `<song>.nofilter.f32` without the low-pass, to compare
+     * (SOUND_CHORDS_VARIANT=.phone for hearsRealSongs).
+     */
+    @Test fun resamplesLikeThePhone() {
         assumeTrue(dir.isNotBlank())
         for (song in songs) {
-            val pcm = File(dir, "${song.slug}.f32").takeIf { it.isFile } ?: continue
+            val native = File(dir, "${song.slug}.44100.f32").takeIf { it.isFile } ?: continue
+            val audio = floats(native)
+            for ((name, filter) in listOf("phone" to true, "nofilter" to false)) {
+                val r = MonoResampler(44_100, BasicPitch.RATE, antiAlias = filter)
+                val out = java.io.ByteArrayOutputStream()
+                // In decoder-sized blocks, as the phone does.
+                var at = 0
+                while (at < audio.size) {
+                    val n = minOf(2048, audio.size - at)
+                    val res = r.push(audio.copyOfRange(at, at + n))
+                    val bb = ByteBuffer.allocate(res.size * 4).order(ByteOrder.LITTLE_ENDIAN)
+                    bb.asFloatBuffer().put(res)
+                    out.write(bb.array())
+                    at += n
+                }
+                File(dir, "${song.slug}.$name.f32").writeBytes(out.toByteArray())
+            }
+        }
+    }
+
+    @Test fun hearsRealSongs() {
+        assumeTrue(dir.isNotBlank())
+        val variant = System.getProperty("sound.chords.variant").orEmpty()
+        for (song in songs) {
+            val pcm = File(dir, "${song.slug}$variant.f32").takeIf { it.isFile } ?: continue
             val audio = floats(pcm)
-            val frames = matrix(File(dir, "${song.slug}.frames.f32"))
-            val onsets = matrix(File(dir, "${song.slug}.onsets.f32"))
+            val frames = matrix(File(dir, "${song.slug}$variant.frames.f32"))
+            val onsets = matrix(File(dir, "${song.slug}$variant.onsets.f32"))
             val t0 = System.nanoTime()
             val beats = BeatTracker.track(audio)
             val t1 = System.nanoTime()

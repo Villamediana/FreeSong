@@ -17,6 +17,9 @@ import kotlinx.serialization.json.jsonPrimitive
 class Fingerings(private val readAsset: (String) -> String?) {
     private val tables = HashMap<Instrument, Map<String, Map<String, List<Fingering>>>>()
 
+    /** Worked out once per chord: the search over the neck is milliseconds on a guitar. */
+    private val known = java.util.concurrent.ConcurrentHashMap<Triple<Chord, Instrument, Int>, List<Fingering>>()
+
     /**
      * Up to [limit] shapes, the easiest first, from different places on the neck when there is a
      * choice. Players' shapes and found ones are ranked together by how easy they are (the
@@ -24,6 +27,12 @@ class Fingerings(private val readAsset: (String) -> String?) {
      */
     fun of(chord: Chord, instrument: Instrument, limit: Int = 4): List<Fingering> {
         if (!instrument.fretted) return emptyList()
+        val key = Triple(chord, instrument, limit)
+        known[key]?.let { return it }
+        return work(chord, instrument, limit).also { known[key] = it }
+    }
+
+    private fun work(chord: Chord, instrument: Instrument, limit: Int): List<Fingering> {
         val fromDb = table(instrument)?.let { lookup(it, chord) }.orEmpty()
             .filter { FretMath.plays(chord, it, instrument, strict = false) }
         val candidates = (fromDb + FretSearch.find(chord, instrument, CANDIDATES)).distinctBy { it.frets }

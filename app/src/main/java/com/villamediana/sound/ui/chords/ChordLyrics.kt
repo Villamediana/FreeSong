@@ -214,7 +214,17 @@ private fun ChordedLine(
             var at = x.toInt() - pad
             val prev = (i - 1 downTo 0).firstOrNull { lineOf[it] == lineOf[i] }
             if (prev != null) at = maxOf(at, xs[prev] + placeables[prev].width + gap)
-            xs[i] = at.coerceIn(-pad, (width - placeables[i].width).coerceAtLeast(-pad))
+            xs[i] = at.coerceAtLeast(-pad)
+        }
+        // A crowded line's last chords that ran past the edge come back in, pushing the ones before
+        // them left instead of landing on top of each other.
+        for (l in lineOf.distinct()) {
+            var limit = width
+            for (i in chords.indices.reversed()) {
+                if (lineOf[i] != l) continue
+                if (xs[i] + placeables[i].width > limit) xs[i] = maxOf(-pad, limit - placeables[i].width)
+                limit = xs[i] - gap
+            }
         }
         val height = layout.size.height + shift
         layout(width, height) {

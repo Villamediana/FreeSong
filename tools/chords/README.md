@@ -15,5 +15,17 @@ for f in $D/*.f32; do case $f in *.frames.f32|*.onsets.f32) continue;; esac
 SOUND_CHORDS_DIR=$D ./gradlew :app:testDebugUnitTest --tests '*ChordsLiveTest.hearsRealSongs' -i
 ```
 
+Para conferir o áudio como o celular o entrega (o decodificador dá a taxa original e o
+`MonoResampler` do app desce para 22 kHz, com filtro anti-aliasing):
+
+```sh
+for f in $D/*.m4a; do ffmpeg -loglevel error -y -i "$f" -ac 1 -f f32le "${f%.m4a}.44100.f32"; done
+SOUND_CHORDS_DIR=$D ./gradlew :app:testDebugUnitTest --tests '*ChordsLiveTest.resamplesLikeThePhone'
+for f in $D/*.phone.f32; do python -I tools/chords/basic_pitch_frames.py "$f" app/src/main/assets/chords/nmp.tflite; done
+SOUND_CHORDS_DIR=$D SOUND_CHORDS_VARIANT=.phone ./gradlew :app:testDebugUnitTest --tests '*ChordsLiveTest.hearsRealSongs' -i
+```
+
+Pelo caminho do celular (1.10.1): Let It Be 97%, Stand By Me 100%, Perfect 99%, Riptide 90%.
+
 Resultado em 2026-11-08: Let It Be 96%, Stand By Me 100%, Perfect 99%, Riptide 88% (Riptide é
 tocada com capotraste na 1ª: soa Bbm–Ab–Db).

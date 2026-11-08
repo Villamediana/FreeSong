@@ -146,7 +146,13 @@ escolheu isso; o Cifra Club recusa pedido de app e não vamos burlar a proteçã
 - `ui/chords/` — `ChordLyricsLines` (acorde sobre a palavra, o que soa agora preenchido em menta),
   `ChordSheet` (Violão · Ukulele · Cavaquinho · Piano, guardado em `Settings.chordInstrument`;
   posições deslizáveis; acordes da música embaixo), diagramas em Canvas. Botão no topo da letra
-  cheia liga/desliga (`Settings.chords`). O cartão de letra do player mostra acordes também, mas só
-  pede pra ouvir com o player aberto.
-- Validação com músicas reais: `tools/chords/README.md` (Let It Be 96%, Stand By Me 100%,
-  Perfect 99%, Riptide 88% do tempo nos acordes certos).
+  cheia liga/desliga (`Settings.chords`, desligado por padrão).
+- **Nada roda sem a pessoa pedir** (pedido do Miguel, 1.10.1: "nem todo mundo toca"): só a letra
+  cheia aberta com o botão ligado ouve uma música (`rememberChordState(listen = true)`); fechar a
+  letra, desligar o botão ou trocar de música para a análise na hora (`ChordEngine.stop`). O cartão
+  de letra do player nunca ouve — só mostra acordes já ouvidos (`ChordEngine.recall`, lê o disco).
+- O áudio chega na taxa do decodificador (44,1/48 kHz, 16 bits ou float) e o `MonoResampler` desce
+  pra 22 kHz com filtro anti-aliasing (Butterworth de 8ª ordem); o modelo roda janela a janela
+  (sem copiar a música inteira em janelas) — música longa cabe na memória.
+- Validação com músicas reais: `tools/chords/README.md`. Pelo caminho do celular (decodificador +
+  `MonoResampler`): Let It Be 97%, Stand By Me 100%, Perfect 99%, Riptide 90% do tempo nos acordes certos.

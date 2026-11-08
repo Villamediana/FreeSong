@@ -66,7 +66,8 @@ object BeatTracker {
         val re = DoubleArray(N_FFT)
         val im = DoubleArray(N_FFT)
         val power = DoubleArray(N_FFT / 2 + 1)
-        val mel = Array(frames) { DoubleArray(MELS) }
+        // Floats: a song is tens of thousands of frames, and dB need no more.
+        val mel = Array(frames) { FloatArray(MELS) }
         var peak = Double.NEGATIVE_INFINITY
         for (t in 0 until frames) {
             if (t % 512 == 0 && !isActive()) throw kotlinx.coroutines.CancellationException()
@@ -85,7 +86,7 @@ object BeatTracker {
                 val (from, weights) = bank[b]
                 for (j in weights.indices) s += weights[j] * power[from + j]
                 val db = 10 * log10(max(s, 1e-10))
-                row[b] = db
+                row[b] = db.toFloat()
                 if (db > peak) peak = db
             }
         }
@@ -93,7 +94,7 @@ object BeatTracker {
         val env = DoubleArray(frames)
         for (t in 1 until frames) {
             var s = 0.0
-            for (b in 0 until MELS) s += max(0.0, max(mel[t][b], floor) - max(mel[t - 1][b], floor))
+            for (b in 0 until MELS) s += max(0.0, max(mel[t][b].toDouble(), floor) - max(mel[t - 1][b].toDouble(), floor))
             env[t] = s / MELS
         }
         val mean = env.average()
@@ -206,7 +207,7 @@ object BeatTracker {
         val peaks = (1 until cum.size - 1).filter { cum[it] > cum[it - 1] && cum[it] >= cum[it + 1] }
         if (peaks.isEmpty()) return IntArray(0)
         val median = peaks.map { cum[it] }.sorted()[peaks.size / 2]
-        var i = peaks.last { cum[it] >= 0.5 * median }
+        var i = peaks.lastOrNull { cum[it] >= 0.5 * median } ?: peaks.last()
         val out = ArrayList<Int>()
         while (i >= 0) {
             out += i

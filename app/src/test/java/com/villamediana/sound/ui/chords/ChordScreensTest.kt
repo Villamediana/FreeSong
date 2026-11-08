@@ -81,13 +81,14 @@ class ChordScreensTest {
 
     private val enabled = MutableStateFlow(true)
     private val instrument = MutableStateFlow(Instrument.VIOLAO)
+    private var heard = 0
 
     private fun deps(chart: ChordChart?): ChordsDeps {
         val engine = ChordEngine(
             scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
             store = ChordStore(tmp.newFolder()),
             worker = Dispatchers.Main,
-            analyze = { _, _ -> chart ?: ChordChart(emptyList()) },
+            analyze = { _, _ -> heard++; chart ?: ChordChart(emptyList()) },
             io = Dispatchers.Main,
         )
         return ChordsDeps(
@@ -177,6 +178,8 @@ class ChordScreensTest {
     @Test fun theButtonTurnsChordsOnAndOff() {
         enabled.value = false
         show(deps(chart()))
+        // Off (the default): the lyrics open, and no song is heard until the button is touched.
+        assertEquals(0, heard)
         compose.onNodeWithContentDescription("Mostrar acordes").performClick()
         compose.waitForIdle()
         assertTrue(enabled.value)
@@ -184,6 +187,30 @@ class ChordScreensTest {
         compose.onNodeWithContentDescription("Esconder acordes").performClick()
         compose.waitForIdle()
         assertTrue(!enabled.value)
+        compose.onNodeWithTag("chordLyrics").assertDoesNotExist()
+    }
+
+    @Test fun thePlayersLyricsCardNeverHearsASongItself() {
+        // Chords on, but only the full player open: nothing runs (the lyrics screen and the button are the ask).
+        val d = deps(chart())
+        compose.setContent {
+            SoundTheme(mode = com.villamediana.sound.data.ThemeMode.DARK) {
+                CompositionLocalProvider(LocalChords provides d) {
+                    com.villamediana.sound.ui.player.LyricsCard(
+                        lyrics = LyricsState.Ready(lyrics),
+                        clock = PlaybackClock().apply { onTick(13_000, 0L) },
+                        wash = mutableStateOf(Color(0xFF3A5F7A)),
+                        washTarget = Color(0xFF3A5F7A),
+                        onSeek = {},
+                        onOpen = {},
+                        track = song,
+                        durationMs = 200_000,
+                    )
+                }
+            }
+        }
+        compose.waitForIdle()
+        assertEquals(0, heard)
         compose.onNodeWithTag("chordLyrics").assertDoesNotExist()
     }
 

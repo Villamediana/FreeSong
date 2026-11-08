@@ -61,7 +61,9 @@ import com.villamediana.sound.chords.Spelling
 import com.villamediana.sound.ui.components.keepHorizontalDrags
 import com.villamediana.sound.ui.sheets.SoundSheet
 import com.villamediana.sound.ui.theme.SoundColors
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * How to play a chord: the instrument on top (remembered), the chord's name, how it is said and
@@ -204,26 +206,28 @@ private fun Variations(count: Int, key: Any, label: (Int) -> Int, page: @Composa
     HorizontalPager(state = pager, modifier = Modifier.fillMaxWidth().keepHorizontalDrags(), key = { "$key-$it" }) { p ->
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { page(p) }
     }
+    // Another chord or instrument may have fewer shapes, for the frame before the pager goes back to the first.
+    val shown = pager.currentPage.coerceIn(0, count - 1)
     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = { scope.launch { pager.animateScrollToPage((pager.currentPage - 1).coerceAtLeast(0)) } }, enabled = pager.currentPage > 0) {
-            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, stringResource(R.string.chords_previous_shape), tint = if (pager.currentPage > 0) SoundColors.Text else SoundColors.TextFaint.copy(alpha = 0.4f))
+        IconButton(onClick = { scope.launch { pager.animateScrollToPage((shown - 1).coerceAtLeast(0)) } }, enabled = shown > 0) {
+            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, stringResource(R.string.chords_previous_shape), tint = if (shown > 0) SoundColors.Text else SoundColors.TextFaint.copy(alpha = 0.4f))
         }
         Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                stringResource(label(pager.currentPage), pager.currentPage + 1, count, pager.currentPage),
+                stringResource(label(shown), shown + 1, count, shown),
                 style = MaterialTheme.typography.labelLarge,
                 color = SoundColors.TextMuted,
             )
             Spacer(Modifier.height(6.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 repeat(count) { i ->
-                    val c by animateColorAsState(if (i == pager.currentPage) SoundColors.Text else SoundColors.TextFaint.copy(alpha = 0.45f), tween(200), label = "dot")
+                    val c by animateColorAsState(if (i == shown) SoundColors.Text else SoundColors.TextFaint.copy(alpha = 0.45f), tween(200), label = "dot")
                     Box(Modifier.size(6.dp).clip(CircleShape).background(c))
                 }
             }
         }
-        IconButton(onClick = { scope.launch { pager.animateScrollToPage((pager.currentPage + 1).coerceAtMost(count - 1)) } }, enabled = pager.currentPage < count - 1) {
-            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, stringResource(R.string.chords_next_shape), tint = if (pager.currentPage < count - 1) SoundColors.Text else SoundColors.TextFaint.copy(alpha = 0.4f))
+        IconButton(onClick = { scope.launch { pager.animateScrollToPage((shown + 1).coerceAtMost(count - 1)) } }, enabled = shown < count - 1) {
+            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, stringResource(R.string.chords_next_shape), tint = if (shown < count - 1) SoundColors.Text else SoundColors.TextFaint.copy(alpha = 0.4f))
         }
     }
 }
@@ -240,6 +244,11 @@ internal fun rememberChordInstrument(): Instrument {
 @Composable
 internal fun ChordSheetHost(chart: ChordChart, chord: Chord?, instrument: Instrument, onChord: (Chord) -> Unit, onDismiss: () -> Unit) {
     val deps = LocalChords.current ?: return
+    // The song's shapes on the chosen instrument worked out ahead, off the main thread, so the
+    // sheet opens at once (a few milliseconds each, once).
+    LaunchedEffect(chart, instrument) {
+        if (instrument.fretted) withContext(Dispatchers.Default) { for (c in chart.distinct) deps.fingerings.of(c, instrument) }
+    }
     if (chord == null) return
     val scope = rememberCoroutineScope()
     ChordSheet(

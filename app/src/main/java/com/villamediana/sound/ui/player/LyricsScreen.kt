@@ -79,17 +79,19 @@ internal fun LyricsCard(
     onOpen: () -> Unit,
     modifier: Modifier = Modifier,
     streamed: Boolean = false,
-    /** The song, for its chords (shown here when they are on; heard only while [chordsActive]). */
+    /**
+     * The song, for its chords: shown here when they are on and were already heard. The card never
+     * hears a song itself — that happens only with the lyrics open and the chords button on.
+     */
     track: Track? = null,
-    chordsActive: Boolean = false,
-    online: Boolean = true,
     durationMs: Long = 0,
 ) {
     val colors = LyricColors.over(lyricsBackground(washTarget))
     val chordsOn = com.villamediana.sound.ui.chords.rememberChordsEnabled() && track != null
-    val chordState = if (track != null) com.villamediana.sound.ui.chords.rememberChordState(track, active = chordsOn && chordsActive, online = online) else ChordState.Idle
+    val chordState = if (track != null) com.villamediana.sound.ui.chords.rememberChordState(track, listen = false, online = true) else ChordState.Idle
     val chart = (chordState as? ChordState.Ready)?.chart?.takeIf { chordsOn }
-    var sheetChord by remember { mutableStateOf<com.villamediana.sound.chords.Chord?>(null) }
+    // The chord picked in this song: another song closes the sheet (and doesn't reopen it when its chords come).
+    var sheetChord by remember(track?.id) { mutableStateOf<com.villamediana.sound.chords.Chord?>(null) }
     val instrument = com.villamediana.sound.ui.chords.rememberChordInstrument()
     Column(
         modifier
@@ -190,9 +192,9 @@ internal fun LyricsScreen(
     val colors = LyricColors.over(lyricsBackground(washTarget))
     val chordsDeps = com.villamediana.sound.ui.chords.LocalChords.current
     val chordsOn = com.villamediana.sound.ui.chords.rememberChordsEnabled()
-    val chordState = com.villamediana.sound.ui.chords.rememberChordState(track, active = chordsOn, online = online)
+    val chordState = com.villamediana.sound.ui.chords.rememberChordState(track, listen = chordsOn, online = online)
     val chart = (chordState as? ChordState.Ready)?.chart?.takeIf { chordsOn }
-    var sheetChord by remember { mutableStateOf<com.villamediana.sound.chords.Chord?>(null) }
+    var sheetChord by remember(track.id) { mutableStateOf<com.villamediana.sound.chords.Chord?>(null) }
     val instrument = com.villamediana.sound.ui.chords.rememberChordInstrument()
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     Box(
@@ -229,8 +231,9 @@ internal fun LyricsScreen(
                         tint = if (chordsOn) SoundColors.Mint else SoundColors.Text.copy(alpha = 0.4f),
                     )
                 }
-                // In the chords view the lines carry chords, not translations.
-                if (lyrics is LyricsState.Ready && !chordsOn) TranslateToggle()
+                // In the chords view the lines carry chords, not translations; until it shows (or when
+                // no chords were heard) the plain lyrics keep their translation and its switch.
+                if (lyrics is LyricsState.Ready && chart == null) TranslateToggle()
             }
             if (chordsOn) {
                 com.villamediana.sound.ui.chords.ChordStatus(

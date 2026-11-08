@@ -1,5 +1,6 @@
 package com.villamediana.sound.chords
 
+import android.media.AudioFormat
 import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
@@ -31,11 +32,9 @@ internal object AudioDecoder {
             try {
                 codec.configure(format, null, null, 0)
                 codec.start()
-                var srcRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
                 var channels = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
-                var srcIndex = 0L // global index of the first frame of the current block
-                var next = 0.0 // position, in source frames, of the next output sample
-                var prev = 0f
+                var encoding = AudioFormat.ENCODING_PCM_16BIT
+                val resampler = MonoResampler(format.getInteger(MediaFormat.KEY_SAMPLE_RATE), rate)
                 val info = MediaCodec.BufferInfo()
                 var inputDone = false
                 while (true) {
@@ -59,35 +58,18 @@ internal object AudioDecoder {
                     val outIndex = codec.dequeueOutputBuffer(info, 10_000)
                     if (outIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
                         val f = codec.outputFormat
-                        srcRate = f.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+                        resampler.rate(f.getInteger(MediaFormat.KEY_SAMPLE_RATE))
                         channels = f.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+                        // Most decoders give 16-bit samples; some give floats (or wider integers).
+                        if (f.containsKey(MediaFormat.KEY_PCM_ENCODING)) encoding = f.getInteger(MediaFormat.KEY_PCM_ENCODING)
                     } else if (outIndex >= 0) {
                         if (info.size > 0) {
                             val buf = codec.getOutputBuffer(outIndex)!!
                             buf.position(info.offset)
                             buf.limit(info.offset + info.size)
-                            val shorts = buf.slice().order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
-                            val ch = channels.coerceAtLeast(1)
-                            val frames = shorts.remaining() / ch
-                            if (frames > 0) {
-                                val mono = FloatArray(frames)
-                                for (fr in 0 until frames) {
-                                    var sum = 0
-                                    for (c in 0 until ch) sum += shorts.get(fr * ch + c)
-                                    mono[fr] = sum.toFloat() / ch / 32768f
-                                }
-                                val step = srcRate.toDouble() / rate
-                                while (next < srcIndex + frames) {
-                                    val local = next - srcIndex
-                                    val a = kotlin.math.floor(local).toInt()
-                                    val t = (local - a).toFloat()
-                                    val s0 = if (a < 0) prev else mono[a]
-                                    val s1 = if (a + 1 < frames) mono[a + 1] else mono[frames - 1]
-                                    out.add(s0 * (1 - t) + s1 * t)
-                                    next += step
-                                }
-                                prev = mono[frames - 1]
-                                srcIndex += frames
+                            val mono = mono(buf.slice().order(ByteOrder.nativeOrder()), channels.coerceAtLeast(1), encoding)
+                            if (mono.isNotEmpty()) {
+                                for (v in resampler.push(mono)) out.add(v)
                                 if (out.size > maxMs / 1000 * rate + rate) throw TooLong()
                             }
                         }
@@ -102,6 +84,52 @@ internal object AudioDecoder {
             return out.toArray()
         } finally {
             extractor.release()
+        }
+    }
+
+    /** One block of decoded PCM, its channels averaged, as −1…1 floats. */
+    private fun mono(bytes: java.nio.ByteBuffer, channels: Int, encoding: Int): FloatArray = when (encoding) {
+        AudioFormat.ENCODING_PCM_FLOAT -> {
+            val f = bytes.asFloatBuffer()
+            FloatArray(f.remaining() / channels) { fr ->
+                var sum = 0f
+                for (c in 0 until channels) sum += f.get(fr * channels + c)
+                sum / channels
+            }
+        }
+        AudioFormat.ENCODING_PCM_32BIT -> {
+            val ints = bytes.asIntBuffer()
+            FloatArray(ints.remaining() / channels) { fr ->
+                var sum = 0.0
+                for (c in 0 until channels) sum += ints.get(fr * channels + c)
+                (sum / channels / 2147483648.0).toFloat()
+            }
+        }
+        AudioFormat.ENCODING_PCM_24BIT_PACKED -> {
+            val frames = bytes.remaining() / 3 / channels
+            FloatArray(frames) { fr ->
+                var sum = 0.0
+                for (c in 0 until channels) {
+                    val at = bytes.position() + (fr * channels + c) * 3
+                    // Little-endian, sign from the top byte.
+                    val v = (bytes.get(at).toInt() and 0xFF) or ((bytes.get(at + 1).toInt() and 0xFF) shl 8) or (bytes.get(at + 2).toInt() shl 16)
+                    sum += v
+                }
+                (sum / channels / 8388608.0).toFloat()
+            }
+        }
+        AudioFormat.ENCODING_PCM_8BIT -> FloatArray(bytes.remaining() / channels) { fr ->
+            var sum = 0
+            for (c in 0 until channels) sum += (bytes.get(bytes.position() + fr * channels + c).toInt() and 0xFF) - 128
+            sum.toFloat() / channels / 128f
+        }
+        else -> {
+            val shorts = bytes.asShortBuffer()
+            FloatArray(shorts.remaining() / channels) { fr ->
+                var sum = 0
+                for (c in 0 until channels) sum += shorts.get(fr * channels + c)
+                sum.toFloat() / channels / 32768f
+            }
         }
     }
 

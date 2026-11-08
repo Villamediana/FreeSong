@@ -6,6 +6,8 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -123,6 +125,11 @@ class ChordEngine(
                     return@withLock
                 }
                 running?.let { (key, job) ->
+                    if (key == subject.key && job.isActive) {
+                        // Already being heard (its state was dropped from memory meanwhile).
+                        set(key, ChordState.Working(0f))
+                        return@withLock
+                    }
                     if (key != subject.key) {
                         job.cancel()
                         set(key, ChordState.Idle)
@@ -135,14 +142,39 @@ class ChordEngine(
         }
     }
 
+    /** Stops hearing [key] if it is being heard (the chords were closed): nothing runs unseen. */
+    fun stop(key: String) {
+        scope.launch {
+            lock.withLock {
+                val (k, job) = running ?: return@withLock
+                if (k != key) return@withLock
+                job.cancel()
+                running = null
+                set(k, ChordState.Idle)
+            }
+        }
+    }
+
+    /** Brings back [subject]'s chords if they were heard before. Never hears anything. */
+    fun recall(subject: ChordSubject) {
+        if (current(subject.key) != ChordState.Idle) return
+        scope.launch {
+            lock.withLock {
+                if (current(subject.key) != ChordState.Idle) return@withLock
+                withContext(io) { runCatching { store.read(subject.key) }.getOrNull() }?.let { set(subject.key, ChordState.Ready(it)) }
+            }
+        }
+    }
+
     private suspend fun hear(subject: ChordSubject) {
+        val me = currentCoroutineContext()[Job]
         var last = -1
         val result = try {
             val chart = analyze(subject) { p ->
                 val pct = (p.coerceIn(0f, 1f) * 100).toInt()
                 if (pct != last) {
                     last = pct
-                    set(subject.key, ChordState.Working(pct / 100f))
+                    progress(subject.key, pct / 100f)
                 }
             }
             if (chart.chords.isEmpty()) throw ChordFailure(ChordState.Reason.NOTHING_HEARD)
@@ -157,8 +189,17 @@ class ChordEngine(
         } catch (t: Throwable) {
             ChordState.Failed(ChordState.Reason.ERROR)
         }
-        set(subject.key, result)
-        lock.withLock { if (running?.first == subject.key) running = null }
+        // A hearing dropped meanwhile leaves its song alone (a chart that made it is still good).
+        if (result is ChordState.Ready || currentCoroutineContext().isActive) set(subject.key, result)
+        lock.withLock { if (running?.second === me) running = null }
+    }
+
+    /**
+     * How far the hearing of [key] is — only while it is still on: a hearing dropped for another
+     * song (its state back to Idle) keeps reporting until it notices, and must not bring it back.
+     */
+    private fun progress(key: String, value: Float) = states.update { map ->
+        if (map[key] !is ChordState.Working) map else LinkedHashMap(map).apply { put(key, ChordState.Working(value)) }
     }
 
     private fun set(key: String, state: ChordState) {

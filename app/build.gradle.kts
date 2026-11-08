@@ -33,8 +33,8 @@ android {
         applicationId = "com.villamediana.sound"
         minSdk = 26
         targetSdk = 36
-        versionCode = 47
-        versionName = "1.10.0"
+        versionCode = 48
+        versionName = "1.10.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Phones only: LiteRT's x86 libraries alone were 13 MB of the APK (no emulator here).
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
@@ -110,6 +110,7 @@ android {
                 it.systemProperty("sound.live", System.getenv("SOUND_LIVE") ?: "")
                 // Chords checked on real songs (tools/chords): where the audio and Basic Pitch frames are.
                 it.systemProperty("sound.chords.dir", System.getenv("SOUND_CHORDS_DIR") ?: "")
+                it.systemProperty("sound.chords.variant", System.getenv("SOUND_CHORDS_VARIANT") ?: "")
                 // Robolectric 4.17 on JDK 21 at API 36 needs these to touch FileDescriptor internals.
                 it.jvmArgs(
                     "--add-opens=java.base/java.io=ALL-UNNAMED",

@@ -1,6 +1,7 @@
 package com.villamediana.sound.ui.chords
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -42,19 +43,31 @@ internal fun rememberChordsEnabled(): Boolean {
 }
 
 /**
- * The chords of [track] while [active]: asked of the engine (heard once, then kept), and asked
- * again when the network comes back after it was missing.
+ * The chords of [track]. Only while [listen] (the lyrics open with the chords button on) is the song
+ * heard — once, then kept — and heard again when the network comes back after it was missing; it
+ * stops as soon as that ends. Otherwise chords heard before are just read back, and nothing runs
+ * for a song never asked for.
  */
 @Composable
-internal fun rememberChordState(track: Track, active: Boolean, online: Boolean): ChordState {
+internal fun rememberChordState(track: Track, listen: Boolean, online: Boolean): ChordState {
     val deps = LocalChords.current ?: return ChordState.Idle
     val subject = remember(track.id, track.videoId, track.filePath) { ChordSubject.of(track) }
     val key = subject?.key ?: ""
     val state by remember(key) { deps.engine.state(key) }.collectAsState(initial = deps.engine.current(key))
-    LaunchedEffect(key, active, online) {
-        if (!active || subject == null) return@LaunchedEffect
+    val enabled = rememberChordsEnabled()
+    LaunchedEffect(key, listen, online, enabled) {
+        if (subject == null || !enabled) return@LaunchedEffect
+        if (!listen) {
+            deps.engine.recall(subject)
+            return@LaunchedEffect
+        }
         val now = deps.engine.current(key)
         deps.engine.request(subject, force = online && now == ChordState.Failed(ChordState.Reason.OFFLINE))
+    }
+    // The button turned off, the lyrics closed or another song: a hearing half done stops there.
+    DisposableEffect(key, listen && enabled) {
+        val listening = listen && enabled
+        onDispose { if (listening) deps.engine.stop(key) }
     }
     return if (subject == null) ChordState.Failed(ChordState.Reason.ERROR) else state
 }

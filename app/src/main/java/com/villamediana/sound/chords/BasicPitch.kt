@@ -54,19 +54,22 @@ object BasicPitch {
 
     // ------------------------------------------------------------ windows --
 
-    /** The audio, half an overlap of silence in front, cut into model-sized windows. */
-    internal fun windows(audio: FloatArray): List<FloatArray> {
-        val padded = FloatArray(OVERLAP / 2 + audio.size)
-        System.arraycopy(audio, 0, padded, OVERLAP / 2, audio.size)
-        val out = mutableListOf<FloatArray>()
-        var i = 0
-        while (i < padded.size) {
-            val w = FloatArray(WINDOW)
-            System.arraycopy(padded, i, w, 0, minOf(WINDOW, padded.size - i))
-            out += w
-            i += STEP
-        }
-        return out
+    /** How many model-sized windows cover [length] samples with half an overlap of silence in front. */
+    internal fun windowCount(length: Int): Int = (OVERLAP / 2 + length + STEP - 1) / STEP
+
+    /**
+     * Window [w] of [audio] (half an overlap of silence in front, silence past the end) written into
+     * [into]. One window at a time: a song cut into all its windows at once is its size again.
+     */
+    internal fun window(audio: FloatArray, w: Int, into: java.nio.FloatBuffer) {
+        into.clear()
+        var from = w * STEP - OVERLAP / 2
+        var left = WINDOW
+        while (from < 0 && left > 0) { into.put(0f); from++; left-- }
+        val take = minOf(left, (audio.size - from).coerceAtLeast(0))
+        if (take > 0) into.put(audio, from, take)
+        repeat(left - take) { into.put(0f) }
+        into.rewind()
     }
 
     /** Window outputs joined: half the overlap dropped at each edge, trimmed to the audio's length. */
@@ -99,8 +102,10 @@ object BasicPitch {
     ): List<Event> {
         val n = framesIn.size
         if (n == 0) return emptyList()
-        val frames = Array(n) { framesIn[it].copyOf() }
-        var onsets = Array(n) { onsetsIn[it].copyOf() }
+        // Copied only to cut a range out: the model's output is big (a song is millions of cells).
+        val ranged = options.maxHz != null || options.minHz != null
+        val frames = if (ranged) Array(n) { framesIn[it].copyOf() } else framesIn
+        var onsets = if (ranged) Array(n) { onsetsIn[it].copyOf() } else onsetsIn
         options.maxHz?.let { hz -> val idx = hzToIndex(hz).coerceIn(0, KEYS); for (r in 0 until n) for (f in idx until KEYS) { onsets[r][f] = 0f; frames[r][f] = 0f } }
         options.minHz?.let { hz -> val idx = hzToIndex(hz).coerceIn(0, KEYS); for (r in 0 until n) for (f in 0 until idx) { onsets[r][f] = 0f; frames[r][f] = 0f } }
 
@@ -192,23 +197,23 @@ object BasicPitch {
 
     private fun inferredOnsets(onsets: Array<FloatArray>, frames: Array<FloatArray>, nDiff: Int = 2): Array<FloatArray> {
         val n = frames.size
-        val diff = Array(n) { FloatArray(KEYS) }
+        // How much the frame grew over the last nDiff frames (worked out twice rather than kept).
+        fun diff(t: Int, f: Int): Float {
+            if (t < nDiff) return 0f
+            var m = Float.MAX_VALUE
+            for (d in 1..nDiff) m = minOf(m, frames[t][f] - frames[t - d][f])
+            return if (m < 0) 0f else m
+        }
         var maxDiff = 0f
         var maxOnset = 0f
         for (t in 0 until n) for (f in 0 until KEYS) {
-            var m = Float.MAX_VALUE
-            for (d in 1..nDiff) {
-                val prev = if (t - d >= 0) frames[t - d][f] else 0f
-                m = minOf(m, frames[t][f] - prev)
-            }
-            val v = if (t < nDiff || m < 0) 0f else m
-            diff[t][f] = v
+            val v = diff(t, f)
             if (v > maxDiff) maxDiff = v
             if (onsets[t][f] > maxOnset) maxOnset = onsets[t][f]
         }
         return Array(n) { t ->
             FloatArray(KEYS) { f ->
-                val scaled = if (maxDiff > 0) maxOnset * diff[t][f] / maxDiff else 0f
+                val scaled = if (maxDiff > 0) maxOnset * diff(t, f) / maxDiff else 0f
                 maxOf(onsets[t][f], scaled)
             }
         }
@@ -278,14 +283,14 @@ object BasicPitch {
         progress: (Float) -> Unit = {},
     ): List<Note> = run {
         val model = model(context)
-        val windows = windows(audio)
-        val noteParts = ArrayList<Array<FloatArray>>(windows.size)
-        val onsetParts = ArrayList<Array<FloatArray>>(windows.size)
+        val count = windowCount(audio.size)
+        val noteParts = ArrayList<Array<FloatArray>>(count)
+        val onsetParts = ArrayList<Array<FloatArray>>(count)
         val input = ByteBuffer.allocateDirect(WINDOW * 4).order(ByteOrder.nativeOrder())
-        windows.forEachIndexed { w, window ->
+        val samples = input.asFloatBuffer()
+        for (w in 0 until count) {
             coroutineContext.ensureActive()
-            input.rewind()
-            for (v in window) input.putFloat(v)
+            window(audio, w, samples)
             input.rewind()
             val note = Array(1) { Array(ANNOT_FRAMES) { FloatArray(KEYS) } }
             val onset = Array(1) { Array(ANNOT_FRAMES) { FloatArray(KEYS) } }
@@ -299,7 +304,7 @@ object BasicPitch {
             }
             noteParts += note[0]
             onsetParts += onset[0]
-            progress((w + 1f) / windows.size)
+            progress((w + 1f) / count)
         }
         val frames = unwrap(noteParts, audio.size)
         val onsets = unwrap(onsetParts, audio.size)
