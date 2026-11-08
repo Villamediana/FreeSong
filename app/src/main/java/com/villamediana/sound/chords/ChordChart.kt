@@ -1,5 +1,6 @@
 package com.villamediana.sound.chords
 
+import com.villamediana.sound.data.LyricLine
 import com.villamediana.sound.data.ParsedLyrics
 import kotlinx.serialization.Serializable
 
@@ -61,6 +62,7 @@ sealed interface ChordRow {
  * so a chord goes over the word it falls in proportionally to the time the line is sung — snapped
  * to the start of a word. What is played where nobody sings (intro, solos, the end) becomes a row
  * of chords alone. Every line shows the chord it starts on, so a player never has to look up.
+ * Lyrics without times get guessed ones ([estimated]).
  */
 object ChordLayout {
     /** Chords change a little before the voice comes in; that much early still counts for the line. */
@@ -73,9 +75,11 @@ object ChordLayout {
     private const val MIN_GAP_ROW_MS = 3_000L
 
     fun rows(lyrics: ParsedLyrics, chart: ChordChart, durationMs: Long): List<ChordRow> {
-        if (!lyrics.synced || lyrics.lines.isEmpty()) return timeline(chart)
+        if (lyrics.lines.none { it.text.isNotBlank() }) return timeline(chart)
         val chords = chart.chords
         if (chords.isEmpty()) return lyrics.lines.mapIndexed { i, l -> ChordRow.Lyric(i, l.text, l.timeMs, emptyList()) }
+        // Lyrics without times still get their chords over the words, at a guessed place.
+        if (!lyrics.synced) return rows(estimated(lyrics, chart, durationMs), chart, durationMs)
         val songEnd = maxOf(durationMs, chords.last().endMs)
         val lines = lyrics.lines
         val out = mutableListOf<ChordRow>()
@@ -111,6 +115,57 @@ object ChordLayout {
             if (gap.isNotEmpty()) out += ChordRow.Instrumental(chords[gap.first()].startMs, gap)
         }
         return out
+    }
+
+    /** A blank line between verses in lyrics without times: about two bars of the band alone. */
+    private const val VERSE_GAP_MS = 4_000L
+
+    /** The most a break between verses is given when there is time to spare: a solo's eight bars or so. */
+    private const val MAX_BREAK_MS = 20_000L
+
+    /**
+     * Times for lyrics that have none, guessed so the chords can go over the words: the lines spread
+     * over the song between an intro and an ending of the usual length, each taking the time its
+     * length needs to be sung (a blank line between verses, a stretch of the band alone), and
+     * each pulled onto a chord change close by (a line starts where the harmony moves, as a rule).
+     * A guess: it can be off by a line or more.
+     */
+    internal fun estimated(lyrics: ParsedLyrics, chart: ChordChart, durationMs: Long): ParsedLyrics {
+        val chords = chart.chords
+        // Runs of blank lines are one break; none at either end.
+        val texts = lyrics.lines.map { it.text.trim() }
+            .filterIndexed { i, t -> t.isNotEmpty() || (i > 0 && lyrics.lines[i - 1].text.isNotBlank()) }
+            .dropWhile { it.isEmpty() }.dropLastWhile { it.isEmpty() }
+        if (texts.isEmpty()) return ParsedLyrics(true, emptyList())
+        val end = maxOf(durationMs, chords.lastOrNull()?.endMs ?: 0L)
+        val nominal = texts.map { if (it.isEmpty()) VERSE_GAP_MS else sungMs(it) }
+        var from = (end * 0.07).toLong().coerceIn(4_000L, 18_000L)
+        var to = end - (end * 0.08).toLong().coerceIn(5_000L, 25_000L)
+        // A short song (or lyrics far longer than it) uses all of it.
+        if (to - from < nominal.sum() / 2) { from = 0; to = end }
+        // Time to spare (few lines for a long song) goes to the breaks between verses first — that's
+        // where the band plays alone — then to the lines; too little squeezes everything alike.
+        val span = (to - from).toDouble()
+        val breaks = texts.count { it.isEmpty() }
+        val sung = nominal.sum().toDouble() - breaks * VERSE_GAP_MS
+        val spare = span - nominal.sum()
+        val breakMs = if (spare > 0 && breaks > 0) VERSE_GAP_MS + minOf(spare / breaks, (MAX_BREAK_MS - VERSE_GAP_MS).toDouble()) else VERSE_GAP_MS.toDouble()
+        val lineScale = if (spare > 0) (span - breaks * breakMs) / sung else span / nominal.sum()
+        val length = texts.indices.map { i -> if (texts[i].isEmpty()) (if (spare > 0) breakMs else breakMs * lineScale) else nominal[i] * lineScale }
+        val pull = (length.filterIndexed { i, _ -> texts[i].isNotEmpty() }.average() * 0.35).toLong().coerceIn(400L, 2_000L)
+        val out = ArrayList<LyricLine>(texts.size)
+        var t = from.toDouble()
+        var last = -1L
+        for ((i, text) in texts.withIndex()) {
+            val guess = t.toLong()
+            val change = chords.minByOrNull { kotlin.math.abs(it.startMs - guess) }?.startMs
+            var at = if (change != null && kotlin.math.abs(change - guess) <= pull) change else guess
+            if (at <= last) at = maxOf(guess, last + 1)
+            out += LyricLine(at, text)
+            last = at
+            t += length[i]
+        }
+        return ParsedLyrics(true, out)
     }
 
     /**

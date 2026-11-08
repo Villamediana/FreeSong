@@ -72,9 +72,9 @@ class ChordLayoutTest {
         assertEquals(8, ChordLayout.slot("Meu amor", 6, taken + PlacedChord(4, 1)))
     }
 
-    @Test fun withoutSyncedLyricsTheChordsRunInRows() {
+    @Test fun withoutLyricsTheChordsRunInRows() {
         val chart = chart(*Array(20) { (it * 2_000L) to listOf("C", "G", "Am", "F")[it % 4] }, end = 40_000).copy(bpm = 120.0)
-        val rows = ChordLayout.rows(ParsedLyrics(false, listOf(LyricLine(0, "texto"))), chart, 40_000)
+        val rows = ChordLayout.rows(ParsedLyrics(false, emptyList()), chart, 40_000)
         assertTrue(rows.all { it is ChordRow.Instrumental })
         assertEquals(20, rows.sumOf { (it as ChordRow.Instrumental).chords.size })
         // Four bars at 120 BPM = 8 s = four chords of two seconds.
@@ -87,5 +87,48 @@ class ChordLayoutTest {
         assertEquals(0, ChordLayout.rowAt(rows, 4_999))
         assertEquals(1, ChordLayout.rowAt(rows, 5_000))
         assertEquals(2, ChordLayout.rowAt(rows, 60_000))
+    }
+
+    @Test fun lyricsWithoutTimesStillGetTheirChordsOverTheWords() {
+        // A 3:30 song, chords every 2 s; the lyrics as a site gives them: no times, verses apart.
+        val names = listOf("Dm", "Bb", "Gm", "F")
+        val chart = ChordChart((0 until 105).map { k -> val c = Chord.parse(names[k % 4])!!; TimedChord(k * 2_000L, (k + 1) * 2_000L, c.root, c.quality) }, MusicKey(2, true))
+        val plain = ParsedLyrics(
+            false,
+            listOf("El confesor me dice que no te quiera", "y yo le digo padre si usted la viera", "", "", "Dice que tus amores me vuelven loco", "que a mi deber no atiendo", "", "que duermo poco")
+                .map { LyricLine(0, it) },
+        )
+        val rows = ChordLayout.rows(plain, chart, 210_000)
+        val sung = rows.filterIsInstance<ChordRow.Lyric>()
+        // Every line is there, with chords over it, in order of time, after an intro.
+        assertEquals(5, sung.size)
+        assertEquals("El confesor me dice que no te quiera", sung.first().text)
+        assertTrue(sung.all { it.chords.isNotEmpty() })
+        assertTrue(sung.zipWithNext().all { (a, b) -> a.startMs < b.startMs })
+        assertTrue(rows.first() is ChordRow.Instrumental)
+        assertTrue(sung.first().startMs in 4_000L..18_000L)
+        // Each line starts on a chord change; the blank lines between verses are the band alone (one break, not two).
+        assertTrue(sung.all { l -> chart.chords.any { it.startMs == l.startMs } })
+        val est = ChordLayout.estimated(plain, chart, 210_000)
+        assertEquals(7, est.lines.size)
+        // Spread over the song, not crammed at the start.
+        assertTrue(sung.last().startMs > 120_000)
+    }
+
+    @Test fun aFullSetOfLyricsWithoutTimesReadsLikeASheet() {
+        // 44 lines for a 4:08 song (as plain lyrics usually are): the verses follow each other, the
+        // band alone only before the voice and after it.
+        val names = listOf("Dm", "Bb", "Gm7", "F")
+        val chart = ChordChart((0 until 71).map { k -> val c = Chord.parse(names[k % 4])!!; TimedChord(k * 3_500L, (k + 1) * 3_500L, c.root, c.quality) }, MusicKey(10, false))
+        val plain = ParsedLyrics(false, (1..44).map { LyricLine(0, "verso $it de una letra que no marca el tiempo") })
+        val rows = ChordLayout.rows(plain, chart, 248_000)
+        assertEquals(44, rows.count { it is ChordRow.Lyric })
+        val inner = rows.drop(1).dropLast(1)
+        assertTrue("chords-only rows between verses: ${inner.count { it is ChordRow.Instrumental }}", inner.none { it is ChordRow.Instrumental })
+    }
+
+    @Test fun noLyricsAtAllIsTheTimeline() {
+        val chart = chart(0L to "G", 4_000L to "D", end = 8_000)
+        assertTrue(ChordLayout.rows(ParsedLyrics(false, emptyList()), chart, 8_000).all { it is ChordRow.Instrumental })
     }
 }

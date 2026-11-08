@@ -214,6 +214,38 @@ class ChordScreensTest {
         compose.onNodeWithTag("chordLyrics").assertDoesNotExist()
     }
 
+    @Test fun lyricsWithoutTimesKeepTheWordsUnderTheChords() {
+        // Only plain lyrics exist for some recordings: the words stay, the chords at a guessed place.
+        val plain = ParsedLyrics(
+            false,
+            listOf(
+                "El confesor me dice que no te quiera,", "y yo le digo padre si usted la viera", "Dice que tus amores me vuelven loco",
+                "que a mi deber no atiendo", "que duermo poco... que duermo poco.", "", "Dice que nuestras muchas conversaciones",
+                "son las que me tienen así", "que ya no tengo salvación",
+            ).map { LyricLine(0, it) } + (1..35).map { LyricLine(0, "verso $it de una letra que no marca el tiempo") },
+        )
+        val names = listOf("Dm", "Bb", "Gm7", "F", "Eb", "Bb", "F", "Gm")
+        val chart = ChordChart(
+            (0 until 60).map { k -> val c = com.villamediana.sound.chords.Chord.parse(names[k % names.size])!!; TimedChord(k * 3_500L, (k + 1) * 3_500L, c.root, c.quality) },
+            key = MusicKey(10, false),
+            bpm = 103.0,
+        )
+        val d = deps(chart)
+        val clock = PlaybackClock().apply { onTick(37_000, 0L) }
+        compose.setContent {
+            SoundTheme(mode = com.villamediana.sound.data.ThemeMode.DARK) {
+                CompositionLocalProvider(LocalChords provides d) {
+                    LyricsScreen(song, LyricsState.Ready(plain), clock, mutableStateOf(Color(0xFF3F3E26)), Color(0xFF3F3E26), true, 248_000, {}, {}, {})
+                }
+            }
+        }
+        compose.waitForIdle()
+        compose.onNodeWithTag("chordLyrics").assertExists()
+        // At 0:37 the list follows the guessed line: words on screen, under their chords.
+        assertTrue(compose.onAllNodes(androidx.compose.ui.test.hasContentDescription("que", substring = true)).fetchSemanticsNodes().isNotEmpty())
+        shot("chords_plain_lyrics")
+    }
+
     @Test fun nothingHeardSaysSo() {
         show(deps(null))
         compose.onNodeWithText("Nenhum acorde nesta música.").assertExists()

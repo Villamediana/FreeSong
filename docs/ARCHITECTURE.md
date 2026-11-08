@@ -138,7 +138,11 @@ escolheu isso; o Cifra Club recusa pedido de app e não vamos burlar a proteçã
     guarda em `filesDir/chords/<chave>.json` (chave = vídeo, então baixada e streamada dividem).
     Ajustes › Armazenamento tem "Acordes".
   - `ChordLayout` — põe o acorde sobre a palavra pelo tempo da linha (LRC só diz quando a linha
-    começa); intro/solo/fim viram linha só de acordes; sem letra sincronizada, linhas de 4 compassos.
+    começa); intro/solo/fim viram linha só de acordes. Letra sem tempo (só texto, comum no LRCLIB):
+    o Miguel escolheu acordes sobre as palavras com tempo estimado (`ChordLayout.estimated`: linhas
+    espalhadas entre uma intro e um final típicos pelo tamanho de cada uma, folga primeiro nas pausas
+    entre estrofes, cada linha puxada para uma troca de acorde próxima) — pode errar por uma linha.
+    Sem letra nenhuma, linhas de 4 compassos.
   - `Fingerings` — formas: canônicas (tabela do LauncherAI) primeiro, depois chords-db (MIT,
     `assets/chords/guitar.json`/`ukulele.json`, cada forma conferida nota a nota) e as achadas por
     busca (`FretSearch`), ordenadas por facilidade e espalhadas pelo braço. Cavaquinho (DGBD) é todo
