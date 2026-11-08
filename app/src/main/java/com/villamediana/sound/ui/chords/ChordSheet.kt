@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -27,9 +26,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
-import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.Remove
-import androidx.compose.animation.togetherWith
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -269,12 +265,12 @@ internal fun ChordSheetHost(chart: ChordChart, chord: Chord?, instrument: Instru
 }
 
 /**
- * Under the lyrics header while the chords are on: looking for a sheet, how far the hearing is, or
- * why it failed; once the chords show, the key with its transposer ([shift] semitones from the
- * song's own key) and, for a written sheet, its capo and whose version it is.
+ * Under the lyrics header while the chords are on and not shown yet: looking for a sheet, how far
+ * the hearing is, or why it failed. Once they show, the key and the capo sit by the play button
+ * ([ChordKey], [ChordSheetNote]).
  */
 @Composable
-internal fun ChordStatus(state: ChordState, onRetry: () -> Unit, modifier: Modifier = Modifier, shift: Int = 0, onShift: (Int) -> Unit = {}) {
+internal fun ChordStatus(state: ChordState, onRetry: () -> Unit, modifier: Modifier = Modifier) {
     when (state) {
         is ChordState.Working -> Column(modifier.fillMaxWidth().testTag("chordProgress")) {
             Text(
@@ -311,98 +307,6 @@ internal fun ChordStatus(state: ChordState, onRetry: () -> Unit, modifier: Modif
                 )
             }
         }
-        is ChordState.Ready -> Row(modifier.fillMaxWidth().testTag("chordBar"), verticalAlignment = Alignment.CenterVertically) {
-            Transposer(state.chart.key, shift, onShift)
-            Spacer(Modifier.width(14.dp))
-            val sheet = state.chart.sheet
-            Column(Modifier.weight(1f), horizontalAlignment = Alignment.End) {
-                if (sheet != null && sheet.capo > 0) {
-                    Text(
-                        stringResource(R.string.chords_capo, sheet.capo),
-                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                        color = SoundColors.Text.copy(alpha = 0.8f),
-                        maxLines = 1,
-                    )
-                }
-                if (sheet != null && sheet.versionOf.isNotBlank()) {
-                    Text(
-                        stringResource(R.string.chords_version, sheet.versionOf),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = SoundColors.Text.copy(alpha = 0.58f),
-                        maxLines = 1,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                    )
-                }
-            }
-        }
         else -> Unit
-    }
-}
-
-/**
- * The song's key between a half step down and a half step up: "Tom G", and how far from the
- * original once moved ("+2"), which a tap on the key brings back. The name rolls the way it went.
- */
-@OptIn(androidx.compose.animation.ExperimentalAnimationApi::class)
-@Composable
-private fun Transposer(key: com.villamediana.sound.chords.MusicKey?, shift: Int, onShift: (Int) -> Unit) {
-    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
-    val max = com.villamediana.sound.chords.ChordShifts.MAX
-    fun step(to: Int) {
-        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
-        onShift(to)
-    }
-    val reset = stringResource(R.string.chords_transpose_reset)
-    Row(
-        Modifier.height(40.dp).clip(CircleShape).background(SoundColors.Text.copy(alpha = 0.08f)).testTag("transposer"),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        StepButton(androidx.compose.material.icons.Icons.Rounded.Remove, stringResource(R.string.chords_transpose_down), shift > -max) { step(shift - 1) }
-        androidx.compose.animation.AnimatedContent(
-            targetState = shift,
-            transitionSpec = {
-                val up = targetState > initialState
-                (androidx.compose.animation.slideInVertically(tween(200)) { if (up) it / 2 else -it / 2 } + androidx.compose.animation.fadeIn(tween(200))) togetherWith
-                    (androidx.compose.animation.slideOutVertically(tween(200)) { if (up) -it / 2 else it / 2 } + androidx.compose.animation.fadeOut(tween(160)))
-            },
-            label = "key",
-            modifier = Modifier
-                .clip(RoundedCornerShape(12.dp))
-                .clickable(enabled = shift != 0, role = Role.Button, onClickLabel = reset) { step(0) }
-                .padding(horizontal = 6.dp, vertical = 6.dp),
-        ) { n ->
-            val shown = key?.let { com.villamediana.sound.chords.MusicKey(Math.floorMod(it.tonic + n, 12), it.minor) }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    if (shown != null) stringResource(R.string.chords_key, shown.name()) else stringResource(R.string.chords_key_unknown),
-                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                    color = SoundColors.Text,
-                    maxLines = 1,
-                )
-                if (n != 0) {
-                    Text(
-                        " " + (if (n > 0) "+$n" else "−${-n}"),
-                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.ExtraBold),
-                        color = SoundColors.Mint,
-                        maxLines = 1,
-                    )
-                }
-            }
-        }
-        StepButton(androidx.compose.material.icons.Icons.Rounded.Add, stringResource(R.string.chords_transpose_up), shift < max) { step(shift + 1) }
-    }
-}
-
-@Composable
-private fun StepButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, enabled: Boolean, onClick: () -> Unit) {
-    Box(
-        Modifier
-            .size(40.dp)
-            .clip(CircleShape)
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-            .semantics { contentDescription = label },
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(icon, contentDescription = null, tint = SoundColors.Text.copy(alpha = if (enabled) 0.9f else 0.28f), modifier = Modifier.size(18.dp))
     }
 }

@@ -76,8 +76,11 @@
     <string name="lyrics_chords_hide">Ocultar acordes</string>
     <string name="chords_looking">Buscando los acordes…</string>
     <string name="chords_listening">Escuchando los acordes… %1$d%%</string>
-    <string name="chords_capo">Cejilla en el traste %1$d</string>
     <string name="chords_version">Versión de %1$s</string>
+    <string name="chords_key_label">Tono</string>
+    <string name="chords_capo_label">Cejilla</string>
+    <string name="chords_capo_fret">Traste %1$d</string>
+    <string name="chords_version_label">Versión de</string>
     <string name="chords_key">Tono %1$s</string>
     <string name="chords_key_unknown">Tono</string>
     <string name="chords_transpose_down">Medio tono abajo</string>

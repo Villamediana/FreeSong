@@ -201,10 +201,12 @@ class ChordScreensTest {
         show(deps(chart(), find = { com.villamediana.sound.chords.SheetLookup.Found(written) }))
         assertEquals(0, heard)
         compose.onNodeWithTag("chordLyrics").assertExists()
-        // No source label (Miguel: not needed); the capo and the key are.
+        // No source label (Miguel: not needed); the capo and the key are, by the play button.
         compose.onNodeWithText("Cifra Club", substring = true).assertDoesNotExist()
-        compose.onNodeWithText("Capotraste na 2ª casa").assertExists()
-        compose.onNodeWithText("Tom G").assertExists()
+        compose.onNodeWithText("CAPOTRASTE").assertExists()
+        compose.onNodeWithText("2ª casa").assertExists()
+        compose.onNodeWithText("TOM").assertExists()
+        compose.onNodeWithContentDescription("Tom G").assertExists()
         compose.onAllNodesWithText("Am7(9)").onFirst().assertExists()
         shot("chords_written_sheet")
 
@@ -212,16 +214,16 @@ class ChordScreensTest {
         compose.onNodeWithContentDescription("Meio tom acima").performClick()
         compose.onNodeWithContentDescription("Meio tom acima").performClick()
         compose.waitForIdle()
-        compose.onNodeWithText("Tom A").assertExists()
-        compose.onNodeWithText("+2", substring = true).assertExists()
+        compose.onNodeWithContentDescription("Tom A +2").assertExists()
+        compose.onNodeWithText("A+2").assertExists()
         compose.onAllNodesWithText("A7M").onFirst().assertExists()
         compose.onAllNodesWithText("Bm7(9)").onFirst().assertExists()
         compose.onAllNodesWithText("Am7(9)").fetchSemanticsNodes().let { assertTrue(it.isEmpty()) }
         shot("chords_transposed")
         // A tap on the key brings it back.
-        compose.onNodeWithText("Tom A").performClick()
+        compose.onNodeWithContentDescription("Tom A +2").performClick()
         compose.waitForIdle()
-        compose.onNodeWithText("Tom G").assertExists()
+        compose.onNodeWithContentDescription("Tom G").assertExists()
         compose.onAllNodesWithText("Am7(9)").onFirst().assertExists()
         compose.onAllNodesWithText("A7(13)").onFirst().performClick()
         compose.waitForIdle()

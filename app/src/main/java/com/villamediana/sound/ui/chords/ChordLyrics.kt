@@ -59,25 +59,30 @@ import com.villamediana.sound.ui.player.PlaybackClock
 import com.villamediana.sound.ui.player.PlayerMath
 import com.villamediana.sound.ui.player.rememberTranslation
 import com.villamediana.sound.ui.player.translationStyle
-import com.villamediana.sound.ui.theme.SoundColors
 import kotlinx.coroutines.delay
 
-/** How chord names look over a lyric set in [lyric]: about half its size, bold, a little apart. */
+/**
+ * How chord names look over a lyric set in [lyric]: a little over half its size, bold, in the same
+ * face — part of the lyrics' type, as the translation is, not a label laid on top.
+ */
 internal fun chordStyleFor(lyric: TextStyle): TextStyle = lyric.copy(
-    fontSize = if (lyric.fontSize.isSpecified) lyric.fontSize * 0.52f else 15.sp,
+    fontSize = if (lyric.fontSize.isSpecified) lyric.fontSize * 0.56f else 15.sp,
     lineHeight = TextUnit.Unspecified,
-    fontWeight = FontWeight.ExtraBold,
+    fontWeight = FontWeight.Bold,
     letterSpacing = 0.01.em,
 )
 
 /**
  * The lyrics with the chords written over the words — just written, nothing marks the one ringing:
- * whoever plays reads them. Synced lyrics follow the song as the plain lyrics do (the line being
- * sung lights up, the list keeps it [linesAbove] rows from the top, a touch pauses that for a few
- * seconds, a tap on a line seeks there); so do the rows of chords alone when there are no lyrics.
- * Lyrics without times stay still, as plain lyrics do: their chords sit at a guessed place, and
- * nothing pretends to know which line is being sung. A player's written sheet puts its chords over
- * the same words it wrote them over. A tap on a chord shows how to play it.
+ * whoever plays reads them. Chords are in their line's ink, as the translation is: they dim with
+ * the lines already sung and light up with the line being sung (the line, never a chord on its
+ * own); the lines to come keep them a little firmer than their words, since whoever plays reads
+ * ahead. Synced lyrics follow the song as the plain lyrics do (the line being sung lights up, the
+ * list keeps it [linesAbove] rows from the top, a touch pauses that for a few seconds, a tap on a
+ * line seeks there); so do the rows of chords alone when there are no lyrics. Lyrics without times
+ * stay still, as plain lyrics do: their chords sit at a guessed place, and nothing pretends to know
+ * which line is being sung. A player's written sheet puts its chords over the same words it wrote
+ * them over. A tap on a chord shows how to play it.
  */
 @Composable
 internal fun ChordLyricsLines(
@@ -121,8 +126,9 @@ internal fun ChordLyricsLines(
         if (current < 0) listState.animateScrollToItem(0) else listState.animateScrollToItem((current - linesAbove).coerceAtLeast(0))
     }
     val chordStyle = remember(textStyle) { chordStyleFor(textStyle) }
-    val names = remember(chart) { chart.labels() }
+    val names = remember(chart) { chart.labels().map(ChordName::typeset) }
     val tap: (Int) -> Unit = { index -> chart.chordAt(index)?.let(onChord) }
+    val ahead = colors.future.copy(alpha = (colors.future.alpha + AHEAD_LIFT).coerceAtMost(0.92f))
 
     LazyColumn(state = listState, modifier = modifier.testTag("chordLyrics"), contentPadding = contentPadding) {
         itemsIndexed(rows) { index, row ->
@@ -133,6 +139,8 @@ internal fun ChordLyricsLines(
                 else -> colors.future
             }
             val color by animateColorAsState(target, tween(LINE_FADE_MS), label = "chordLyric")
+            val chordTarget = if (timed && index > current) ahead else target
+            val chordColor by animateColorAsState(chordTarget, tween(LINE_FADE_MS), label = "chordInk")
             val rowModifier = Modifier
                 .fillMaxWidth()
                 .then(
@@ -144,10 +152,10 @@ internal fun ChordLyricsLines(
                 is ChordRow.Lyric -> {
                     val translation = translations?.get(row.text.trim())
                     if (translation == null) {
-                        ChordedLine(row.text, row.chords, names, textStyle, chordStyle, { color }, tap, rowModifier)
+                        ChordedLine(row.text, row.chords, names, textStyle, chordStyle, { color }, { chordColor }, tap, rowModifier)
                     } else {
                         androidx.compose.foundation.layout.Column(rowModifier) {
-                            ChordedLine(row.text, row.chords, names, textStyle, chordStyle, { color }, tap, Modifier.fillMaxWidth())
+                            ChordedLine(row.text, row.chords, names, textStyle, chordStyle, { color }, { chordColor }, tap, Modifier.fillMaxWidth())
                             Text(
                                 text = translation,
                                 style = textStyle.translationStyle(),
@@ -161,7 +169,8 @@ internal fun ChordLyricsLines(
                     chords = row.chords,
                     names = names,
                     chordStyle = chordStyle,
-                    noteColor = color,
+                    noteColor = { color },
+                    chordColor = { chordColor },
                     onChord = tap,
                     modifier = rowModifier,
                 )
@@ -179,10 +188,11 @@ internal fun ChordLyricsLines(
 private fun ChordedLine(
     text: String,
     chords: List<PlacedChord>,
-    names: List<String>,
+    names: List<AnnotatedString>,
     textStyle: TextStyle,
     chordStyle: TextStyle,
     color: () -> Color,
+    chordColor: () -> Color,
     onChord: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -193,7 +203,7 @@ private fun ChordedLine(
     val drawn = remember(text, style) { mutableListOf<Pair<TextLayoutResult, Float>>() }
     Layout(
         content = {
-            for (c in chords) ChordChip(names[c.index], chordStyle, onClick = { onChord(c.index) })
+            for (c in chords) ChordChip(names[c.index], chordStyle, chordColor, onClick = { onChord(c.index) })
         },
         modifier = modifier
             .semantics { contentDescription = text }
@@ -209,7 +219,9 @@ private fun ChordedLine(
         val gap = 4.dp.roundToPx()
         val lastLine = layout.lineCount - 1
         val lineOf = chords.map { c -> if (c.at >= text.length) lastLine else layout.getLineForOffset(c.at) }
-        val room = (placeables.maxOfOrNull { it.height } ?: 0) + 2.dp.roundToPx()
+        // The chords sit close over their words (into the line's own leading), so a chord reads as
+        // belonging to the line under it, not to the one above.
+        val room = (placeables.maxOfOrNull { it.height } ?: 0) - CHORD_TUCK.roundToPx()
         // Each line goes down by the room made above it and above every line before it.
         val tops = IntArray(layout.lineCount)
         var shift = 0
@@ -249,26 +261,34 @@ private fun ChordedLine(
     }
 }
 
-/** Chords alone (intro, solo, the end), after a note sign. */
+/**
+ * Chords alone (intro, solo, the end): a soft note sign, then the chords at the same size as over
+ * the words, spaced as bars would be.
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun InstrumentalRow(
     chords: List<Int>,
-    names: List<String>,
+    names: List<AnnotatedString>,
     chordStyle: TextStyle,
-    noteColor: Color,
+    noteColor: () -> Color,
+    chordColor: () -> Color,
     onChord: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val big = chordStyle.copy(fontSize = chordStyle.fontSize * 1.18f)
     FlowRow(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
         itemVerticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("♪", style = big, color = noteColor, modifier = Modifier.padding(end = 4.dp))
-        for (k in chords) ChordChip(names[k], big, onClick = { onChord(k) })
+        androidx.compose.foundation.text.BasicText(
+            "♪",
+            style = chordStyle.copy(fontWeight = FontWeight.Medium),
+            color = { noteColor().let { it.copy(alpha = it.alpha * 0.55f) } },
+            modifier = Modifier.padding(end = 2.dp),
+        )
+        for (k in chords) ChordChip(names[k], chordStyle, chordColor, onClick = { onChord(k) })
     }
 }
 
@@ -289,13 +309,16 @@ internal fun rememberTranslationsByText(lyrics: ParsedLyrics): Map<String, Strin
     }
 }
 
-/** A chord name in the chords' color. Tapping it shows how to play it. */
+/**
+ * A chord name, typeset ([ChordName]), in its line's ink — read at draw time, so a line fading in
+ * or out doesn't measure its chords again. Tapping it shows how to play it.
+ */
 @Composable
-internal fun ChordChip(name: String, style: TextStyle, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Text(
+internal fun ChordChip(name: AnnotatedString, style: TextStyle, color: () -> Color, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    androidx.compose.foundation.text.BasicText(
         text = name,
         style = style,
-        color = SoundColors.Mint,
+        color = { color() },
         maxLines = 1,
         softWrap = false,
         modifier = modifier
@@ -306,5 +329,8 @@ internal fun ChordChip(name: String, style: TextStyle, onClick: () -> Unit, modi
 }
 
 private val CHIP_PAD = 6.dp
+private val CHORD_TUCK = 3.dp
+/** How much firmer the chords of the lines to come are than their words. */
+private const val AHEAD_LIFT = 0.2f
 private const val FOLLOW_PAUSE_MS = 3_000L
 private const val LINE_FADE_MS = 260

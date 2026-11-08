@@ -76,8 +76,11 @@
     <string name="lyrics_chords_hide">Esconder acordes</string>
     <string name="chords_looking">Procurando a cifra…</string>
     <string name="chords_listening">Ouvindo os acordes… %1$d%%</string>
-    <string name="chords_capo">Capotraste na %1$dª casa</string>
     <string name="chords_version">Versão de %1$s</string>
+    <string name="chords_key_label">Tom</string>
+    <string name="chords_capo_label">Capotraste</string>
+    <string name="chords_capo_fret">%1$dª casa</string>
+    <string name="chords_version_label">Versão de</string>
     <string name="chords_key">Tom %1$s</string>
     <string name="chords_key_unknown">Tom</string>
     <string name="chords_transpose_down">Meio tom abaixo</string>

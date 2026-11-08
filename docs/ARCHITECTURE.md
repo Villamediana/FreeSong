@@ -152,6 +152,17 @@ cifra lá é **ouvida no celular** a partir do áudio (1.12.0, pedido do Miguel:
   cifra (nomes escritos mantêm as extensões, grafia pelo tom novo), as linhas não mudam. Guardado por
   música em `filesDir/chord-shifts.json` (`ChordShifts`, ±11). **Tradução junto com acordes**: o botão
   não some; a tradução vai embaixo da linha (`rememberTranslationsByText`, achada pelo texto da linha).
+- Visual dos acordes (1.12.2), pra caber no design da letra como a tradução cabe:
+  - Acorde na **tinta da própria linha** (amarelo na cantada, esmaecido nas já cantadas; nas que vêm,
+    um pouco mais firme que as palavras, porque quem toca lê adiante). Nada de menta fixo por cima.
+    Continua sem marcar o acorde que soa: acende a linha, nunca um acorde sozinho.
+  - Nome tipografado como songbook (`ChordName`): acorde cheio, extensão menor e elevada
+    (Bm⁷⁽⁹⁾), baixo depois da barra na linha (D/F#; "7/9" é extensão). Mesmo tamanho nas linhas só
+    de acordes. Acorde mais colado à sua linha (`CHORD_TUCK`), mais ar entre linhas (18 dp).
+  - Tom e capotraste saíram de cima da letra e foram pra fileira do play (`ChordControls`): "TOM"
+    sobre − A⁺² + à esquerda, "CAPOTRASTE" sobre "2ª casa" (ou "VERSÃO DE") à direita — rótulo em
+    caixa alta pequena como o "TOCANDO DE" do player. Entre o título e a letra só fica o estado
+    enquanto procura/ouve/falhou. Botão de acordes ligado = tinta cheia, como o de tradução.
 
 - `chords/` (puro Kotlin, testado, menos o que toca no Android):
   - `AudioChords` — o áudio da música: o arquivo baixado, ou o stream lido pelo mesmo `AudioCache`

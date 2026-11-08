@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -128,6 +130,7 @@ internal fun LyricsCard(
                 modifier = Modifier.fillMaxWidth().height(CARD_LYRICS_HEIGHT),
                 linesAbove = 1,
                 contentPadding = PaddingValues(top = 2.dp, bottom = 28.dp),
+                lineGap = 14.dp,
             )
             lyrics == LyricsState.Loading -> LyricsLoading(lineHeight = 20.dp, Modifier.padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 30.dp))
             lyrics == LyricsState.None || lyrics == LyricsState.Offline -> NoLyrics(lyrics, streamed, Modifier.padding(start = 20.dp, end = 20.dp, bottom = 26.dp))
@@ -233,19 +236,19 @@ internal fun LyricsScreen(
                         onClick = { scope.launch { chordsDeps.setEnabled(!chordsOn) } },
                         size = 44.dp,
                         iconSize = 22.dp,
-                        tint = if (chordsOn) SoundColors.Mint else SoundColors.Text.copy(alpha = 0.4f),
+                        // On and off read as the translation's: the same ink, full or faint.
+                        tint = if (chordsOn) SoundColors.Text else SoundColors.Text.copy(alpha = 0.4f),
                     )
                 }
                 // Chords and translation go together: the chords over a line, its translation under it.
                 if (lyrics is LyricsState.Ready) TranslateToggle()
             }
             if (chordsOn) {
+                // Only while they are on the way (or failed): once shown, nothing sits over the words.
                 com.villamediana.sound.ui.chords.ChordStatus(
                     state = chordState,
                     onRetry = { com.villamediana.sound.chords.ChordSubject.of(track)?.let { chordsDeps?.engine?.request(it, force = true) } },
                     modifier = Modifier.padding(start = 24.dp, end = 28.dp).padding(bottom = 6.dp),
-                    shift = shift,
-                    onShift = setShift,
                 )
             }
             Box(
@@ -273,9 +276,10 @@ internal fun LyricsScreen(
                         colors = colors,
                         modifier = Modifier.fillMaxSize(),
                         linesAbove = 2,
-                        contentPadding = PaddingValues(top = 24.dp, bottom = 160.dp),
+                        contentPadding = PaddingValues(top = 28.dp, bottom = 160.dp),
                         horizontalPadding = 28.dp,
-                        lineGap = 10.dp,
+                        // A little more air between lines than plain lyrics: each one carries its chords.
+                        lineGap = 18.dp,
                     )
                     lyrics == LyricsState.Loading -> LyricsLoading(lineHeight = 28.dp, Modifier.padding(horizontal = 28.dp, vertical = 32.dp))
                     lyrics == LyricsState.None || lyrics == LyricsState.Offline -> NoLyrics(lyrics, streamed, Modifier.padding(horizontal = 28.dp, vertical = 24.dp))
@@ -295,8 +299,20 @@ internal fun LyricsScreen(
             }
             Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 28.dp).padding(bottom = 12.dp)) {
                 SeekBar(clock = clock, durationMs = durationMs, onSeek = onSeek, timeColor = SoundColors.Text.copy(alpha = 0.7f))
-                Box(Modifier.fillMaxWidth().padding(top = 2.dp), contentAlignment = Alignment.Center) {
-                    MorphPlayPause(playing = playing, onClick = onTogglePlay, size = 60.dp)
+                // With chords shown, the key sits left of the play button and a sheet's capo right of
+                // it: the transport row holds them, as the player's row holds its controls.
+                Box(Modifier.fillMaxWidth().padding(top = if (found != null) 10.dp else 2.dp).heightIn(min = 60.dp)) {
+                    if (found != null) {
+                        com.villamediana.sound.ui.chords.ChordKey(
+                            key = found.key,
+                            shift = shift,
+                            onShift = setShift,
+                            // The "−" lines up with the time under the bar's start.
+                            modifier = Modifier.align(Alignment.TopStart).offset(x = (-11).dp),
+                        )
+                        com.villamediana.sound.ui.chords.ChordSheetNote(found.sheet, Modifier.align(Alignment.TopEnd))
+                    }
+                    MorphPlayPause(playing = playing, onClick = onTogglePlay, size = 60.dp, modifier = Modifier.align(Alignment.Center))
                 }
             }
         }
