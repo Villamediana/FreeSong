@@ -152,7 +152,9 @@ escolheu isso; o Cifra Club recusa pedido de app e não vamos burlar a proteçã
     `assets/chords/guitar.json`/`ukulele.json`, cada forma conferida nota a nota) e as achadas por
     busca (`FretSearch`), ordenadas por facilidade e espalhadas pelo braço. Cavaquinho (DGBD) é todo
     por busca. Piano: posição fundamental + inversões (`PianoVoicing`).
-- `ui/chords/` — `ChordLyricsLines` (acorde sobre a palavra, o que soa agora preenchido em menta),
+- `ui/chords/` — `ChordLyricsLines` (acorde escrito sobre a palavra, SEM marcar o que soa agora —
+  pedido do Miguel, 1.11.1; letra sincronizada acompanha como a letra normal; letra sem tempo fica
+  parada, sem linha amarela nem rolagem nem toque para pular),
   `ChordSheet` (Violão · Ukulele · Cavaquinho · Piano, guardado em `Settings.chordInstrument`;
   posições deslizáveis; acordes da música embaixo), diagramas em Canvas. Botão no topo da letra
   cheia liga/desliga (`Settings.chords`, desligado por padrão).

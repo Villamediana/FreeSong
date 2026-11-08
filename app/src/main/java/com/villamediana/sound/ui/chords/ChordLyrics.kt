@@ -2,7 +2,6 @@ package com.villamediana.sound.ui.chords
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
@@ -70,10 +69,12 @@ internal fun chordStyleFor(lyric: TextStyle): TextStyle = lyric.copy(
 )
 
 /**
- * The lyrics with the chords over the words, following the song like the plain lyrics do: the
- * line being sung lights up, the chord ringing now is filled in, and the list keeps the current
- * line [linesAbove] rows from the top (a touch pauses that for a few seconds). Rows of chords alone
- * hold the intro, solos and the end. A tap on a line seeks there; a tap on a chord shows it.
+ * The lyrics with the chords written over the words — just written, nothing marks the one ringing:
+ * whoever plays reads them. Synced lyrics follow the song as the plain lyrics do (the line being
+ * sung lights up, the list keeps it [linesAbove] rows from the top, a touch pauses that for a few
+ * seconds, a tap on a line seeks there); so do the rows of chords alone when there are no lyrics.
+ * Lyrics without times stay still, as plain lyrics do: their chords sit at a guessed place, and
+ * nothing pretends to know which line is being sung. A tap on a chord shows how to play it.
  */
 @Composable
 internal fun ChordLyricsLines(
@@ -95,8 +96,9 @@ internal fun ChordLyricsLines(
         ChordLayout.rows(lyrics ?: ParsedLyrics(false, emptyList()), chart, durationMs)
     }
     val listState = rememberSaveable(rows, saver = LazyListState.Saver) { LazyListState() }
-    val current by remember(rows, clock) { derivedStateOf { ChordLayout.rowAt(rows, clock.positionMs + PlayerMath.LYRICS_LEAD_MS) } }
-    val ringing by remember(chart, clock) { derivedStateOf { chart.indexAt(clock.positionMs) } }
+    // Times known: synced lyrics, or no lyrics at all (the chords' own times). Not guessed ones.
+    val timed = lyrics == null || lyrics.synced || lyrics.lines.none { it.text.isNotBlank() }
+    val current by remember(rows, clock, timed) { derivedStateOf { if (timed) ChordLayout.rowAt(rows, clock.positionMs + PlayerMath.LYRICS_LEAD_MS) else -1 } }
     val dragged by listState.interactionSource.collectIsDraggedAsState()
     var resting by remember { mutableStateOf(true) }
     LaunchedEffect(dragged) {
@@ -108,7 +110,7 @@ internal fun ChordLyricsLines(
         }
     }
     LaunchedEffect(rows, current, resting) {
-        if (!resting) return@LaunchedEffect
+        if (!timed || !resting) return@LaunchedEffect
         if (current < 0) listState.animateScrollToItem(0) else listState.animateScrollToItem((current - linesAbove).coerceAtLeast(0))
     }
     val chordStyle = remember(textStyle) { chordStyleFor(textStyle) }
@@ -118,6 +120,7 @@ internal fun ChordLyricsLines(
     LazyColumn(state = listState, modifier = modifier.testTag("chordLyrics"), contentPadding = contentPadding) {
         itemsIndexed(rows) { index, row ->
             val target = when {
+                !timed -> colors.active.copy(alpha = 0.92f)
                 index == current -> colors.active
                 index < current -> colors.past
                 else -> colors.future
@@ -125,7 +128,10 @@ internal fun ChordLyricsLines(
             val color by animateColorAsState(target, tween(LINE_FADE_MS), label = "chordLyric")
             val rowModifier = Modifier
                 .fillMaxWidth()
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onSeek(row.startMs) }
+                .then(
+                    if (timed) Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onSeek(row.startMs) }
+                    else Modifier,
+                )
                 .padding(horizontal = horizontalPadding, vertical = lineGap / 2)
             when (row) {
                 is ChordRow.Lyric -> ChordedLine(
@@ -135,7 +141,6 @@ internal fun ChordLyricsLines(
                     textStyle = textStyle,
                     chordStyle = chordStyle,
                     color = { color },
-                    ringing = { ringing },
                     onChord = tap,
                     modifier = rowModifier,
                 )
@@ -144,7 +149,6 @@ internal fun ChordLyricsLines(
                     names = names,
                     chordStyle = chordStyle,
                     noteColor = color,
-                    ringing = { ringing },
                     onChord = tap,
                     modifier = rowModifier,
                 )
@@ -166,7 +170,6 @@ private fun ChordedLine(
     textStyle: TextStyle,
     chordStyle: TextStyle,
     color: () -> Color,
-    ringing: () -> Int,
     onChord: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -177,7 +180,7 @@ private fun ChordedLine(
     val drawn = remember(text, style) { mutableListOf<Pair<TextLayoutResult, Float>>() }
     Layout(
         content = {
-            for (c in chords) ChordChip(names[c.index], chordStyle, active = { ringing() == c.index }, onClick = { onChord(c.index) })
+            for (c in chords) ChordChip(names[c.index], chordStyle, onClick = { onChord(c.index) })
         },
         modifier = modifier
             .semantics { contentDescription = text }
@@ -241,7 +244,6 @@ private fun InstrumentalRow(
     names: List<String>,
     chordStyle: TextStyle,
     noteColor: Color,
-    ringing: () -> Int,
     onChord: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -253,25 +255,21 @@ private fun InstrumentalRow(
         itemVerticalAlignment = Alignment.CenterVertically,
     ) {
         Text("♪", style = big, color = noteColor, modifier = Modifier.padding(end = 4.dp))
-        for (k in chords) ChordChip(names[k], big, active = { ringing() == k }, onClick = { onChord(k) })
+        for (k in chords) ChordChip(names[k], big, onClick = { onChord(k) })
     }
 }
 
-/** A chord name: in the "playing" color, filled in while it rings. Tapping it shows how to play it. */
+/** A chord name in the chords' color. Tapping it shows how to play it. */
 @Composable
-internal fun ChordChip(name: String, style: TextStyle, active: () -> Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val on = active()
-    val fill by animateColorAsState(if (on) SoundColors.Mint else SoundColors.Mint.copy(alpha = 0f), tween(180), label = "chordFill")
-    val ink by animateColorAsState(if (on) SoundColors.OnMint else SoundColors.Mint, tween(180), label = "chordInk")
+internal fun ChordChip(name: String, style: TextStyle, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Text(
         text = name,
         style = style,
-        color = ink,
+        color = SoundColors.Mint,
         maxLines = 1,
         softWrap = false,
         modifier = modifier
             .clip(RoundedCornerShape(8.dp))
-            .background(fill)
             .clickable(role = Role.Button, onClick = onClick)
             .padding(horizontal = CHIP_PAD, vertical = 1.dp),
     )
