@@ -20,11 +20,13 @@ okhttp = "5.5.1"
 coroutines = "1.11.0"
 serialization = "1.12.0"
 newpipe-extractor = "v0.26.5"
+litert = "1.4.2"
 junit = "4.13.2"
 robolectric = "4.17"
 androidx-test-core = "1.7.0"
 
 [libraries]
+litert = { module = "com.google.ai.edge.litert:litert", version.ref = "litert" }
 android-desugar = { module = "com.android.tools:desugar_jdk_libs_nio", version.ref = "desugar" }
 androidx-core = { module = "androidx.core:core-ktx", version.ref = "core" }
 androidx-splashscreen = { module = "androidx.core:core-splashscreen", version.ref = "splashscreen" }

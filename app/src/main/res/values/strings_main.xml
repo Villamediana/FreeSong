@@ -22,6 +22,7 @@
     <string name="settings_cache_covers">Capas</string>
     <string name="settings_cache_lyrics">Letras e traduções</string>
     <string name="settings_cache_home">Sugestões do Início</string>
+    <string name="settings_cache_chords">Acordes</string>
     <string name="settings_cache_clear">Limpar</string>
     <string name="settings_cache_clear_all">Limpar tudo</string>
     <string name="sheet_album_not_found">Álbum não encontrado.</string>

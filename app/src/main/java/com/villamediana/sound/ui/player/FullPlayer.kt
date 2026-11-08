@@ -330,6 +330,11 @@ internal fun FullPlayer(
                 onOpen = actions.openLyrics,
                 modifier = Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)),
                 streamed = stream.streamed,
+                track = track,
+                // The full player stays composed when collapsed: chords are heard only while it is open.
+                chordsActive = expand.target == 1f,
+                online = stream.online,
+                durationMs = durationMs,
             )
             Spacer(Modifier.height(navBottom + 32.dp))
         }

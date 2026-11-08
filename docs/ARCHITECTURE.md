@@ -119,3 +119,34 @@ JSON: usar `kotlinx.serialization` (o `org.json` do Android vira stub nos testes
   (`VideoRoute`, `navigator.openVideo(videoId, title)`); render com media3-ui-compose `PlayerSurface`.
 - **Compartilhar** (`ui/components/Share.kt`): link (YouTube Music) ou o próprio arquivo de áudio
   (FileProvider `${applicationId}.files`), álbum/playlist remota.
+
+## Acordes (1.10.0, 2026-11-08)
+
+Acordes em cima da letra, ouvidos **no celular** a partir do áudio da própria música (o Miguel
+escolheu isso; o Cifra Club recusa pedido de app e não vamos burlar a proteção do site).
+
+- `chords/` (puro Kotlin, testado, menos o que toca no Android):
+  - `AudioChords` — o áudio da música: o arquivo baixado, ou o stream lido pelo mesmo `AudioCache`
+    do player (música recém-ouvida não gasta dados); `AudioDecoder` decodifica em mono 22 kHz.
+  - `BeatTracker` — batidas da gravação (Ellis/librosa: força de ataque em bandas mel, tempo por
+    autocorrelação com viés em 120 BPM, programação dinâmica). Os acordes mudam na batida da banda.
+  - `BasicPitch` — modelo do Spotify (Apache 2.0, 200 KB, `assets/chords/nmp.tflite`, LiteRT,
+    2 threads) ouve as notas. Trazido do LauncherAI como estava.
+  - `ChordHearing` — notas → acordes maior/menor/7/m7 por batida (Viterbi, mínimo ~1,3 s por
+    acorde, tom da música pesa). Do LauncherAI, agora sobre as batidas reais.
+  - `ChordEngine` — um por vez numa thread de fundo, cancela ao trocar de música; `ChordStore`
+    guarda em `filesDir/chords/<chave>.json` (chave = vídeo, então baixada e streamada dividem).
+    Ajustes › Armazenamento tem "Acordes".
+  - `ChordLayout` — põe o acorde sobre a palavra pelo tempo da linha (LRC só diz quando a linha
+    começa); intro/solo/fim viram linha só de acordes; sem letra sincronizada, linhas de 4 compassos.
+  - `Fingerings` — formas: canônicas (tabela do LauncherAI) primeiro, depois chords-db (MIT,
+    `assets/chords/guitar.json`/`ukulele.json`, cada forma conferida nota a nota) e as achadas por
+    busca (`FretSearch`), ordenadas por facilidade e espalhadas pelo braço. Cavaquinho (DGBD) é todo
+    por busca. Piano: posição fundamental + inversões (`PianoVoicing`).
+- `ui/chords/` — `ChordLyricsLines` (acorde sobre a palavra, o que soa agora preenchido em menta),
+  `ChordSheet` (Violão · Ukulele · Cavaquinho · Piano, guardado em `Settings.chordInstrument`;
+  posições deslizáveis; acordes da música embaixo), diagramas em Canvas. Botão no topo da letra
+  cheia liga/desliga (`Settings.chords`). O cartão de letra do player mostra acordes também, mas só
+  pede pra ouvir com o player aberto.
+- Validação com músicas reais: `tools/chords/README.md` (Let It Be 96%, Stand By Me 100%,
+  Perfect 99%, Riptide 88% do tempo nos acordes certos).

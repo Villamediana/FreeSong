@@ -27,6 +27,7 @@ import com.villamediana.sound.playback.video.YouTubeVideoPlayback
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
@@ -55,6 +56,43 @@ class AppGraph(context: Context) {
     }
     val enricher: MetadataEnricher by lazy { CatalogMetadataEnricher(http) }
     val lyrics: LyricsSource by lazy { LrclibLyricsSource(http) }
+
+    /** Chords heard from the songs, on the phone, one at a time on a background thread. */
+    val chords: com.villamediana.sound.chords.ChordEngine by lazy {
+        val streams = com.villamediana.sound.playback.stream.OnlineStreams(scope, online = {
+            com.villamediana.sound.playback.stream.hasInternet(appContext)
+        }) { youTube }
+        val audio = com.villamediana.sound.chords.AudioChords(appContext, streams) { settings.current().audioQuality }
+        val worker = java.util.concurrent.Executors.newSingleThreadExecutor { r ->
+            Thread({
+                android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND)
+                r.run()
+            }, "chords")
+        }
+        com.villamediana.sound.chords.ChordEngine(
+            scope = scope,
+            store = com.villamediana.sound.chords.ChordStore(appContext.filesDir.resolve("chords")),
+            worker = worker.asCoroutineDispatcher(),
+            analyze = audio::analyze,
+        )
+    }
+
+    /** Chord shapes for the instruments (chords-db in assets, worked out for the rest). */
+    val fingerings: com.villamediana.sound.chords.Fingerings by lazy {
+        com.villamediana.sound.chords.Fingerings { name -> appContext.assets.open(name).bufferedReader().use { it.readText() } }
+    }
+
+    /** What the chords screens use (the engine, the shapes, the on/off and instrument settings). */
+    val chordsDeps: com.villamediana.sound.ui.chords.ChordsDeps by lazy {
+        com.villamediana.sound.ui.chords.ChordsDeps(
+            engine = chords,
+            fingerings = fingerings,
+            enabled = settings.settings.map { it.chords }.distinctUntilChanged(),
+            instrument = settings.settings.map { com.villamediana.sound.chords.Instrument.fromId(it.chordInstrument) }.distinctUntilChanged(),
+            setEnabled = { settings.setChords(it) },
+            setInstrument = { settings.setChordInstrument(it.name) },
+        )
+    }
 
     /** Every cache on the phone, measured and cleared from Ajustes › Armazenamento. */
     val caches: com.villamediana.sound.data.AppCaches by lazy { com.villamediana.sound.data.AppCaches(appContext) }

@@ -28,6 +28,9 @@ enum class CacheKind {
 
     /** The Home's suggestion lists. */
     HOME,
+
+    /** Chords heard from the songs (hearing them again takes a few seconds each). */
+    CHORDS,
 }
 
 /** Sizes and clean-up of every cache (Ajustes › Armazenamento), one kind at a time or all. */
@@ -45,6 +48,7 @@ class AppCaches(private val context: Context) {
         CacheKind.COVERS -> (SingletonImageLoader.get(context).diskCache?.size ?: 0L) + graph.covers.bytes()
         CacheKind.LYRICS -> PlayerLyrics.cache.bytes() + graph.lyricsTranslator.bytes()
         CacheKind.HOME -> graph.discover.bytes()
+        CacheKind.CHORDS -> graph.chords.bytes()
     }
 
     suspend fun clear(kind: CacheKind) = withContext(Dispatchers.IO) {
@@ -64,6 +68,7 @@ class AppCaches(private val context: Context) {
                     graph.lyricsTranslator.clear()
                 }
                 CacheKind.HOME -> graph.discover.clear()
+                CacheKind.CHORDS -> graph.chords.clear()
             }
         }
         Unit

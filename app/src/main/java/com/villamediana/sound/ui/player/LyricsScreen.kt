@@ -58,6 +58,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.villamediana.sound.R
+import com.villamediana.sound.chords.ChordState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import com.villamediana.sound.data.db.Track
 import com.villamediana.sound.ui.theme.SoundColors
 
@@ -75,8 +79,18 @@ internal fun LyricsCard(
     onOpen: () -> Unit,
     modifier: Modifier = Modifier,
     streamed: Boolean = false,
+    /** The song, for its chords (shown here when they are on; heard only while [chordsActive]). */
+    track: Track? = null,
+    chordsActive: Boolean = false,
+    online: Boolean = true,
+    durationMs: Long = 0,
 ) {
     val colors = LyricColors.over(lyricsBackground(washTarget))
+    val chordsOn = com.villamediana.sound.ui.chords.rememberChordsEnabled() && track != null
+    val chordState = if (track != null) com.villamediana.sound.ui.chords.rememberChordState(track, active = chordsOn && chordsActive, online = online) else ChordState.Idle
+    val chart = (chordState as? ChordState.Ready)?.chart?.takeIf { chordsOn }
+    var sheetChord by remember { mutableStateOf<com.villamediana.sound.chords.Chord?>(null) }
+    val instrument = com.villamediana.sound.ui.chords.rememberChordInstrument()
     Column(
         modifier
             .fillMaxWidth()
@@ -95,20 +109,37 @@ internal fun LyricsCard(
             Text(stringResource(R.string.player_lyrics), style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = SoundColors.Text, modifier = Modifier.weight(1f))
             PlayerIconButton(Icons.Rounded.OpenInFull, stringResource(R.string.player_lyrics_open), onOpen, size = 44.dp, iconSize = 18.dp)
         }
-        when (lyrics) {
-            LyricsState.Loading -> LyricsLoading(lineHeight = 20.dp, Modifier.padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 30.dp))
-            LyricsState.None, LyricsState.Offline -> NoLyrics(lyrics, streamed, Modifier.padding(start = 20.dp, end = 20.dp, bottom = 26.dp))
-            is LyricsState.Ready -> LyricsLines(
+        val cardStyle = MaterialTheme.typography.headlineSmall.copy(fontSize = 22.sp, lineHeight = 29.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.01).em)
+        when {
+            chart != null && lyrics != LyricsState.Loading -> com.villamediana.sound.ui.chords.ChordLyricsLines(
+                lyrics = (lyrics as? LyricsState.Ready)?.lyrics,
+                chart = chart,
+                durationMs = durationMs,
+                clock = clock,
+                onSeek = onSeek,
+                onChord = { sheetChord = it },
+                textStyle = cardStyle,
+                colors = colors,
+                modifier = Modifier.fillMaxWidth().height(CARD_LYRICS_HEIGHT),
+                linesAbove = 1,
+                contentPadding = PaddingValues(top = 2.dp, bottom = 28.dp),
+            )
+            lyrics == LyricsState.Loading -> LyricsLoading(lineHeight = 20.dp, Modifier.padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 30.dp))
+            lyrics == LyricsState.None || lyrics == LyricsState.Offline -> NoLyrics(lyrics, streamed, Modifier.padding(start = 20.dp, end = 20.dp, bottom = 26.dp))
+            lyrics is LyricsState.Ready -> LyricsLines(
                 lyrics = lyrics.lyrics,
                 clock = clock,
                 onSeek = onSeek,
-                textStyle = MaterialTheme.typography.headlineSmall.copy(fontSize = 22.sp, lineHeight = 29.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.01).em),
+                textStyle = cardStyle,
                 colors = colors,
                 modifier = Modifier.fillMaxWidth().height(CARD_LYRICS_HEIGHT),
                 linesAbove = 1,
                 contentPadding = PaddingValues(top = 2.dp, bottom = 28.dp),
             )
         }
+    }
+    if (chart != null) {
+        com.villamediana.sound.ui.chords.ChordSheetHost(chart, sheetChord, instrument, onChord = { sheetChord = it }, onDismiss = { sheetChord = null })
     }
 }
 
@@ -154,8 +185,16 @@ internal fun LyricsScreen(
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
     streamed: Boolean = false,
+    online: Boolean = true,
 ) {
     val colors = LyricColors.over(lyricsBackground(washTarget))
+    val chordsDeps = com.villamediana.sound.ui.chords.LocalChords.current
+    val chordsOn = com.villamediana.sound.ui.chords.rememberChordsEnabled()
+    val chordState = com.villamediana.sound.ui.chords.rememberChordState(track, active = chordsOn, online = online)
+    val chart = (chordState as? ChordState.Ready)?.chart?.takeIf { chordsOn }
+    var sheetChord by remember { mutableStateOf<com.villamediana.sound.chords.Chord?>(null) }
+    val instrument = com.villamediana.sound.ui.chords.rememberChordInstrument()
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     Box(
         modifier
             .fillMaxSize()
@@ -180,7 +219,25 @@ internal fun LyricsScreen(
                     )
                     Text(track.artist, style = MaterialTheme.typography.bodyMedium, color = SoundColors.Text.copy(alpha = 0.7f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                if (lyrics is LyricsState.Ready) TranslateToggle()
+                if (chordsDeps != null) {
+                    PlayerIconButton(
+                        com.villamediana.sound.ui.chords.ChordsIcon,
+                        stringResource(if (chordsOn) R.string.lyrics_chords_hide else R.string.lyrics_chords_show),
+                        onClick = { scope.launch { chordsDeps.setEnabled(!chordsOn) } },
+                        size = 44.dp,
+                        iconSize = 22.dp,
+                        tint = if (chordsOn) SoundColors.Mint else SoundColors.Text.copy(alpha = 0.4f),
+                    )
+                }
+                // In the chords view the lines carry chords, not translations.
+                if (lyrics is LyricsState.Ready && !chordsOn) TranslateToggle()
+            }
+            if (chordsOn) {
+                com.villamediana.sound.ui.chords.ChordStatus(
+                    state = chordState,
+                    onRetry = { com.villamediana.sound.chords.ChordSubject.of(track)?.let { chordsDeps?.engine?.request(it, force = true) } },
+                    modifier = Modifier.padding(horizontal = 28.dp).padding(bottom = 6.dp),
+                )
             }
             Box(
                 Modifier
@@ -194,10 +251,26 @@ internal fun LyricsScreen(
                         drawRect(Brush.verticalGradient(listOf(bg.copy(alpha = 0f), bg), startY = size.height - fade * 1.6f, endY = size.height))
                     },
             ) {
-                when (lyrics) {
-                    LyricsState.Loading -> LyricsLoading(lineHeight = 28.dp, Modifier.padding(horizontal = 28.dp, vertical = 32.dp))
-                    LyricsState.None, LyricsState.Offline -> NoLyrics(lyrics, streamed, Modifier.padding(horizontal = 28.dp, vertical = 24.dp))
-                    is LyricsState.Ready -> LyricsLines(
+                when {
+                    chart != null && lyrics != LyricsState.Loading -> com.villamediana.sound.ui.chords.ChordLyricsLines(
+                        lyrics = (lyrics as? LyricsState.Ready)?.lyrics,
+                        chart = chart,
+                        durationMs = durationMs,
+                        clock = clock,
+                        onSeek = onSeek,
+                        onChord = { sheetChord = it },
+                        // A touch smaller than the plain lyrics: each line carries its chords too.
+                        textStyle = MaterialTheme.typography.displaySmall.copy(fontSize = 28.sp, lineHeight = 35.sp, fontWeight = FontWeight.Bold),
+                        colors = colors,
+                        modifier = Modifier.fillMaxSize(),
+                        linesAbove = 2,
+                        contentPadding = PaddingValues(top = 24.dp, bottom = 160.dp),
+                        horizontalPadding = 28.dp,
+                        lineGap = 10.dp,
+                    )
+                    lyrics == LyricsState.Loading -> LyricsLoading(lineHeight = 28.dp, Modifier.padding(horizontal = 28.dp, vertical = 32.dp))
+                    lyrics == LyricsState.None || lyrics == LyricsState.Offline -> NoLyrics(lyrics, streamed, Modifier.padding(horizontal = 28.dp, vertical = 24.dp))
+                    lyrics is LyricsState.Ready -> LyricsLines(
                         lyrics = lyrics.lyrics,
                         clock = clock,
                         onSeek = onSeek,
@@ -218,6 +291,9 @@ internal fun LyricsScreen(
                 }
             }
         }
+    }
+    if (chart != null) {
+        com.villamediana.sound.ui.chords.ChordSheetHost(chart, sheetChord, instrument, onChord = { sheetChord = it }, onDismiss = { sheetChord = null })
     }
 }
 

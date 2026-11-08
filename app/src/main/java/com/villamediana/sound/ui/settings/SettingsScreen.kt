@@ -595,6 +595,7 @@ private fun cacheLabel(kind: com.villamediana.sound.data.CacheKind): Int = when 
     com.villamediana.sound.data.CacheKind.COVERS -> R.string.settings_cache_covers
     com.villamediana.sound.data.CacheKind.LYRICS -> R.string.settings_cache_lyrics
     com.villamediana.sound.data.CacheKind.HOME -> R.string.settings_cache_home
+    com.villamediana.sound.data.CacheKind.CHORDS -> R.string.settings_cache_chords
 }
 
 private fun cacheIcon(kind: com.villamediana.sound.data.CacheKind): ImageVector = when (kind) {
@@ -603,6 +604,7 @@ private fun cacheIcon(kind: com.villamediana.sound.data.CacheKind): ImageVector 
     com.villamediana.sound.data.CacheKind.COVERS -> Icons.Rounded.Image
     com.villamediana.sound.data.CacheKind.LYRICS -> Icons.Rounded.Lyrics
     com.villamediana.sound.data.CacheKind.HOME -> Icons.Rounded.Home
+    com.villamediana.sound.data.CacheKind.CHORDS -> com.villamediana.sound.ui.chords.ChordsIcon
 }
 
 /** "Limpar histórico": a quiet row with its icon; the line under it says when it is done. */

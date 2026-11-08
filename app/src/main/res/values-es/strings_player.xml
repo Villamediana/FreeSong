@@ -70,4 +70,25 @@
     <string name="player_lyrics_offline_title">Sin internet</string>
     <string name="player_lyrics_offline_body">La letra aparece cuando vuelva la conexión.</string>
     <string name="player_equalizer">Ecualizador</string>
+
+    <!-- Acordes sobre la letra -->
+    <string name="lyrics_chords_show">Mostrar acordes</string>
+    <string name="lyrics_chords_hide">Ocultar acordes</string>
+    <string name="chords_listening">Escuchando los acordes… %1$d%%</string>
+    <string name="chords_failed_error">No se pudieron escuchar los acordes de esta canción.</string>
+    <string name="chords_failed_offline">Sin conexión para escuchar los acordes.</string>
+    <string name="chords_failed_too_long">Canción demasiado larga para los acordes.</string>
+    <string name="chords_failed_nothing">Ningún acorde en esta canción.</string>
+    <string name="chords_retry">Reintentar</string>
+    <string name="chords_instrument_violao">Guitarra</string>
+    <string name="chords_instrument_ukulele">Ukelele</string>
+    <string name="chords_instrument_cavaquinho">Cavaquinho</string>
+    <string name="chords_instrument_piano">Piano</string>
+    <string name="chords_position">Posición %1$d de %2$d</string>
+    <string name="chords_root_position">Fundamental</string>
+    <string name="chords_inversion">%3$dª inversión</string>
+    <string name="chords_in_song">En esta canción</string>
+    <string name="chords_no_shape">Sin diagrama de este acorde en este instrumento.</string>
+    <string name="chords_previous_shape">Forma anterior</string>
+    <string name="chords_next_shape">Forma siguiente</string>
 </resources>

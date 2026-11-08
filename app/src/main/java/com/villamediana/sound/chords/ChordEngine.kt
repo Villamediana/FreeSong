@@ -1,0 +1,187 @@
+package com.villamediana.sound.chords
+
+import com.villamediana.sound.data.db.Track
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import java.io.File
+import java.security.MessageDigest
+
+/** The song whose chords are wanted: its audio is the stream of [videoId] or the file at [path]. */
+data class ChordSubject(val key: String, val videoId: String?, val path: String?, val durationMs: Long) {
+    companion object {
+        /**
+         * The same recording shares one hearing: a song downloaded from a video is that video's
+         * audio, so it is keyed by the video. Files from elsewhere go by their path and size.
+         */
+        fun of(track: Track): ChordSubject? {
+            val videoId = track.videoId?.takeIf { it.isNotBlank() }
+            val path = track.filePath.takeIf { it.isNotBlank() && !it.startsWith("http") && File(it).isFile }
+            return when {
+                videoId != null -> ChordSubject("v_" + videoId.filter { it.isLetterOrDigit() || it == '-' || it == '_' }, videoId, path, track.durationMs)
+                path != null -> ChordSubject("f_" + sha1("$path|${track.fileSize}"), null, path, track.durationMs)
+                else -> null
+            }
+        }
+
+        private fun sha1(s: String): String =
+            MessageDigest.getInstance("SHA-1").digest(s.toByteArray()).joinToString("") { "%02x".format(it) }.take(20)
+    }
+}
+
+/** Where a song's chords stand. */
+sealed interface ChordState {
+    data object Idle : ChordState
+    data class Working(val progress: Float) : ChordState
+    data class Ready(val chart: ChordChart) : ChordState
+    data class Failed(val reason: Reason) : ChordState
+
+    enum class Reason { OFFLINE, TOO_LONG, NOTHING_HEARD, ERROR }
+}
+
+class ChordFailure(val reason: ChordState.Reason, cause: Throwable? = null) : Exception(reason.name, cause)
+
+/** Charts heard before, one JSON file per song, the least recently used going past [maxFiles]. */
+class ChordStore(private val dir: File, private val maxFiles: Int = 400) {
+    private val json = Json { ignoreUnknownKeys = true }
+
+    fun read(key: String): ChordChart? {
+        val f = File(dir, "$key.json")
+        if (!f.isFile) return null
+        val chart = runCatching { json.decodeFromString(ChordChart.serializer(), f.readText()) }.getOrNull()
+        if (chart == null || chart.version != ChordChart.VERSION) {
+            f.delete()
+            return null
+        }
+        f.setLastModified(System.currentTimeMillis())
+        return chart
+    }
+
+    fun write(key: String, chart: ChordChart) {
+        dir.mkdirs()
+        val tmp = File(dir, "$key.json.tmp")
+        tmp.writeText(json.encodeToString(ChordChart.serializer(), chart))
+        tmp.renameTo(File(dir, "$key.json"))
+        val files = dir.listFiles { f -> f.name.endsWith(".json") }.orEmpty()
+        if (files.size > maxFiles) files.sortedBy { it.lastModified() }.take(files.size - maxFiles).forEach { it.delete() }
+    }
+
+    fun bytes(): Long = dir.listFiles().orEmpty().sumOf { it.length() }
+
+    fun clear() {
+        dir.listFiles().orEmpty().forEach { it.delete() }
+    }
+}
+
+/**
+ * Hears the chords of the songs asked for, one at a time on a background thread, and keeps them:
+ * on disk (a song is heard once) and in memory for the session. Asking for another song while one
+ * is being heard drops the first — the listener moved on.
+ */
+class ChordEngine(
+    private val scope: CoroutineScope,
+    private val store: ChordStore,
+    private val worker: CoroutineDispatcher,
+    /** Hears one song: the chart, or a [ChordFailure]. Reports 0 → 1. */
+    private val analyze: suspend (ChordSubject, (Float) -> Unit) -> ChordChart,
+    private val io: CoroutineDispatcher = Dispatchers.IO,
+) {
+    private val states = MutableStateFlow<Map<String, ChordState>>(emptyMap())
+    private val lock = Mutex()
+    private var running: Pair<String, Job>? = null
+
+    fun state(key: String): Flow<ChordState> = states.map { it[key] ?: ChordState.Idle }.distinctUntilChanged()
+
+    fun current(key: String): ChordState = states.value[key] ?: ChordState.Idle
+
+    /**
+     * Makes sure [subject]'s chords are on their way: already known, read from disk, or heard now.
+     * A failure stays until [force] (the "try again", or the network coming back).
+     */
+    fun request(subject: ChordSubject, force: Boolean = false) {
+        scope.launch {
+            lock.withLock {
+                when (val now = current(subject.key)) {
+                    is ChordState.Ready, is ChordState.Working -> return@withLock
+                    is ChordState.Failed -> if (!force) return@withLock
+                    ChordState.Idle -> Unit
+                }
+                withContext(io) { runCatching { store.read(subject.key) }.getOrNull() }?.let { chart ->
+                    set(subject.key, ChordState.Ready(chart))
+                    return@withLock
+                }
+                running?.let { (key, job) ->
+                    if (key != subject.key) {
+                        job.cancel()
+                        set(key, ChordState.Idle)
+                    }
+                }
+                set(subject.key, ChordState.Working(0f))
+                val job = scope.launch(worker) { hear(subject) }
+                running = subject.key to job
+            }
+        }
+    }
+
+    private suspend fun hear(subject: ChordSubject) {
+        var last = -1
+        val result = try {
+            val chart = analyze(subject) { p ->
+                val pct = (p.coerceIn(0f, 1f) * 100).toInt()
+                if (pct != last) {
+                    last = pct
+                    set(subject.key, ChordState.Working(pct / 100f))
+                }
+            }
+            if (chart.chords.isEmpty()) throw ChordFailure(ChordState.Reason.NOTHING_HEARD)
+            runCatching { store.write(subject.key, chart) }
+            ChordState.Ready(chart)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: ChordFailure) {
+            ChordState.Failed(e.reason)
+        } catch (e: AudioDecoder.TooLong) {
+            ChordState.Failed(ChordState.Reason.TOO_LONG)
+        } catch (t: Throwable) {
+            ChordState.Failed(ChordState.Reason.ERROR)
+        }
+        set(subject.key, result)
+        lock.withLock { if (running?.first == subject.key) running = null }
+    }
+
+    private fun set(key: String, state: ChordState) {
+        states.update { map ->
+            val next = LinkedHashMap(map)
+            next.remove(key)
+            next[key] = state
+            // Only the latest few charts stay in memory; the rest are on disk.
+            while (next.size > MEMORY) next.remove(next.keys.first())
+            next
+        }
+    }
+
+    fun bytes(): Long = store.bytes()
+
+    suspend fun clear() = lock.withLock {
+        running?.second?.cancel()
+        running = null
+        states.value = emptyMap()
+        withContext(io) { store.clear() }
+    }
+
+    private companion object {
+        const val MEMORY = 24
+    }
+}

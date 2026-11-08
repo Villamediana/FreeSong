@@ -746,6 +746,7 @@ internal fun PlayerHost(
                 onTogglePlay = actions.togglePlay,
                 onClose = { lyricsOpen = false },
                 streamed = stream.streamed,
+                online = online,
             )
         }
     }

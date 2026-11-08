@@ -33,9 +33,11 @@ android {
         applicationId = "com.villamediana.sound"
         minSdk = 26
         targetSdk = 36
-        versionCode = 46
-        versionName = "1.9.3"
+        versionCode = 47
+        versionName = "1.10.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Phones only: LiteRT's x86 libraries alone were 13 MB of the APK (no emulator here).
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
 
     signingConfigs {
@@ -78,6 +80,8 @@ android {
 
     androidResources {
         localeFilters += listOf("pt", "es", "en")
+        // The model is memory-mapped straight from the APK.
+        noCompress += listOf("tflite")
     }
 
     packaging {
@@ -104,6 +108,8 @@ android {
             isReturnDefaultValues = true
             all {
                 it.systemProperty("sound.live", System.getenv("SOUND_LIVE") ?: "")
+                // Chords checked on real songs (tools/chords): where the audio and Basic Pitch frames are.
+                it.systemProperty("sound.chords.dir", System.getenv("SOUND_CHORDS_DIR") ?: "")
                 // Robolectric 4.17 on JDK 21 at API 36 needs these to touch FileDescriptor internals.
                 it.jvmArgs(
                     "--add-opens=java.base/java.io=ALL-UNNAMED",
@@ -171,6 +177,8 @@ dependencies {
     implementation(libs.coroutines.android)
     implementation(libs.serialization.json)
     implementation(libs.newpipe.extractor)
+    // LiteRT (TensorFlow Lite) for Basic Pitch, the 200 KB model that hears the notes of a song (chords).
+    implementation(libs.litert)
 
     testImplementation(libs.junit)
     testImplementation(libs.coroutines.test)

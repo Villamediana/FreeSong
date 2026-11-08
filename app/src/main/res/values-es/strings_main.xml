@@ -22,6 +22,7 @@
     <string name="settings_cache_covers">Portadas</string>
     <string name="settings_cache_lyrics">Letras y traducciones</string>
     <string name="settings_cache_home">Sugerencias de Inicio</string>
+    <string name="settings_cache_chords">Acordes</string>
     <string name="settings_cache_clear">Limpiar</string>
     <string name="settings_cache_clear_all">Limpiar todo</string>
     <string name="sheet_album_not_found">Álbum no encontrado.</string>
