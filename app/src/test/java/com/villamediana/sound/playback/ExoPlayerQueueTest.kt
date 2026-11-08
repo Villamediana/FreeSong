@@ -49,6 +49,19 @@ class ExoPlayerQueueTest {
     }
 
     @Test
+    fun `on repeat one, next leaves the song, so the crossfade loops by seeking to its top`() {
+        player.setMediaItems((0 until 3).map(::item))
+        player.repeatMode = androidx.media3.common.Player.REPEAT_MODE_ONE
+        player.seekTo(1, 150_000)
+        shadowOf(Looper.getMainLooper()).idle()
+        // Navigation ignores "repeat one": seekToNextMediaItem would move on to song 2.
+        assertEquals(2, player.nextMediaItemIndex)
+        player.seekTo(player.currentMediaItemIndex, 0)
+        assertEquals("1", player.currentMediaItem!!.mediaId)
+        assertEquals(0L, player.currentPosition)
+    }
+
+    @Test
     fun `play next while shuffled lands right after the playing song`() {
         player.setMediaItems((0 until 5).map(::item))
         player.shuffleModeEnabled = true

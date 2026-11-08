@@ -33,10 +33,23 @@ class CrossfadePlanTest {
         assertEquals(Step.Idle, step(seconds = 0, position = end, prepared = true))
         assertEquals(Step.Idle, step(position = end, prepared = true, playing = false))
         assertEquals(Step.Idle, step(position = end, prepared = true, hasNext = false))
-        assertEquals(Step.Idle, step(position = end, prepared = true, repeatOne = true))
         assertEquals(Step.Idle, step(position = end, prepared = true, blocked = true))
         // A short track (jingle, intro) plays whole.
         assertEquals(Step.Idle, step(duration = 12_000, position = 9_000, prepared = true))
+    }
+
+    @Test fun repeatOneFadesIntoItsOwnStart() {
+        // The song follows itself: it fades even as the last one in the queue, back to the top.
+        assertEquals(Step.Prepare(195_000), step(position = 190_000, repeatOne = true, hasNext = false))
+        assertEquals(Step.Start(4_000, loop = true), step(position = 196_000, repeatOne = true, hasNext = false, prepared = true))
+        assertEquals(Step.Start(4_000, loop = true), step(position = 196_000, repeatOne = true, prepared = true))
+        // Without "repeat one" it moves on to the next song, as always.
+        assertEquals(Step.Start(4_000, loop = false), step(position = 196_000, prepared = true))
+        // The rest still holds: off, paused, sleep timer, a short track.
+        assertEquals(Step.Idle, step(seconds = 0, position = 196_000, repeatOne = true, prepared = true))
+        assertEquals(Step.Idle, step(position = 196_000, repeatOne = true, prepared = true, playing = false))
+        assertEquals(Step.Idle, step(position = 196_000, repeatOne = true, prepared = true, blocked = true))
+        assertEquals(Step.Idle, step(duration = 12_000, position = 9_000, repeatOne = true, prepared = true))
     }
 
     @Test fun equalPowerCurve() {

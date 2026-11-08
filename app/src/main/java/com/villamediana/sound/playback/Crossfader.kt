@@ -19,14 +19,17 @@ object CrossfadePlan {
     const val PREPARE_AHEAD_MS = 6_000L
 
     sealed interface Step {
-        /** Nothing to do (off, no next song, too short, repeat one…). */
+        /** Nothing to do (off, no next song, too short, sleep timer…). */
         data object Idle : Step
 
         /** Ready the end of this song in the tail player, paused at [fromMs]. */
         data class Prepare(val fromMs: Long) : Step
 
-        /** Start: the tail plays the end out while the next song comes in, over [fadeMs]. */
-        data class Start(val fadeMs: Long) : Step
+        /**
+         * Start: the tail plays the end out while the next song comes in, over [fadeMs]. On "repeat
+         * one" ([loop]) the song that comes in is the same one, from the top.
+         */
+        data class Start(val fadeMs: Long, val loop: Boolean = false) : Step
     }
 
     fun step(
@@ -39,7 +42,8 @@ object CrossfadePlan {
         blocked: Boolean,
         prepared: Boolean,
     ): Step {
-        if (seconds <= 0 || !playing || !hasNext || repeatOne || blocked) return Step.Idle
+        // On "repeat one" the song follows itself, whatever comes after it in the queue.
+        if (seconds <= 0 || !playing || !(hasNext || repeatOne) || blocked) return Step.Idle
         if (durationMs == C.TIME_UNSET || durationMs <= 0) return Step.Idle
         val fade = seconds * 1_000L
         // A song shorter than a few fades plays whole.
@@ -47,7 +51,7 @@ object CrossfadePlan {
         val remaining = durationMs - positionMs
         return when {
             remaining <= 300 -> Step.Idle
-            remaining <= fade -> if (prepared) Step.Start(remaining) else Step.Idle
+            remaining <= fade -> if (prepared) Step.Start(remaining, loop = repeatOne) else Step.Idle
             remaining <= fade + PREPARE_AHEAD_MS && !prepared -> Step.Prepare(durationMs - fade)
             else -> Step.Idle
         }
@@ -73,6 +77,8 @@ internal class Crossfader(
     private val seconds: () -> Int,
     /** Another feature owns the volume or the end of the song (sleep timer). */
     private val blocked: () -> Boolean,
+    /** "Repeat one" went around by the fade (the player itself saw only a seek): a new listen starts. */
+    private val onLoop: () -> Unit = {},
 ) {
     private val handler = Handler(Looper.getMainLooper())
     private var tail: ExoPlayer? = null
@@ -153,7 +159,7 @@ internal class Crossfader(
         when (step) {
             CrossfadePlan.Step.Idle -> Unit
             is CrossfadePlan.Step.Prepare -> prepare(current ?: return, step.fromMs)
-            is CrossfadePlan.Step.Start -> begin(step.fadeMs)
+            is CrossfadePlan.Step.Start -> begin(step.fadeMs, step.loop)
         }
     }
 
@@ -169,7 +175,7 @@ internal class Crossfader(
         preparedFor = item.mediaId
     }
 
-    private fun begin(remainingMs: Long) {
+    private fun begin(remainingMs: Long, loop: Boolean) {
         val t = tail ?: return
         // The tail picks up exactly where the main player is.
         val pos = player.currentPosition
@@ -182,11 +188,13 @@ internal class Crossfader(
         player.volume = 0f
         ourSkip = true
         try {
-            player.seekToNextMediaItem()
+            // "Next" ignores "repeat one" (it would leave the song): the loop goes back to the top.
+            if (loop) player.seekTo(player.currentMediaItemIndex, 0) else player.seekToNextMediaItem()
         } finally {
             ourSkip = false
         }
         preparedFor = null
+        if (loop) onLoop()
     }
 
     private fun stepFade() {

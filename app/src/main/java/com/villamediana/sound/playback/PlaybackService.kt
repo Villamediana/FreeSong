@@ -195,6 +195,11 @@ class PlaybackService : MediaLibraryService() {
             },
             seconds = { settings.crossfadeSeconds },
             blocked = { sleep.timer != SleepTimer.Off },
+            // Same as the player's own "repeat one" transition: every time around is a listen.
+            onLoop = {
+                finishListen()
+                startListen(player.currentMediaItem)
+            },
         ).also { it.start() }
         output = OutputDeviceMonitor(this) { name ->
             outputName = name
