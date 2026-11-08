@@ -55,11 +55,11 @@ object SearchReveal {
 fun Modifier.searchRevealOrigin(): Modifier = onGloballyPositioned { SearchReveal.origin = it.boundsInRoot().center }
 
 /**
- * Long enough to see the circle fill the page (it covers most of it by ~500 ms; the rest is its edge
+ * Long enough to see the circle fill the page (it covers most of it by ~400 ms; the rest is its edge
  * reaching the far corner), on a gentle curve: the old fast-out one covered 90% in 200 ms and looked
  * like a glitch.
  */
-private const val REVEAL_IN_MS = 800
+private const val REVEAL_IN_MS = 650
 private val RevealInEasing = CubicBezierEasing(0.33f, 0.12f, 0.35f, 1f)
 private const val REVEAL_OUT_MS = 340
 
@@ -77,7 +77,7 @@ class SearchEntrance internal constructor() {
 
     companion object {
         /** How long after the tap the entrance plays; later, nothing waits. */
-        const val WINDOW_MS = 2_600L
+        const val WINDOW_MS = 2_200L
     }
 }
 
@@ -89,7 +89,7 @@ val LocalSearchEntrance = staticCompositionLocalOf<SearchEntrance?> { null }
  * search. Something composed later in the entrance (data that came in late) starts at once.
  */
 @Composable
-fun Modifier.entrance(atMs: Int, durationMs: Int = 360, rise: Dp = 14.dp, scaleFrom: Float = 1f): Modifier {
+fun Modifier.entrance(atMs: Int, durationMs: Int = 300, rise: Dp = 14.dp, scaleFrom: Float = 1f): Modifier {
     val entrance = LocalSearchEntrance.current ?: return this
     val progress = remember { Animatable(if (entrance.done) 1f else 0f) }
     LaunchedEffect(Unit) {

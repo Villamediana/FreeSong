@@ -152,15 +152,15 @@ class SearchScreensSmokeTest {
         // The circle is still growing: nothing on the page yet.
         assertEquals(0, inked(field, 120))
         assertEquals(0, inked("soda stereo", 120))
-        at(760)
+        at(620)
         // Field in; the newest search coming in, the oldest still to come; no genres yet.
-        assert(inked(field, 760) > 0)
-        assert(inked("soda stereo", 760) > 0)
-        assertEquals(0, inked("charly", 760))
-        assertEquals(0, inked("Rock en español", 760))
-        at(1_200)
-        assert(inked("charly", 1_200) > 0)
-        at(1_500)
+        assert(inked(field, 620) > 0)
+        assert(inked("soda stereo", 620) > 0)
+        assertEquals(0, inked("charly", 620))
+        assertEquals(0, inked("Rock en español", 620))
+        at(1_000)
+        assert(inked("charly", 1_000) > 0)
+        at(1_250)
         at(2_400)
         assert(inked("Rock en español", 2_400) > 0)
         rule.mainClock.autoAdvance = true

@@ -511,24 +511,24 @@ private fun SelectionBar(count: Int, onDownload: () -> Unit, onCancel: () -> Uni
 
 /**
  * When each part of the search page comes in, in ms after the tap on the magnifier: the circle
- * covers the page by ~500 ms, then the field and the mic, the recent searches one by one, and the
+ * covers the page by ~400 ms, then the field and the mic, the recent searches one by one, and the
  * genre cards. Past a few rows the rest come together (they're below the fold anyway).
  */
 private object Entrance {
-    const val HEADER = 420
-    const val FIELD = 480
-    const val MIC = 560
-    const val RECENTS = 640
-    private const val STEP = 75
-    private const val GENRES_AFTER = 90
-    private const val GENRE_ROW = 90
-    private const val GENRE_SIDE = 55
+    const val HEADER = 340
+    const val FIELD = 385
+    const val MIC = 450
+    const val RECENTS = 510
+    private const val STEP = 60
+    private const val GENRES_AFTER = 70
+    private const val GENRE_ROW = 72
+    private const val GENRE_SIDE = 45
 
-    fun recent(i: Int) = RECENTS + 50 + minOf(i, 7) * STEP
+    fun recent(i: Int) = RECENTS + 40 + minOf(i, 7) * STEP
 
     fun genres(recents: Int) = if (recents == 0) RECENTS else recent(recents - 1) + GENRES_AFTER
 
-    fun genreTile(genresAt: Int, row: Int, side: Int) = genresAt + 80 + minOf(row, 5) * GENRE_ROW + side * GENRE_SIDE
+    fun genreTile(genresAt: Int, row: Int, side: Int) = genresAt + 64 + minOf(row, 5) * GENRE_ROW + side * GENRE_SIDE
 }
 
 @Composable
@@ -577,7 +577,7 @@ private fun IdleContent(
                         GenreTile(
                             g,
                             onClick = { onGenre(g.name) },
-                            modifier = Modifier.weight(1f).entrance(Entrance.genreTile(genresAt, row, side), durationMs = 440, rise = 26.dp, scaleFrom = 0.92f),
+                            modifier = Modifier.weight(1f).entrance(Entrance.genreTile(genresAt, row, side), durationMs = 360, rise = 26.dp, scaleFrom = 0.92f),
                         )
                     }
                     if (pair.size == 1) Spacer(Modifier.weight(1f))
