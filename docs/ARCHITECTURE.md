@@ -471,3 +471,34 @@ uma página cheia está por cima e o player volta só depois do deslize (`PAGE_M
   ("Números de Ana") porque o `SocialHub.syncStats` manda os totais do mês e do ano (`NumbersOf`)
   junto com horas e top 5 — relay 1.4.0 (`numbers_json`, `relay/src/numbers.js` confere tudo). Só
   totais, nenhum histórico.
+
+## DNA que aprende o momento inteiro (1.26.0, 2026-11-09)
+
+O DNA (`smart/MusicDna.kt`) continua **silencioso**: nenhuma tela nova, nenhum botão, nunca a
+palavra na tela — só muda o que toca e o que é sugerido. O que ele aprende agora:
+
+- **Hora e dia de verdade.** A hora é contínua (uma música das 21h conta um pouco às 20h e às 22h,
+  quase nada às 15h) e cada hora da semana tem a sua memória (168 vagas): segunda de manhã não é
+  sábado de manhã. A madrugada pertence ao dia anterior (`DnaMoment.DAY_STARTS`).
+- **Lugar e companhia em tudo.** Artistas, gêneros, músicas e pulos guardam o lugar (os que o app
+  aprende sozinho, com "Lembrar lugares" ligado) e quem estava junto na jam.
+- **O som da música: clima e ritmo.** `playback/SoundTap.kt` (um `TeeAudioProcessor` na saída do
+  player) entrega o áudio que já está tocando ao `smart/SoundPrint.kt` (`SoundAnalyzer`): poucas
+  somas por amostra, sem transformada — volume, brilho, quanto acontece, firmeza da batida e
+  andamento. Fica em `song_sounds` (banco v10), **só no aparelho** (não vai pro cofre nem pro
+  servidor) e a música medida o bastante (`SETTLED_SECONDS`) não é ouvida de novo. `SoundMap` põe
+  cada música no lugar dela entre tudo o que a pessoa ouve (calma↔intensa, parada↔movida) e o DNA
+  aprende que som é de cada momento — vale também pra música nunca ouvida naquele momento.
+- **Amigos.** `smart/FriendsTaste.kt`: o que cada amigo já mostra aos amigos (artistas do mês e do
+  ano, top de músicas) empurra as sugestões e os rádios; mais quando vários concordam, inteiro pra
+  quem está junto na jam. Nada novo é pedido ao servidor nem sai do aparelho. O gosto de quem ouve
+  manda: o dos amigos não entra no perfil e o que é pulado sempre continua fora.
+- **Biblioteca no momento.** `ForYou.libraryFit()` → `Taste.fit` → `Scoring.tasteWeight`: o
+  aleatório inteligente e o "a seguir" das músicas do aparelho pesam o quanto cada uma combina com
+  agora (`MusicDna.fit`: artista × som × pulos neste momento).
+
+Regras que não mudam: o pulo vale só no momento em que aconteceu, é perdoado por ouvir até o fim e
+some com o tempo; coração segura a música; ajuste fino só nas constantes do `MusicDna`.
+
+Ficou de fora, de propósito: sugerir pelo que toca **perto de outros usuários**. Pra isso o
+servidor teria que saber onde cada celular está — e hoje ele não sabe nem guarda nada disso.
