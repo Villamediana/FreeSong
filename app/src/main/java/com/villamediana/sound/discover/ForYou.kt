@@ -4,6 +4,7 @@ import com.villamediana.sound.data.LibraryRepository
 import com.villamediana.sound.online.RemoteTrack
 import com.villamediana.sound.data.asTransientTrack
 import com.villamediana.sound.smart.DnaMoment
+import com.villamediana.sound.smart.FriendsTaste
 import com.villamediana.sound.smart.MomentPlan
 import com.villamediana.sound.social.SongRef
 import com.villamediana.sound.smart.GenreMatch
@@ -13,6 +14,7 @@ import com.villamediana.sound.smart.Listen
 import com.villamediana.sound.smart.Recommend
 import com.villamediana.sound.smart.SmartMixes
 import com.villamediana.sound.smart.TasteProfile
+import com.villamediana.sound.smart.artistKey
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -23,6 +25,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlin.math.abs
 
 /**
  * The Home's suggestions, from what the listener actually likes ([TasteProfile]: everything heard
@@ -45,6 +48,8 @@ class ForYou(
     private val placeNow: () -> Long? = { null },
     /** Who is listening along now (the friends in the jam). */
     private val peopleNow: () -> Set<String> = { emptySet() },
+    /** What the friends like, as they show it to their friends (already on this phone). */
+    private val friends: () -> FriendsTaste = { FriendsTaste.NONE },
 ) {
     /** One "Porque você curte <artist>" row. */
     data class BecauseRow(val artist: String, val artistKey: String, val tracks: List<RemoteTrack>)
@@ -102,6 +107,26 @@ class ForYou(
         return MomentPlan(m, own, fresh, names(m.people))
     }
 
+    /**
+     * How well each song of the library fits right now (track id → factor, only the ones the
+     * moment moves): what the shuffle and "a seguir" of the library lean to. Empty while the DNA
+     * has nothing to say.
+     */
+    suspend fun libraryFit(): Map<Long, Double> {
+        val dna = dna()
+        if (dna.isEmpty) return emptyMap()
+        val m = moment()
+        val tracks = library.allTracks()
+        return withContext(Dispatchers.Default) {
+            val out = HashMap<Long, Double>()
+            for (t in tracks) {
+                val fit = dna.fit(t.videoId, artistKey(t.artist), m)
+                if (abs(fit - 1.0) > 0.03) out[t.id] = fit
+            }
+            out
+        }
+    }
+
     /** The taste for right now ([TasteProfile.inMoment]): what radios and suggestions use. */
     suspend fun profileNow(): TasteProfile {
         val p = profile()
@@ -131,12 +156,13 @@ class ForYou(
         // Downloading a song says something too (less than a heart): the library's songs count a little.
         val saved = tracks.filter { !it.liked }.map { Heart(it.videoId, it.title, it.artist, it.genre, it.addedAt) }
         val known = artistGenres.known()
-        val profile = TasteProfile.build(listens, hearts, now, known, picked(), saved)
+        val profile = TasteProfile.build(listens, hearts, now, known, picked(), saved, runCatching { friends() }.getOrDefault(FriendsTaste.NONE))
         val dna = MusicDna.build(
             listens,
             hearts.mapNotNullTo(HashSet()) { it.videoId },
             now,
             genreOf = { artist, songGenre -> GenreMatch.idOf(songGenre ?: known[artist]) },
+            sounds = library.sounds(),
         )
         return profile to dna
     }

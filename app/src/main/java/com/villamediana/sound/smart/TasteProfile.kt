@@ -46,6 +46,11 @@ class TasteProfile private constructor(
     private val byArtist: Map<String, ArtistTaste>,
     /** For a moment's profile: how much each song skipped in it is wanted, 0..1 (absent = 1). */
     private val songFactors: Map<String, Double> = emptyMap(),
+    /** For a moment's profile: how a song's own sound fits it against its artist's usual one (absent = 1). */
+    private val soundFits: Map<String, Double> = emptyMap(),
+    /** What the friends like ([FriendsTaste]) and how much of it counts now (artist key → 0..1). */
+    private val friends: FriendsTaste = FriendsTaste.NONE,
+    private val friendsLike: Map<String, Double> = friends.likes(),
 ) {
     /** A song of an artist, as the profile remembers it. */
     data class SongTaste(val videoId: String?, val title: String, val score: Double, val genre: String?)
@@ -82,18 +87,35 @@ class TasteProfile private constructor(
     fun songFactor(videoId: String): Double = songFactors[videoId] ?: 1.0
 
     /**
+     * How a song's own sound (mood, rhythm) fits this moment, against what its artist usually
+     * sounds like: 1 = the same or not known; above, it fits better (for a moment's profile; else 1).
+     */
+    fun soundFit(videoId: String): Double = soundFits[videoId] ?: 1.0
+
+    /**
+     * How much the friends like the artist of [artistName], 0..1 (0 = no friend does): more when
+     * several do, and in full for a friend listening along (for a moment's profile).
+     */
+    fun friendsLike(artistName: String): Double = if (friendsLike.isEmpty()) 0.0 else friendsLike[artistKey(artistName)] ?: 0.0
+
+    /**
      * This taste for [m], with the [dna]: the artists and genres of this part of the day, of
      * weekdays or the weekend, of this place and of these friends move up (the others down a
      * little), and what is skipped in this moment — songs, artists, genres — goes down in it (only
-     * in it: the taste of every other moment stays), out when skipped here again and again.
+     * in it: the taste of every other moment stays), out when skipped here again and again. So do
+     * the artists whose sound is the moment's (calm, intense, still, moving), heard in it or not.
+     * What the friends along like counts in full.
      */
     fun inMoment(dna: MusicDna, m: DnaMoment): TasteProfile {
-        if (dna.isEmpty || isEmpty) return this
-        val lifted = artists.map { a -> a.copy(affinity = (a.affinity * dna.lift(a.key, m)).coerceAtMost(1.0)) }
+        val liked = if (m.people.isEmpty()) friendsLike else friends.likes(m.people)
+        if (dna.isEmpty || isEmpty) {
+            return if (liked === friendsLike) this else TasteProfile(artists, genres, avoidSongs, avoidArtists, known, byArtist, songFactors, soundFits, friends, liked)
+        }
+        val lifted = artists.map { a -> a.copy(affinity = (a.affinity * dna.lift(a.key, m) * dna.soundLift(null, a.key, m)).coerceAtMost(1.0)) }
             .sortedWith(compareByDescending<ArtistTaste> { it.affinity }.thenBy { it.key })
         val moved = genres.map { g -> g.copy(score = g.score * dna.genreLift(g.id, m)) }
             .sortedWith(compareByDescending<GenreTaste> { it.score }.thenBy { it.id })
-        return TasteProfile(lifted, moved, avoidSongs + dna.avoidNow(m), avoidArtists, known, lifted.associateBy { it.key }, dna.songFactors(m))
+        return TasteProfile(lifted, moved, avoidSongs + dna.avoidNow(m), avoidArtists, known, lifted.associateBy { it.key }, dna.songFactors(m), dna.soundFits(m), friends, liked)
     }
 
     /**
@@ -151,7 +173,8 @@ class TasteProfile private constructor(
         /**
          * Builds the profile. [artistGenres] says the genre of an artist (artist key → genre name)
          * when the songs don't carry one (streamed songs); [picked] are the genres chosen on the Home;
-         * [saved] the songs downloaded (a quiet "I like this", a fraction of a heart, long memory only).
+         * [saved] the songs downloaded (a quiet "I like this", a fraction of a heart, long memory only);
+         * [friends] what the friends like (it never changes the taste: it only nudges what is suggested).
          */
         fun build(
             listens: List<Listen>,
@@ -160,6 +183,7 @@ class TasteProfile private constructor(
             artistGenres: Map<String, String> = emptyMap(),
             picked: Set<String> = emptySet(),
             saved: List<Heart> = emptyList(),
+            friends: FriendsTaste = FriendsTaste.NONE,
         ): TasteProfile {
             val songs = LinkedHashMap<String, Pair<String, Acc>>() // song key → (artist key, acc)
             val names = HashMap<String, HashMap<String, Int>>()
@@ -267,7 +291,7 @@ class TasteProfile private constructor(
             val genres = genreScore.map { (id, score) -> GenreTaste(id, score, id in picked) }
                 .sortedWith(compareByDescending<GenreTaste> { it.score }.thenBy { it.id })
 
-            return TasteProfile(tastes, genres, avoidSongs, avoidArtists, known, tastes.associateBy { it.key })
+            return TasteProfile(tastes, genres, avoidSongs, avoidArtists, known, tastes.associateBy { it.key }, friends = friends)
         }
 
         private fun decay(ageMs: Long, halfLifeMs: Long): Double = 0.5.pow(ageMs.toDouble() / halfLifeMs)

@@ -37,6 +37,15 @@ data class Profile(
     val friendsSince: Long? = null,
 ) {
     val isFriend: Boolean get() = relation == "friends" || friendsSince != null
+
+    /**
+     * The artists this friend listens most, as they show it to their friends: the month's, the
+     * year's, then the ones of their top songs.
+     */
+    fun favourites(): com.villamediana.sound.smart.FriendsTaste.Friend = com.villamediana.sound.smart.FriendsTaste.Friend(
+        id,
+        numbers?.month?.top.orEmpty().map { it.name } + numbers?.year?.top.orEmpty().map { it.name } + top.orEmpty().map { it.artist },
+    )
 }
 
 /** A song as it travels between phones: its YouTube video and what the player shows. */

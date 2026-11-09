@@ -88,6 +88,7 @@ class PlaybackService : MediaLibraryService() {
     private val leveler = VolumeLeveler()
     /** The quick crossfade of a tap on a lyric line ([SeekBlend]). */
     private val seekBlend = SeekBlendProcessor()
+    private val soundTap = SoundTap()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val listen = ListenTracker { SystemClock.elapsedRealtime() }
 
@@ -129,7 +130,7 @@ class PlaybackService : MediaLibraryService() {
         strings = PlaybackStrings.from(this)
         streams = OnlineStreams(graph.scope, online = { hasInternet(this) }) { graph.youTube }
         artwork = ArtworkShare(this)
-        player = ExoPlayer.Builder(this, SeekBlend.renderers(this, seekBlend))
+        player = ExoPlayer.Builder(this, SeekBlend.renderers(this, seekBlend, soundTap.processor()))
             // The song playing is kept whole in memory (back buffer): going back in it, or seeking to
             // a part already heard, plays at once instead of downloading that part again.
             .setLoadControl(
@@ -355,7 +356,9 @@ class PlaybackService : MediaLibraryService() {
     private suspend fun taste(): Taste {
         val now = System.currentTimeMillis()
         tasteCache?.takeIf { now - tasteAt < TASTE_TTL_MS }?.let { return it }
-        return withContext(Dispatchers.IO) { library.loadTaste(now) }.also {
+        // What fits this moment (the hour, the day, the place, who is along) plays first.
+        val fit = runCatching { graph.forYou.libraryFit() }.getOrDefault(emptyMap())
+        return withContext(Dispatchers.IO) { library.loadTaste(now, fit) }.also {
             tasteCache = it
             tasteAt = now
         }
@@ -660,6 +663,23 @@ class PlaybackService : MediaLibraryService() {
     private fun startListen(item: MediaItem?) {
         val id = listenId(item) ?: return
         listeningOnline = MediaItems.onlineItem(item)
+        // The DNA: what the song sounds like, measured as it plays — unless it was measured enough already.
+        val videoId = listeningOnline?.videoId ?: tracksById[id]?.videoId
+        soundAsk?.cancel()
+        soundAsk = null
+        if (videoId.isNullOrBlank()) soundTap.rest() else {
+            soundTap.begin()
+            soundAsk = scope.launch {
+                val known = try {
+                    library.soundOf(videoId)
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    null
+                }
+                if (known?.settled == true) soundTap.rest()
+            }
+        }
         // The DNA: who is along (the jam) and where the phone is (when places are on), for this listen.
         listenPeople = runCatching { graph.jamPeople().toList() }.getOrDefault(emptyList())
         listenPlace = graph.places.last
@@ -671,8 +691,12 @@ class PlaybackService : MediaLibraryService() {
     }
 
     private fun finishListen() {
+        soundAsk?.cancel()
+        soundAsk = null
+        val sound = soundTap.take()
         val s = listen.finish() ?: return
         val online = listeningOnline?.takeIf { it.trackId == s.trackId }
+        val videoId = online?.videoId ?: tracksById[s.trackId]?.videoId
         listeningOnline = null
         tasteCache = null
         val place = listenPlace
@@ -682,6 +706,7 @@ class PlaybackService : MediaLibraryService() {
                 if (online != null) library.recordOnlinePlay(online.toRemote(), s.listenedMs, s.durationMs, s.context, placeId = place, people = people)
                 else if (s.trackId >= 0) library.recordPlay(s.trackId, s.listenedMs, s.durationMs, s.context, placeId = place, people = people)
             }
+            if (sound != null && !videoId.isNullOrBlank()) runCatching { library.learnSound(videoId, sound) }
         }
     }
 
@@ -689,6 +714,7 @@ class PlaybackService : MediaLibraryService() {
     private var listenPlace: Long? = null
     private var listenPeople: List<String> = emptyList()
     private var placeAsk: kotlinx.coroutines.Job? = null
+    private var soundAsk: kotlinx.coroutines.Job? = null
 
     // ================================================================ persistence
 

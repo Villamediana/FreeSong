@@ -38,7 +38,8 @@ internal fun List<Track>.feats(): List<Feat> = map(::Feat)
 
 /**
  * How much the listener likes a track right now. 1.0 = neutral; liked and often-finished songs go
- * up, often-skipped and just-played ones go down. Always > 0.
+ * up, often-skipped and just-played ones go down; the songs of this moment go up ([Taste.fit]).
+ * Always > 0.
  */
 internal fun tasteWeight(t: Track, taste: Taste): Double {
     var w = 1.0
@@ -54,6 +55,7 @@ internal fun tasteWeight(t: Track, taste: Taste): Double {
         last != null && taste.now - last in 0 until 3 * HOUR_MS -> 0.25
         else -> 1.0
     }
+    if (taste.fit.isNotEmpty()) w *= taste.fit[t.id] ?: 1.0
     return w.coerceAtLeast(0.02)
 }
 

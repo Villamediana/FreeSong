@@ -23,6 +23,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Protocol
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
+import com.villamediana.sound.smart.SoundPrint
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -90,6 +91,55 @@ class ForYouTest {
         repeat(times) { i ->
             library.recordOnlinePlay(remote(id, artist), if (skipped) 5_000 else 200_000, 200_000, "test", now - (hoursAgo + i) * 3_600_000L)
         }
+    }
+
+    @Test
+    fun theLibrarysSongsOfThisHourFitNowAndTheOnesOfAnotherHourFitLess() = runBlocking {
+        fun own(n: Int, artist: String) = com.villamediana.sound.data.db.Track(
+            title = "Own $n", artist = artist, videoId = "own$n", filePath = "/music/$n.m4a", durationMs = 200_000,
+        )
+        // Nothing heard yet: the moment has nothing to say about the library.
+        val nowBand = library.insertTrack(own(1, "Now Band"))
+        val thenBand = library.insertTrack(own(2, "Then Band"))
+        val stranger = library.insertTrack(own(3, "Stranger"))
+        assertTrue(forYou.libraryFit().isEmpty())
+        // Two weeks of one band at this hour and another half a day away.
+        for (day in 1..14) {
+            library.recordOnlinePlay(remote("n${day % 5}", "Now Band"), 200_000, 200_000, "test", now - day * 24 * 3_600_000L)
+            library.recordOnlinePlay(remote("t${day % 5}", "Then Band"), 200_000, 200_000, "test", now - day * 24 * 3_600_000L - 12 * 3_600_000L)
+        }
+        forYou.invalidate()
+        val fit = forYou.libraryFit()
+        assertTrue(fit.getValue(nowBand) > 1.3)
+        assertTrue(fit.getValue(thenBand) < 0.8)
+        // Never heard: as always (not even listed).
+        assertFalse(stranger in fit)
+    }
+
+    @Test
+    fun whatSongsSoundLikeIsKeptOnThePhoneAndReachesTheDna() = runBlocking {
+        fun sound(e: Float, seconds: Float = 120f) = SoundPrint(-30f + 20f * e, 500f + 3_000f * e, 5f + 40f * e, 0.1f + 0.7f * e, 70f + 90f * e, seconds)
+        // Soft songs at this hour of the day, hard ones half a day away, for a week.
+        for (i in 0 until 7) {
+            library.learnSound("soft-$i", sound(0.05f + 0.03f * i))
+            library.learnSound("hard-$i", sound(0.75f + 0.03f * i))
+            for (day in 1..3) {
+                library.recordOnlinePlay(remote("soft-$i", "Soft Band"), 200_000, 200_000, "test", now - day * 24 * 3_600_000L)
+                library.recordOnlinePlay(remote("hard-$i", "Hard Band"), 200_000, 200_000, "test", now - day * 24 * 3_600_000L - 12 * 3_600_000L)
+            }
+        }
+        assertEquals(14, library.sounds().size)
+        // Heard again: the two measures join, each by how much it heard.
+        library.learnSound("soft-0", sound(0.05f, seconds = 40f).copy(loud = -21f))
+        val again = library.soundOf("soft-0")!!
+        assertEquals(160f, again.seconds, 0.01f)
+        assertEquals(-27f, again.loud, 0.01f)
+        assertTrue(again.settled)
+
+        val dna = forYou.dna()
+        val m = forYou.moment()
+        assertTrue(dna.soundLift("soft-1", "soft band", m) > 1.2)
+        assertTrue(dna.soundLift("hard-1", "hard band", m) < 0.9)
     }
 
     @Test

@@ -154,7 +154,7 @@ class AppGraph(context: Context) {
     }
 
     val downloads: DownloadController by lazy { WorkDownloadController(appContext, db, library, storage, settings) }
-    val player: PlayerConnection by lazy { MediaPlayerConnection(appContext, library, settings, scope) }
+    val player: PlayerConnection by lazy { MediaPlayerConnection(appContext, library, settings, scope, momentFit = { forYou.libraryFit() }) }
     val discover: com.villamediana.sound.discover.DiscoverRepository by lazy {
         com.villamediana.sound.discover.DiscoverRepository(youTube, appContext.filesDir.resolve("discover.json"))
     }
@@ -174,6 +174,7 @@ class AppGraph(context: Context) {
             scope = scope,
             placeNow = { places.last },
             peopleNow = { jamPeople() },
+            friends = { com.villamediana.sound.smart.FriendsTaste.of(social.friends.value.friends.map { it.favourites() }) },
         )
     }
 

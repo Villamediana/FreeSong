@@ -123,6 +123,20 @@ class SmartQueueTest {
     }
 
     @Test
+    fun `the songs of this moment come earlier, the ones of another later`() {
+        val lib = library { repeat(30) { i -> add("Artist $i") } }
+        // The first ten are this moment's, the next ten another one's, the rest as always.
+        val t = Taste(now = BASE_TIME, fit = lib.take(10).associate { it.id to 2.5 } + lib.subList(10, 20).associate { it.id to 0.4 })
+        val sums = DoubleArray(3)
+        repeat(400) { s ->
+            SmartQueue.smartShuffle(lib, t, s.toLong()).forEachIndexed { pos, track -> sums[((track.id - 1) / 10).toInt()] += pos.toDouble() }
+        }
+        assertTrue("now ${sums[0]} < always ${sums[2]} < another ${sums[1]}", sums[0] < sums[2] && sums[2] < sums[1])
+        // Without it nothing changes.
+        assertEquals(SmartQueue.smartShuffle(lib, Taste(now = BASE_TIME), 7), SmartQueue.smartShuffle(lib, Taste(now = BASE_TIME, fit = emptyMap()), 7))
+    }
+
+    @Test
     fun `tiny inputs`() {
         assertEquals(emptyList<Track>(), SmartQueue.smartShuffle(emptyList(), taste, 1))
         val one = library { add("A") }

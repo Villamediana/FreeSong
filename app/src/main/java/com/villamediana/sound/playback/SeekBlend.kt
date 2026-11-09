@@ -75,14 +75,14 @@ object SeekBlend {
 
     private const val RAMP_MS = 4
 
-    /** ExoPlayer's renderers with [blend] in the audio path (everything else as by default). */
+    /** ExoPlayer's renderers with [before] and then [blend] in the audio path (everything else as by default). */
     @OptIn(UnstableApi::class)
-    fun renderers(context: Context, blend: SeekBlendProcessor): RenderersFactory = object : DefaultRenderersFactory(context) {
+    fun renderers(context: Context, blend: SeekBlendProcessor, vararg before: AudioProcessor): RenderersFactory = object : DefaultRenderersFactory(context) {
         override fun buildAudioSink(context: Context, enableFloatOutput: Boolean, enableAudioOutputPlaybackParams: Boolean): AudioSink =
             DefaultAudioSink.Builder(context)
                 .setEnableFloatOutput(enableFloatOutput)
                 .setEnableAudioOutputPlaybackParameters(enableAudioOutputPlaybackParams)
-                .setAudioProcessors(arrayOf<AudioProcessor>(blend))
+                .setAudioProcessors(arrayOf<AudioProcessor>(*before, blend))
                 .build()
     }
 }

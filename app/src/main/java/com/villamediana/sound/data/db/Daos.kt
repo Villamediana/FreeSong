@@ -379,6 +379,18 @@ interface SharedSongDao {
 }
 
 @Dao
+interface SongSoundDao {
+    @Query("SELECT * FROM song_sounds")
+    suspend fun all(): List<SongSound>
+
+    @Query("SELECT * FROM song_sounds WHERE videoId = :videoId")
+    suspend fun of(videoId: String): SongSound?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun put(sound: SongSound)
+}
+
+@Dao
 interface PlaceDao {
     @Query("SELECT * FROM places")
     suspend fun all(): List<Place>
