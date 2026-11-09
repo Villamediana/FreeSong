@@ -263,8 +263,9 @@ data class PlaylistOnline(
 }
 
 /**
- * A song swapped with a friend (FreeSong social: the friend area has no text, only songs). Kept
- * only on the phone — the relay delivers it and forgets it.
+ * A message in the conversation with a friend: a song ([SONG]) or a text ([TEXT]), with each
+ * side's reaction. Kept only on the phone — the relay delivers it and forgets it. A text keeps the
+ * song fields empty. [deliveryId] is the relay's id, the same on both phones: reactions point at it.
  */
 @Entity(
     tableName = "shared_songs",
@@ -285,12 +286,24 @@ data class SharedSong(
     val cover: String? = null,
     val url: String? = null,
     val at: Long,
-    /** An incoming song opened in the friend's page (the outgoing ones are seen by definition). */
+    /** An incoming message seen in the conversation (the outgoing ones are seen by definition). */
     val seen: Boolean,
+    @androidx.room.ColumnInfo(defaultValue = "song") val kind: String = SONG,
+    val text: String? = null,
+    /** This phone's person's reaction (an emoji), and when it was set (the newest wins across phones). */
+    val myReaction: String? = null,
+    @androidx.room.ColumnInfo(defaultValue = "0") val myReactionAt: Long = 0,
+    /** The friend's reaction. */
+    val theirReaction: String? = null,
+    @androidx.room.ColumnInfo(defaultValue = "0") val theirReactionAt: Long = 0,
 ) {
+    val isText: Boolean get() = kind == TEXT
+
     companion object {
         const val IN = "in"
         const val OUT = "out"
+        const val SONG = "song"
+        const val TEXT = "text"
     }
 }
 

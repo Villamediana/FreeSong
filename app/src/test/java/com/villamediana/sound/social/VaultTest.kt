@@ -85,6 +85,23 @@ class VaultTest {
     }
 
     @Test
+    fun textsTravelAndEachReactionKeepsItsNewestSetting() {
+        val text = VShared("uf", "in", 9, VSong("", ""), 5, seen = false, kind = "text", text = "oi")
+        // Phone A: you reacted ❤️ at 10; phone B: you changed to 😂 at 20, and the friend's 🔥 arrived there.
+        val a = VaultData(shared = listOf(text.copy(myReaction = "❤️", myReactionAt = 10)))
+        val b = VaultData(shared = listOf(text.copy(seen = true, myReaction = "😂", myReactionAt = 20, theirReaction = "🔥", theirReactionAt = 15)))
+        val merged = VaultMerge.merge(null, a, b, 100).shared.single()
+        assertEquals("text", merged.kind)
+        assertEquals("oi", merged.text)
+        assertEquals(true, merged.seen)
+        assertEquals("😂" to 20L, merged.myReaction to merged.myReactionAt)
+        assertEquals("🔥" to 15L, merged.theirReaction to merged.theirReactionAt)
+        // Taken back later on A: that wins.
+        val back = VaultMerge.merge(null, VaultData(shared = listOf(merged.copy(myReaction = null, myReactionAt = 30))), VaultData(shared = listOf(merged)), 100).shared.single()
+        assertEquals(null to 30L, back.myReaction to back.myReactionAt)
+    }
+
+    @Test
     fun nothingNewComparesEqualSoNothingIsWritten() {
         val d = VaultData(likes = listOf(like("b"), like("a")), plays = listOf(play("x", 5), play("y", 9)))
         val once = VaultMerge.merge(null, d, VaultData(), 10)

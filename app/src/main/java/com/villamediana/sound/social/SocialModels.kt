@@ -132,7 +132,17 @@ data class UsersPage(val users: List<Profile> = emptyList(), val next: Int? = nu
 
 /** A song a friend sent while it was on its way (the relay forgets it once this phone confirms). */
 @Serializable
-data class Delivery(val id: Long, val kind: String, val from: String, val at: Long, val track: SongRef? = null)
+data class Delivery(
+    val id: Long,
+    /** "share" (a song: [track]), "text" ([text]) or "reaction" ([emoji] on the message [ref]; "" takes it back). */
+    val kind: String,
+    val from: String,
+    val at: Long,
+    val track: SongRef? = null,
+    val text: String? = null,
+    val ref: Long? = null,
+    val emoji: String? = null,
+)
 
 @Serializable
 data class Mailbox(val deliveries: List<Delivery> = emptyList(), val from: List<Profile> = emptyList(), val requests: Int = 0)

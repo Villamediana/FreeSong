@@ -351,5 +351,16 @@ interface SharedSongDao {
 
     @Query("DELETE FROM shared_songs")
     suspend fun clear()
+
+    @Query("SELECT * FROM shared_songs WHERE friendId = :friendId AND deliveryId = :deliveryId LIMIT 1")
+    suspend fun find(friendId: String, deliveryId: Long): SharedSong?
+
+    /** Your reaction (null takes it back); an older one never replaces a newer. */
+    @Query("UPDATE shared_songs SET myReaction = :emoji, myReactionAt = :at WHERE friendId = :friendId AND deliveryId = :deliveryId AND myReactionAt <= :at")
+    suspend fun setMyReaction(friendId: String, deliveryId: Long, emoji: String?, at: Long): Int
+
+    /** The friend's reaction, only on a message of your conversation with them. */
+    @Query("UPDATE shared_songs SET theirReaction = :emoji, theirReactionAt = :at WHERE friendId = :friendId AND deliveryId = :deliveryId AND theirReactionAt <= :at")
+    suspend fun setTheirReaction(friendId: String, deliveryId: Long, emoji: String?, at: Long): Int
 }
 

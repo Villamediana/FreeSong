@@ -168,6 +168,29 @@ class RelayApi(
         ShareBox.serializer(),
     ).share
 
+    /** A text to a friend (relay 1.5.0); the relay answers with its delivery id and time. */
+    fun sendText(to: String, text: String): SentShare = call(
+        "POST", "/v1/messages",
+        json(buildJsonObject {
+            put("to", to)
+            put("text", text)
+        }),
+        MessageBox.serializer(),
+    ).message
+
+    /** A reaction ([emoji], "" to take it back) to the message [ref] of the conversation with [to]. */
+    fun react(to: String, ref: Long, emoji: String) {
+        call(
+            "POST", "/v1/reactions",
+            json(buildJsonObject {
+                put("to", to)
+                put("ref", ref)
+                put("emoji", emoji)
+            }),
+            ReactionBox.serializer(),
+        )
+    }
+
     fun mailbox(): Mailbox = call("GET", "/v1/mailbox", null, Mailbox.serializer())
 
     fun ack(ids: List<Long>) {
@@ -231,6 +254,8 @@ class RelayApi(
     @Serializable internal data class StatusBox(val status: String)
     @Serializable internal data class AckBox(val removed: Int = 0)
     @Serializable internal data class ShareBox(val share: SentShare)
+    @Serializable internal data class MessageBox(val message: SentShare)
+    @Serializable internal data class ReactionBox(val reaction: SentShare)
     @Serializable internal data class JamBox(val jam: Jam)
 }
 

@@ -93,6 +93,7 @@ class VaultSyncTest {
         a.library.addOnlineToPlaylist(list, remote("oceano00001", "Oceano"))
         a.library.addToPlaylist(list, listOf(fileId))
         a.db.sharedSongs().insert(SharedSong(friendId = "ufriend", direction = SharedSong.IN, deliveryId = 7, videoId = "fromfriend1", title = "De um amigo", artist = "X", at = 5, seen = false))
+        a.db.sharedSongs().insert(SharedSong(friendId = "ufriend", direction = SharedSong.OUT, deliveryId = 8, videoId = "", title = "", artist = "", at = 6, seen = true, kind = SharedSong.TEXT, text = "ouve essa", theirReaction = "🔥", theirReactionAt = 9))
         a.genres = true to setOf("mpb", "rock")
         assertEquals(VaultSync.Outcome.SYNCED, a.vault.sync())
 
@@ -112,7 +113,15 @@ class VaultSyncTest {
         val bList = b.library.vaultPlaylists().single()
         assertEquals("Viagem", bList.playlist.name)
         assertEquals(listOf("oceano00001", "file0000001"), bList.songs.map { it.videoId })
-        assertEquals("De um amigo", b.db.sharedSongs().all().single().title)
+        assertEquals("De um amigo", b.db.sharedSongs().all().first().title)
+        val textOnB = b.db.sharedSongs().find("ufriend", 8)!!
+        assertEquals(SharedSong.TEXT to "ouve essa", textOnB.kind to textOnB.text)
+        assertEquals("🔥", textOnB.theirReaction)
+        // A reaction given on B reaches A.
+        b.db.sharedSongs().setMyReaction("ufriend", 7, "❤️", 50)
+        assertEquals(VaultSync.Outcome.SYNCED, b.vault.sync())
+        assertEquals(VaultSync.Outcome.SYNCED, a.vault.sync())
+        assertEquals("❤️", a.db.sharedSongs().find("ufriend", 7)!!.myReaction)
         assertEquals(true to setOf("mpb", "rock"), b.genres)
         // The taste learned on A is the same on B (the same listening and hearts).
         assertTrue(b.library.likedOnlineList().any { it.videoId == "oceano00001" })

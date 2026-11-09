@@ -33,8 +33,11 @@ import okhttp3.OkHttpClient
 import java.io.File
 import java.io.IOException
 
-/** The songs swapped with friends, kept on this phone only (the relay just delivers them). */
-class SharedSongs(private val dao: SharedSongDao, private val api: RelayApi) {
+/**
+ * The conversations with friends — songs, texts and reactions — kept on this phone only (the relay
+ * just delivers them and forgets).
+ */
+class SharedSongs(private val dao: SharedSongDao, private val api: RelayApi, private val now: () -> Long = System::currentTimeMillis) {
     val all: Flow<List<SharedSong>> = dao.observeAll()
 
     fun thread(friendId: String): Flow<List<SharedSong>> = dao.observeThread(friendId)
@@ -44,15 +47,47 @@ class SharedSongs(private val dao: SharedSongDao, private val api: RelayApi) {
         dao.insert(row(friendId, SharedSong.OUT, sent.id, song, sent.at, seen = true))
     }
 
-    /** A delivery kept here; true when it is new (not a second copy of one already kept). */
-    suspend fun keep(d: Delivery): Boolean {
-        val song = d.track ?: return false
-        return dao.insert(row(d.from, SharedSong.IN, d.id, song, d.at, seen = false)) > 0
+    /** A text to a friend; kept here once the relay took it. */
+    suspend fun sendText(friendId: String, text: String): Result<Unit> = runCatching {
+        val clean = text.trim()
+        require(clean.isNotEmpty()) { "empty" }
+        val sent = withContext(Dispatchers.IO) { api.sendText(friendId, clean) }
+        dao.insert(textRow(friendId, SharedSong.OUT, sent.id, clean, sent.at, seen = true))
+    }
+
+    /**
+     * Your reaction to [message] ([emoji] null takes it back): shown here at once, then sent to the
+     * friend; if it doesn't go, it is put back as it was.
+     */
+    suspend fun react(message: SharedSong, emoji: String?): Result<Unit> {
+        val at = maxOf(now(), message.myReactionAt + 1)
+        dao.setMyReaction(message.friendId, message.deliveryId, emoji, at)
+        return runCatching { withContext(Dispatchers.IO) { api.react(message.friendId, message.deliveryId, emoji.orEmpty()) } }
+            .onFailure { dao.setMyReaction(message.friendId, message.deliveryId, message.myReaction, at) }
+    }
+
+    /**
+     * A delivery kept here: a song or a text becomes a message, a reaction lands on the message it
+     * points at. True for a new message (not a second copy, not a reaction): the one to tell about.
+     */
+    suspend fun keep(d: Delivery): Boolean = when (d.kind) {
+        "share" -> d.track?.let { song -> dao.insert(row(d.from, SharedSong.IN, d.id, song, d.at, seen = false)) > 0 } ?: false
+        "text" -> d.text?.takeIf { it.isNotBlank() }?.let { text -> dao.insert(textRow(d.from, SharedSong.IN, d.id, text, d.at, seen = false)) > 0 } ?: false
+        "reaction" -> {
+            d.ref?.let { ref -> dao.setTheirReaction(d.from, ref, d.emoji?.takeIf { it.isNotEmpty() }, d.at) }
+            false
+        }
+        else -> false
     }
 
     suspend fun markSeen(friendId: String) = dao.markSeen(friendId)
 
     suspend fun clear() = dao.clear()
+
+    private fun textRow(friendId: String, direction: String, deliveryId: Long, text: String, at: Long, seen: Boolean) = SharedSong(
+        friendId = friendId, direction = direction, deliveryId = deliveryId,
+        videoId = "", title = "", artist = "", at = at, seen = seen, kind = SharedSong.TEXT, text = text,
+    )
 
     private fun row(friendId: String, direction: String, deliveryId: Long, s: SongRef, at: Long, seen: Boolean) = SharedSong(
         friendId = friendId, direction = direction, deliveryId = deliveryId,
@@ -120,8 +155,8 @@ class SocialHub(
     private val _foreground = MutableStateFlow(false)
     val foreground: StateFlow<Boolean> = _foreground
 
-    /** The friend page open right now (its songs arrive without a notification). */
-    @Volatile var openFriend: String? = null
+    /** The conversation open right now (its messages arrive without a notification). */
+    @Volatile var openChat: String? = null
 
     fun start() {
         // Unit tests (Robolectric) drive the hub themselves: no real relay from a test run.
@@ -203,10 +238,10 @@ class SocialHub(
                 if (!_foreground.value) SocialNotifier.accepted(context, event.user)
             }
             is RelayEvent.FriendRemoved -> refreshFriends()
-            is RelayEvent.SongIn -> {
+            is RelayEvent.DeliveryIn -> {
                 val fresh = songs.keep(event.delivery)
                 link.send(buildJsonObject { put("t", "ack"); putJsonArray("ids") { add(JsonPrimitive(event.delivery.id)) } })
-                if (fresh && (!_foreground.value || openFriend != event.from.id)) event.delivery.track?.let { SocialNotifier.song(context, event.from, it, _foreground.value) }
+                if (fresh && (!_foreground.value || openChat != event.from.id)) SocialNotifier.message(context, event.from, event.delivery, _foreground.value)
             }
             is RelayEvent.JamInvited -> if (!_foreground.value) SocialNotifier.jam(context, event.invite.from)
             // The profile was deleted on another phone, or this one was signed out from another:
@@ -251,7 +286,7 @@ class SocialHub(
         Unit
     }
 
-    /** Songs that arrived while the app was closed: kept here, then the relay forgets them. */
+    /** What friends sent while the app was closed: kept here, then the relay forgets it. */
     suspend fun drainMailbox(): List<Pair<Profile?, Delivery>> {
         if (!account.ready) return emptyList()
         val box = try {
@@ -265,7 +300,7 @@ class SocialHub(
         return fresh.map { senders[it.from] to it }
     }
 
-    /** Deleting the profile also takes the songs swapped with friends off this phone. */
+    /** Deleting the profile also takes the conversations with friends off this phone. */
     suspend fun deleteProfile(): Result<Unit> {
         val id = account.me.value?.id
         return account.delete {

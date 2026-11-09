@@ -32,6 +32,26 @@ export function cleanText(raw, max) {
   return chars.length > max ? chars.slice(0, max).join('').trim() : text;
 }
 
+export const MAX_MESSAGE = 2000;
+const MAX_MESSAGE_LINES = 40;
+
+/**
+ * Mensagem de conversa: como [cleanText], mas guarda as quebras de linha (no máximo uma linha em
+ * branco seguida e [MAX_MESSAGE_LINES] linhas; o resto vira espaço) e vai até [max] caracteres.
+ */
+export function cleanMessage(raw, max = MAX_MESSAGE) {
+  if (typeof raw !== 'string') return '';
+  const text = raw.toWellFormed().replace(/\r\n?/g, '\n').replace(INVISIBLE, '')
+    .replace(/(?!\n)[\p{Cc}\u2028\u2029]/gu, ' ').replace(MARK_PILE, '$1')
+    .replace(/[^\S\n]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+  const lines = text.split('\n');
+  const flat = lines.length > MAX_MESSAGE_LINES
+    ? [...lines.slice(0, MAX_MESSAGE_LINES - 1), lines.slice(MAX_MESSAGE_LINES - 1).join(' ')].join('\n')
+    : text;
+  const chars = [...flat];
+  return chars.length > max ? chars.slice(0, max).join('').trim() : flat;
+}
+
 /** Normaliza o que a pessoa digitou ("@Miguel.V " → "miguel.v"). */
 export function normalizeUsername(raw) {
   return String(raw ?? '').trim().replace(/^@/, '').toLowerCase();

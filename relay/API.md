@@ -1,7 +1,13 @@
-# FreeSong relay: API (v1.4.0)
+# FreeSong relay: API (v1.5.0)
 
 Contrato entre o app e o servidor. Endereço: `https://freesong.simplyonegoal.com`.
 Instalação do servidor: [DEPLOY.md](DEPLOY.md).
+
+## Novidades da 1.5.0
+
+**Conversa entre amigos**: além de música (`POST /v1/shares`), texto (`POST /v1/messages`) e reação
+(`POST /v1/reactions`), pela mesma caixa de entregas (o servidor esquece depois do ack). Ver
+[Conversa](#conversa). App antigo que receber `kind` desconhecido deve só confirmar e ignorar.
 
 ## Novidades da 1.1.0 (o que o app precisa adaptar)
 
@@ -126,18 +132,29 @@ Cada item de `users` é o perfil (completo se amigo) + `relation`: `none`, `frie
 `friendsSince`; `incoming`/`outgoing` são `{requestId, at, user}`. Os dois pedindo um ao outro já
 viram amigos.
 
-## Músicas compartilhadas
+## Conversa
 
 | Método e rota | Corpo | Resposta | Erros |
 |---|---|---|---|
 | `POST /v1/shares` | `{to, track}` | `201 {share: {id, at}}` | `404 unknown_user`, `403 not_friends`, `400 invalid_track`, `429 inbox_full`, `429 slow_down` |
+| `POST /v1/messages` | `{to, text}` | `201 {message: {id, at}}` | os mesmos + `400 invalid_text` |
+| `POST /v1/reactions` | `{to, ref, emoji}` | `201 {reaction: {id, at}}` | os mesmos + `400 invalid_reaction` |
 | `GET /v1/mailbox` | | `{deliveries, from, requests}` | |
 | `POST /v1/mailbox/ack` | `{ids: [número]}` | `{removed}` | |
 
 Só entre amigos. Quem está com o app aberto recebe na hora (`delivery` no WebSocket); quem não está
-busca na caixa. Entrega = `{id, kind: "share", from, at, track}`; `from` da caixa = perfis de quem
-mandou; `requests` = pedidos de amizade recebidos. **Confirme (`ack`) o que recebeu**: o servidor
-apaga na hora; o que não for confirmado some em 14 dias. O histórico fica só no celular.
+busca na caixa. Entrega = `{id, kind, from, at, ...}`:
+
+- `kind: "share"` + `track` — uma música.
+- `kind: "text"` + `text` — até 2000 caracteres; quebras de linha ficam (no máximo uma linha em branco
+  seguida, até 40 linhas); invisíveis e controles saem. Texto que fica vazio → `400 invalid_text`.
+- `kind: "reaction"` + `ref, emoji` — `ref` é o `id` da entrega reagida (o mesmo número nos dois
+  celulares: quem manda recebe o `id` na resposta, quem recebe na entrega); `emoji` é um de
+  `❤️ 😂 😮 😢 🔥 👍`, ou `""` pra tirar a reação. Uma reação por pessoa por mensagem (a nova troca a antiga).
+
+`from` da caixa = perfis de quem mandou; `requests` = pedidos de amizade recebidos. **Confirme (`ack`)
+o que recebeu**: o servidor apaga na hora; o que não for confirmado some em 14 dias. A conversa fica
+só nos celulares.
 
 ## Jam
 
@@ -175,7 +192,7 @@ Do servidor pro app:
 |---|---|---|
 | `hello` | `serverTime, pending` | ao conectar (`pending` = entregas na caixa) |
 | `pong` | `c, s` | resposta ao `ping` (`s` = hora do servidor) |
-| `delivery` | `delivery, from` | um amigo mandou música |
+| `delivery` | `delivery, from` | um amigo mandou música, texto ou reação |
 | `friend.request` | `request: {requestId, at, user}` | pedido de amizade recebido |
 | `friend.accepted` | `user` | aceitaram seu pedido |
 | `friend.removed` | `userId` | desfizeram a amizade (ou apagaram o perfil) |
@@ -212,5 +229,5 @@ Do app pro servidor (até 64 KB por mensagem; toda mensagem conta no limite de 6
 | WebSockets abertos | 5 por pessoa, 2000 no servidor |
 | Aparelhos (tokens) | 10 por perfil |
 | Pedidos de amizade | 100 em aberto; 60 novos/h; 3/dia pro mesmo perfil |
-| Músicas compartilhadas | 120/h por pessoa; 500 esperando na caixa de cada um |
+| Conversa | músicas 120/h, textos 600/h e reações 600/h por pessoa; 500 entregas esperando na caixa de cada um |
 | Jam | 30 pessoas; fila de 200; 120 mudanças/min por jam; 20 convites/h por par |

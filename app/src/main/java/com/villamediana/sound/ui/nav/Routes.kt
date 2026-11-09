@@ -33,6 +33,7 @@ import kotlinx.serialization.Serializable
 @Serializable data object SocialRoute
 @Serializable data object ProfileRoute
 @Serializable data class FriendRoute(val id: String)
+@Serializable data class ChatRoute(val id: String)
 
 /** Pages that take the whole screen: no mini player over them, the player layer is hidden. */
 fun isFullPage(route: Any): Boolean = route is VideoRoute || route == SettingsRoute || route == EqualizerRoute || route == ThemeRoute || route is RecapRoute

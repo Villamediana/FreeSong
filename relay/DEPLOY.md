@@ -188,7 +188,7 @@ Limites (por pessoa, salvo indicado):
   antigo cai) e 2000 no servidor; celular que não lê o que recebe cai em vez de acumular memória.
 - Até 10 aparelhos por perfil (o mais antigo sai); `DELETE /v1/me/sessions` tira todos os outros.
 - Amizade: 100 pedidos em aberto, 60 novos/h, o mesmo pedido no máximo 3×/dia; pedido repetido
-  não toca de novo. Músicas: 120/h, 500 esperando. Jam: 120 mudanças/min por jam, 20 convites/h de
+  não toca de novo. Conversa: músicas 120/h, textos e reações 600/h, 500 esperando. Jam: 120 mudanças/min por jam, 20 convites/h de
   uma pessoa pra outra, convite repetido não toca de novo.
 
 O que chega no celular dos outros:
@@ -199,4 +199,4 @@ O que chega no celular dos outros:
   `music.youtube.com`, `youtu.be` (capa em servidor qualquer entregaria o IP de quem abrisse).
 - Foto: JPEG conferido segmento por segmento, até 2048 px de lado; sai sem EXIF (GPS, câmera,
   miniatura da foto original), XMP, IPTC, comentários e sem nada colado depois do fim da imagem.
-- Música compartilhada só entre amigos; jam só com amigo (ou convidado por um amigo que está nela).
+- Conversa (música, texto e reação) só entre amigos; jam só com amigo (ou convidado por um amigo que está nela).

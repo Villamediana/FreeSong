@@ -287,6 +287,33 @@ test('quem estava com o app fechado busca na caixa; o ack apaga só as suas', as
   assert.equal((await api('GET', '/v1/mailbox', { token: b.token })).json.deliveries.length, 0);
 });
 
+test('conversa: texto (com quebras, limpo) e reação só entre amigos, pela mesma caixa', async () => {
+  const a = await person();
+  const b = await person();
+  assert.equal((await api('POST', '/v1/messages', { token: a.token, body: { to: b.id, text: 'oi' } })).status, 403);
+  await friends(a, b);
+  assert.equal((await api('POST', '/v1/messages', { token: a.token, body: { to: b.id, text: '  \u202E ' } })).status, 400);
+  assert.equal((await api('POST', '/v1/messages', { token: a.token, body: { to: b.id } })).status, 400);
+  const appB = await online(b);
+  const sent = await api('POST', '/v1/messages', { token: a.token, body: { to: b.id, text: 'oi!\r\n\n\n\ntudo bem?\u202E' } });
+  assert.equal(sent.status, 201);
+  const ev = await appB.next((e) => e.t === 'delivery');
+  assert.equal(ev.delivery.kind, 'text');
+  assert.equal(ev.delivery.text, 'oi!\n\ntudo bem?');
+  assert.equal(ev.delivery.id, sent.json.message.id);
+  // b reage à mensagem de a (o id da entrega é o mesmo nos dois celulares); "" tira a reação.
+  const bad = [{ ref: sent.json.message.id, emoji: '💩' }, { ref: 0, emoji: '❤️' }, { ref: '3', emoji: '❤️' }, { ref: 3 }];
+  for (const body of bad) assert.equal((await api('POST', '/v1/reactions', { token: b.token, body: { to: a.id, ...body } })).status, 400);
+  const appA = await online(a);
+  assert.equal((await api('POST', '/v1/reactions', { token: b.token, body: { to: a.id, ref: sent.json.message.id, emoji: '❤️' } })).status, 201);
+  const r = await appA.next((e) => e.t === 'delivery');
+  assert.deepEqual([r.delivery.kind, r.delivery.ref, r.delivery.emoji, r.from.id], ['reaction', sent.json.message.id, '❤️', b.id]);
+  assert.equal((await api('POST', '/v1/reactions', { token: b.token, body: { to: a.id, ref: sent.json.message.id, emoji: '' } })).status, 201);
+  assert.equal((await appA.next((e) => e.t === 'delivery' && e.delivery.emoji === '')).delivery.ref, sent.json.message.id);
+  appA.close();
+  appB.close();
+});
+
 test('entrega não buscada some depois de 14 dias', async () => {
   const a = await person();
   const b = await person();

@@ -164,8 +164,8 @@ class RelayClientTest {
         link.want(true)
         withTimeout(5_000) { link.connected.first { it } }
         a.api.share(b.me.id, song(4))
-        withTimeout(5_000) { while (events.none { it is RelayEvent.SongIn }) kotlinx.coroutines.delay(20) }
-        val inbound = events.filterIsInstance<RelayEvent.SongIn>().single()
+        withTimeout(5_000) { while (events.none { it is RelayEvent.DeliveryIn }) kotlinx.coroutines.delay(20) }
+        val inbound = events.filterIsInstance<RelayEvent.DeliveryIn>().single()
         assertEquals(a.me.id, inbound.from.id)
         assertEquals(song(4).videoId, inbound.delivery.track!!.videoId)
         link.want(false)

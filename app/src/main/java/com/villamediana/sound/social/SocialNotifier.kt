@@ -24,9 +24,9 @@ import com.villamediana.sound.SoundApplication
 import java.io.File
 import java.util.concurrent.TimeUnit
 
-/** Social notifications: a friend request, a friend accepted, a song from a friend, a jam invite. */
+/** Social notifications: a friend request, a friend accepted, a message from a friend, a jam invite. */
 object SocialNotifier {
-    /** Extra on the notification's intent: what to open ("friends", "friend:<id>", "jam"). */
+    /** Extra on the notification's intent: what to open ("friends", "friend:<id>", "chat:<id>", "jam"). */
     const val EXTRA_OPEN = "com.villamediana.sound.social.OPEN"
 
     fun request(context: Context, from: Profile) = post(
@@ -43,14 +43,20 @@ object SocialNotifier {
         "friend:${user.id}",
     )
 
-    /** One notification per friend: a new song replaces the last one from them. [quiet] while the app is open. */
-    fun song(context: Context, from: Profile, song: SongRef, quiet: Boolean = false) = post(
-        context, Notifications.ID_SOCIAL_SONG + (from.id.hashCode() and 0xffff),
-        context.getString(R.string.social_notif_song_title, from.name),
-        listOf(song.title, song.artist).filter { it.isNotBlank() }.joinToString(" · "),
-        "friend:${from.id}",
-        quiet = quiet,
-    )
+    /**
+     * One notification per friend: a new message (a song or a text) replaces the last one from
+     * them; tapping it opens the conversation. [quiet] while the app is open.
+     */
+    fun message(context: Context, from: Profile, d: Delivery, quiet: Boolean = false) {
+        val song = d.track
+        val (title, text) = when {
+            d.kind == "text" && d.text != null -> from.name to d.text
+            song != null -> context.getString(R.string.social_notif_song_title, from.name) to
+                listOf(song.title, song.artist).filter { it.isNotBlank() }.joinToString(" · ")
+            else -> return
+        }
+        post(context, Notifications.ID_SOCIAL_SONG + (from.id.hashCode() and 0xffff), title, text, "chat:${from.id}", quiet = quiet)
+    }
 
     fun jam(context: Context, from: Profile) = post(
         context, Notifications.ID_SOCIAL_JAM,
@@ -77,6 +83,7 @@ object SocialNotifier {
                 .setColor(ContextCompat.getColor(context, R.color.accent))
                 .setContentTitle(title)
                 .setContentText(text)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(text))
                 .setContentIntent(tap)
                 .setAutoCancel(true)
                 .setSilent(quiet)
@@ -96,8 +103,7 @@ class SocialWorker(appContext: Context, params: WorkerParameters) : CoroutineWor
         if (hub.account.loaded() != AccountStatus.READY) return Result.success()
         val onScreen = hub.foreground.value
         for ((from, d) in hub.drainMailbox()) {
-            val song = d.track ?: continue
-            if (!onScreen && from != null) SocialNotifier.song(applicationContext, from, song)
+            if (!onScreen && from != null) SocialNotifier.message(applicationContext, from, d)
         }
         // The vault too: what this profile's other phones did (hearts, playlists, songs) comes in.
         runCatching { hub.vault.sync() }
