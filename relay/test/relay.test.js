@@ -481,3 +481,33 @@ test('rota desconhecida, método errado e JSON quebrado', async () => {
   assert.equal(r.status, 400);
   assert.equal(r.json.error, 'bad_json');
 });
+
+test('jam: fila com música inválida é recusada inteira (o índice não aponta pra outra)', async () => {
+  const a = await person();
+  const jam = (await api('POST', '/v1/jams', { token: a.token, body: {} })).json.jam;
+  const bad = await api('POST', `/v1/jams/${jam.id}/state`, { token: a.token, body: { baseRev: jam.state.rev, queue: [track(1), { title: 'sem vídeo' }, track(3)], index: 2, positionMs: 0, playing: true } });
+  assert.equal(bad.status, 400);
+  assert.equal(relay.jams.get(jam.id).state.queue.length, 0);
+});
+
+test('jam: quem não está nela não recebe nada dela pelo WebSocket', async () => {
+  const a = await person();
+  const outsider = await person();
+  const jam = (await api('POST', '/v1/jams', { token: a.token, body: { state: { queue: [track(1)], index: 0, positionMs: 0, playing: true } } })).json.jam;
+  const app = await online(outsider);
+  app.send({ t: 'jam.state', jamId: jam.id, baseRev: jam.state.rev, index: 0, positionMs: 0, playing: false });
+  const ev = await app.next((e) => e.t === 'jam' || e.t === 'jam.ended');
+  assert.equal(ev.t, 'jam.ended');
+  assert.equal(ev.jam, undefined);
+  assert.equal(relay.jams.get(jam.id).state.playing, true);
+  app.close();
+});
+
+test('jam: convites demais não deixam jam criada pela metade', async () => {
+  const a = await person();
+  const ids = Array.from({ length: 31 }, (_, i) => `ufake${i}`);
+  const r = await api('POST', '/v1/jams', { token: a.token, body: { invite: ids } });
+  assert.equal(r.status, 400);
+  assert.equal(r.json.error, 'jam_full');
+  assert.equal((await api('GET', '/v1/jams/current', { token: a.token })).json.jam, null);
+});

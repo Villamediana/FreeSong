@@ -415,14 +415,16 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
   route('POST', /^\/v1\/jams$/, async (req) => {
     const me = auth(req);
     const b = await json(req);
-    // Confere os convites antes de criar (ninguém começa jam com quem não é amigo).
-    for (const id of Array.isArray(b.invite) ? b.invite.map(String) : []) {
-      if (id !== me.id && !store.areFriends(me.id, id)) throw new HttpError(403, 'not_friends', { userId: id });
+    // Confere os convites antes de criar (ninguém começa jam com quem não é amigo; nada fica pela metade).
+    const invite = Array.isArray(b.invite) ? [...new Set(b.invite.map(String))].filter((id) => id !== me.id) : [];
+    if (invite.length + 1 > MAX_MEMBERS) throw new HttpError(400, 'jam_full');
+    for (const id of invite) {
+      if (!store.areFriends(me.id, id)) throw new HttpError(403, 'not_friends', { userId: id });
     }
     const previous = jams.of(me.id);
     if (previous) afterLeave(jams.leave(previous, me.id), me.id);
     const jam = jams.create(me.id, b.state && typeof b.state === 'object' ? b.state : null);
-    inviteFriends(jam, me, b.invite);
+    inviteFriends(jam, me, invite);
     return { status: 201, body: { jam: jamView(jam) } };
   });
 
@@ -568,12 +570,15 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
       } else if (msg?.t === 'ack' && Array.isArray(msg.ids)) {
         store.ack(userId, msg.ids.filter(Number.isInteger).slice(0, 500));
       } else if (msg?.t === 'jam.state') {
+        // Mesmo limite dos pedidos HTTP (um app não inunda a jam dos outros).
+        if (!limits.requests.take(userId)) return;
         const me = store.user(userId);
         if (!me) return ws.close(4001, 'deleted');
         try {
           const { result, jam } = jamState(me, msg);
-          // Mudou junto com outra pessoa (ou fora da jam): fica com a versão atual.
-          if (!result.ok) ws.send(JSON.stringify({ t: 'jam', jam: jamView(jam), rejected: result.reason }));
+          // Mudou junto com outra pessoa: fica com a versão atual. Quem não está na jam não vê nada dela.
+          if (result.reason === 'not_member') ws.send(JSON.stringify({ t: 'jam.ended', jamId: jam.id }));
+          else if (!result.ok) ws.send(JSON.stringify({ t: 'jam', jam: jamView(jam), rejected: result.reason }));
         } catch (e) {
           if (e instanceof HttpError) ws.send(JSON.stringify({ t: 'jam.ended', jamId: msg.jamId }));
           else log.error?.('[relay] ws', e);

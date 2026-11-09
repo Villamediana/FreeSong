@@ -124,7 +124,10 @@ export class Jams {
     let queue = jam.state.queue;
     if (msg.queue !== undefined) {
       if (!Array.isArray(msg.queue)) return { ok: false, reason: 'invalid' };
-      queue = msg.queue.slice(0, MAX_QUEUE).map(cleanTrack).filter(Boolean);
+      // Uma música inválida no meio mudaria o que o índice aponta: a fila inteira é recusada.
+      if (msg.queue.length > MAX_QUEUE) return { ok: false, reason: 'invalid' };
+      queue = msg.queue.map(cleanTrack);
+      if (queue.some((t) => !t)) return { ok: false, reason: 'invalid' };
     }
     const index = Number.isInteger(msg.index) ? msg.index : jam.state.index;
     if (queue.length === 0 ? index !== 0 : index < 0 || index >= queue.length) return { ok: false, reason: 'invalid' };
