@@ -273,20 +273,24 @@ class HomeScreensSmokeTest {
         seed()
         compose.setContent { Host { SettingsScreen() } }
         waitForText("Qualidade do áudio")
+        // The quality says its value on the row; its choices open in a sheet.
         waitForText("Máxima")
-        // Choices and switches carry their state for TalkBack (the whole row is the control).
-        compose.onNode(hasText("Máxima") and isSelectable()).assertIsSelected()
+        // Switches carry their state for TalkBack (the whole row is the control).
         compose.onNode(hasText("Buscar letras") and isToggleable()).assertIsOn()
         compose.onNode(hasText("Baixar só no Wi-Fi") and isToggleable()).assertIsOff()
         shot("settings")
+        compose.onNodeWithText("Qualidade do áudio").performClick()
+        compose.onNode(hasText("Máxima") and isSelectable()).assertIsSelected()
+        compose.onNode(hasText("Econômica") and isSelectable()).performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("Econômica", substring = true).fetchSemanticsNodes().isNotEmpty() && compose.onAllNodes(hasText("Compatível") and isSelectable()).fetchSemanticsNodes().isEmpty() }
         compose.onAllNodes(hasScrollToKeyAction())[0].performScrollToKey("about")
         waitForText("Limpar histórico")
-        // Everything kept to spare the internet, each with its size and "Limpar".
-        compose.onAllNodes(hasScrollToKeyAction())[0].performScrollToKey("about")
-        waitForText("Guardado pra economizar internet")
-        listOf("Músicas ouvidas", "Vídeos de fundo", "Capas", "Letras e traduções", "Sugestões do Início", "Limpar tudo").forEach { waitForText(it) }
         waitForText("músicas")
         shot("settings-bottom")
+        // Everything kept to spare the internet, each with its size and "Limpar", in its sheet.
+        compose.onNodeWithText("Liberar espaço").performClick()
+        waitForText("Guardado pra economizar internet")
+        listOf("Músicas ouvidas", "Vídeos de fundo", "Capas", "Letras e traduções", "Sugestões do Início", "Limpar tudo").forEach { waitForText(it) }
     }
 
     @Test

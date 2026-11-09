@@ -1,6 +1,16 @@
 package com.villamediana.sound.ui.social
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -24,8 +34,6 @@ import androidx.compose.material.icons.rounded.ZoomIn
 import androidx.compose.material.icons.rounded.ZoomOut
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -42,7 +50,6 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
@@ -115,8 +122,9 @@ internal class FrameMath(private val width: Int, private val height: Int, privat
 }
 
 /**
- * "Ajustar foto": the picked photo behind the round frame — drag it, pinch or slide to zoom — then
- * "Aplicar" (the square around the circle becomes the photo) or "Cancelar".
+ * "Ajustar foto": the picked photo edge to edge behind a big round frame — drag it, pinch or use
+ * the bar to zoom — with a live preview of how friends will see it, then "Aplicar" (the square
+ * around the circle becomes the photo); the × leaves it as it was.
  */
 @Composable
 internal fun PhotoCropDialog(photo: ImageBitmap, onCancel: () -> Unit, onApply: (Rect) -> Unit) {
@@ -125,77 +133,148 @@ internal fun PhotoCropDialog(photo: ImageBitmap, onCancel: () -> Unit, onApply: 
     }
 }
 
+private val CropInk = Color(0xFF07080B)
+
 /** What the dialog shows (apart from the dialog, so the tests can draw it). */
 @Composable
 internal fun PhotoCropContent(photo: ImageBitmap, onCancel: () -> Unit, onApply: (Rect) -> Unit) {
     BoxWithConstraints(
         Modifier
             .fillMaxSize()
-            .background(Color(0xFF0B0C10))
+            .background(CropInk)
             .windowInsetsPadding(WindowInsets.statusBars)
             .windowInsetsPadding(WindowInsets.navigationBars),
     ) {
-        // The round frame: the screen's width (inside the gutters), at most a comfortable size.
-        val frameDp = (maxWidth - Dimens.Gutter * 2).coerceAtMost(420.dp)
-        val frame = with(LocalDensity.current) { frameDp.toPx() }
+        // The frame: the whole width (the photo runs edge to edge), at most a comfortable size.
+        val frameDp = maxWidth.coerceAtMost(460.dp)
+        // The circle sits a little inside the frame (room for its halo): the framing is the circle's.
+        val ringInset = 14.dp
+        val insetPx = with(LocalDensity.current) { ringInset.toPx() }
+        val frame = with(LocalDensity.current) { (frameDp - ringInset * 2).toPx() }
         val math = remember(photo, frame) { FrameMath(photo.width, photo.height, frame) }
         var framing by remember(math) { mutableStateOf(math.start()) }
         val cropLabel = stringResource(R.string.crop_title)
 
-        Column(Modifier.fillMaxSize().padding(horizontal = Dimens.Gutter), horizontalAlignment = Alignment.CenterHorizontally) {
-            Spacer(Modifier.height(18.dp))
-            Text(stringResource(R.string.crop_title), style = MaterialTheme.typography.headlineSmall, color = Color.White, modifier = Modifier.fillMaxWidth())
-            Spacer(Modifier.height(4.dp))
-            Text(stringResource(R.string.crop_hint), style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.fillMaxWidth())
-            Spacer(Modifier.weight(1f))
+        Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+            // × · title
+            Box(Modifier.fillMaxWidth().height(60.dp).padding(horizontal = 8.dp)) {
+                Box(
+                    Modifier
+                        .align(Alignment.CenterStart)
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .clickable(onClick = onCancel),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Rounded.Close, stringResource(R.string.cancel), tint = Color.White, modifier = Modifier.size(24.dp))
+                }
+                Text(
+                    stringResource(R.string.crop_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    color = Color.White,
+                    modifier = Modifier.align(Alignment.Center),
+                )
+            }
+            Spacer(Modifier.weight(0.6f))
             Canvas(
                 Modifier
                     .size(frameDp)
+                    .clipToBounds()
                     .semantics { contentDescription = cropLabel }
                     .pointerInput(math) {
-                        detectTransformGestures { centroid, pan, zoom, _ -> framing = math.gesture(framing, pan, zoom, centroid) }
+                        detectTransformGestures { centroid, pan, zoom, _ ->
+                            framing = math.gesture(framing, pan, zoom, centroid - Offset(insetPx, insetPx))
+                        }
                     },
             ) {
-                val sc = math.scale(framing.zoom)
-                clipRect {
-                    drawImage(
-                        photo,
-                        dstOffset = IntOffset(framing.offset.x.toInt(), framing.offset.y.toInt()),
-                        dstSize = IntSize((photo.width * sc).toInt(), (photo.height * sc).toInt()),
-                    )
-                }
-                // Dark outside the circle: what stays is what friends will see.
-                val inset = 2.dp.toPx()
-                val ring = Path().apply {
+                translate(insetPx, insetPx) { drawFramed(photo, math, framing) }
+                // Outside the circle almost dark: what stays is what friends will see.
+                val inset = insetPx
+                val circle = Rect(Offset(inset, inset), Size(size.width - 2 * inset, size.height - 2 * inset))
+                val mask = Path().apply {
                     fillType = PathFillType.EvenOdd
                     addRect(Rect(Offset.Zero, size))
-                    addOval(Rect(Offset(inset, inset), Size(size.width - 2 * inset, size.height - 2 * inset)))
+                    addOval(circle)
                 }
-                drawPath(ring, Color.Black.copy(alpha = 0.62f))
-                drawCircle(Color.White.copy(alpha = 0.9f), radius = size.minDimension / 2f - inset, style = Stroke(width = 2.dp.toPx()))
+                drawPath(mask, CropInk.copy(alpha = 0.78f))
+                drawCircle(Color.White.copy(alpha = 0.16f), radius = circle.width / 2f + 5.dp.toPx(), center = circle.center, style = Stroke(width = 8.dp.toPx()))
+                drawCircle(Color.White, radius = circle.width / 2f, center = circle.center, style = Stroke(width = 2.dp.toPx()))
             }
-            Spacer(Modifier.height(26.dp))
-            // The zoom, also by hand.
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.ZoomOut, null, tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(22.dp))
-                Slider(
-                    value = framing.zoom,
-                    onValueChange = { framing = math.zoomTo(framing, it) },
-                    valueRange = 1f..FrameMath.MAX_ZOOM,
-                    colors = SliderDefaults.colors(
-                        thumbColor = Color.White,
-                        activeTrackColor = SoundColors.Accent,
-                        inactiveTrackColor = Color.White.copy(alpha = 0.22f),
-                    ),
-                    modifier = Modifier.weight(1f).padding(horizontal = 10.dp),
+            Spacer(Modifier.height(14.dp))
+            Text(
+                stringResource(R.string.crop_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.White.copy(alpha = 0.55f),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = Dimens.Gutter),
+            )
+            Spacer(Modifier.height(22.dp))
+            Row(Modifier.fillMaxWidth().padding(horizontal = Dimens.Gutter), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.ZoomOut, null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
+                ZoomBar(
+                    value = (framing.zoom - 1f) / (FrameMath.MAX_ZOOM - 1f),
+                    onValue = { framing = math.zoomTo(framing, 1f + it * (FrameMath.MAX_ZOOM - 1f)) },
+                    modifier = Modifier.weight(1f).padding(horizontal = 14.dp),
                 )
-                Icon(Icons.Rounded.ZoomIn, null, tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(22.dp))
+                Icon(Icons.Rounded.ZoomIn, null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
             }
-            Spacer(Modifier.weight(1f))
-            Row(Modifier.fillMaxWidth().padding(bottom = 18.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                PersonButton(stringResource(R.string.cancel), onClick = onCancel, modifier = Modifier.weight(1f))
-                PersonButton(stringResource(R.string.crop_apply), onClick = { onApply(math.cut(framing)) }, filled = true, modifier = Modifier.weight(1f))
+            Spacer(Modifier.weight(0.4f))
+            // How it will look: on your card, in the friends list, in a jam.
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                listOf(64.dp, 44.dp, 30.dp).forEach { side ->
+                    Canvas(Modifier.size(side).clip(CircleShape).background(Color.White.copy(alpha = 0.08f))) {
+                        val k = size.width / frame
+                        scale(k, pivot = Offset.Zero) { drawFramed(photo, math, framing) }
+                    }
+                }
+                Spacer(Modifier.size(2.dp))
+                Text(stringResource(R.string.crop_preview), style = MaterialTheme.typography.labelMedium, color = Color.White.copy(alpha = 0.55f))
             }
+            Spacer(Modifier.height(22.dp))
+            PersonButton(
+                stringResource(R.string.crop_apply),
+                onClick = { onApply(math.cut(framing)) },
+                filled = true,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = Dimens.Gutter),
+            )
+            Spacer(Modifier.height(18.dp))
         }
+    }
+}
+
+/** The photo where the framing puts it, in frame pixels (the canvas clips it to its own shape). */
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawFramed(photo: ImageBitmap, math: FrameMath, framing: Framing) {
+    val sc = math.scale(framing.zoom)
+    drawImage(
+        photo,
+        dstOffset = IntOffset(framing.offset.x.toInt(), framing.offset.y.toInt()),
+        dstSize = IntSize((photo.width * sc).toInt(), (photo.height * sc).toInt()),
+    )
+}
+
+/** A thin bar with a round handle: drag or tap anywhere on it. [value] 0..1. */
+@Composable
+private fun ZoomBar(value: Float, onValue: (Float) -> Unit, modifier: Modifier = Modifier) {
+    BoxWithConstraints(
+        modifier
+            .height(36.dp)
+            .pointerInput(Unit) {
+                detectTapGestures { onValue((it.x / size.width).coerceIn(0f, 1f)) }
+            }
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures { change, _ -> onValue((change.position.x / size.width).coerceIn(0f, 1f)) }
+            },
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        val width = maxWidth
+        Box(Modifier.fillMaxWidth().height(4.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.18f)))
+        Box(Modifier.width(width * value).height(4.dp).clip(CircleShape).background(SoundColors.Accent))
+        Box(
+            Modifier
+                .padding(start = (width - 22.dp) * value)
+                .size(22.dp)
+                .clip(CircleShape)
+                .background(Color.White),
+        )
     }
 }

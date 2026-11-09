@@ -19,6 +19,8 @@ class SoundApplication : Application(), SingletonImageLoader.Factory {
 
     override fun onCreate() {
         super.onCreate()
+        // If the app ever closes by a crash, its first lines are kept (the update sheet shows why).
+        runCatching { com.villamediana.sound.update.ExitReport.catchCrashes(this) }
         graph = AppGraph(this)
         instance = this
         Notifications.createChannels(this)

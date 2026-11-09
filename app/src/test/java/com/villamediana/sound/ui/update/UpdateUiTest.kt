@@ -103,6 +103,16 @@ class UpdateUiTest {
     }
 
     @Test
+    fun whenTheAppClosedMidWayTheSheetSaysWhy() {
+        compose.setContent {
+            Sheet { UpdateSheetBody(UpdateState.Available(release), release, {}, {}, {}, closedNote = "erro no app (crash)") }
+        }
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("erro no app (crash)", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("O app fechou no meio da última tentativa", substring = true).assertExists()
+        shot("update-closed-note")
+    }
+
+    @Test
     fun installingBreathes() {
         compose.setContent { Sheet { UpdateSheetBody(UpdateState.Installing(release), release, {}, {}, {}) } }
         compose.onAllNodesWithText("Instalando…")[0].assertExists()

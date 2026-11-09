@@ -103,7 +103,12 @@ class UpdatesTest {
         }
     }
 
-    private fun updates(version: String = "1.12.4", code: Long = 58, enabled: Boolean = true) = Updates(
+    private fun updates(
+        version: String = "1.12.4",
+        code: Long = 58,
+        enabled: Boolean = true,
+        exitReason: (Long) -> String? = { null },
+    ) = Updates(
         scope = scope,
         source = ReleaseSource(github.client, "test"),
         downloader = ApkDownloader(github.client, "test"),
@@ -116,6 +121,7 @@ class UpdatesTest {
         clock = { now },
         onFound = { synchronized(found) { found += it.version } },
         onManual = { manualCalls++ },
+        exitReason = exitReason,
     )
 
     private fun apiCalls() = github.count { it.url.toString() == ReleaseFeed.LATEST_URL }
@@ -291,6 +297,34 @@ class UpdatesTest {
         background.awaitState { it is UpdateState.Installing }
         awaitInstalls(2)
         assertTrue(background.sheet.value)
+        assertEquals(1, apkCalls())
+    }
+
+    @Test
+    fun closedBySomethingAndroidRecordedTheSheetSaysWhyAndWaitsForTheButton() {
+        val u = updates()
+        runBlocking { u.check(manual = false) }
+        now += 60_000
+        val tappedAt = now
+        u.update()
+        u.awaitState { it is UpdateState.Installing }
+        awaitInstalls(1)
+        // The app closed on the way (a crash, say): starting again, it asks Android why since the tap.
+        var askedSince: Long? = null
+        val again = updates(exitReason = { since -> askedSince = since; "erro no app (crash)" })
+        again.awaitState { it is UpdateState.Available }
+        runBlocking { withTimeout(5_000) { again.closedNote.first { it != null } } }
+        assertEquals("erro no app (crash)", again.closedNote.value)
+        assertEquals(tappedAt, askedSince)
+        // On screen: the sheet opens with the reason and nothing goes to Android by itself.
+        again.onResume()
+        runBlocking { withTimeout(5_000) { again.sheet.first { it } } }
+        Thread.sleep(200)
+        assertEquals(1, installer.installed.size)
+        // The button: straight to Android (the APK already here), and the note goes.
+        again.update()
+        awaitInstalls(2)
+        assertEquals(null, again.closedNote.value)
         assertEquals(1, apkCalls())
     }
 

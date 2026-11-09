@@ -1,6 +1,5 @@
 package com.villamediana.sound.ui.update
 
-import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
@@ -62,7 +61,6 @@ import com.villamediana.sound.ui.components.formatBytes
 import com.villamediana.sound.ui.components.pressScale
 import com.villamediana.sound.ui.sheets.SoundSheet
 import com.villamediana.sound.update.AppRelease
-import com.villamediana.sound.update.InstallResult
 import com.villamediana.sound.update.ReleaseNotes
 import com.villamediana.sound.update.UpdateFailure
 import com.villamediana.sound.update.UpdateNotifier
@@ -92,14 +90,14 @@ fun UpdateHost(updates: Updates = SoundApplication.graph.updates) {
             updates.confirm.collect { intent ->
                 if (intent != null) {
                     updates.confirmShown()
-                    // Can't open it: a failure the sheet shows, not an endless "Instalando…".
+                    // Can't open it (no installer screen here, or Android refused): Android's "Atualizar?"
+                    // instead (or a failure the sheet shows) — never something that takes the app down.
                     try {
                         context.startActivity(intent)
-                    } catch (e: ActivityNotFoundException) {
-                        // No installer screen on this phone: Android's "Atualizar?" instead.
-                        updates.screenUnavailable(e.message)
-                    } catch (e: SecurityException) {
-                        updates.onInstallStatus(InstallResult.FAILED, e.message, null)
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        updates.screenUnavailable("${e.javaClass.simpleName}: ${e.message}")
                     }
                 }
             }
@@ -109,12 +107,14 @@ fun UpdateHost(updates: Updates = SoundApplication.graph.updates) {
     val open by updates.sheet.collectAsStateWithLifecycle()
     val state by updates.state.collectAsStateWithLifecycle()
     val auto by updates.autoReady.collectAsStateWithLifecycle()
+    val closed by updates.closedNote.collectAsStateWithLifecycle()
     val release = state.release
     if (open && release != null) {
         UpdateSheet(
             state = state,
             release = release,
             autoReady = auto == release.version,
+            closedNote = closed,
             onUpdate = updates::update,
             onAllow = {
                 val settings = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}"))
@@ -131,12 +131,13 @@ private fun UpdateSheet(
     state: UpdateState,
     release: AppRelease,
     autoReady: Boolean,
+    closedNote: String?,
     onUpdate: () -> Unit,
     onAllow: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     SoundSheet(onDismissRequest = onDismiss) {
-        UpdateSheetBody(state, release, onUpdate, onAllow, onDismiss, autoReady)
+        UpdateSheetBody(state, release, onUpdate, onAllow, onDismiss, autoReady, closedNote)
     }
 }
 
@@ -150,6 +151,8 @@ internal fun UpdateSheetBody(
     onDismiss: () -> Unit,
     /** Downloaded and waiting to install by itself when the app is not in use. */
     autoReady: Boolean = false,
+    /** The app closed in the middle of the last try, and why (Android's record). */
+    closedNote: String? = null,
 ) {
     Column(Modifier.fillMaxWidth()) {
         Row(
@@ -188,7 +191,11 @@ internal fun UpdateSheetBody(
         val note: String? = when (state) {
             is UpdateState.NeedsPermission -> stringResource(R.string.update_permission_body)
             is UpdateState.Failed -> failureText(state.reason)
-            else -> if (autoReady) stringResource(R.string.update_auto_note) else null
+            else -> when {
+                closedNote != null -> stringResource(R.string.update_closed_note, closedNote)
+                autoReady -> stringResource(R.string.update_auto_note)
+                else -> null
+            }
         }
         AnimatedContent(
             targetState = note,

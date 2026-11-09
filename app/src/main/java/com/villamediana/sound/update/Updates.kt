@@ -99,6 +99,8 @@ internal data class UpdateMemory(
     val auto: String? = null,
     /** How [installing] went to Android: "now" (the button) or "auto" (by itself, the app not in use). */
     val mode: String? = null,
+    /** When the button's update started (to find why the app closed, if it closed on the way). */
+    val attemptAt: Long? = null,
 )
 
 /** The version the new process is, right after Android replaced the app, and how it got there. */
@@ -147,6 +149,8 @@ class Updates internal constructor(
     private val onFound: (AppRelease) -> Unit = {},
     /** The button was tapped: the automatic update stands down (its worker is called off). */
     private val onManual: () -> Unit = {},
+    /** Why the app closed since [Long] (Android's own record, a crash caught here); null when it didn't. */
+    private val exitReason: (since: Long) -> String? = { null },
 ) {
     private val _state = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val state: StateFlow<UpdateState> = _state
@@ -157,6 +161,13 @@ class Updates internal constructor(
 
     /** Updates install by themselves on this phone (Android 12+, FreeSong installed by FreeSong). */
     val installsBySelf: Boolean get() = enabled && runCatching { installer.canInstallQuietly() }.getOrDefault(false)
+
+    private val _closed = MutableStateFlow<String?>(null)
+    /**
+     * The app closed in the middle of the last update and this is why (what Android recorded): the
+     * sheet shows it and waits for the button, instead of carrying on by itself, so it can be seen.
+     */
+    val closedNote: StateFlow<String?> = _closed
 
     private val _auto = MutableStateFlow<String?>(null)
     /** The version downloaded and waiting to install by itself when the app is not in use. */
@@ -184,6 +195,10 @@ class Updates internal constructor(
         }
         _state.compareAndSet(UpdateState.Idle, UpdateState.Available(release))
         if (saved.auto == release.version && ready(release) != null) _auto.value = release.version
+        // The button's update was under way and the app is starting again: it closed on the way. Why?
+        if (saved.wants == release.version && saved.attemptAt != null) {
+            _closed.value = runCatching { exitReason(saved.attemptAt) }.getOrNull()
+        }
     }
 
     /** A quiet check when the last one is older than [CHECK_EVERY_MS] (app on screen). */
@@ -279,9 +294,11 @@ class Updates internal constructor(
             // the app (the app looks "not in use" then): it's called off first.
             standDownAuto()
             // Kept until Android answers the install: if the app is closed on the way, it carries on.
+            val startedAt = clock()
             withContext(Dispatchers.IO) {
-                memory.change { it.copy(wants = release.version, resumed = if (fresh) 0 else it.resumed) }
+                memory.change { it.copy(wants = release.version, resumed = if (fresh) 0 else it.resumed, attemptAt = startedAt) }
             }
+            _closed.value = null
             if (!installer.canInstall()) {
                 _state.value = UpdateState.NeedsPermission(release)
                 return@launch
@@ -433,7 +450,10 @@ class Updates internal constructor(
                 is UpdateState.NeedsPermission -> if (installer.canInstall()) update()
                 is UpdateState.Available -> {
                     val saved = withContext(Dispatchers.IO) { memory.read() }
-                    if (saved.wants == release.version && saved.resumed < MAX_RESUMES) {
+                    if (saved.wants == release.version && _closed.value != null) {
+                        // It closed on the way: the sheet says why and waits for the button.
+                        _sheet.value = true
+                    } else if (saved.wants == release.version && saved.resumed < MAX_RESUMES) {
                         withContext(Dispatchers.IO) { memory.change { it.copy(resumed = it.resumed + 1) } }
                         _sheet.value = true
                         update(fresh = false)
