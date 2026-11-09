@@ -108,7 +108,14 @@ class RelayClientTest {
         assertTrue(a.me.username.matches(Regex("[a-z]+_\\d{3,4}")))
         val renamed = a.api.rename(name = "Ana Teste", username = "ana.teste${System.nanoTime() % 10000}")
         assertEquals("Ana Teste", renamed.name)
-        val jpeg = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte(), 0xE0.toByte()) + ByteArray(400) + byteArrayOf(0xFF.toByte(), 0xD9.toByte())
+        // A real JPEG (the relay checks the image's structure since 1.1.0; a fake one is turned down).
+        val jpeg = java.io.ByteArrayOutputStream().also { out ->
+            val img = java.awt.image.BufferedImage(64, 64, java.awt.image.BufferedImage.TYPE_INT_RGB)
+            for (y in 0 until 64) for (x in 0 until 64) img.setRGB(x, y, (x * 4 shl 16) or (y * 4 shl 8) or 0x80)
+            javax.imageio.ImageIO.write(img, "jpg", out)
+        }.toByteArray()
+        val fake = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte(), 0xE0.toByte()) + ByteArray(400) + byteArrayOf(0xFF.toByte(), 0xD9.toByte())
+        assertEquals("not_jpeg", (runCatching { a.api.setAvatar(fake) }.exceptionOrNull() as RelayException).code)
         val withPhoto = a.api.setAvatar(jpeg)
         assertNotNull(withPhoto.avatar)
         assertEquals("$base${withPhoto.avatar}", a.api.absolute(withPhoto.avatar))
@@ -213,5 +220,65 @@ class RelayClientTest {
         a.api.deleteAccount()
         val e = runCatching { a.api.me() }.exceptionOrNull() as RelayException
         assertEquals(401, e.status)
+    }
+
+    @Test
+    fun youTubeMusicCoversAndLinksTravelOthersAreLeftBehind() {
+        val a = Phone().register()
+        val b = Phone().register()
+        friends(a, b)
+        val music = song(5).copy(
+            cover = "https://lh3.googleusercontent.com/abc123=w544-h544-l90-rj",
+            url = "https://music.youtube.com/watch?v=vid00000005",
+        )
+        a.api.share(b.me.id, music)
+        // A picture from anywhere else would make the friend's phone call that server: the song goes, the picture doesn't.
+        a.api.share(b.me.id, song(6).copy(cover = "https://example.com/spy.jpg", url = "https://example.com/x"))
+        val got = b.api.mailbox().deliveries.mapNotNull { it.track }.associateBy { it.videoId }
+        assertEquals(music.cover, got.getValue(music.videoId).cover)
+        assertEquals(music.url, got.getValue(music.videoId).url)
+        assertNull(got.getValue(song(6).videoId).cover)
+        assertNull(got.getValue(song(6).videoId).url)
+    }
+
+    /** A phone with the app open; its events as they come. */
+    private fun online(p: Phone, scope: CoroutineScope): Pair<RelayLink, CopyOnWriteArrayList<RelayEvent>> {
+        val link = RelayLink(http, base, { p.token }, scope)
+        val events = CopyOnWriteArrayList<RelayEvent>()
+        scope.launch { link.events.collect { events += it } }
+        link.want(true)
+        return link to events
+    }
+
+    @Test
+    fun theLineSaysSoWhenTheProfileIsDeletedOnAnotherPhone() = runBlocking {
+        val a = Phone().register()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val (link, events) = online(a, scope)
+        withTimeout(5_000) { link.connected.first { it } }
+        // The other phone (same profile, by the code) deletes it.
+        val other = Phone().apply { token = api.recover(a.code).token }
+        other.api.deleteAccount()
+        withTimeout(5_000) { while (events.none { it == RelayEvent.SignedOut }) kotlinx.coroutines.delay(20) }
+        link.want(false)
+        scope.cancel()
+    }
+
+    @Test
+    fun theLineSaysSoWhenAnotherPhoneSignsThisOneOut() = runBlocking {
+        val a = Phone().register()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val (link, events) = online(a, scope)
+        withTimeout(5_000) { link.connected.first { it } }
+        val other = Phone().apply { token = api.recover(a.code).token }
+        // "Sign out of the other phones" on the other one.
+        http.newCall(
+            okhttp3.Request.Builder().url("$base/v1/me/sessions").delete().header("Authorization", "Bearer ${other.token}").build(),
+        ).execute().use { assertEquals(200, it.code) }
+        withTimeout(5_000) { while (events.none { it == RelayEvent.SignedOut }) kotlinx.coroutines.delay(20) }
+        assertEquals(401, (runCatching { a.api.me() }.exceptionOrNull() as RelayException).status)
+        assertEquals(a.me.id, other.api.me().id)
+        link.want(false)
+        scope.cancel()
     }
 }

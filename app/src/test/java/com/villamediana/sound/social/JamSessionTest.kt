@@ -53,11 +53,14 @@ class JamSessionTest {
             left++
             if (offline) throw java.io.IOException("offline")
         }
+        /** The live line is down (changes go over HTTP), and the relay turns them down with [refusal]. */
+        var lineDown = false
+        var refusal: RelayException? = null
         override fun sendState(jamId: String, baseRev: Long, state: JamState, withQueue: Boolean): Boolean {
             synchronized(sent) { sent += Sent(baseRev, state, withQueue) }
-            return true
+            return !lineDown
         }
-        override fun postState(jamId: String, baseRev: Long, state: JamState, withQueue: Boolean) = error("unused")
+        override fun postState(jamId: String, baseRev: Long, state: JamState, withQueue: Boolean): Jam = throw refusal ?: error("unused")
         override fun serverNow() = serverNow
     }
 
@@ -228,6 +231,22 @@ class JamSessionTest {
         waitFor { playback.value.isPlaying }
         assertFalse(session.held.value)
         assertEquals(before, relay.sent.size)
+    }
+
+    @Test
+    fun aChangeTheRelayTurnsDownGoesBackToTheJamAsItIs() {
+        runBlocking { session.join(JamInvite(Jam("j9", "host"), Profile("host", "h", "Host"))) }
+        waitFor { playback.value.isPlaying && playback.value.queueIndex == 1 }
+        Thread.sleep(250)
+        // The line is down and the relay says "too many changes" over HTTP: the jam goes on playing.
+        relay.current = CurrentJam(jam = Jam("j9", "host", state = JamState(q, 1, 30_000, true, serverNow, rev = 5)))
+        relay.lineDown = true
+        relay.refusal = RelayException(429, "slow_down")
+        assertTrue(gate!!.togglePlayPause())
+        waitFor { relay.sent.isNotEmpty() }
+        // Not a pause only this phone hears: back to the relay's jam, playing.
+        waitFor { session.jam.value!!.state.playing && playback.value.isPlaying }
+        assertEquals(5, session.jam.value!!.state.rev)
     }
 
     @Test

@@ -297,9 +297,11 @@ class JamSession(
         _jam.value = jam.copy(state = optimistic)
         scope.launch(Dispatchers.IO) {
             if (!relay.sendState(jam.id, base.rev, optimistic, withQueue)) {
-                runCatching { relay.postState(jam.id, base.rev, optimistic, withQueue) }.onSuccess { fresh ->
-                    withContext(main) { if (_jam.value?.id == fresh.id) _jam.value = fresh }
-                }
+                runCatching { relay.postState(jam.id, base.rev, optimistic, withQueue) }
+                    .onSuccess { fresh -> withContext(main) { if (_jam.value?.id == fresh.id) _jam.value = fresh } }
+                    // Refused (too many changes, a song it won't take) or unreachable: back to the jam
+                    // as the relay has it, so this phone doesn't play a version nobody else hears.
+                    .onFailure { refresh() }
             }
         }
     }
