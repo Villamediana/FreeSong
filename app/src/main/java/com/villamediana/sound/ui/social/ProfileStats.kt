@@ -89,7 +89,7 @@ class ProfileStatsViewModel : ViewModel() {
     val stats: StateFlow<NumPeriod?> = period.flatMapLatest { p ->
         val from = ListeningStatsMaker.start(p, System.currentTimeMillis())
         combine(graph.library.playEventsSince(from), graph.library.tracks, graph.library.onlinePlaysSince(from)) { events, tracks, online ->
-            NumbersOf.period(ListeningStatsMaker.build(p, events, tracks.associateBy { it.id }, online, System.currentTimeMillis()))
+            NumbersOf.period(ListeningStatsMaker.build(p, events, tracks.associateBy { it.id }, online, System.currentTimeMillis()), forFriends = false)
         }
     }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 }
