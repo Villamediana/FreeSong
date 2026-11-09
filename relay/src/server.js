@@ -18,9 +18,13 @@ import { Jams, cleanState, cleanTrack, MAX_MEMBERS } from './jams.js';
 import { cleanJpeg } from './jpeg.js';
 import { cleanDisplayName, normalizeUsername, randomIdentity } from './names.js';
 
-export const VERSION = '1.2.0';
+export const VERSION = '1.3.0';
 const JSON_LIMIT = 64 * 1024;
 const AVATAR_LIMIT = 600 * 1024;
+/** O cofre (cifrado no celular): corpo do PUT e bytes guardados. */
+const VAULT_BODY_LIMIT = 6 * 1024 * 1024;
+const VAULT_DATA_MAX = 4 * 1024 * 1024;
+const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
 /** Entrega que o celular do amigo não buscou nesse tempo é apagada. */
 export const DELIVERY_TTL_MS = 14 * 24 * 3600_000;
 /** Teto de entregas esperando por pessoa (e de pedidos de amizade em aberto por pessoa). */
@@ -126,6 +130,7 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
     jamChanges: new Limiter(120, MINUTE, clock), // por jam: cada mudança vai pra até 30 pessoas
     jamInvites: new Limiter(20, HOUR, clock), // convites de jam de uma pessoa pra outra
     jamRejects: new Limiter(10, MINUTE, clock), // por pessoa: jam devolvida pelo WebSocket quando passou do teto
+    vaultPuts: new Limiter(120, HOUR, clock), // por pessoa: cofre gravado (vários celulares sincronizando)
   };
   /** userId → sockets abertos (um por celular com o app aberto) */
   const sockets = new Map();
@@ -324,6 +329,42 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
       throw e;
     }
     return { me: fullProfile(store.user(me.id)) };
+  });
+
+  // Cofre: curtidas, histórico, playlists e músicas trocadas, cifrados no celular com uma chave que
+  // só o código de recuperação abre. Aqui é só guardado e devolvido: o servidor não lê.
+  route('GET', /^\/v1\/me\/vault$/, (req) => {
+    const me = auth(req);
+    const v = store.vault(me.id);
+    if (!v) throw new HttpError(404, 'no_vault');
+    return { rev: v.rev, key: v.key, data: Buffer.from(v.data).toString('base64'), updatedAt: v.updated_at };
+  });
+
+  route('PUT', /^\/v1\/me\/vault$/, async (req) => {
+    const me = auth(req);
+    if (!limits.vaultPuts.take(me.id)) throw new HttpError(429, 'slow_down');
+    const raw = await body(req, VAULT_BODY_LIMIT);
+    let b;
+    try {
+      b = JSON.parse(raw.toString('utf8'));
+    } catch {
+      throw new HttpError(400, 'bad_json');
+    }
+    if (!b || typeof b !== 'object' || Array.isArray(b)) throw new HttpError(400, 'bad_json');
+    if (!Number.isInteger(b.baseRev) || b.baseRev < 0) throw new HttpError(400, 'bad_vault');
+    if (typeof b.data !== 'string' || !BASE64.test(b.data)) throw new HttpError(400, 'bad_vault');
+    const data = Buffer.from(b.data, 'base64');
+    if (data.length > VAULT_DATA_MAX) throw new HttpError(413, 'too_large');
+    if (data.length < 28) throw new HttpError(400, 'bad_vault'); // nem um cabeçalho de cifra cabe
+    let key = null;
+    if (b.key !== undefined) {
+      if (typeof b.key !== 'string' || b.key.length > 512 || !BASE64.test(b.key)) throw new HttpError(400, 'bad_vault');
+      key = b.key;
+    }
+    const r = store.putVault(me.id, b.baseRev, key, data, clock());
+    if (r.stale) throw new HttpError(409, 'stale', { rev: r.rev });
+    if (r.nokey) throw new HttpError(400, 'bad_vault');
+    return { rev: r.rev };
   });
 
   // Foto: JPEG já reduzido pelo app (512 px). Sai daqui só a imagem: sem EXIF/GPS nem nada colado.

@@ -377,3 +377,25 @@ telas de perfil/amigos estavam feias. Primeiro ficaram iguais à página de arti
   gera prints com `SOUND_SHOTS=1`.
 - **@ fixo**: o app não oferece mais trocar; o relay 1.2.0 responde `400 username_fixed` a outro
   `username` no `PATCH /v1/me` (o mesmo de volta passa).
+
+## Trocar de celular com o código: o cofre (1.18.0 + relay 1.3.0, 2026-11-09)
+
+Pedido do Miguel: com o código, além do perfil e das amizades, voltar as curtidas, o aprendizado do
+gosto etc. — "não sentir diferença"; e o mesmo perfil em vários celulares. Ele tinha pedido antes que
+o servidor guardasse só o básico: por isso o cofre é **cifrado no celular**.
+- `social/Vault.kt` (puro): `VaultCrypto` — chave do cofre aleatória (AES-256-GCM, gzip), embrulhada
+  pela chave do código (PBKDF2-SHA256 60k, sal "freesong-vault:<id>"); `VaultData` (curtidas,
+  escutas de 400 dias, playlists com chave = createdAt, importadas do Spotify, músicas trocadas,
+  gêneros); `VaultMerge` — 3 vias com a base da última sync: adicionado de um lado fica, removido de
+  um lado some, playlist mudada dos dois lados fica a mais nova, escutas e músicas trocadas só somam;
+  sem base (celular recém-recuperado) junta tudo. Saída em ordem fixa (nada novo = nada gravado).
+- `social/VaultSync.kt`: lê o cofre → abre (chave guardada, senão o código) → junta → aplica no
+  celular (`PhoneVault`) → grava com `baseRev` (409 = outro celular gravou: lê de novo). A chave fica
+  no DataStore "social" (`userId:base64`), a base em `files/vault-base-<id>.json`. Código novo:
+  `SocialHub.newRecoveryCode()` → `vault.rekey()` (os outros celulares seguem com a chave que têm).
+- Quando: ao abrir o app (`bootstrap`, depois da caixa de entrada), 15 s depois de mexer em curtidas
+  ou playlists, no `SocialWorker` de hora em hora; recuperar = `bootstrap`.
+- Relay: tabela `vaults` (user_id, rev, key, data BLOB, updated_at), `GET/PUT /v1/me/vault`, some com
+  o perfil. O teste "o banco guarda só o básico" confere que o cofre é só bytes opacos.
+- Testes: `VaultTest` (cifra, junção), `VaultSyncTest` (relay de verdade + dois/três celulares:
+  recuperar traz tudo, descurtir num some no outro, escrita simultânea, código novo).

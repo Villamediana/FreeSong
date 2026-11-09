@@ -170,6 +170,17 @@ class SocialAccount(
         code
     }
 
+    /** The vault's data key on this phone, when it is [userId]'s (it opens the vault without the code). */
+    suspend fun vaultKey(userId: String): ByteArray? {
+        val saved = context.socialStore.data.first()[VAULT_KEY] ?: return null
+        val (owner, key) = saved.split(':', limit = 2).takeIf { it.size == 2 } ?: return null
+        return if (owner == userId) runCatching { VaultCrypto.unb64(key) }.getOrNull() else null
+    }
+
+    suspend fun setVaultKey(userId: String, key: ByteArray?) {
+        context.socialStore.edit { if (key == null) it.remove(VAULT_KEY) else it[VAULT_KEY] = userId + ":" + VaultCrypto.b64(key) }
+    }
+
     /** Deletes the profile on the relay (and the songs shared with friends on this phone, by [onDeleted]). */
     suspend fun delete(onDeleted: suspend () -> Unit): Result<Unit> = runCatching {
         withContext(Dispatchers.IO) { api.deleteAccount() }
@@ -273,5 +284,6 @@ class SocialAccount(
         private val OPTED_OUT = booleanPreferencesKey("opted_out")
         private val STATS_SIG = stringPreferencesKey("stats_sig")
         private val STATS_AT = longPreferencesKey("stats_at")
+        private val VAULT_KEY = stringPreferencesKey("vault_key")
     }
 }

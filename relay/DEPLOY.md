@@ -23,6 +23,12 @@ amizade. Música compartilhada não fica no servidor: ele segura a entrega só a
 confirmar que recebeu (ou 14 dias) e apaga. Jam vive só na memória. Não guarda IP, último acesso
 nem versão do app.
 
+Desde a 1.3.0 há também o **cofre** (tabela `vaults`): curtidas, histórico, playlists e músicas
+trocadas de cada pessoa, pra ela trocar de celular com o código sem perder nada. Ele chega **cifrado
+no celular** (AES-256-GCM, chave embrulhada por uma chave que só o código de recuperação gera): o
+relay guarda bytes que não consegue ler. Até 4 MB por pessoa; some junto com o perfil. Entra no
+backup do banco como o resto.
+
 ## 1. Node 22.13+
 
 Dentro do Debian:

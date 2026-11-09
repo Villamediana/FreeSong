@@ -465,10 +465,13 @@ test('WebSocket sem token, ou com token na URL, é recusado', async () => {
   }
 });
 
-test('o banco guarda só o básico: nada de histórico de músicas, IP, último acesso ou versão do app', async () => {
+test('o banco guarda só o básico: nada de histórico legível, IP, último acesso ou versão do app', async () => {
   const db = new DatabaseSync(join(dir, 'freesong.db'), { readOnly: true });
   const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'").all().map((t) => t.name).sort();
-  assert.deepEqual(tables, ['deliveries', 'friend_requests', 'friendships', 'tokens', 'users']);
+  assert.deepEqual(tables, ['deliveries', 'friend_requests', 'friendships', 'tokens', 'users', 'vaults']);
+  // O cofre é um blob opaco (cifrado no celular) e a chave dele embrulhada pelo código: nada legível.
+  const vaultCols = db.prepare('PRAGMA table_info(vaults)').all().map((c) => c.name).sort();
+  assert.deepEqual(vaultCols, ['data', 'key', 'rev', 'updated_at', 'user_id']);
   const cols = db.prepare('PRAGMA table_info(users)').all().map((c) => c.name).sort();
   assert.deepEqual(cols, ['avatar_rev', 'created_at', 'id', 'listened_ms', 'name', 'recovery_hash', 'top_json', 'username']);
   // Tokens e códigos só em hash.
@@ -781,4 +784,39 @@ test('jam: estado inválido não tira ninguém da jam; quem não foi convidado n
   assert.equal(back.jam.state.rev, rev);
   assert.equal(back.jam.state.playing, true);
   wa.close();
+});
+
+test('cofre: guardado cifrado, só o dono lê, versão evita atropelo, some com a conta', async () => {
+  const a = await person();
+  const b = await person();
+  const blob = (n) => Buffer.from(Array.from({ length: n }, (_, i) => (i * 31 + n) % 256)).toString('base64');
+  assert.equal((await api('GET', '/v1/me/vault', { token: a.token })).json.error, 'no_vault');
+  // Criar exige a chave embrulhada (sem ela ninguém abriria o cofre num celular novo).
+  let r = await api('PUT', '/v1/me/vault', { token: a.token, body: { baseRev: 0, data: blob(100) } });
+  assert.equal(r.json.error, 'bad_vault');
+  r = await api('PUT', '/v1/me/vault', { token: a.token, body: { baseRev: 0, key: blob(60), data: blob(100) } });
+  assert.equal(r.json.rev, 1);
+  let v = (await api('GET', '/v1/me/vault', { token: a.token })).json;
+  assert.deepEqual([v.rev, v.key, v.data], [1, blob(60), blob(100)]);
+  // Outro celular gravou antes: a versão velha é recusada com a atual (ele junta e tenta de novo).
+  r = await api('PUT', '/v1/me/vault', { token: a.token, body: { baseRev: 0, data: blob(120) } });
+  assert.equal(r.status, 409);
+  assert.equal(r.json.rev, 1);
+  // Sem chave nova, a chave fica; os dados mudam.
+  r = await api('PUT', '/v1/me/vault', { token: a.token, body: { baseRev: 1, data: blob(120) } });
+  assert.equal(r.json.rev, 2);
+  v = (await api('GET', '/v1/me/vault', { token: a.token })).json;
+  assert.deepEqual([v.rev, v.key, v.data], [2, blob(60), blob(120)]);
+  // Código novo: a chave é embrulhada de novo.
+  r = await api('PUT', '/v1/me/vault', { token: a.token, body: { baseRev: 2, key: blob(61), data: blob(120) } });
+  assert.equal((await api('GET', '/v1/me/vault', { token: a.token })).json.key, blob(61));
+  // Ninguém mais vê o cofre de A.
+  assert.equal((await api('GET', '/v1/me/vault', { token: b.token })).json.error, 'no_vault');
+  // Lixo e tamanho.
+  assert.equal((await api('PUT', '/v1/me/vault', { token: b.token, body: { baseRev: 0, key: blob(60), data: 'não é base64!' } })).json.error, 'bad_vault');
+  assert.equal((await api('PUT', '/v1/me/vault', { token: b.token, body: { baseRev: 0, key: blob(60), data: blob(10) } })).json.error, 'bad_vault');
+  assert.equal((await api('PUT', '/v1/me/vault', { token: b.token, body: { baseRev: 0, key: blob(60), data: blob(4 * 1024 * 1024 + 10) } })).status, 413);
+  // Apagou o perfil: o cofre vai junto.
+  await api('DELETE', '/v1/me', { token: a.token });
+  assert.equal(relay.store.vault(a.id), null);
 });

@@ -107,7 +107,7 @@ fun ProfileScreen() {
             code?.let { copy(context, it) }
             snackbar.feedback.show(res.getString(R.string.profile_copied))
         },
-        onNewCode = { scope.launch { hub.account.newRecoveryCode() } },
+        onNewCode = { scope.launch { hub.newRecoveryCode() } },
         onDelete = { deleting = true },
         sheets = {
             if (editing && p != null) EditNameSheet(p, onDismiss = { editing = false }, onSaved = { snackbar.feedback.show(res.getString(R.string.profile_saved)) })
@@ -122,7 +122,7 @@ fun ProfileScreen() {
                     }
                     SheetAction(Icons.Rounded.Key, stringResource(R.string.profile_new_code), onClick = {
                         menu = false
-                        scope.launch { hub.account.newRecoveryCode() }
+                        scope.launch { hub.newRecoveryCode() }
                     })
                     SheetAction(Icons.Rounded.SwapHoriz, stringResource(R.string.profile_use_code), onClick = { menu = false; recovering = true })
                     SheetAction(Icons.Rounded.DeleteOutline, stringResource(R.string.profile_delete), tint = SoundColors.Danger, labelColor = SoundColors.Danger, onClick = {
@@ -131,7 +131,7 @@ fun ProfileScreen() {
                     })
                 }
             }
-            if (recovering) RecoverDialog(onDismiss = { recovering = false })
+            if (recovering) RecoverDialog(onDismiss = { recovering = false }, onRecovered = { snackbar.feedback.show(res.getString(R.string.profile_recovered)) })
             if (deleting) {
                 ConfirmDialog(
                     title = stringResource(R.string.profile_delete_title),
@@ -268,7 +268,7 @@ internal fun Section(title: String, content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun RecoverDialog(onDismiss: () -> Unit) {
+private fun RecoverDialog(onDismiss: () -> Unit, onRecovered: () -> Unit) {
     val hub = SoundApplication.graph.social
     val scope = rememberCoroutineScope()
     val res = LocalContext.current.resources
@@ -297,7 +297,9 @@ private fun RecoverDialog(onDismiss: () -> Unit) {
                 scope.launch {
                     hub.account.recover(code)
                         .onSuccess {
+                            // The profile, its friends, and from its vault the hearts, playlists, listening.
                             hub.bootstrap()
+                            onRecovered()
                             onDismiss()
                         }
                         .onFailure { e -> error = res.getString(if ((e as? RelayException)?.status == 404) R.string.profile_code_wrong else R.string.profile_error_network) }

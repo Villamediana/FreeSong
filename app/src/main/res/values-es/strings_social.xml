@@ -44,12 +44,12 @@
     <string name="profile_hours">%1$s h escuchadas</string>
     <string name="profile_top">Más escuchadas</string>
     <string name="profile_recovery_title">Código de recuperación</string>
-    <string name="profile_recovery_body">Guárdalo. En un teléfono nuevo, trae tu perfil de vuelta.</string>
+    <string name="profile_recovery_body">Guárdalo. En un teléfono nuevo trae todo de vuelta: amigos, me gusta, playlists y tu gusto.</string>
     <string name="profile_copy">Copiar</string>
     <string name="profile_copied">Código copiado</string>
     <string name="profile_new_code">Generar otro</string>
     <string name="profile_use_code">Usar el código de otro teléfono</string>
-    <string name="profile_use_code_body">El perfil de este teléfono se cambia por el del código.</string>
+    <string name="profile_use_code_body">El perfil de este teléfono se cambia por el del código, con amigos, me gusta, playlists y tu gusto.</string>
     <string name="profile_code_label">Código</string>
     <string name="profile_code_wrong">Código no encontrado.</string>
     <string name="profile_use">Usar</string>
@@ -102,4 +102,5 @@
     <string name="person_hours_value">%1$s h</string>
     <string name="person_hours_label">escuchadas</string>
     <string name="profile_edit_name_action">Editar nombre</string>
+    <string name="profile_recovered">Todo de vuelta: amigos, me gusta, playlists y tu gusto.</string>
 </resources>
