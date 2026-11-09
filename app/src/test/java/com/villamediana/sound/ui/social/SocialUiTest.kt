@@ -14,6 +14,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -174,7 +175,7 @@ class SocialUiTest {
                     code = "7K2Q-M9XD-4TFA-H3RB",
                     photoBusy = false,
                     snackbar = com.villamediana.sound.ui.detail.rememberDetailSnackbar(),
-                    onPhoto = {}, onEdit = { edit++ }, onMenu = {}, onCopy = {}, onNewCode = {}, onDelete = {},
+                    onPhoto = {}, onEdit = { edit++ }, onMenu = {}, onCopy = {}, onNewCode = {}, onUseCode = {},
                 )
             }
         }
@@ -235,6 +236,27 @@ class SocialUiTest {
         compose.onNodeWithText("Adicionar").assertExists()
         compose.onNodeWithText("Vocês ainda não são amigos.").assertExists()
         shot("social-stranger")
+    }
+
+    @Test
+    fun framingAPhotoInTheCircle() {
+        var applied: androidx.compose.ui.geometry.Rect? = null
+        val photo = android.graphics.Bitmap.createBitmap(900, 600, android.graphics.Bitmap.Config.ARGB_8888).apply {
+            val c = android.graphics.Canvas(this)
+            c.drawColor(android.graphics.Color.rgb(40, 120, 110))
+            c.drawCircle(450f, 300f, 220f, android.graphics.Paint().apply { color = android.graphics.Color.rgb(230, 180, 140) })
+        }
+        compose.setContent {
+            PageHost { PhotoCropContent(photo.asImageBitmap(), onCancel = {}, onApply = { applied = it }) }
+        }
+        compose.onNodeWithText("Ajustar foto").assertExists()
+        shot("social-photo-crop")
+        compose.onNodeWithText("Aplicar").performClick()
+        val cut = applied!!
+        // Untouched: the middle square of the photo.
+        assertEquals(cut.width, cut.height, 0.5f)
+        assertEquals(150f, cut.left, 1f)
+        assertEquals(600f, cut.width, 1f)
     }
 
     @Test

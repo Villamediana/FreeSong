@@ -80,6 +80,12 @@ interface PlaylistDao {
     @Query("SELECT * FROM playlists WHERE sourceUrl = :url LIMIT 1")
     suspend fun bySourceUrl(url: String): Playlist?
 
+    @Query("SELECT * FROM playlists")
+    suspend fun all(): List<Playlist>
+
+    @Query("DELETE FROM playlist_tracks WHERE playlistId = :playlistId")
+    suspend fun clearRows(playlistId: Long)
+
     @Insert
     suspend fun insert(playlist: Playlist): Long
 
@@ -187,6 +193,14 @@ interface PlayEventDao {
 
     @Query("DELETE FROM play_events")
     suspend fun clear()
+
+    /** Listening time of the plays [prune] would remove. */
+    @Query("SELECT COALESCE(SUM(listenedMs), 0) FROM play_events WHERE playedAt < :before OR id NOT IN (SELECT id FROM play_events ORDER BY playedAt DESC, id DESC LIMIT :keep)")
+    suspend fun listenedToPrune(before: Long, keep: Int): Long
+
+    /** Drops plays older than [before] and all but the newest [keep]. */
+    @Query("DELETE FROM play_events WHERE playedAt < :before OR id NOT IN (SELECT id FROM play_events ORDER BY playedAt DESC, id DESC LIMIT :keep)")
+    suspend fun prune(before: Long, keep: Int): Int
 }
 
 @Dao
@@ -246,6 +260,9 @@ interface ImportedPlaylistDao {
     @Query("SELECT * FROM imported_playlists WHERE url = :url")
     suspend fun get(url: String): ImportedPlaylist?
 
+    @Query("SELECT * FROM imported_playlists")
+    suspend fun all(): List<ImportedPlaylist>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(playlist: ImportedPlaylist)
 
@@ -258,6 +275,9 @@ interface OnlinePlayDao {
     @Insert
     suspend fun insert(play: OnlinePlay): Long
 
+    @Insert
+    suspend fun insertAll(plays: List<OnlinePlay>)
+
     @Query("SELECT * FROM online_plays WHERE playedAt >= :since ORDER BY playedAt DESC")
     suspend fun since(since: Long): List<OnlinePlay>
 
@@ -266,6 +286,14 @@ interface OnlinePlayDao {
 
     @Query("DELETE FROM online_plays")
     suspend fun clear()
+
+    /** Listening time of the plays [prune] would remove. */
+    @Query("SELECT COALESCE(SUM(listenedMs), 0) FROM online_plays WHERE playedAt < :before OR id NOT IN (SELECT id FROM online_plays ORDER BY playedAt DESC, id DESC LIMIT :keep)")
+    suspend fun listenedToPrune(before: Long, keep: Int): Long
+
+    /** Drops plays older than [before] and all but the newest [keep]. */
+    @Query("DELETE FROM online_plays WHERE playedAt < :before OR id NOT IN (SELECT id FROM online_plays ORDER BY playedAt DESC, id DESC LIMIT :keep)")
+    suspend fun prune(before: Long, keep: Int): Int
 }
 
 @Dao
@@ -278,6 +306,9 @@ interface PlaylistOnlineDao {
 
     @Query("SELECT * FROM playlist_online WHERE playlistId = :playlistId ORDER BY position, rowId")
     suspend fun rows(playlistId: Long): List<PlaylistOnline>
+
+    @Query("DELETE FROM playlist_online WHERE playlistId = :playlistId")
+    suspend fun clearFor(playlistId: Long)
 
     @Query("SELECT * FROM playlist_online WHERE videoId = :videoId")
     suspend fun byVideo(videoId: String): List<PlaylistOnline>
@@ -311,6 +342,12 @@ interface SharedSongDao {
 
     @Query("UPDATE shared_songs SET seen = 1 WHERE friendId = :friendId AND seen = 0")
     suspend fun markSeen(friendId: String)
+
+    @Query("SELECT * FROM shared_songs ORDER BY at, id")
+    suspend fun all(): List<SharedSong>
+
+    @Query("UPDATE shared_songs SET seen = 1 WHERE direction = :direction AND deliveryId = :deliveryId")
+    suspend fun markSeenOne(direction: String, deliveryId: Long)
 
     @Query("DELETE FROM shared_songs")
     suspend fun clear()

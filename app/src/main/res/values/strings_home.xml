@@ -132,12 +132,6 @@
         <item quantity="other">artistas</item>
     </plurals>
     <string name="home_settings_stat_hours">horas</string>
-    <string name="home_settings_clear_history">Limpar histórico</string>
-    <string name="home_settings_clear_history_sub">Zera as reproduções que alimentam os mixes.</string>
-    <string name="home_settings_history_cleared">Histórico limpo</string>
-    <string name="home_settings_clear_title">Limpar histórico?</string>
-    <string name="home_settings_clear_body">O registro de reproduções usado pelos mixes e pelo aleatório inteligente recomeça do zero. Suas músicas continuam no celular.</string>
-    <string name="home_settings_clear_confirm">Limpar</string>
     <string name="home_settings_version">Versão %1$s</string>
 
     <!-- Ajustes: tocar online, equalizador; compartilhar playlist (segunda leva) -->

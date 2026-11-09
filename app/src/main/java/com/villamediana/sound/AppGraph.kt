@@ -264,6 +264,9 @@ class AppGraph(context: Context) {
             player = { player as MediaPlayerConnection },
             library = library,
             related = { videoId -> youTube.related(videoId, 25).map(com.villamediana.sound.social.SongRef::of) },
+            genres = { settings.settings.first().let { it.genresChosen to it.favoriteGenres } },
+            setGenres = { settings.setFavoriteGenres(it) },
+            listenedBefore = { settings.settings.first().listenedBeforeMs },
         )
     }
 

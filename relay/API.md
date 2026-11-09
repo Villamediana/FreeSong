@@ -85,7 +85,17 @@ Instalação do servidor: [DEPLOY.md](DEPLOY.md).
 | `PUT /v1/me/stats` | `{listenedMs, top: [música]}` | `{me}` | `400 invalid_stats` |
 | `POST /v1/me/recovery` | | `{recoveryCode}` (o antigo deixa de valer) | |
 | `DELETE /v1/me/sessions` | | `{revoked}` (só este aparelho continua) | |
-| `DELETE /v1/me` | | `{ok: true}` | |
+| `GET /v1/me/vault` | | `{rev, key, data, updatedAt}` | `404 no_vault` |
+| `PUT /v1/me/vault` | `{baseRev, data, key?}` | `{rev}` | `409 stale {rev}`, `400 bad_vault`, `413 too_large`, `429 slow_down` |
+| `DELETE /v1/me` | | `{ok: true}` (o cofre vai junto) | |
+
+**Cofre** (1.3.0): o que o app sabe da pessoa (curtidas, histórico, playlists, músicas trocadas,
+gêneros), pra ela trocar de celular ou usar vários. `data` e `key` são base64 de bytes cifrados **no
+celular**: `data` com a chave do cofre (AES-256-GCM, gzip antes), `key` = a chave do cofre cifrada
+com a chave que o código de recuperação gera (PBKDF2-SHA256, sal = id do perfil). O relay não
+consegue ler nenhum dos dois. `baseRev` = a versão lida (0 cria; aí `key` é obrigatória); se outro
+aparelho gravou antes, `409 stale` com a versão atual: leia de novo, junte e grave. `key` só vem na
+criação e depois de um código novo. `data` até 4 MB (bytes).
 
 A conta nasce sozinha na primeira abertura: mostre o `recoveryCode` (formato `7K2Q-M9XD-4TFA-H3RB`) pra
 pessoa guardar; é o único jeito de voltar ao perfil num celular novo. `@nome`: 3–20 caracteres,

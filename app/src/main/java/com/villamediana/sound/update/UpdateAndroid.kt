@@ -51,7 +51,68 @@ fun createUpdates(context: Context, http: OkHttpClient, scope: CoroutineScope): 
         enabled = !BuildConfig.DEBUG,
         onFound = { UpdateAutoWorker.schedule(app) },
         onManual = { UpdateAutoWorker.cancel(app) },
+        exitReason = { since -> ExitReport.describe(app, since) },
     )
+}
+
+/**
+ * Why the app closed, for the update sheet: Android's own record of the process ending (Android 11+:
+ * a crash, low memory, the system, a permission change…) and the last crash caught here.
+ */
+object ExitReport {
+    private const val CRASH_FILE = "last-crash.txt"
+
+    /** Keeps the next crash's first lines on disk (then lets Android handle it as always). */
+    fun catchCrashes(context: Context) {
+        val dir = context.applicationContext.filesDir
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, error ->
+            runCatching {
+                val lines = buildList {
+                    add(error.toString())
+                    error.stackTrace.take(8).forEach { add("  at $it") }
+                    error.cause?.let { c -> add("caused by $c"); c.stackTrace.take(4).forEach { add("  at $it") } }
+                }
+                File(dir, CRASH_FILE).writeText(lines.joinToString("\n").take(4_000))
+            }
+            previous?.uncaughtException(thread, error)
+        }
+    }
+
+    fun describe(context: Context, since: Long): String? {
+        val parts = mutableListOf<String>()
+        if (Build.VERSION.SDK_INT >= 30) {
+            runCatching {
+                val am = context.getSystemService(android.app.ActivityManager::class.java)
+                am?.getHistoricalProcessExitReasons(context.packageName, 0, 5)
+                    ?.firstOrNull { it.timestamp >= since }
+                    ?.let { info -> parts += reasonName(info.reason) + (info.description?.takeIf { it.isNotBlank() }?.let { " — $it" } ?: "") }
+            }
+        }
+        val crash = File(context.filesDir, CRASH_FILE).takeIf { it.isFile && it.lastModified() >= since }
+        crash?.let { f -> runCatching { f.readLines().take(3).joinToString(" ").trim() }.getOrNull()?.takeIf { it.isNotBlank() }?.let { parts += it } }
+        return parts.joinToString("\n").ifBlank { null }
+    }
+
+    private fun reasonName(reason: Int): String = when (reason) {
+        1 -> "o app saiu sozinho"
+        2 -> "encerrado pelo sistema"
+        3 -> "pouca memória"
+        4 -> "erro no app (crash)"
+        5 -> "erro nativo (crash)"
+        6 -> "travou (ANR)"
+        7 -> "falha ao iniciar"
+        8 -> "uma permissão mudou"
+        9 -> "uso excessivo de recursos"
+        10 -> "fechado (pedido do usuário ou do sistema)"
+        11 -> "forçado a parar"
+        12 -> "um processo do qual dependia caiu"
+        13 -> "outro motivo do sistema"
+        14 -> "congelado pelo sistema"
+        15 -> "o pacote mudou de estado"
+        16 -> "o app foi atualizado"
+        else -> "motivo desconhecido ($reason)"
+    }
 }
 
 /**

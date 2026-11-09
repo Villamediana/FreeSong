@@ -63,6 +63,16 @@ CREATE INDEX IF NOT EXISTS deliveries_to ON deliveries(to_id, id);
 -- Lista global (mais novos primeiro) e a faxina das entregas vencidas sem varrer a tabela toda.
 CREATE INDEX IF NOT EXISTS users_created ON users(created_at DESC, id);
 CREATE INDEX IF NOT EXISTS deliveries_created ON deliveries(created_at);
+-- Cofre: o que o celular sabe da pessoa (curtidas, histórico, playlists, músicas trocadas), cifrado
+-- NO CELULAR com uma chave que só o código de recuperação abre. Aqui ficam bytes que o servidor não
+-- consegue ler; servem pra pessoa trocar de celular (ou usar vários) sem sentir diferença.
+CREATE TABLE IF NOT EXISTS vaults (
+  user_id    TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  rev        INTEGER NOT NULL,
+  key        TEXT NOT NULL,
+  data       BLOB NOT NULL,
+  updated_at INTEGER NOT NULL
+);
 `;
 
 export const sha256 = (text) => createHash('sha256').update(text).digest('hex');
@@ -195,6 +205,31 @@ export class Store {
 
   setStats(id, { listenedMs, top }) {
     this.st('UPDATE users SET listened_ms = ?, top_json = ? WHERE id = ?').run(listenedMs, JSON.stringify(top), id);
+  }
+
+  /** O cofre da pessoa ({rev, key, data, updated_at}) ou null. */
+  vault(userId) {
+    return this.st('SELECT rev, key, data, updated_at FROM vaults WHERE user_id = ?').get(userId) ?? null;
+  }
+
+  /**
+   * Grava o cofre se [baseRev] é a versão que está aqui (0 = ainda não há): dois celulares da mesma
+   * pessoa nunca apagam o que o outro acabou de mandar. [key] (a chave do cofre, embrulhada pelo
+   * código) é obrigatória na criação e só muda quando vem. {ok, rev} | {stale, rev} | {nokey}.
+   */
+  putVault(userId, baseRev, key, data, now) {
+    return this.tx(() => {
+      const cur = this.st('SELECT rev, key FROM vaults WHERE user_id = ?').get(userId);
+      const rev = cur ? cur.rev : 0;
+      if (baseRev !== rev) return { stale: true, rev };
+      if (!cur) {
+        if (!key) return { nokey: true };
+        this.st('INSERT INTO vaults (user_id, rev, key, data, updated_at) VALUES (?, 1, ?, ?, ?)').run(userId, key, data, now);
+        return { ok: true, rev: 1 };
+      }
+      this.st('UPDATE vaults SET rev = ?, key = ?, data = ?, updated_at = ? WHERE user_id = ?').run(rev + 1, key ?? cur.key, data, now, userId);
+      return { ok: true, rev: rev + 1 };
+    });
   }
 
   deleteUser(id) {

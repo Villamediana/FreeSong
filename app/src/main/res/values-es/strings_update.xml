@@ -26,5 +26,6 @@
     <string name="settings_update_failed">No se pudo verificar ahora</string>
     <string name="settings_update_available">Actualizar a %1$s</string>
     <string name="settings_update_going">Actualizando a %1$s</string>
+    <string name="update_closed_note">La app se cerró en medio del último intento. Motivo que registró Android: %1$s</string>
     <string name="update_auto_note">Ya descargada: se instala sola cuando no estés usando FreeSong.</string>
 </resources>

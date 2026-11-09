@@ -105,6 +105,29 @@ class RelayApi(
         call("DELETE", "/v1/me", null, OkBox.serializer())
     }
 
+    /** The profile's vault (sealed on its phones: the relay can't read it); null when there is none yet. */
+    internal fun vault(): VaultBox? = try {
+        call("GET", "/v1/me/vault", null, VaultBox.serializer())
+    } catch (e: RelayException) {
+        if (e.status == 404) null else throw e
+    }
+
+    /**
+     * Writes the vault over version [baseRev] (0: the first); [key] (the data key wrapped by the
+     * code) on the first write and after a new code. The new version; 409 "stale" when another phone
+     * wrote first.
+     */
+    internal fun putVault(baseRev: Long, data: String, key: String?): Long = call(
+        "PUT",
+        "/v1/me/vault",
+        json(buildJsonObject {
+            put("baseRev", baseRev)
+            put("data", data)
+            if (key != null) put("key", key)
+        }),
+        RevBox.serializer(),
+    ).rev
+
     // ---------------------------------------------------------------- people and friends
 
     fun users(query: String, offset: Int, limit: Int = 30): UsersPage {
@@ -202,6 +225,8 @@ class RelayApi(
     @Serializable internal data class UserBox(val user: Profile)
     @Serializable internal data class CodeBox(val recoveryCode: String)
     @Serializable internal data class OkBox(val ok: Boolean = true)
+    @Serializable internal data class VaultBox(val rev: Long, val key: String, val data: String, val updatedAt: Long = 0)
+    @Serializable internal data class RevBox(val rev: Long)
     @Serializable internal data class StatusBox(val status: String)
     @Serializable internal data class AckBox(val removed: Int = 0)
     @Serializable internal data class ShareBox(val share: SentShare)

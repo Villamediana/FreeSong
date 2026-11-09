@@ -250,9 +250,111 @@ class LibraryRepository(
     /** Streamed songs with a heart. */
     suspend fun likedOnlineList(): List<LikedOnline> = likedOnlineDao.all()
 
+    // ---------------------------------------------------------------- the profile's vault
+    // What follows the person to another phone (social/VaultSync): hearts, listening, playlists.
+
+    /** Every heart that can follow the person (songs with a YouTube id) and when it was given. */
+    suspend fun vaultLikes(): List<Pair<RemoteTrack, Long>> {
+        val mine = trackDao.all().filter { it.liked && !it.videoId.isNullOrBlank() }.map { t ->
+            RemoteTrack(t.videoId!!, t.sourceUrl ?: "https://music.youtube.com/watch?v=${t.videoId}", t.title, t.artist, t.album, t.durationMs.takeIf { it > 0 }, t.coverPath?.takeIf { it.startsWith("https://") }) to (t.likedAt ?: t.addedAt)
+        }
+        val streamed = likedOnlineDao.all().map { RemoteTrack(it.videoId, it.url, it.title, it.artist, it.album, it.durationMs, it.thumbnailUrl) to it.likedAt }
+        return (mine + streamed).distinctBy { it.first.videoId }
+    }
+
+    /** A heart from another phone, with the time it was given there. */
+    suspend fun likeFromVault(song: RemoteTrack, at: Long) = db.withTransaction {
+        val have = trackDao.byVideoId(song.videoId)
+        if (have != null) trackDao.setLiked(have.id, true, at)
+        else likedOnlineDao.insert(LikedOnline.of(song).copy(likedAt = at))
+    }
+
+    /** A heart taken back on another phone. */
+    suspend fun unlikeFromVault(videoId: String) = db.withTransaction {
+        trackDao.byVideoId(videoId)?.let { trackDao.setLiked(it.id, false, null) }
+        likedOnlineDao.delete(videoId)
+    }
+
+    /** Listening from another phone (as streamed listening here). */
+    suspend fun addOnlinePlays(plays: List<OnlinePlay>) {
+        if (plays.isNotEmpty()) onlinePlayDao.insertAll(plays)
+    }
+
+    /** A playlist with its songs in order: the ones with a YouTube id, and the rows of files only on this phone. */
+    data class VaultPlaylist(val playlist: Playlist, val songs: List<RemoteTrack>, val phoneOnly: List<Long>)
+
+    suspend fun vaultPlaylists(): List<VaultPlaylist> {
+        val tracks = trackDao.all().associateBy { it.id }
+        return playlistDao.all().map { p ->
+            val local = playlistDao.rows(p.id).mapNotNull { r -> tracks[r.trackId]?.let { r.position to it } }
+            val online = playlistOnlineDao.rows(p.id).map { it.position to it }
+            val ordered = (local.map { it.first to (it.second as Any) } + online.map { it.first to (it.second as Any) }).sortedBy { it.first }.map { it.second }
+            val songs = ordered.mapNotNull { item ->
+                when (item) {
+                    is Track -> item.videoId?.takeIf { it.isNotBlank() }?.let { v ->
+                        RemoteTrack(v, item.sourceUrl ?: "https://music.youtube.com/watch?v=$v", item.title, item.artist, item.album, item.durationMs.takeIf { it > 0 }, item.coverPath?.takeIf { it.startsWith("https://") })
+                    }
+                    is PlaylistOnline -> RemoteTrack(item.videoId, item.url, item.title, item.artist, item.album, item.durationMs, item.thumbnailUrl, item.catalog)
+                    else -> null
+                }
+            }
+            val phoneOnly = ordered.filterIsInstance<Track>().filter { it.videoId.isNullOrBlank() }.map { it.id }
+            VaultPlaylist(p, songs, phoneOnly)
+        }
+    }
+
+    /**
+     * A playlist as another phone has it: made here if missing (with its creation time, the same on
+     * every phone), its songs replaced otherwise — the files only on this phone stay, at the end.
+     */
+    suspend fun putPlaylistFromVault(
+        createdAt: Long,
+        updatedAt: Long,
+        name: String,
+        description: String?,
+        sourceUrl: String?,
+        pinned: Boolean,
+        songs: List<RemoteTrack>,
+        existingId: Long?,
+    ) = db.withTransaction {
+        val id = existingId ?: playlistDao.insert(Playlist(name = name, description = description, sourceUrl = sourceUrl, pinned = pinned, createdAt = createdAt, updatedAt = updatedAt))
+        val keep = if (existingId != null) playlistDao.rows(id).filter { r -> trackDao.get(r.trackId)?.videoId.isNullOrBlank() }.map { it.trackId } else emptyList()
+        playlistDao.clearRows(id)
+        playlistOnlineDao.clearFor(id)
+        var pos = 0
+        for (s in songs) {
+            val have = trackDao.byVideoId(s.videoId)
+            if (have != null) playlistDao.insertRows(listOf(PlaylistTrack(playlistId = id, trackId = have.id, position = pos++)))
+            else playlistOnlineDao.insert(PlaylistOnline.of(id, s, pos++))
+        }
+        if (keep.isNotEmpty()) playlistDao.insertRows(keep.map { PlaylistTrack(playlistId = id, trackId = it, position = pos++) })
+        val p = playlistDao.get(id) ?: return@withTransaction
+        // Its time stays the other phone's (otherwise each phone would think it changed it).
+        playlistDao.update(p.copy(name = name, description = description, pinned = pinned, sourceUrl = sourceUrl, updatedAt = updatedAt))
+    }
+
+    suspend fun deletePlaylistFromVault(id: Long) = playlistDao.delete(id)
+
+    suspend fun importedList(): List<ImportedPlaylist> = importedDao.all()
+
+    suspend fun putImportedFromVault(p: ImportedPlaylist) = importedDao.upsert(p)
+
     suspend fun clearHistory() = db.withTransaction {
         eventDao.clear()
         onlinePlayDao.clear()
+    }
+
+    /**
+     * Keeps the listening history from growing forever: [HISTORY_KEPT_MS] back (the mixes, the taste
+     * and January's look at the year before all read less than that) and at most [HISTORY_MAX_ROWS]
+     * of each kind. Returns the listening time removed (the profile's hours keep counting it).
+     */
+    suspend fun pruneHistory(now: Long = System.currentTimeMillis()): Long = db.withTransaction {
+        val before = now - HISTORY_KEPT_MS
+        val removed = eventDao.listenedToPrune(before, HISTORY_MAX_ROWS) + onlinePlayDao.listenedToPrune(before, HISTORY_MAX_ROWS)
+        eventDao.prune(before, HISTORY_MAX_ROWS)
+        onlinePlayDao.prune(before, HISTORY_MAX_ROWS)
+        removed
     }
 
     // ---------------------------------------------------------------- playlists
@@ -586,6 +688,11 @@ class LibraryRepository(
     }.flowOn(Dispatchers.Default)
 
     companion object {
+        /** How far back the listening is kept on the phone (the same as the profile's vault). */
+        const val HISTORY_KEPT_MS = com.villamediana.sound.social.VaultMerge.PLAYS_KEPT_MS
+        /** At most this many plays of each kind (library, streamed), the newest. */
+        const val HISTORY_MAX_ROWS = 50_000
+
         fun groupAlbums(all: List<Track>): List<AlbumSummary> =
             all.filter { it.hasAlbum }.groupBy { it.albumKey!!.normalized }.values.map { group ->
                 val first = group.minWith(compareBy<Track>({ it.trackNumber ?: Int.MAX_VALUE }, { it.addedAt }))

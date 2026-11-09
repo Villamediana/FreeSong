@@ -44,12 +44,12 @@
     <string name="profile_hours">%1$s h ouvidas</string>
     <string name="profile_top">Mais ouvidas</string>
     <string name="profile_recovery_title">Código de recuperação</string>
-    <string name="profile_recovery_body">Guarde. Num celular novo, ele traz seu perfil de volta.</string>
+    <string name="profile_recovery_body">Guarde. Num celular novo ele traz tudo de volta: amigos, curtidas, playlists e o seu gosto.</string>
     <string name="profile_copy">Copiar</string>
     <string name="profile_copied">Código copiado</string>
     <string name="profile_new_code">Gerar outro</string>
     <string name="profile_use_code">Usar o código de outro celular</string>
-    <string name="profile_use_code_body">O perfil deste celular é trocado pelo do código.</string>
+    <string name="profile_use_code_body">O perfil deste celular é trocado pelo do código, com amigos, curtidas, playlists e o seu gosto.</string>
     <string name="profile_code_label">Código</string>
     <string name="profile_code_wrong">Código não encontrado.</string>
     <string name="profile_use">Usar</string>
@@ -102,4 +102,9 @@
     <string name="person_hours_value">%1$s h</string>
     <string name="person_hours_label">ouvidas</string>
     <string name="profile_edit_name_action">Editar nome</string>
+    <string name="profile_recovered">Tudo de volta: amigos, curtidas, playlists e o seu gosto.</string>
+    <string name="crop_title">Ajustar foto</string>
+    <string name="crop_hint">Arraste pra enquadrar · dois dedos ou a barra pra aproximar</string>
+    <string name="crop_apply">Aplicar</string>
+    <string name="crop_preview">Assim seus amigos veem</string>
 </resources>

@@ -83,8 +83,13 @@ Não há e-mail, senha, rastreamento nem anúncio. Biblioteca, histórico e ajus
 O servidor do FreeSong guarda só o básico para os amigos funcionarem: o perfil (nome, @, foto,
 data de entrada, horas ouvidas e as cinco mais ouvidas, que só os amigos veem) e as amizades. As
 músicas trocadas com os amigos ficam em cada celular: o servidor só segura a entrega até o
-celular do amigo receber e apaga. A jam existe só enquanto acontece. O perfil pode ser apagado a
-qualquer momento em Amigos › Editar.
+celular do amigo receber e apaga. A jam existe só enquanto acontece.
+
+Para trocar de celular (ou usar o mesmo perfil em vários), o código de recuperação traz tudo de
+volta: curtidas, playlists, o histórico de onde o app aprende o seu gosto, gêneros e as músicas
+trocadas. Isso viaja num **cofre cifrado no próprio celular** (AES-256-GCM) com uma chave que só o
+código abre: o servidor guarda os bytes e não consegue ler nada. O perfil, com o cofre, pode ser
+apagado a qualquer momento no Perfil.
 
 O app só acessa a internet para o que precisa, sempre por HTTPS:
 

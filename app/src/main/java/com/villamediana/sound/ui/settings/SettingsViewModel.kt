@@ -67,9 +67,6 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
         _caches.value = graph.caches.sizes()
     }
 
-    private val _historyCleared = MutableStateFlow(false)
-    val historyCleared: StateFlow<Boolean> = _historyCleared
-
     fun setQuality(q: AudioQuality) = launch { store.setAudioQuality(q) }
     fun setWifiOnly(v: Boolean) = launch { store.setWifiOnly(v) }
     fun setSmartDownloads(v: Boolean) = launch { store.setSmartDownloads(v) }
@@ -79,11 +76,6 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     fun setLikeDownloads(v: Boolean) = launch { store.setLikeDownloads(v) }
     fun setShowHome(v: Boolean) = launch { store.setShowHome(v) }
     fun setTheme(v: com.villamediana.sound.data.ThemeMode) = launch { store.setTheme(v) }
-
-    fun clearHistory() = launch {
-        library.clearHistory()
-        _historyCleared.value = true
-    }
 
     private fun launch(block: suspend () -> Unit) {
         viewModelScope.launch { block() }

@@ -99,6 +99,8 @@ class SocialWorker(appContext: Context, params: WorkerParameters) : CoroutineWor
             val song = d.track ?: continue
             if (!onScreen && from != null) SocialNotifier.song(applicationContext, from, song)
         }
+        // The vault too: what this profile's other phones did (hearts, playlists, songs) comes in.
+        runCatching { hub.vault.sync() }
         val page = hub.refreshFriends() ?: return Result.success()
         val seenFile = File(applicationContext.filesDir, "social-requests-notified.txt")
         val seen = runCatching { seenFile.readLines().toSet() }.getOrDefault(emptySet())

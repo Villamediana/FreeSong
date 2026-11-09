@@ -27,4 +27,10 @@
     <string name="settings_cache_clear_all">Limpiar todo</string>
     <string name="sheet_album_not_found">Álbum no encontrado.</string>
     <string name="sheet_artist_not_found">Artista no encontrado.</string>
+    <string name="settings_group_sound">Sonido</string>
+    <string name="settings_off">Apagado</string>
+    <string name="settings_free_space">Liberar espacio</string>
+    <string name="settings_free_space_value">%1$s guardados para ahorrar datos</string>
+    <string name="settings_parallel_short">Cuántas descargas juntas</string>
+    <string name="settings_parallel_title">A la vez</string>
 </resources>

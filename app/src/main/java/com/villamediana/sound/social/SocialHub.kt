@@ -1,3 +1,5 @@
+@file:OptIn(kotlinx.coroutines.FlowPreview::class)
+
 package com.villamediana.sound.social
 
 import android.content.Context
@@ -16,7 +18,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -56,6 +61,9 @@ class SharedSongs(private val dao: SharedSongDao, private val api: RelayApi) {
     )
 }
 
+/** A heart or a playlist changed: the vault syncs this long after the last change. */
+private const val VAULT_AFTER_MS = 15_000L
+
 /**
  * FreeSong's social side, for the whole app: the profile (made by itself), friends, songs swapped
  * with them and the jam. The live line to the relay is up while the app is on screen or a jam is on.
@@ -69,6 +77,11 @@ class SocialHub(
     private val player: () -> MediaPlayerConnection,
     private val library: LibraryRepository,
     private val related: suspend (String) -> List<SongRef>,
+    /** The genres picked on the Home (chosen?, ids), and setting them: they follow the profile too. */
+    genres: suspend () -> Pair<Boolean, Set<String>> = { false to emptySet() },
+    setGenres: suspend (Set<String>) -> Unit = {},
+    /** Listening time already pruned from the history: the profile's hours still count it. */
+    private val listenedBefore: suspend () -> Long = { 0L },
 ) {
     val baseUrl: String = BuildConfig.RELAY_URL
     val account = SocialAccount(context, scope) { token -> RelayApi(http, baseUrl, token) }
@@ -84,6 +97,20 @@ class SocialHub(
         me = { account.me.value?.id },
         related = related,
         setGate = { player().gate = it },
+    )
+
+    /**
+     * The profile's vault: hearts, listening (the taste is learned from it), playlists, songs
+     * swapped and genres follow the profile to any phone with its code, sealed so the relay can't
+     * read them; several phones of one profile stay in step.
+     */
+    val vault = VaultSync(
+        dir = context.filesDir,
+        api = account.api,
+        local = PhoneVault(library, dao, genres, setGenres),
+        profile = { account.me.value?.id?.let { it to account.recoveryCode.value } },
+        loadKey = { account.vaultKey(it) },
+        saveKey = { id, key -> account.setVaultKey(id, key) },
     )
 
     private val _friends = MutableStateFlow(readFriends())
@@ -117,6 +144,14 @@ class SocialHub(
         }
         // One event that goes wrong doesn't stop the ones after it.
         scope.launch { link.events.collect { quietly { handle(it) } } }
+        // A heart or a playlist changed here: the vault follows a moment later (the other phones see it).
+        scope.launch {
+            combine(library.likedVideoIds, library.playlists.map { lists -> lists.map { it.id to it.playlist.updatedAt } }) { a, b -> a to b }
+                .distinctUntilChanged()
+                .drop(1)
+                .debounce(VAULT_AFTER_MS)
+                .collect { if (account.ready) quietly { vault.sync() } }
+        }
     }
 
     /** Runs [block]; a failure in it is dropped (the next foreground or event tries again). */
@@ -142,7 +177,14 @@ class SocialHub(
         quietly { refreshFriends() }
         quietly { drainMailbox() }
         quietly { jam.refresh() }
+        // The vault after the mailbox (the songs that just came in go with it) and before the stats.
+        quietly { vault.sync() }
         quietly { syncStats() }
+    }
+
+    /** A new recovery code: shown here, and the vault's key wrapped by it (the old code opens nothing). */
+    suspend fun newRecoveryCode(): Result<String> = account.newRecoveryCode().onSuccess { code ->
+        quietly { vault.rekey(code) }
     }
 
     private suspend fun handle(event: RelayEvent) {
@@ -224,11 +266,15 @@ class SocialHub(
     }
 
     /** Deleting the profile also takes the songs swapped with friends off this phone. */
-    suspend fun deleteProfile(): Result<Unit> = account.delete {
-        jam.forget()
-        songs.clear()
-        _friends.value = FriendsPage()
-        withContext(Dispatchers.IO) { friendsFile().delete() }
+    suspend fun deleteProfile(): Result<Unit> {
+        val id = account.me.value?.id
+        return account.delete {
+            jam.forget()
+            songs.clear()
+            id?.let { vault.forget(it) }
+            _friends.value = FriendsPage()
+            withContext(Dispatchers.IO) { friendsFile().delete() }
+        }
     }
 
     /** Hours listened and the five most heard (all time, library and online), for friends to see. */
@@ -241,7 +287,7 @@ class SocialHub(
             Recaps.build(0, events, tracks, online, span = Long.MIN_VALUE until Long.MAX_VALUE)
         }
         val top = recap.topSongs.mapNotNull { s -> s.track?.let(SongRef::of) ?: s.remote?.let(SongRef::of) }
-        account.syncStats(recap.listenedMs, top)
+        account.syncStats(recap.listenedMs + listenedBefore(), top)
     }
 
     private fun friendsFile() = File(context.filesDir, "social-friends.json")
