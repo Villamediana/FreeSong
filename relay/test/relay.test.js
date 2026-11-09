@@ -774,5 +774,10 @@ test('jam: estado inválido não tira ninguém da jam; quem não foi convidado n
   }
   assert.equal(status, 429);
   assert.equal(r.json.error, 'slow_down');
+  // Pelo WebSocket, no teto: volta a jam como está (o celular desfaz a mudança que ninguém ouviu).
+  wa.send({ t: 'jam.state', jamId: jam.id, baseRev: rev, index: 0, positionMs: 99, playing: false });
+  const back = await wa.next((e) => e.t === 'jam' && e.rejected === 'slow_down');
+  assert.equal(back.jam.state.rev, rev);
+  assert.equal(back.jam.state.playing, true);
   wa.close();
 });

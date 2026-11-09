@@ -24,8 +24,9 @@ Instalação do servidor: [DEPLOY.md](DEPLOY.md).
    revogado fecha com **4003**. Ver "Códigos de fechamento": 4002 e 4003 **não** devem reconectar em
    laço.
 7. **Jam**: `POST /v1/jams` com `state` inválido → `400 invalid_state` (antes criava a jam vazia).
-   Teto de 120 mudanças por minuto por jam: `POST /state` → `429 slow_down`; pelo WebSocket a mudança
-   é ignorada sem resposta. Convidar quem já foi convidado não manda `jam.invite` de novo.
+   Teto de 120 mudanças por minuto por jam: `POST /state` → `429 slow_down`; pelo WebSocket volta
+   `{t:"jam", jam, rejected:"slow_down"}` (até 10 por minuto por pessoa; depois disso, sem resposta).
+   Convidar quem já foi convidado não manda `jam.invite` de novo.
 8. **Amizade**: pedir de novo quem já tem pedido seu em aberto devolve o mesmo `requestId` sem novo
    aviso. Pedir/cancelar/pedir tem limite (3 vezes por dia pro mesmo perfil; 60 pedidos novos por
    hora) → `429 slow_down`.

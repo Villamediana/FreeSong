@@ -125,6 +125,7 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
     shares: new Limiter(120, HOUR, clock), // músicas mandadas por pessoa
     jamChanges: new Limiter(120, MINUTE, clock), // por jam: cada mudança vai pra até 30 pessoas
     jamInvites: new Limiter(20, HOUR, clock), // convites de jam de uma pessoa pra outra
+    jamRejects: new Limiter(10, MINUTE, clock), // por pessoa: jam devolvida pelo WebSocket quando passou do teto
   };
   /** userId → sockets abertos (um por celular com o app aberto) */
   const sockets = new Map();
@@ -729,10 +730,14 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
       if (!me) return ws.close(4001, 'deleted');
       try {
         const { result, jam } = jamState(me, msg);
-        // Mudou junto com outra pessoa: fica com a versão atual. Quem não está na jam não vê nada dela.
-        // Passou do teto da jam: a mudança é ignorada (sem devolver a fila inteira, que é o que pesa).
+        // Recusada (mudou junto com outra pessoa, inválida, passou do teto): devolve a versão atual,
+        // senão o celular fica tocando a mudança dele, que ninguém mais ouve. A resposta leva a fila
+        // inteira, então no teto ela também tem limite (quem insiste depois disso não ganha banda).
+        // Quem não está na jam não vê nada dela.
         if (result.reason === 'not_member') send(ws, JSON.stringify({ t: 'jam.ended', jamId: jam.id }));
-        else if (!result.ok && result.reason !== 'slow_down') send(ws, JSON.stringify({ t: 'jam', jam: jamView(jam), rejected: result.reason }));
+        else if (!result.ok && (result.reason !== 'slow_down' || limits.jamRejects.take(userId))) {
+          send(ws, JSON.stringify({ t: 'jam', jam: jamView(jam), rejected: result.reason }));
+        }
       } catch (e) {
         if (!(e instanceof HttpError)) throw e;
         send(ws, JSON.stringify({ t: 'jam.ended', jamId: String(msg.jamId ?? '').slice(0, 40) }));
