@@ -12,8 +12,25 @@ const RESERVED = new Set([
   'admin', 'administrador', 'root', 'freesong', 'suporte', 'support', 'soporte', 'oficial', 'official',
   'moderador', 'moderator', 'sistema', 'system', 'null', 'undefined', 'me', 'eu', 'yo',
 ]);
+/** Ninguém se passa pela equipe: "freesong_oficial", "admin.br", "suporte2"... */
+const RESERVED_PARTS = ['freesong', 'admin', 'suporte', 'support', 'soporte', 'moderador', 'moderator'];
 
 const PATTERN = /^[a-z][a-z0-9_.]{2,19}$/;
+
+// Invisíveis e de direção do texto: com eles dá pra esconder ou inverter parte de um nome
+// (U+202E faz "exe.png" aparecer como "gnp.exe"), ou ter nome em branco. ZWJ/ZWNJ ficam (emoji de familia, escritas indianas).
+const INVISIBLE = /[\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180E\u200B\u200E\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\u3164\uFEFF\uFFA0]|[\u{E0000}-\u{E007F}]/gu;
+const CONTROL = /[\p{Cc}\u2028\u2029]/gu;
+// "Zalgo": acento empilhado sem fim invade a linha de cima na tela dos outros.
+const MARK_PILE = /(\p{M}{4})\p{M}+/gu;
+
+/** Texto que vai pra tela de outra pessoa: uma linha, sem invisíveis, até [max] caracteres. */
+export function cleanText(raw, max) {
+  if (typeof raw !== 'string') return '';
+  const text = raw.toWellFormed().replace(INVISIBLE, '').replace(CONTROL, ' ').replace(MARK_PILE, '$1').replace(/\s+/g, ' ').trim();
+  const chars = [...text];
+  return chars.length > max ? chars.slice(0, max).join('').trim() : text;
+}
 
 /** Normaliza o que a pessoa digitou ("@Miguel.V " → "miguel.v"). */
 export function normalizeUsername(raw) {
@@ -24,7 +41,7 @@ export function normalizeUsername(raw) {
 export function usernameProblem(name) {
   if (!PATTERN.test(name)) return 'invalid';
   if (name.endsWith('.') || name.includes('..')) return 'invalid';
-  if (RESERVED.has(name)) return 'reserved';
+  if (RESERVED.has(name) || RESERVED_PARTS.some((part) => name.includes(part))) return 'reserved';
   return null;
 }
 
@@ -38,9 +55,9 @@ export function randomIdentity() {
   };
 }
 
-/** Nome de exibição: 1–40 caracteres, sem quebras nem espaços nas pontas. */
+/** Nome de exibição: 1–40 caracteres, sem quebras, invisíveis nem espaços nas pontas. */
 export function cleanDisplayName(raw) {
-  const name = String(raw ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
+  const name = cleanText(raw, 41);
   if (name.length < 1 || [...name].length > 40) return null;
   return name;
 }

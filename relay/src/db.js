@@ -8,8 +8,14 @@ import { createHash, randomBytes } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 
+// WAL + synchronous NORMAL: seguro contra corrupção e bem mais rápido no armazenamento do celular
+// (numa queda de energia perde no máximo a última escrita). busy_timeout: um backup rodando
+// (sqlite3 .backup) faz a escrita esperar um instante em vez de falhar.
 const SCHEMA = `
 PRAGMA journal_mode = WAL;
+PRAGMA synchronous = NORMAL;
+PRAGMA busy_timeout = 2000;
+PRAGMA journal_size_limit = 16777216;
 PRAGMA foreign_keys = ON;
 CREATE TABLE IF NOT EXISTS users (
   id            TEXT PRIMARY KEY,
@@ -54,9 +60,15 @@ CREATE TABLE IF NOT EXISTS deliveries (
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS deliveries_to ON deliveries(to_id, id);
+-- Lista global (mais novos primeiro) e a faxina das entregas vencidas sem varrer a tabela toda.
+CREATE INDEX IF NOT EXISTS users_created ON users(created_at DESC, id);
+CREATE INDEX IF NOT EXISTS deliveries_created ON deliveries(created_at);
 `;
 
 export const sha256 = (text) => createHash('sha256').update(text).digest('hex');
+
+/** Aparelhos (tokens) por pessoa; o mais antigo sai quando entra um novo além disso. */
+export const MAX_TOKENS = 10;
 
 /** Token de acesso: 32 bytes aleatórios; no banco só o hash. */
 export const newToken = () => randomBytes(32).toString('base64url');
@@ -137,10 +149,24 @@ export class Store {
     return this.st('SELECT * FROM users WHERE recovery_hash = ?').get(sha256(norm)) ?? null;
   }
 
+  /** Celular novo (recuperação). Guarda só os [MAX_TOKENS] mais novos: aparelho antigo esquecido cai sozinho. */
   addToken(userId, now) {
     const token = newToken();
-    this.st('INSERT INTO tokens (hash, user_id, created_at) VALUES (?, ?, ?)').run(sha256(token), userId, now);
+    this.tx(() => {
+      this.st('INSERT INTO tokens (hash, user_id, created_at) VALUES (?, ?, ?)').run(sha256(token), userId, now);
+      this.st(`DELETE FROM tokens WHERE user_id = ? AND hash NOT IN
+               (SELECT hash FROM tokens WHERE user_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?)`).run(userId, userId, MAX_TOKENS);
+    });
     return token;
+  }
+
+  tokenAlive(hash) {
+    return !!hash && !!this.st('SELECT 1 FROM tokens WHERE hash = ?').get(hash);
+  }
+
+  /** "Sair dos outros aparelhos": apaga todos os tokens da pessoa menos o [keepHash]. */
+  revokeOtherTokens(userId, keepHash) {
+    return Number(this.st('DELETE FROM tokens WHERE user_id = ? AND hash != ?').run(userId, keepHash).changes);
   }
 
   newRecovery(userId) {
@@ -210,9 +236,10 @@ export class Store {
     });
   }
 
+  /** Desfaz a amizade; true se eram amigos. */
   unfriend(x, y) {
     const [a, b] = x < y ? [x, y] : [y, x];
-    this.st('DELETE FROM friendships WHERE a = ? AND b = ?').run(a, b);
+    return Number(this.st('DELETE FROM friendships WHERE a = ? AND b = ?').run(a, b).changes) > 0;
   }
 
   request(id) {
@@ -254,6 +281,10 @@ export class Store {
     }
     for (const id of ids) if (friends.has(id)) out.set(id, { relation: 'friends' });
     return out;
+  }
+
+  incomingCount(id) {
+    return this.st('SELECT count(*) AS n FROM friend_requests WHERE to_id = ?').get(id).n;
   }
 
   outgoingCount(id) {
