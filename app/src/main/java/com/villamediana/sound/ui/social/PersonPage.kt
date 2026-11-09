@@ -104,8 +104,6 @@ internal fun PersonPage(
     numbers: NumPeriod? = null,
     numbersEmpty: String? = null,
     firstName: String? = null,
-    /** "Seu ritmo" under the artists (your own page shows your DNA instead). */
-    rhythm: Boolean = true,
     sheets: @Composable () -> Unit = {},
     more: LazyListScope.() -> Unit = {},
 ) {
@@ -167,7 +165,7 @@ internal fun PersonPage(
                     if (numbers.top.isNotEmpty()) {
                         item(key = "artists", contentType = "artists") { PersonArtists(numbers, firstName) }
                     }
-                    if (rhythm) item(key = "rhythm", contentType = "rhythm") { PersonRhythm(numbers, firstName, tint) }
+                    item(key = "rhythm", contentType = "rhythm") { PersonRhythm(numbers, firstName, tint) }
                 }
                 more()
             }

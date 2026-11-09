@@ -41,6 +41,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -225,13 +228,29 @@ fun LiveBadge(playing: Boolean, modifier: Modifier = Modifier) {
 fun MixCard(mix: Mix, playing: Boolean, onOpen: () -> Unit, onPlay: () -> Unit, modifier: Modifier = Modifier, size: Dp = 156.dp) {
     // The mix's own color (from its covers) glides in when it arrives after the card.
     val tint by animateColorAsState(mix.tint?.let { Color(it) } ?: SoundColors.Accent, tween(420), label = "mixTint")
+    // The mix of this moment (it changes with the time, the day, the place, the friends along): the
+    // same card, set apart without a word — the accent's light from a corner, rings of sound
+    // spreading from it, a little spark, the foot from the accent into mint.
+    val moment = mix.kind == Mix.Kind.MOMENT
     Column(modifier.width(size).pressable(onOpen)) {
         Box(Modifier.size(size).clip(RoundedCornerShape(Dimens.CoverCorner))) {
             Crossfade(targetState = mix.covers, animationSpec = tween(320), label = "mixArt") { covers ->
                 MosaicCover(covers, Modifier.fillMaxSize(), seed = mix.id, shape = RectangleShape)
             }
-            Box(Modifier.fillMaxSize().background(tint.copy(alpha = 0.30f)))
-            Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(5.dp).background(tint))
+            if (moment) {
+                MomentLight(Modifier.fillMaxSize())
+                MomentSeal(Modifier.align(Alignment.TopStart).padding(9.dp))
+                Box(
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(5.dp)
+                        .background(Brush.horizontalGradient(listOf(SoundColors.Accent, SoundColors.Mint))),
+                )
+            } else {
+                Box(Modifier.fillMaxSize().background(tint.copy(alpha = 0.30f)))
+                Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(5.dp).background(tint))
+            }
             PlayPauseButton(
                 playing = playing,
                 onClick = onPlay,
@@ -244,6 +263,38 @@ fun MixCard(mix: Mix, playing: Boolean, onOpen: () -> Unit, onPlay: () -> Unit, 
         Text(mix.title, style = MaterialTheme.typography.titleSmall, color = SoundColors.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Spacer(Modifier.height(2.dp))
         Text(mix.subtitle, style = MaterialTheme.typography.bodySmall, color = SoundColors.TextMuted, maxLines = 2, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** The accent's light washing in from the top-left corner, with rings of sound spreading from it (the moment's mix). */
+@Composable
+internal fun MomentLight(modifier: Modifier = Modifier) {
+    val accent = SoundColors.Accent
+    Box(
+        modifier
+            .background(Brush.linearGradient(listOf(accent.copy(alpha = 0.55f), accent.copy(alpha = 0.18f), Color.Transparent)))
+            .drawBehind {
+                val center = androidx.compose.ui.geometry.Offset(-6.dp.toPx(), -6.dp.toPx())
+                repeat(4) { i ->
+                    drawCircle(
+                        Color.White.copy(alpha = 0.16f - i * 0.03f),
+                        radius = (34 + 30 * i).dp.toPx(),
+                        center = center,
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5.dp.toPx()),
+                    )
+                }
+            },
+    )
+}
+
+/** A little spark in a dark circle: this mix is made for right now. */
+@Composable
+internal fun MomentSeal(modifier: Modifier = Modifier, size: Dp = 28.dp) {
+    Box(
+        modifier.size(size).clip(CircleShape).background(Color.Black.copy(alpha = 0.38f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(Icons.Rounded.AutoAwesome, null, tint = Color.White, modifier = Modifier.size(size * 0.58f))
     }
 }
 

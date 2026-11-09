@@ -73,8 +73,6 @@ class MusicDna private constructor(
     private val songSkips: Map<String, Skips>,
     private val artistSkips: Map<String, Skips>,
     private val genreSkips: Map<String, Skips>,
-    /** For the DNA page. */
-    val summary: DnaSummary,
 ) {
     /**
      * Skips and listens heard through (fading with [SKIP_HALF_LIFE_MS]) in each moment: the part of
@@ -285,13 +283,10 @@ class MusicDna private constructor(
             val songSkips = HashMap<String, Skips>()
             val artistSkips = HashMap<String, Skips>()
             val genreSkips = HashMap<String, Skips>()
-            val names = HashMap<String, HashMap<String, Int>>()
-            val sum = DnaSummary.Builder(zone)
 
             for (l in listens) {
                 val a = artistKey(l.artist)
                 if (a.isEmpty()) continue
-                names.getOrPut(a) { HashMap() }.merge(l.artist.trim(), 1, Int::plus)
                 val t = Instant.ofEpochMilli(l.at).atZone(zone)
                 val part = DayPart.of(t.hour).ordinal
                 val day = if (t.dayOfWeek == DayOfWeek.SATURDAY || t.dayOfWeek == DayOfWeek.SUNDAY) 1 else 0
@@ -341,9 +336,7 @@ class MusicDna private constructor(
                 partTotal[part] += value
                 dayTotal[day] += value
                 total += value
-                sum.add(l, t, a, genreOf(a, l.genre), value)
             }
-            val display = names.mapValues { (_, n) -> n.maxBy { it.value }.key }
             return MusicDna(
                 artistParts, artistDays, artistPlaces, artistPeople, artistTotal,
                 genreParts, genreDays, genreTotal,
@@ -351,126 +344,7 @@ class MusicDna private constructor(
                 songSkips.filterValues { it.skipped.any { v -> v > 0 } },
                 artistSkips.filterValues { it.skipped.any { v -> v > 0 } },
                 genreSkips.filterValues { it.skipped.any { v -> v > 0 } },
-                sum.build(display),
             )
-        }
-    }
-}
-
-/**
- * What the DNA page shows (pure numbers, worked out with the DNA): minutes per hour of the day and
- * per weekday, the artists and genre of each part of the day, the places (by when you are there and
- * what you hear there) and the friends you listen with.
- */
-data class DnaSummary(
-    /** Minutes listened in each hour (0–23), all time (decayed weight not used: real minutes). */
-    val hourMinutes: List<Long>,
-    /** Minutes per weekday, Monday first. */
-    val weekdayMinutes: List<Long>,
-    val parts: List<Part>,
-    val weekdayTop: List<String>,
-    val weekendTop: List<String>,
-    val places: List<Place>,
-    val people: List<Person>,
-) {
-    data class Part(val part: DayPart, val minutes: Long, val artists: List<String>, val genre: String?)
-    data class Place(val id: Long, val minutes: Long, val part: DayPart?, val weekend: Boolean?, val artists: List<String>)
-    data class Person(val id: String, val minutes: Long, val artists: List<String>, val songs: List<Pair<String, String>>)
-
-    val isEmpty: Boolean get() = hourMinutes.all { it == 0L }
-
-    /** The part of the day with the most listening. */
-    val mainPart: DayPart? get() = parts.maxByOrNull { it.minutes }?.takeIf { it.minutes > 0 }?.part
-
-    internal class Builder(private val zone: ZoneId) {
-        private val hours = LongArray(24)
-        private val weekdays = LongArray(7)
-        private val partMs = LongArray(4)
-        private val partArtists = Array(4) { HashMap<String, Double>() }
-        private val partGenres = Array(4) { HashMap<String, Double>() }
-        private val dayArtists = Array(2) { HashMap<String, Double>() }
-        private val placeMs = HashMap<Long, Long>()
-        private val placeParts = HashMap<Long, LongArray>()
-        private val placeDays = HashMap<Long, LongArray>()
-        private val placeArtists = HashMap<Long, HashMap<String, Double>>()
-        private val personMs = HashMap<String, Long>()
-        private val personArtists = HashMap<String, HashMap<String, Double>>()
-        private val personSongs = HashMap<String, HashMap<Pair<String, String>, Double>>()
-
-        fun add(l: Listen, t: java.time.ZonedDateTime, artist: String, genre: String?, value: Double) {
-            val ms = l.listenedMs.coerceAtLeast(0)
-            val part = DayPart.of(t.hour).ordinal
-            val day = if (t.dayOfWeek == DayOfWeek.SATURDAY || t.dayOfWeek == DayOfWeek.SUNDAY) 1 else 0
-            hours[t.hour] += ms
-            weekdays[t.dayOfWeek.value - 1] += ms
-            partMs[part] += ms
-            partArtists[part].merge(artist, value, Double::plus)
-            genre?.let { partGenres[part].merge(it, value, Double::plus) }
-            dayArtists[day].merge(artist, value, Double::plus)
-            l.place?.let { p ->
-                placeMs.merge(p, ms, Long::plus)
-                placeParts.getOrPut(p) { LongArray(4) }[part] += ms
-                placeDays.getOrPut(p) { LongArray(2) }[day] += ms
-                placeArtists.getOrPut(p) { HashMap() }.merge(artist, value, Double::plus)
-            }
-            for (p in l.people) {
-                personMs.merge(p, ms, Long::plus)
-                personArtists.getOrPut(p) { HashMap() }.merge(artist, value, Double::plus)
-                personSongs.getOrPut(p) { HashMap() }.merge(l.title to l.artist, value, Double::plus)
-            }
-        }
-
-        private fun top(m: Map<String, Double>, names: Map<String, String>, n: Int = 3) =
-            m.entries.sortedByDescending { it.value }.take(n).map { names[it.key] ?: it.key }
-
-        fun build(names: Map<String, String>): DnaSummary {
-            // Two artists that differ the most between weekdays and the weekend (what makes each its own).
-            fun distinct(mine: Map<String, Double>, other: Map<String, Double>): List<String> {
-                val a = mine.values.sum().takeIf { it > 0 } ?: return emptyList()
-                val b = other.values.sum().takeIf { it > 0 } ?: 1.0
-                return mine.entries.sortedByDescending { (k, v) -> (v / a) * ((v / a + 0.02) / ((other[k] ?: 0.0) / b + 0.02)) }
-                    .take(3).map { names[it.key] ?: it.key }
-            }
-            return DnaSummary(
-                hourMinutes = hours.map { it / 60_000 },
-                weekdayMinutes = weekdays.map { it / 60_000 },
-                parts = DayPart.entries.map { p ->
-                    Part(p, partMs[p.ordinal] / 60_000, top(partArtists[p.ordinal], names), partGenres[p.ordinal].maxByOrNull { it.value }?.key)
-                },
-                weekdayTop = distinct(dayArtists[0], dayArtists[1]),
-                weekendTop = distinct(dayArtists[1], dayArtists[0]),
-                places = placeMs.entries.filter { it.value >= MIN_PLACE_MS }.sortedByDescending { it.value }.take(MAX_PLACES).map { (id, ms) ->
-                    val parts = placeParts.getValue(id)
-                    val days = placeDays.getValue(id)
-                    val mainPart = parts.indices.maxBy { parts[it] }
-                    Place(
-                        id = id,
-                        minutes = ms / 60_000,
-                        part = DayPart.entries[mainPart].takeIf { parts[mainPart] * 2 >= ms },
-                        weekend = when {
-                            days[1] * 2 >= ms * 1 && days[1] > days[0] * 1.2 -> true
-                            days[0] > days[1] * 2.5 -> false
-                            else -> null
-                        },
-                        artists = top(placeArtists.getValue(id), names),
-                    )
-                },
-                people = personMs.entries.sortedByDescending { it.value }.take(MAX_PEOPLE).map { (id, ms) ->
-                    Person(
-                        id = id,
-                        minutes = ms / 60_000,
-                        artists = top(personArtists.getValue(id), names),
-                        songs = personSongs.getValue(id).entries.sortedByDescending { it.value }.take(3).map { it.key },
-                    )
-                },
-            )
-        }
-
-        private companion object {
-            /** A place shows once there are 30 minutes of music heard there. */
-            const val MIN_PLACE_MS = 30L * 60_000
-            const val MAX_PLACES = 4
-            const val MAX_PEOPLE = 6
         }
     }
 }
