@@ -4,10 +4,12 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import net from 'node:net';
 import { DatabaseSync } from 'node:sqlite';
 import WebSocket from 'ws';
-import { createRelay, DELIVERY_TTL_MS } from '../src/server.js';
-import { IDLE_END_MS } from '../src/jams.js';
+import { createRelay, DELIVERY_TTL_MS, ipKey, Limiter, MAX_SOCKETS_PER_USER } from '../src/server.js';
+import { cleanTrack, IDLE_END_MS } from '../src/jams.js';
+import { MAX_TOKENS } from '../src/db.js';
 
 let relay, base, dir;
 let now = 1_800_000_000_000;
@@ -85,6 +87,11 @@ async function online(p) {
 }
 
 const tick = () => new Promise((r) => setTimeout(r, 60));
+/** JPEG de verdade, 8×8 cinza, sem nenhum metadado (é exatamente o que o relay devolve). */
+const TINY_JPEG = Buffer.from(
+  '/9j/2wBDABALDA4MChAODQ4SERATGCgaGBYWGDEjJR0oOjM9PDkzODdASFxOQERXRTc4UG1RV19iZ2hnPk1xeXBkeFxlZ2P/wAALCAAIAAgBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAAA//EABcQAAMBAAAAAAAAAAAAAAAAAAADBjP/2gAIAQEAAD8AGNVmf//Z',
+  'base64',
+);
 const track = (n) => ({ videoId: `vid${String(n).padStart(8, '0')}`, title: `Música ${n}`, artist: 'Artista', durationMs: 200_000, cover: 'https://i.ytimg.com/vi/x/hq.jpg' });
 
 // -------------------------------------------------------------------- contas
@@ -147,13 +154,18 @@ test('nome e @nome editáveis; @nome único e com regras', async () => {
 test('foto: só JPEG, servida com versão, apagável', async () => {
   const a = await person();
   assert.equal((await api('PUT', '/v1/me/avatar', { token: a.token, raw: Buffer.from('não é imagem'.repeat(20)) })).status, 400);
-  const jpeg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(500, 7), Buffer.from([0xff, 0xd9])]);
+  // Só o cabeçalho de JPEG com lixo atrás não passa mais: tem que ser um JPEG de verdade.
+  const fake = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(500, 7), Buffer.from([0xff, 0xd9])]);
+  assert.equal((await api('PUT', '/v1/me/avatar', { token: a.token, raw: fake })).status, 400);
+  const jpeg = TINY_JPEG;
   let r = await api('PUT', '/v1/me/avatar', { token: a.token, raw: jpeg, headers: { 'content-type': 'image/jpeg' } });
   assert.equal(r.status, 200);
   assert.match(r.json.me.avatar, new RegExp(`^/avatars/${a.id}\\.jpg\\?v=1$`));
   const img = await fetch(base + r.json.me.avatar);
   assert.equal(img.status, 200);
   assert.equal(img.headers.get('content-type'), 'image/jpeg');
+  assert.equal(img.headers.get('x-content-type-options'), 'nosniff');
+  assert.equal(img.headers.get('cache-control'), 'public, max-age=3600');
   assert.deepEqual(Buffer.from(await img.arrayBuffer()), jpeg);
   r = await api('PUT', '/v1/me/avatar', { token: a.token, raw: jpeg });
   assert.match(r.json.me.avatar, /\?v=2$/);
@@ -510,4 +522,257 @@ test('jam: convites demais não deixam jam criada pela metade', async () => {
   assert.equal(r.status, 400);
   assert.equal(r.json.error, 'jam_full');
   assert.equal((await api('GET', '/v1/jams/current', { token: a.token })).json.jam, null);
+});
+
+// -------------------------------------------------------------------- segurança (rodada 2)
+
+const RLO = String.fromCodePoint(0x202e);
+const ZWSP = String.fromCodePoint(0x200b);
+const LSEP = String.fromCodePoint(0x2028);
+
+/** Segmento JPEG [marker] com o texto dentro. */
+function segment(marker, text) {
+  const data = Buffer.from(text, 'latin1');
+  const head = Buffer.from([0xff, marker, 0, 0]);
+  head.writeUInt16BE(data.length + 2, 2);
+  return Buffer.concat([head, data]);
+}
+
+const closeCode = (ws) => new Promise((r) => ws.once('close', (code) => r(code)));
+
+test('foto: sai sem EXIF/GPS, comentário nem arquivo colado; gigante ou cortada é recusada', async () => {
+  const a = await person();
+  const dirty = Buffer.concat([
+    TINY_JPEG.subarray(0, 2),
+    segment(0xe0, 'JFIF\0miniatura SEGREDO'),
+    segment(0xe1, 'Exif\0\0GPS -23.55 -46.63 SEGREDO'),
+    segment(0xed, 'Photoshop 3.0\0IPTC SEGREDO'),
+    segment(0xfe, 'comentario SEGREDO'),
+    TINY_JPEG.subarray(2),
+    Buffer.from('PK\x03\x04 arquivo colado SEGREDO', 'latin1'),
+  ]);
+  const r = await api('PUT', '/v1/me/avatar', { token: a.token, raw: dirty });
+  assert.equal(r.status, 200);
+  const served = Buffer.from(await (await fetch(base + r.json.me.avatar)).arrayBuffer());
+  assert.deepEqual(served, TINY_JPEG);
+  // Dimensão absurda (bomba de memória no celular de quem abrir a lista) e JPEG cortado no meio.
+  const huge = Buffer.from(TINY_JPEG);
+  huge.writeUInt16BE(30000, huge.indexOf(Buffer.from([0xff, 0xc0])) + 5);
+  assert.equal((await api('PUT', '/v1/me/avatar', { token: a.token, raw: huge })).status, 400);
+  assert.equal((await api('PUT', '/v1/me/avatar', { token: a.token, raw: TINY_JPEG.subarray(0, TINY_JPEG.length - 20) })).status, 400);
+});
+
+test('mensagem grande ou lixo pelo WebSocket não derruba o relay', async () => {
+  const a = await person();
+  const b = await person();
+  const wa = await online(a);
+  const wb = await online(b);
+  wa.ws.on('error', () => {});
+  const closed = closeCode(wa.ws);
+  wa.ws.send('x'.repeat(70 * 1024));
+  assert.equal(await closed, 1009);
+  wb.ws.send(Buffer.from([0, 1, 2, 255]));
+  wb.send({ t: 'jam.state', jamId: { nao: 'texto' } });
+  wb.send({ t: 'ack', ids: ['x', 1.5, null] });
+  wb.send({ t: 'ping', c: 7 });
+  assert.equal((await wb.next((e) => e.t === 'pong')).c, 7);
+  assert.equal((await api('GET', '/v1/health')).status, 200);
+  wb.close();
+});
+
+test('URL torta não derruba o relay; respostas com cabeçalhos de segurança', async () => {
+  const { port } = relay.server.address();
+  for (const line of ['GET //[x HTTP/1.1', 'GET http://[x HTTP/1.1']) {
+    const reply = await new Promise((resolve) => {
+      let data = '';
+      const s = net.connect(port, '127.0.0.1', () => s.write(`${line}\r\nHost: relay\r\nConnection: close\r\n\r\n`));
+      s.on('data', (d) => (data += d));
+      s.on('close', () => resolve(data));
+      s.on('error', () => resolve(data));
+    });
+    assert.match(reply, /^HTTP\/1\.1 4\d\d /); // respondeu (400/404) em vez de cair
+  }
+  const h = await api('GET', '/v1/health');
+  assert.equal(h.status, 200);
+  assert.equal(h.res.headers.get('x-content-type-options'), 'nosniff');
+  assert.match(h.res.headers.get('content-security-policy'), /default-src 'none'/);
+  assert.equal(h.res.headers.get('referrer-policy'), 'no-referrer');
+  // Chegou na Cloudflare sem TLS: recusado (o app descobre o erro na hora).
+  const p = await person();
+  for (const headers of [{ 'x-forwarded-proto': 'http' }, { 'cf-visitor': '{"scheme":"http"}' }]) {
+    const r = await api('GET', '/v1/me', { token: p.token, headers });
+    assert.equal(r.status, 403);
+    assert.equal(r.json.error, 'https_only');
+  }
+  assert.equal((await api('GET', '/v1/me', { token: p.token, headers: { 'x-forwarded-proto': 'https', 'cf-visitor': '{"scheme":"https"}' } })).status, 200);
+});
+
+test('jam: convite repetido não toca de novo no celular do amigo', async () => {
+  const a = await person();
+  const b = await person();
+  await friends(a, b);
+  const wb = await online(b);
+  const jam = (await api('POST', '/v1/jams', { token: a.token, body: { invite: [b.id] } })).json.jam;
+  await wb.next((e) => e.t === 'jam.invite');
+  assert.equal((await api('POST', `/v1/jams/${jam.id}/invite`, { token: a.token, body: { userIds: [b.id] } })).status, 200);
+  await tick();
+  assert.equal(wb.events.filter((e) => e.t === 'jam.invite').length, 0);
+  wb.close();
+});
+
+test('teto de WebSockets por pessoa: o mais antigo cai', async () => {
+  const a = await person();
+  const first = await online(a);
+  const closed = closeCode(first.ws);
+  const rest = [];
+  for (let i = 0; i < MAX_SOCKETS_PER_USER; i++) rest.push(await online(a));
+  assert.equal(await closed, 4002);
+  rest.at(-1).send({ t: 'ping', c: 1 });
+  assert.equal((await rest.at(-1).next((e) => e.t === 'pong')).c, 1);
+  for (const s of rest) s.close();
+});
+
+test('sair dos outros aparelhos: só o celular que pediu continua', async () => {
+  const a = await person();
+  const old = await online(a);
+  const closed = closeCode(old.ws);
+  const rec = await api('POST', '/v1/accounts/recover', { body: { code: a.code }, headers: { 'cf-connecting-ip': '198.51.100.7' } });
+  assert.equal(rec.status, 200);
+  const r = await api('DELETE', '/v1/me/sessions', { token: rec.json.token });
+  assert.equal(r.json.revoked, 1);
+  assert.equal(await closed, 4003);
+  assert.equal((await api('GET', '/v1/me', { token: a.token })).status, 401);
+  assert.equal((await api('GET', '/v1/me', { token: rec.json.token })).status, 200);
+});
+
+test('teto de aparelhos: o mais antigo cai quando entra um além do teto', async () => {
+  const a = await person();
+  const ip = { 'cf-connecting-ip': '198.51.100.8' };
+  let last;
+  for (let i = 0; i < MAX_TOKENS; i++) last = await api('POST', '/v1/accounts/recover', { body: { code: a.code }, headers: ip });
+  assert.equal(last.status, 200);
+  assert.equal((await api('GET', '/v1/me', { token: a.token })).status, 401);
+  assert.equal((await api('GET', '/v1/me', { token: last.json.token })).status, 200);
+});
+
+test('limites por IP: IPv6 conta pelo /64; limitador cheio não devolve o limite de ninguém', async () => {
+  assert.equal(ipKey('203.0.113.9'), '203.0.113.9');
+  assert.equal(ipKey('::ffff:203.0.113.9'), '203.0.113.9');
+  assert.equal(ipKey('2001:db8:1:2:3:4:5:6'), '2001:db8:1:2::/64');
+  assert.equal(ipKey('2001:0db8:0001:0002::abcd'), '2001:db8:1:2::/64');
+  assert.equal(ipKey('2001:db8::1'), '2001:db8:0:0::/64');
+  assert.equal(ipKey('64:ff9b::192.0.2.1'), '64:ff9b:0:0::/64');
+  assert.equal(ipKey('lixo'), '?');
+  let last;
+  for (let i = 1; i <= 21; i++) last = await api('POST', '/v1/accounts', { body: {}, headers: { 'cf-connecting-ip': `2001:db8:77:1::${i.toString(16)}` } });
+  assert.equal(last.status, 429);
+  let t = 0;
+  const lim = new Limiter(1, 1000, () => t, 3);
+  assert.equal(lim.take('a'), true);
+  assert.equal(lim.take('a'), false);
+  assert.equal(lim.take('b'), true);
+  assert.equal(lim.take('c'), true);
+  assert.equal(lim.take('d'), false); // cheio de chaves valendo: recusa a nova...
+  assert.equal(lim.take('a'), false); // ...e quem estava barrado continua barrado
+  t = 1000;
+  assert.equal(lim.take('d'), true);
+  assert.equal(lim.take('a'), true);
+});
+
+test('teto de contas novas no servidor todo (muitos IPs)', async () => {
+  const d2 = mkdtempSync(join(tmpdir(), 'freesong-relay-'));
+  const r2 = createRelay({ dataDir: d2, clock: () => now, log: { error() {} }, newAccountsPerHour: 2 });
+  await new Promise((r) => r2.server.listen(0, '127.0.0.1', r));
+  const url = `http://127.0.0.1:${r2.server.address().port}/v1/accounts`;
+  const codes = [];
+  for (let i = 1; i <= 3; i++) codes.push((await fetch(url, { method: 'POST', headers: { 'cf-connecting-ip': `192.0.2.${i}` }, body: '{}' })).status);
+  assert.deepEqual(codes, [201, 201, 429]);
+  await r2.close();
+  rmSync(d2, { recursive: true, force: true });
+});
+
+test('nomes e músicas sem invisíveis nem inversão de texto; capa e link só do YouTube', async () => {
+  const a = await person();
+  const b = await person();
+  await friends(a, b);
+  let r = await api('PATCH', '/v1/me', { token: a.token, body: { name: `Ana${RLO}gnp.exe${ZWSP}${LSEP}` } });
+  assert.equal(r.status, 200);
+  assert.equal(r.json.me.name, 'Anagnp.exe');
+  r = await api('PATCH', '/v1/me', { token: a.token, body: { name: `${ZWSP}${String.fromCodePoint(0x3164)}` } });
+  assert.equal(r.json.error, 'invalid_name');
+  assert.equal((await api('PATCH', '/v1/me', { token: a.token, body: { username: 'freesong_oficial' } })).json.error, 'username_reserved');
+  assert.equal((await api('PATCH', '/v1/me', { token: a.token, body: { username: 'banda_oficial' } })).status, 200);
+  const wb = await online(b);
+  const sent = { videoId: 'dQw4w9WgXcQ', title: `Oi${RLO}${LSEP}tchau`, artist: 'X', cover: 'https://rastreador.example/pixel.jpg', url: 'https://music.youtube.com/watch?v=dQw4w9WgXcQ' };
+  assert.equal((await api('POST', '/v1/shares', { token: a.token, body: { to: b.id, track: sent } })).status, 201);
+  const d = (await wb.next((e) => e.t === 'delivery')).delivery;
+  assert.equal(d.track.title, 'Oi tchau');
+  assert.equal(d.track.cover, undefined);
+  assert.equal(d.track.url, 'https://music.youtube.com/watch?v=dQw4w9WgXcQ');
+  const cover = (c) => cleanTrack({ videoId: 'dQw4w9WgXcQ', title: 't', cover: c }).cover;
+  assert.equal(cover('https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg'), 'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg');
+  assert.equal(cover('https://lh3.googleusercontent.com/abc=w120-h120'), 'https://lh3.googleusercontent.com/abc=w120-h120');
+  assert.equal(cover('https://i.ytimg.com.rastreador.example/x.jpg'), undefined);
+  assert.equal(cover('https://user:pw@i.ytimg.com/x.jpg'), undefined);
+  assert.equal(cover('https://i.ytimg.com:8443/x.jpg'), undefined);
+  assert.equal(cover('http://i.ytimg.com/x.jpg'), undefined);
+  wb.close();
+});
+
+test('pedido de amizade repetido não toca de novo; pedir e cancelar sem parar tem limite', async () => {
+  const a = await person();
+  const b = await person();
+  const wb = await online(b);
+  const first = await api('POST', '/v1/friends/requests', { token: a.token, body: { userId: b.id } });
+  const again = await api('POST', '/v1/friends/requests', { token: a.token, body: { userId: b.id } });
+  assert.equal(again.json.requestId, first.json.requestId);
+  await wb.next((e) => e.t === 'friend.request');
+  await tick();
+  assert.equal(wb.events.filter((e) => e.t === 'friend.request').length, 0);
+  let r = first;
+  for (let i = 0; i < 3; i++) {
+    await api('POST', `/v1/friends/requests/${r.json.requestId}/decline`, { token: a.token });
+    r = await api('POST', '/v1/friends/requests', { token: a.token, body: { userId: b.id } });
+  }
+  assert.equal(r.status, 429);
+  wb.close();
+});
+
+test('desfazer amizade que não existe não avisa ninguém', async () => {
+  const a = await person();
+  const b = await person();
+  const wb = await online(b);
+  assert.equal((await api('DELETE', `/v1/friends/${b.id}`, { token: a.token })).json.status, 'none');
+  await tick();
+  assert.equal(wb.events.filter((e) => e.t === 'friend.removed').length, 0);
+  wb.close();
+});
+
+test('jam: estado inválido não tira ninguém da jam; quem não foi convidado não mexe; teto de mudanças', async () => {
+  const a = await person();
+  const b = await person();
+  const c = await person();
+  await friends(a, b);
+  const jam = (await api('POST', '/v1/jams', { token: a.token, body: { invite: [b.id] } })).json.jam;
+  let r = await api('POST', '/v1/jams', { token: a.token, body: { state: { queue: [{ videoId: '!' }], index: 0 } } });
+  assert.equal(r.status, 400);
+  assert.equal(r.json.error, 'invalid_state');
+  assert.equal((await api('GET', '/v1/jams/current', { token: a.token })).json.jam.id, jam.id);
+  const wa = await online(a);
+  await api('POST', `/v1/jams/${jam.id}/decline`, { token: c.token });
+  await tick();
+  assert.equal(wa.events.filter((e) => e.t === 'jam').length, 0);
+  r = await api('POST', `/v1/jams/${jam.id}/state`, { token: a.token, body: { baseRev: 0, queue: [track(1)], index: 0, positionMs: 1e300, playing: true } });
+  assert.equal(r.json.accepted, true);
+  assert.ok(r.json.jam.state.positionMs <= 6 * 3600_000);
+  let rev = r.json.jam.state.rev;
+  let status = 200;
+  for (let i = 0; i < 130 && status === 200; i++) {
+    r = await api('POST', `/v1/jams/${jam.id}/state`, { token: a.token, body: { baseRev: rev, index: 0, positionMs: i, playing: true } });
+    status = r.status;
+    if (status === 200) rev = r.json.jam.state.rev;
+  }
+  assert.equal(status, 429);
+  assert.equal(r.json.error, 'slow_down');
+  wa.close();
 });
