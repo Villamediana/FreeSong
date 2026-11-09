@@ -35,6 +35,9 @@ function httpsUrl(v, hostPattern) {
 }
 
 /** Uma música da fila como o app manda: o vídeo e o que o player mostra. Null se não serve. */
+/** Uma capa só dos servidores que o app usa (ou nada). */
+export const cleanCover = (v) => httpsUrl(v, COVER_HOST);
+
 export function cleanTrack(raw) {
   if (!raw || typeof raw !== 'object') return null;
   const videoId = typeof raw.videoId === 'string' && /^[A-Za-z0-9_-]{6,20}$/.test(raw.videoId) ? raw.videoId : null;

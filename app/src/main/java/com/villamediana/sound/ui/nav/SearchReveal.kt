@@ -55,11 +55,12 @@ object SearchReveal {
 fun Modifier.searchRevealOrigin(): Modifier = onGloballyPositioned { SearchReveal.origin = it.boundsInRoot().center }
 
 /**
- * Long enough to see the circle fill the page (it covers most of it by ~400 ms; the rest is its edge
+ * Long enough to see the circle fill the page (it covers most of it by ~350 ms; the rest is its edge
  * reaching the far corner), on a gentle curve: the old fast-out one covered 90% in 200 ms and looked
  * like a glitch.
  */
-private const val REVEAL_IN_MS = 650
+// 800 → 650 (1.10.3, "um pouco mais rápida") → 560 (1.20.3, "só mais um pouquinho").
+private const val REVEAL_IN_MS = 560
 private val RevealInEasing = CubicBezierEasing(0.33f, 0.12f, 0.35f, 1f)
 private const val REVEAL_OUT_MS = 340
 

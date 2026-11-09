@@ -456,3 +456,18 @@ Ajustes (e equalizador, vídeo…) travavam ao entrar e sair: o espaço do mini 
 encolhia animado (tudo embaixo e a própria página se remontavam a cada quadro do deslize) e o player
 era recriado no primeiro quadro da volta. Agora, em `SoundRoot`, o espaço fica congelado enquanto
 uma página cheia está por cima e o player volta só depois do deslize (`PAGE_MS`).
+
+## Play/pause redondinho, busca mais rápida, "Seus números" no perfil (1.21.0 + relay 1.4.0, 2026-11-09)
+
+- `ui/components/PlayGlyph.kt`: o play/pause do app inteiro (mini player, player, cards, páginas) é um
+  desenho só, com cantos arredondados (CornerPathEffect, 13% da largura: triângulo macio e palitos
+  em pílula, na mesma maciez das setas `Icons.Rounded.Skip*`) e o morph triângulo ↔ barras. Em
+  repouso o play é um triângulo único (as duas metades mostrariam um entalhe).
+- Busca: círculo 650 → 560 ms (Miguel: "só mais um pouquinho") e a entrada do conteúdo ~14% antes.
+- Perfil: `stats/ListeningStats.kt` + `ui/social/ProfileStats.kt` — "Seus números", Mês/Ano:
+  minutos, músicas, artistas, ritmo da semana + "Você é da noite · pico às 22h" e os seus artistas
+  (abrem o perfil do artista). O carrossel "Mais ouvidas" continua como era. Miguel tirou sequência e
+  gêneros ("não precisa"). No seu perfil é calculado na hora; os **amigos** veem os mesmos números
+  ("Números de Ana") porque o `SocialHub.syncStats` manda os totais do mês e do ano (`NumbersOf`)
+  junto com horas e top 5 — relay 1.4.0 (`numbers_json`, `relay/src/numbers.js` confere tudo). Só
+  totais, nenhum histórico.

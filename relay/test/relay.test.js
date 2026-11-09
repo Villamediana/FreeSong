@@ -465,6 +465,51 @@ test('WebSocket sem token, ou com token na URL, é recusado', async () => {
   }
 });
 
+test('números do perfil: só totais, conferidos, e só a pessoa e os amigos veem', async () => {
+  const a = await person();
+  const b = await person();
+  const c = await person();
+  await friends(a, b);
+  const period = (over = {}) => ({
+    minutes: 2412, songs: 212, artists: 74, hour: 22, weekdays: [5, 4, 6, 5, 9, 7, 3],
+    top: [{ name: 'Maná', minutes: 500, cover: 'https://i.ytimg.com/vi/x/hq.jpg' }],
+    ...over,
+  });
+  const r = await api('PUT', '/v1/me/stats', {
+    token: a.token,
+    body: {
+      listenedMs: 3_600_000,
+      top: [],
+      numbers: {
+        month: period({ hour: 99, weekdays: [1, 2], top: [...Array(9)].map((_, i) => ({ name: `Artista ${i}`, minutes: 10, cover: 'https://evil.example/x.jpg' })) }),
+        year: period({ minutes: -5, songs: 1e12 }),
+        history: ['nada disso fica'],
+      },
+    },
+  });
+  assert.equal(r.status, 200);
+  const n = r.json.me.numbers;
+  // Hora fora do relógio vira vazia, semana torta vira zeros, no máximo 5 artistas, capa de servidor estranho some.
+  assert.equal(n.month.hour, null);
+  assert.deepEqual(n.month.weekdays, [0, 0, 0, 0, 0, 0, 0]);
+  assert.equal(n.month.top.length, 5);
+  assert.ok(n.month.top.every((t) => t.cover === undefined));
+  assert.equal(n.year.minutes, 0);
+  assert.equal(n.year.songs, 1_000_000);
+  assert.equal(n.year.top[0].cover, 'https://i.ytimg.com/vi/x/hq.jpg');
+  assert.equal(n.history, undefined);
+  // As músicas mais ouvidas seguem no "top" de sempre: os números não levam lista de músicas.
+  assert.equal(n.year.topSongs, undefined);
+  // O amigo vê; quem não é amigo, não.
+  const seen = (await api('GET', `/v1/users/${a.id}`, { token: b.token })).json.user;
+  assert.equal(seen.numbers.year.top[0].name, 'Maná');
+  const stranger = (await api('GET', `/v1/users/${a.id}`, { token: c.token })).json.user;
+  assert.equal(stranger.numbers, undefined);
+  // Um app antigo (sem números) não apaga os que estavam.
+  await api('PUT', '/v1/me/stats', { token: a.token, body: { listenedMs: 4_000_000, top: [] } });
+  assert.equal((await api('GET', '/v1/me', { token: a.token })).json.me.numbers.year.top[0].name, 'Maná');
+});
+
 test('o banco guarda só o básico: nada de histórico legível, IP, último acesso ou versão do app', async () => {
   const db = new DatabaseSync(join(dir, 'freesong.db'), { readOnly: true });
   const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'").all().map((t) => t.name).sort();
@@ -473,7 +518,7 @@ test('o banco guarda só o básico: nada de histórico legível, IP, último ace
   const vaultCols = db.prepare('PRAGMA table_info(vaults)').all().map((c) => c.name).sort();
   assert.deepEqual(vaultCols, ['data', 'key', 'rev', 'updated_at', 'user_id']);
   const cols = db.prepare('PRAGMA table_info(users)').all().map((c) => c.name).sort();
-  assert.deepEqual(cols, ['avatar_rev', 'created_at', 'id', 'listened_ms', 'name', 'recovery_hash', 'top_json', 'username']);
+  assert.deepEqual(cols, ['avatar_rev', 'created_at', 'id', 'listened_ms', 'name', 'numbers_json', 'recovery_hash', 'top_json', 'username']);
   // Tokens e códigos só em hash.
   const p = await person();
   const row = db.prepare('SELECT hash FROM tokens').all().map((r) => r.hash);

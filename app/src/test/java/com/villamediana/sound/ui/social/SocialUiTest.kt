@@ -270,4 +270,59 @@ class SocialUiTest {
         }
         compose.onNodeWithText("Ana Lima te chamou pra uma jam").assertExists()
     }
+
+    @Test
+    fun yourNumbersFillTheProfile() {
+        val numbers = com.villamediana.sound.social.NumPeriod(
+            minutes = 2_412, songs = 212, artists = 74, hour = 22,
+            weekdays = listOf(300L, 240L, 360L, 300L, 540L, 420L, 180L),
+            top = listOf(
+                com.villamediana.sound.social.NumArtist("Maná", 500),
+                com.villamediana.sound.social.NumArtist("Paramore", 350),
+                com.villamediana.sound.social.NumArtist("Djavan", 250),
+            ),
+        )
+        var period = com.villamediana.sound.stats.StatsPeriod.MONTH
+        compose.setContent {
+            PageHost {
+                androidx.compose.foundation.lazy.LazyColumn(Modifier.background(SoundColors.Ink)) {
+                    item { ProfileStatsContent("Seus números", "Seus amigos também veem", numbers, period, onPeriod = { period = it }) }
+                }
+            }
+        }
+        compose.onNodeWithText("Seus números").assertExists()
+        compose.onNodeWithText(java.text.NumberFormat.getIntegerInstance().format(2_412)).assertExists()
+        compose.onNodeWithText("Você é da noite").assertExists()
+        compose.onNodeWithText("O som sobe mais às 22h").assertExists()
+        compose.onNodeWithText("Maná").assertExists()
+        // No streak and no genres any more (Miguel: not needed).
+        check(compose.onAllNodesWithText("dias seguidos").fetchSemanticsNodes().isEmpty())
+        compose.onNodeWithText("Ano").performClick()
+        assertEquals(com.villamediana.sound.stats.StatsPeriod.YEAR, period)
+        shot("profile-stats")
+    }
+
+    @Test
+    fun aFriendsPageShowsTheirNumbers() {
+        val friend = me.copy(
+            id = "ufriend", username = "ana_v", name = "Ana Vilela", relation = "friends", friendsSince = 1_700_000_000_000,
+            numbers = com.villamediana.sound.social.Numbers(
+                month = com.villamediana.sound.social.NumPeriod(minutes = 900, songs = 80, artists = 30, hour = 9, top = listOf(com.villamediana.sound.social.NumArtist("Rubel", 200))),
+                year = com.villamediana.sound.social.NumPeriod(minutes = 12_000, songs = 700, artists = 150, hour = 9),
+            ),
+        )
+        compose.setContent {
+            PageHost {
+                FriendPage(
+                    person = friend, isFriend = true, relation = "friends", songs = emptyList(), inJam = false,
+                    snackbar = com.villamediana.sound.ui.detail.rememberDetailSnackbar(),
+                    onSend = {}, onJam = {}, onMenu = {}, onAdd = {}, onPlaySwapped = {},
+                )
+            }
+        }
+        compose.onAllNodes(androidx.compose.ui.test.hasScrollAction())[0].performScrollToNode(androidx.compose.ui.test.hasText("Números de Ana"))
+        compose.onNodeWithText("Números de Ana").assertExists()
+        compose.onNodeWithText("Rubel").assertExists()
+        compose.onNodeWithText("Você é da manhã").assertExists()
+    }
 }

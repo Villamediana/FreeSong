@@ -515,20 +515,21 @@ private fun SelectionBar(count: Int, onDownload: () -> Unit, onCancel: () -> Uni
  * genre cards. Past a few rows the rest come together (they're below the fold anyway).
  */
 private object Entrance {
-    const val HEADER = 340
-    const val FIELD = 385
-    const val MIC = 450
-    const val RECENTS = 510
-    private const val STEP = 60
-    private const val GENRES_AFTER = 70
-    private const val GENRE_ROW = 72
-    private const val GENRE_SIDE = 45
+    // In step with the circle (560 ms since 1.20.3): everything ~14% sooner than with 650 ms.
+    const val HEADER = 292
+    const val FIELD = 331
+    const val MIC = 387
+    const val RECENTS = 439
+    private const val STEP = 52
+    private const val GENRES_AFTER = 60
+    private const val GENRE_ROW = 62
+    private const val GENRE_SIDE = 39
 
-    fun recent(i: Int) = RECENTS + 40 + minOf(i, 7) * STEP
+    fun recent(i: Int) = RECENTS + 34 + minOf(i, 7) * STEP
 
     fun genres(recents: Int) = if (recents == 0) RECENTS else recent(recents - 1) + GENRES_AFTER
 
-    fun genreTile(genresAt: Int, row: Int, side: Int) = genresAt + 64 + minOf(row, 5) * GENRE_ROW + side * GENRE_SIDE
+    fun genreTile(genresAt: Int, row: Int, side: Int) = genresAt + 55 + minOf(row, 5) * GENRE_ROW + side * GENRE_SIDE
 }
 
 @Composable

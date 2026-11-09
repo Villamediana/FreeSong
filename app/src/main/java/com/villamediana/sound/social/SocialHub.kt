@@ -277,17 +277,24 @@ class SocialHub(
         }
     }
 
-    /** Hours listened and the five most heard (all time, library and online), for friends to see. */
+    /**
+     * For friends to see: hours listened and the five most heard (all time), and the profile's
+     * numbers of the month and of the year (totals only, worked out here).
+     */
     suspend fun syncStats() {
         if (!account.ready) return
-        val recap = withContext(Dispatchers.Default) {
+        val (recap, numbers) = withContext(Dispatchers.Default) {
             val events = library.playEventsSince(0).first()
             val tracks = library.tracks.first().associateBy { it.id }
             val online = library.onlinePlaysListSince(0)
-            Recaps.build(0, events, tracks, online, span = Long.MIN_VALUE until Long.MAX_VALUE)
+            val now = System.currentTimeMillis()
+            val all = Recaps.build(0, events, tracks, online, span = Long.MIN_VALUE until Long.MAX_VALUE)
+            fun period(p: com.villamediana.sound.stats.StatsPeriod) =
+                NumbersOf.period(com.villamediana.sound.stats.ListeningStatsMaker.build(p, events, tracks, online, now))
+            all to Numbers(month = period(com.villamediana.sound.stats.StatsPeriod.MONTH), year = period(com.villamediana.sound.stats.StatsPeriod.YEAR))
         }
         val top = recap.topSongs.mapNotNull { s -> s.track?.let(SongRef::of) ?: s.remote?.let(SongRef::of) }
-        account.syncStats(recap.listenedMs + listenedBefore(), top)
+        account.syncStats(recap.listenedMs + listenedBefore(), top, numbers)
     }
 
     private fun friendsFile() = File(context.filesDir, "social-friends.json")

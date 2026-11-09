@@ -29,6 +29,8 @@ data class Profile(
     val since: Long = 0,
     val listenedMs: Long? = null,
     val top: List<SongRef>? = null,
+    /** The profile's numbers of the month and the year (friends and oneself only; apps before 1.21 send none). */
+    val numbers: Numbers? = null,
     /** none · outgoing · incoming · friends · self (lists only). */
     val relation: String? = null,
     val requestId: Long? = null,
@@ -38,6 +40,28 @@ data class Profile(
 }
 
 /** A song as it travels between phones: its YouTube video and what the player shows. */
+/** "Seus números": totals of the month and of the year, worked out on the phone (no history). */
+@Serializable
+data class Numbers(val month: NumPeriod? = null, val year: NumPeriod? = null)
+
+@Serializable
+data class NumPeriod(
+    val minutes: Long = 0,
+    val songs: Int = 0,
+    val artists: Int = 0,
+    /** 0–23, the hour with the most listening. */
+    val hour: Int? = null,
+    /** Minutes per weekday, Monday first. */
+    val weekdays: List<Long> = List(7) { 0L },
+    /** The top artists. */
+    val top: List<NumArtist> = emptyList(),
+) {
+    val empty: Boolean get() = minutes <= 0 && top.isEmpty()
+}
+
+@Serializable
+data class NumArtist(val name: String, val minutes: Long = 0, val cover: String? = null)
+
 @Serializable
 data class SongRef(
     val videoId: String,
