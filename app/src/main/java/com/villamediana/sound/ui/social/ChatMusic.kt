@@ -90,7 +90,8 @@ fun ChatMusicSheet(friend: Profile, onDismiss: () -> Unit, onSend: (SongRef) -> 
     }
 
     val now = playback.current?.let(SongRef::of)
-    val likes = liked.mapNotNull(SongRef::of)
+    val likedSongs = remember(liked) { liked.mapNotNull(SongRef::of) }
+    val likes = likedSongs
         .filter { it.videoId != now?.videoId }
         .filter { query.isBlank() || it.title.contains(query.trim(), true) || it.artist.contains(query.trim(), true) }
         .take(if (query.isBlank()) 60 else 8)

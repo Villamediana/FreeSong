@@ -238,6 +238,7 @@ class AppGraph(context: Context) {
                     ids.mapNotNull { id -> (friends[id] ?: jam[id])?.name?.trim()?.substringBefore(' ') }
                 }
             },
+            momentKey = { forYou.moment().key },
             momentLabels = {
                 val res = appContext.resources
                 com.villamediana.sound.smart.MadeForYou.MomentLabels(

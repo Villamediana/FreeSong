@@ -32,6 +32,8 @@ class MadeForYouStore(
     /** "Pra agora", from the DNA: what fits this moment (null: not enough listening yet). */
     private val moment: (suspend () -> MomentPlan?)? = null,
     private val momentLabels: () -> MadeForYou.MomentLabels = { MadeForYou.MomentLabels({ _, _ -> "" }, { it }) },
+    /** The moment now, as a key (cheap): the "Pra agora" mix is made again only when it changes. */
+    private val momentKey: () -> String = { "" },
 ) {
     private val _mixes = MutableStateFlow<List<Mix>>(emptyList())
     private val _moment = MutableStateFlow<Mix?>(null)
@@ -61,8 +63,8 @@ class MadeForYouStore(
             do {
                 again.set(false)
                 // Never let a failure here take the app down: the mixes just wait for the next try.
-                runCatching { makeMoment(SmartMixes.dayNumber(clock())) }
                 runCatching { make(SmartMixes.dayNumber(clock())) }
+                runCatching { makeMoment(SmartMixes.dayNumber(clock())) }
             } while (again.get())
         }
     }
@@ -107,6 +109,8 @@ class MadeForYouStore(
     /** "Pra agora": made again when the moment changes (another part of the day, another place, a jam). */
     private suspend fun makeMoment(day: Long) {
         val make = moment ?: return
+        // The same moment as the mix on screen: nothing to make (no work on every return to the Home).
+        if (_moment.value != null && momentMadeFor == "$day|${momentKey()}") return
         val plan = make() ?: run {
             _moment.value = null
             momentMadeFor = null

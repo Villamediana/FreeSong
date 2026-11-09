@@ -25,6 +25,8 @@ import java.io.File
  * loudness every [TICK_MS] for the waves. One recording at a time.
  */
 class VoiceRecorder(private val context: Context) {
+    private val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    private var focus: AudioFocusRequest? = null
     private var recorder: MediaRecorder? = null
     private var file: File? = null
     private var startedAt = 0L
@@ -54,6 +56,8 @@ class VoiceRecorder(private val context: Context) {
             r.setMaxDuration(MAX_MS.toInt())
             r.setOutputFile(out.absolutePath)
             r.setOnInfoListener { _, what, _ -> if (what == MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED) onLimit() }
+            // The music steps aside while you speak (it would be in the message) and comes back after.
+            takeFocus()
             r.prepare()
             r.start()
             recorder = r
@@ -74,8 +78,22 @@ class VoiceRecorder(private val context: Context) {
         } catch (e: Exception) {
             runCatching { r.release() }
             out.delete()
+            giveFocus()
             false
         }
+    }
+
+    private fun takeFocus() {
+        val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
+            .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
+            .build()
+        focus = req
+        audio.requestAudioFocus(req)
+    }
+
+    private fun giveFocus() {
+        focus?.let { audio.abandonAudioFocusRequest(it) }
+        focus = null
     }
 
     /** Stops and hands the recording over: the file, its length and its waves; null if it was too short or failed. */
@@ -88,6 +106,8 @@ class VoiceRecorder(private val context: Context) {
         file = null
         val ok = runCatching { r.stop() }.isSuccess
         runCatching { r.release() }
+        // The music comes back only once the microphone is closed.
+        giveFocus()
         if (!ok || out == null || ms < MIN_MS || !out.isFile || out.length() < 64) {
             out?.delete()
             return null
@@ -102,6 +122,7 @@ class VoiceRecorder(private val context: Context) {
         recorder = null
         runCatching { r.stop() }
         runCatching { r.release() }
+        giveFocus()
         file?.delete()
         file = null
     }
@@ -147,8 +168,15 @@ class VoicePlayer(context: Context, private val scope: CoroutineScope) {
     fun toggle(key: Long, file: File, fraction: Float? = null) {
         val p = player
         if (p != null && current == key) {
-            if (fraction != null) seek(fraction)
-            if (p.isPlaying) pause() else resume()
+            if (fraction != null) {
+                // A tap on the waves jumps there and plays (it never pauses).
+                seek(fraction)
+                if (!p.isPlaying) resume()
+            } else if (p.isPlaying) {
+                pause()
+            } else {
+                resume()
+            }
             return
         }
         stop()
