@@ -33,8 +33,8 @@ android {
         applicationId = "com.villamediana.sound"
         minSdk = 26
         targetSdk = 36
-        versionCode = 79
-        versionName = "1.24.0"
+        versionCode = 80
+        versionName = "1.25.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // The FreeSong relay (relay/): profiles, friends, shared songs and jams.
         buildConfigField("String", "RELAY_URL", "\"https://freesong.simplyonegoal.com\"")
