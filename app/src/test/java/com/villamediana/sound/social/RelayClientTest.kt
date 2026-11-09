@@ -1,5 +1,6 @@
 package com.villamediana.sound.social
 
+import kotlinx.serialization.json.put
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -280,6 +281,48 @@ class RelayClientTest {
         assertEquals(401, (runCatching { a.api.me() }.exceptionOrNull() as RelayException).status)
         assertEquals(a.me.id, other.api.me().id)
         link.want(false)
+        scope.cancel()
+    }
+
+    @Test
+    fun answersCorrectionsVoiceTypingAndNewNamesTravel() = runBlocking {
+        val a = Phone().register()
+        val b = Phone().register()
+        friends(a, b)
+        val first = a.api.sendText(b.me.id, "bora?")
+        val reply = b.api.sendText(a.me.id, "bora!", replyTo = first.id)
+        val fixed = a.api.editText(b.me.id, first.id, "bora ouvir?")
+        // A minimal MP4 (the relay only checks its "ftyp" box).
+        val audio = ByteArray(2_048) { 7 }.also { "\u0000\u0000\u0000\u0018ftypM4A ".toByteArray(Charsets.ISO_8859_1).copyInto(it) }
+        val voice = a.api.sendVoice(b.me.id, audio, 4_200, "0369cf", replyTo = reply.id)
+        assertTrue(voice.id > fixed.id)
+        val box = b.api.mailbox()
+        assertEquals(listOf("text", "edit", "voice"), box.deliveries.map { it.kind })
+        val edit = box.deliveries.single { it.kind == "edit" }
+        assertEquals(first.id, edit.ref)
+        assertEquals("bora ouvir?", edit.text)
+        val v = box.deliveries.single { it.kind == "voice" }
+        assertEquals(VoiceInfo(4_200, "0369cf", 2_048), v.voice)
+        assertEquals(reply.id, v.replyTo)
+        org.junit.Assert.assertArrayEquals(audio, b.api.voiceAudio(v.id))
+        // Confirmed: the relay forgets the audio too.
+        b.api.ack(box.deliveries.map { it.id })
+        assertEquals(404, (runCatching { b.api.voiceAudio(v.id) }.exceptionOrNull() as RelayException).status)
+        assertEquals(reply.id, a.api.mailbox().deliveries.single().id)
+
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val (linkA, _) = online(a, scope)
+        val (linkB, eventsB) = online(b, scope)
+        withTimeout(5_000) {
+            linkA.connected.first { it }
+            linkB.connected.first { it }
+        }
+        linkA.send(kotlinx.serialization.json.buildJsonObject { put("t", "typing"); put("to", b.me.id); put("on", true) })
+        withTimeout(5_000) { while (eventsB.none { it == RelayEvent.Typing(a.me.id, true) }) kotlinx.coroutines.delay(20) }
+        a.api.rename(name = "Ana Nova")
+        withTimeout(5_000) { while (eventsB.none { it is RelayEvent.ProfileChanged && it.user.id == a.me.id && it.user.name == "Ana Nova" }) kotlinx.coroutines.delay(20) }
+        linkA.want(false)
+        linkB.want(false)
         scope.cancel()
     }
 }

@@ -329,6 +329,9 @@ interface PlaylistOnlineDao {
     suspend fun setPosition(rowId: Long, position: Int)
 }
 
+/** Unseen messages of one conversation. */
+data class UnreadCount(val friendId: String, val n: Int)
+
 @Dao
 interface SharedSongDao {
     @Insert(onConflict = androidx.room.OnConflictStrategy.IGNORE)
@@ -358,6 +361,17 @@ interface SharedSongDao {
     /** Your reaction (null takes it back); an older one never replaces a newer. */
     @Query("UPDATE shared_songs SET myReaction = :emoji, myReactionAt = :at WHERE friendId = :friendId AND deliveryId = :deliveryId AND myReactionAt <= :at")
     suspend fun setMyReaction(friendId: String, deliveryId: Long, emoji: String?, at: Long): Int
+
+    /**
+     * The new text of a message (only a text, only on the side that wrote it: an edit that points
+     * at a message from someone else changes nothing); an older correction never replaces a newer.
+     */
+    @Query("UPDATE shared_songs SET text = :text, editedAt = :at WHERE friendId = :friendId AND direction = :direction AND deliveryId = :deliveryId AND kind = 'text' AND editedAt < :at")
+    suspend fun editText(friendId: String, direction: String, deliveryId: Long, text: String, at: Long): Int
+
+    /** Unseen messages per friend (for the badges). */
+    @Query("SELECT friendId, count(*) AS n FROM shared_songs WHERE direction = 'in' AND seen = 0 GROUP BY friendId")
+    fun observeUnread(): Flow<List<UnreadCount>>
 
     /** The friend's reaction, only on a message of your conversation with them. */
     @Query("UPDATE shared_songs SET theirReaction = :emoji, theirReactionAt = :at WHERE friendId = :friendId AND deliveryId = :deliveryId AND theirReactionAt <= :at")

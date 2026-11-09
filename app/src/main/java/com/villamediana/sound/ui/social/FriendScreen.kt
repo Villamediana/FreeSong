@@ -95,9 +95,23 @@ fun FriendScreen(id: String) {
     var fetched by remember(id) { mutableStateOf<Profile?>(null) }
     LaunchedEffect(id, asFriend == null) {
         if (asFriend == null) fetched = runCatching { withContext(Dispatchers.IO) { hub.api.user(id) } }.getOrNull()
+        // A friend: their latest numbers and photo, now that their page is open.
+        else hub.refreshFriends()
+    }
+    // A new name or photo shows here at once (no leaving and coming back).
+    LaunchedEffect(id) {
+        hub.profileChanges.collect { p -> if (p.id == id) fetched = fetched?.copy(name = p.name, avatar = p.avatar) ?: p }
     }
     val incoming = friends.incoming.firstOrNull { it.user.id == id }
-    val profile = asFriend ?: fetched ?: incoming?.user
+    val inJam = jam?.members?.firstOrNull { it.id == id }
+    val profile = asFriend ?: fetched ?: incoming?.user ?: inJam
+    val withJam = when {
+        jam == null -> PersonJam.NONE
+        inJam != null -> PersonJam.TOGETHER
+        jam?.invited?.any { it.id == id } == true -> PersonJam.INVITED
+        else -> PersonJam.INVITE
+    }
+    var jamOpen by rememberSaveable { mutableStateOf(false) }
     val nav = com.villamediana.sound.ui.nav.navigator()
     val thread by remember(id) { hub.songs.thread(id) }.collectAsStateWithLifecycle(initialValue = emptyList())
 
@@ -113,9 +127,10 @@ fun FriendScreen(id: String) {
             friends.outgoing.any { it.user.id == id } || profile?.relation == "outgoing" -> "outgoing"
             else -> profile?.relation
         },
-        inJam = jam != null,
+        jam = withJam,
         snackbar = snackbar,
         onChat = { nav.openChat(id) },
+        onOpenJam = { jamOpen = true },
         onJam = {
             scope.launch {
                 val result = if (jam != null) hub.jam.invite(listOf(id)) else hub.jam.start(listOf(id))
@@ -129,6 +144,7 @@ fun FriendScreen(id: String) {
             }
         },
         sheets = {
+            if (jamOpen) JamSheet(onDismiss = { jamOpen = false })
             if (menu) {
                 SoundSheet(onDismissRequest = { menu = false }) {
                     SheetAction(Icons.Rounded.PersonRemove, stringResource(R.string.friend_unfriend), tint = SoundColors.Danger, labelColor = SoundColors.Danger, onClick = {
@@ -160,10 +176,11 @@ internal fun FriendPage(
     isFriend: Boolean,
     unread: Int,
     relation: String?,
-    inJam: Boolean,
+    jam: PersonJam,
     snackbar: com.villamediana.sound.ui.detail.DetailSnackbar,
     onChat: () -> Unit,
     onJam: () -> Unit,
+    onOpenJam: () -> Unit = {},
     onMenu: () -> Unit,
     onAdd: () -> Unit,
     sheets: @Composable () -> Unit = {},
@@ -194,18 +211,15 @@ internal fun FriendPage(
                     filled = true,
                     modifier = Modifier.weight(1f),
                 )
-                PersonButton(
-                    stringResource(if (inJam) R.string.friend_invite_jam else R.string.friend_jam),
-                    onClick = onJam,
-                    icon = Icons.Rounded.GraphicEq,
-                    modifier = Modifier.weight(1f),
-                )
+                JamButton(jam, onJam, onOpenJam, Modifier.weight(1f))
             } else if (person != null) {
                 when (relation) {
                     "incoming" -> PersonButton(stringResource(R.string.social_accept), onClick = onAdd, filled = true, modifier = Modifier.weight(1f))
                     "outgoing" -> PersonButton(stringResource(R.string.social_requested), onClick = {}, enabled = false, modifier = Modifier.weight(1f))
                     else -> PersonButton(stringResource(R.string.social_add), onClick = onAdd, filled = true, icon = Icons.Rounded.PersonAdd, modifier = Modifier.weight(1f))
                 }
+                // Someone in your jam through a friend: the jam is there too.
+                if (jam == PersonJam.TOGETHER) JamButton(jam, onJam, onOpenJam, Modifier.weight(1f))
             }
         },
         topActions = {
@@ -228,79 +242,16 @@ internal fun FriendPage(
     )
 }
 
-/** "Mandar pra Fulano": the song playing now, then your likes (filterable). */
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+/** Where a person stands with your jam: none on, on but not them, called, or in it with you. */
+enum class PersonJam { NONE, INVITE, INVITED, TOGETHER }
+
+/** "Jam" (start one with them), "Chamar pra jam", "Chamado" or "Na jam" (opens it). */
 @Composable
-fun SendSongSheet(friend: Profile, onDismiss: () -> Unit) {
-    val graph = SoundApplication.graph
-    val hub = graph.social
-    val scope = rememberCoroutineScope()
-    val feedback = rememberSheetFeedback()
-    val res = LocalContext.current.resources
-    val playback by graph.player.state.collectAsStateWithLifecycle()
-    val liked by graph.library.likedAll.collectAsStateWithLifecycle(initialValue = emptyList())
-    var filter by remember { mutableStateOf("") }
-    val now = playback.current?.takeIf { it.videoId != null }
-    val likes = liked.filter { it.videoId != null && it.videoId != now?.videoId }
-        .filter { filter.isBlank() || it.title.contains(filter, true) || it.artist.contains(filter, true) }
-        .take(60)
-
-    fun send(t: Track) {
-        val song = SongRef.of(t) ?: return
-        onDismiss()
-        scope.launch {
-            hub.songs.send(friend.id, song)
-                .onSuccess { feedback.show(res.getString(R.string.send_sent, friend.name)) }
-                .onFailure { feedback.show(res.getString(R.string.send_failed)) }
-        }
-    }
-
-    SoundSheet(onDismissRequest = onDismiss) {
-        Text(
-            stringResource(R.string.send_sheet_title, friend.name),
-            style = MaterialTheme.typography.headlineSmall,
-            color = SoundColors.Text,
-            modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 8.dp),
-        )
-        Column(Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState())) {
-            if (now != null) {
-                SendLabel(stringResource(R.string.send_now_playing))
-                SendRow(now) { send(now) }
-            }
-            if (liked.isNotEmpty()) {
-                SendLabel(stringResource(R.string.send_liked))
-                com.villamediana.sound.ui.sheets.SoundTextField(
-                    filter, { filter = it }, label = stringResource(R.string.send_filter),
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 6.dp),
-                )
-                likes.forEach { t -> SendRow(t) { send(t) } }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SendLabel(text: String) {
-    Text(
-        text.uppercase(),
-        style = MaterialTheme.typography.labelSmall,
-        color = SoundColors.TextFaint,
-        modifier = Modifier.padding(start = 24.dp, top = 12.dp, bottom = 6.dp),
-    )
-}
-
-@Composable
-private fun SendRow(t: Track, onClick: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).height(64.dp).padding(horizontal = 24.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Cover(t.coverPath, Modifier.size(46.dp), seed = t.album ?: t.title, shape = RoundedCornerShape(10.dp))
-        Spacer(Modifier.width(14.dp))
-        Column(Modifier.weight(1f)) {
-            Text(t.title, style = MaterialTheme.typography.titleSmall, color = SoundColors.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(t.artist, style = MaterialTheme.typography.bodySmall, color = SoundColors.TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        Icon(Icons.AutoMirrored.Rounded.Send, null, tint = SoundColors.Accent, modifier = Modifier.size(20.dp))
+private fun JamButton(jam: PersonJam, onJam: () -> Unit, onOpenJam: () -> Unit, modifier: Modifier = Modifier) {
+    when (jam) {
+        PersonJam.NONE -> PersonButton(stringResource(R.string.friend_jam), onClick = onJam, icon = Icons.Rounded.GraphicEq, modifier = modifier)
+        PersonJam.INVITE -> PersonButton(stringResource(R.string.friend_invite_jam), onClick = onJam, icon = Icons.Rounded.GraphicEq, modifier = modifier)
+        PersonJam.INVITED -> PersonButton(stringResource(R.string.friend_jam_invited), onClick = {}, icon = Icons.Rounded.GraphicEq, enabled = false, modifier = modifier)
+        PersonJam.TOGETHER -> PersonButton(stringResource(R.string.friend_in_jam), onClick = onOpenJam, icon = Icons.Rounded.GraphicEq, modifier = modifier)
     }
 }

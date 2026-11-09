@@ -1,5 +1,6 @@
 // Relay do FreeSong: perfis criados sozinhos, lista global, amizades, conversa entre amigos
-// (texto, música e reação) e jam (todos ouvindo a mesma coisa). HTTP JSON + um WebSocket por app aberto.
+// (texto, música, áudio, reação, resposta e edição) e jam (todos ouvindo a mesma coisa). HTTP JSON +
+// um WebSocket por app aberto.
 //
 // Guarda só o básico (perfil e amizades). A conversa não vira histórico aqui: fica em cada
 // celular; o servidor só segura a entrega até o celular do amigo confirmar, depois apaga.
@@ -19,9 +20,16 @@ import { cleanNumbers } from './numbers.js';
 import { cleanJpeg } from './jpeg.js';
 import { cleanDisplayName, cleanMessage, normalizeUsername, randomIdentity } from './names.js';
 
-export const VERSION = '1.5.0';
+export const VERSION = '1.6.0';
 const JSON_LIMIT = 64 * 1024;
 const AVATAR_LIMIT = 600 * 1024;
+/** Mensagem de voz: AAC em MP4 (o app grava ~24 kbps, até 5 min ≈ 0,9 MB). */
+export const VOICE_LIMIT = 1536 * 1024;
+export const VOICE_MAX_MS = 5 * 60_000 + 2_000;
+/** Áudio esperando uma pessoa buscar (o resto da caixa é texto e cabe em pouco). */
+export const VOICE_PENDING_LIMIT = 48 * 1024 * 1024;
+/** Ondinhas do áudio: um nível 0–f por barra. */
+const WAVE = /^[0-9a-f]{1,64}$/;
 /** O cofre (cifrado no celular): corpo do PUT e bytes guardados. */
 const VAULT_BODY_LIMIT = 6 * 1024 * 1024;
 const VAULT_DATA_MAX = 4 * 1024 * 1024;
@@ -132,6 +140,8 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
     shares: new Limiter(120, HOUR, clock), // músicas mandadas por pessoa
     messages: new Limiter(600, HOUR, clock), // mensagens de texto por pessoa
     reactions: new Limiter(600, HOUR, clock), // reações por pessoa
+    voices: new Limiter(120, HOUR, clock), // mensagens de voz por pessoa
+    typing: new Limiter(40, MINUTE, clock), // "escrevendo…" de uma pessoa pra outra
     jamChanges: new Limiter(120, MINUTE, clock), // por jam: cada mudança vai pra até 30 pessoas
     jamInvites: new Limiter(20, HOUR, clock), // convites de jam de uma pessoa pra outra
     jamRejects: new Limiter(10, MINUTE, clock), // por pessoa: jam devolvida pelo WebSocket quando passou do teto
@@ -219,6 +229,24 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
   function afterLeave({ jam, ended }, leaver) {
     if (ended) jamEnded(jam, [leaver]);
     else broadcastJam(jam);
+  }
+
+  /**
+   * Nome ou foto mudou: os amigos (perfil completo), quem está na jam com a pessoa (o público) e os
+   * outros celulares dela veem na hora, sem precisar sair e voltar da tela.
+   */
+  function profileChanged(userId) {
+    const u = store.user(userId);
+    if (!u) return;
+    const friendSet = new Set(store.friendIds(userId));
+    const full = { t: 'profile', user: fullProfile(u) };
+    emit(userId, full);
+    for (const f of friendSet) emit(f, full);
+    const jam = jams.of(userId);
+    if (jam) {
+      const pub = { t: 'profile', user: publicProfile(u) };
+      for (const m of jam.members) if (m !== userId && !friendSet.has(m)) emit(m, pub);
+    }
   }
 
   // ---------------------------------------------------------------- HTTP
@@ -334,6 +362,7 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
       if (String(e.message).includes('UNIQUE')) throw new HttpError(409, 'username_taken');
       throw e;
     }
+    if (change.name && change.name !== me.name) profileChanged(me.id);
     return { me: fullProfile(store.user(me.id)) };
   });
 
@@ -382,6 +411,7 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
     writeFileSync(tmp, img);
     renameSync(tmp, avatarPath(me.id));
     store.bumpAvatar(me.id, true);
+    profileChanged(me.id);
     return { me: fullProfile(store.user(me.id)) };
   });
 
@@ -389,6 +419,7 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
     const me = auth(req);
     rmSync(avatarPath(me.id), { force: true });
     store.bumpAvatar(me.id, false);
+    profileChanged(me.id);
     return { me: fullProfile(store.user(me.id)) };
   });
 
@@ -512,12 +543,27 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
     return to;
   }
 
-  function deliver(me, to, kind, payload, limit) {
+  /** Cabe mais uma entrega na caixa de [to]? */
+  function roomFor(to) {
     if (store.pendingCount(to) >= MAX_PENDING) throw new HttpError(429, 'inbox_full');
+  }
+
+  function deliver(me, to, kind, payload, limit, audio = null) {
+    roomFor(to);
     if (!limit.take(me.id)) throw new HttpError(429, 'slow_down');
-    const d = deliveryView(store.addDelivery(me.id, to, kind, payload, clock()));
+    const d = deliveryView(store.addDelivery(me.id, to, kind, payload, clock(), audio));
     emit(to, { t: 'delivery', delivery: d, from: publicProfile(me) });
     return { id: d.id, at: d.at };
+  }
+
+  /**
+   * [replyTo] de uma mensagem: o id da entrega respondida (o mesmo nos dois celulares), ou nada.
+   * Quem confere se a mensagem existe é o celular (o servidor não guarda a conversa).
+   */
+  function replyOf(raw) {
+    if (raw === undefined || raw === null) return {};
+    if (!Number.isSafeInteger(raw) || raw <= 0) throw new HttpError(400, 'invalid_reply');
+    return { replyTo: raw };
   }
 
   route('POST', /^\/v1\/shares$/, async (req) => {
@@ -526,7 +572,8 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
     const to = conversationWith(me, b.to);
     const track = cleanTrack(b.track);
     if (!track) throw new HttpError(400, 'invalid_track');
-    return { status: 201, body: { share: deliver(me, to, 'share', { track }, limits.shares) } };
+    const reply = replyOf(b.replyTo);
+    return { status: 201, body: { share: deliver(me, to, 'share', { track, ...reply }, limits.shares) } };
   });
 
   route('POST', /^\/v1\/messages$/, async (req) => {
@@ -535,7 +582,50 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
     const to = conversationWith(me, b.to);
     const text = cleanMessage(b.text);
     if (!text) throw new HttpError(400, 'invalid_text');
-    return { status: 201, body: { message: deliver(me, to, 'text', { text }, limits.messages) } };
+    const reply = replyOf(b.replyTo);
+    return { status: 201, body: { message: deliver(me, to, 'text', { text, ...reply }, limits.messages) } };
+  });
+
+  // Texto corrigido de uma mensagem já mandada ([ref] = id da entrega). O celular de quem recebe só
+  // aceita a edição de uma mensagem que veio de quem está editando.
+  route('POST', /^\/v1\/messages\/edit$/, async (req) => {
+    const me = auth(req);
+    const b = await json(req);
+    const to = conversationWith(me, b.to);
+    if (!Number.isSafeInteger(b.ref) || b.ref <= 0) throw new HttpError(400, 'invalid_edit');
+    const text = cleanMessage(b.text);
+    if (!text) throw new HttpError(400, 'invalid_text');
+    return { status: 201, body: { edit: deliver(me, to, 'edit', { ref: b.ref, text }, limits.messages) } };
+  });
+
+  // Mensagem de voz: o corpo é o áudio (AAC em MP4); duração, ondinhas e resposta vão na URL. O
+  // áudio fica aqui só até o celular do amigo baixar e confirmar (ou 14 dias), como o resto.
+  route('POST', /^\/v1\/voice$/, async (req, url) => {
+    const me = auth(req);
+    // O corpo é lido antes das outras recusas: resposta com o áudio pela metade no socket estraga a
+    // conexão que o cloudflared reaproveita.
+    const audio = await body(req, VOICE_LIMIT);
+    const q = url.searchParams;
+    const to = conversationWith(me, q.get('to'));
+    const ms = Number(q.get('ms'));
+    const wave = q.get('wave') ?? '';
+    if (!Number.isSafeInteger(ms) || ms < 300 || ms > VOICE_MAX_MS || !WAVE.test(wave)) throw new HttpError(400, 'invalid_voice');
+    const rawReply = q.get('replyTo');
+    const reply = replyOf(rawReply === null ? undefined : Number(rawReply));
+    roomFor(to);
+    if (store.pendingVoiceBytes(to) >= VOICE_PENDING_LIMIT) throw new HttpError(429, 'inbox_full');
+    // MP4 começa com a caixa "ftyp": o resto o servidor não abre (só guarda e entrega).
+    if (audio.length < 64 || audio.toString('latin1', 4, 8) !== 'ftyp') throw new HttpError(400, 'invalid_voice');
+    const voice = { ms, wave, bytes: audio.length };
+    return { status: 201, body: { voice: deliver(me, to, 'voice', { voice, ...reply }, limits.voices, audio) } };
+  });
+
+  // O áudio de uma mensagem de voz que chegou (só quem recebe baixa; depois do ack não existe mais).
+  route('GET', /^\/v1\/voice\/(\d+)$/, (req, url, [id]) => {
+    const me = auth(req);
+    const data = store.voice(Number(id), me.id);
+    if (!data) throw new HttpError(404, 'unknown_voice');
+    return { raw: Buffer.from(data), type: 'audio/mp4' };
   });
 
   // Reação a uma mensagem da conversa ([ref] = id da entrega, que os dois celulares guardam).
@@ -730,6 +820,11 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
           continue;
         }
         const out = await r.handler(req, url, m.slice(1));
+        if (out?.raw) {
+          res.writeHead(200, { ...SECURITY_HEADERS, 'content-type': out.type, 'content-length': out.raw.length, 'cache-control': 'no-store' });
+          res.end(out.raw);
+          return;
+        }
         const status = out?.status && out.body ? out.status : 200;
         const payload = JSON.stringify(out?.status && out.body ? out.body : out);
         res.writeHead(status, JSON_HEADERS);
@@ -799,6 +894,12 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
       send(ws, JSON.stringify({ t: 'pong', c, s: clock() }));
     } else if (msg?.t === 'ack' && Array.isArray(msg.ids)) {
       store.ack(userId, msg.ids.filter(Number.isInteger).slice(0, 500));
+    } else if (msg?.t === 'typing') {
+      // "Escrevendo…": só passa adiante, pra amigo, na hora (não fica guardado em lugar nenhum).
+      const to = typeof msg.to === 'string' ? msg.to.slice(0, 40) : '';
+      if (!to || to === userId || !isOnline(to) || !limits.typing.take(`${userId}>${to}`)) return;
+      if (!store.areFriends(userId, to)) return;
+      emit(to, { t: 'typing', from: userId, on: msg.on !== false });
     } else if (msg?.t === 'jam.state') {
       const me = store.user(userId);
       if (!me) return ws.close(4001, 'deleted');

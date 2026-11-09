@@ -52,6 +52,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -157,6 +158,9 @@ fun SoundRoot(incoming: MutableStateFlow<Inbound?>) {
     val playerExpanded = rememberSaveable { mutableStateOf(false) }
     // No bottom bar: the mini player sits at the bottom, just above the system navigation.
     val barSpace = navBarInset
+    // The jam's pill sits over the mini player: the pages keep their last lines clear of it.
+    val inJam by SoundApplication.graph.social.jam.jam.collectAsStateWithLifecycle()
+    val jamSpace by animateDpAsState(if (inJam != null && !chromeHidden) 46.dp else 0.dp, label = "jam")
 
     CompositionLocalProvider(
         LocalNavigator provides navigator,
@@ -164,7 +168,7 @@ fun SoundRoot(incoming: MutableStateFlow<Inbound?>) {
         com.villamediana.sound.ui.components.LocalArtistPhotos provides SoundApplication.graph.artistPhotos,
         com.villamediana.sound.ui.player.LocalLyricsTranslator provides SoundApplication.graph.lyricsTranslator,
         com.villamediana.sound.ui.chords.LocalChords provides SoundApplication.graph.chordsDeps,
-        LocalBottomInset provides barSpace + miniPlayerSpace + 16.dp,
+        LocalBottomInset provides barSpace + miniPlayerSpace + jamSpace + 16.dp,
     ) {
         Box(Modifier.fillMaxSize().background(SoundColors.Ink)) {
             NavHost(
@@ -247,6 +251,13 @@ fun SoundRoot(incoming: MutableStateFlow<Inbound?>) {
                 )
             }
 
+            // In a jam: a pill over the mini player, anywhere in the app (tap: the jam).
+            com.villamediana.sound.ui.social.JamPill(
+                shown = chromeShown && !chromeHidden && !Chrome.playerRising,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = Dimens.Gutter - 4.dp, bottom = barSpace + (if (playback.hasMedia) Dimens.MiniPlayerHeight + 10.dp else 16.dp)),
+            )
             // A new version on GitHub: the quiet check, the sheet and Android's install screens.
             com.villamediana.sound.ui.update.UpdateHost()
             // Jam invites while the app is open, and what a social notification asked to open.

@@ -148,6 +148,9 @@ data class VShared(
     @SerialName("mra") val myReactionAt: Long = 0,
     @SerialName("tr") val theirReaction: String? = null,
     @SerialName("tra") val theirReactionAt: Long = 0,
+    /** The message it answers, and when its text was last corrected (the newest correction wins). */
+    @SerialName("rp") val replyTo: Long? = null,
+    @SerialName("ed") val editedAt: Long = 0,
 ) {
     val key: String get() = "$direction#$deliveryId"
 }
@@ -197,10 +200,13 @@ object VaultMerge {
             .map { same ->
                 val mine = same.maxBy { it.myReactionAt }
                 val theirs = same.maxBy { it.theirReactionAt }
+                val edited = same.maxBy { it.editedAt }
                 same.first().copy(
                     seen = same.any { it.seen },
                     myReaction = mine.myReaction, myReactionAt = mine.myReactionAt,
                     theirReaction = theirs.theirReaction, theirReactionAt = theirs.theirReactionAt,
+                    text = edited.text, editedAt = edited.editedAt,
+                    replyTo = same.firstNotNullOfOrNull { it.replyTo },
                 )
             }
             .sortedWith(compareBy<VShared> { it.at }.thenBy { it.key }),

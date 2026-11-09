@@ -87,6 +87,10 @@ private fun ArtistContent(detail: ArtistDetail) {
     val countText = songCount(s.trackCount)
     val albumsText = if (s.albumCount > 0) pluralStringResource(R.plurals.detail_n_albums, s.albumCount, s.albumCount) else null
 
+    // The artist's photo opens big on a tap.
+    var viewing by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+    if (viewing && s.coverPath != null) com.villamediana.sound.ui.components.PhotoViewer(s.coverPath) { viewing = false }
+
     CollectionScaffold(
         header = HeaderSpec(
             overline = stringResource(R.string.detail_overline_artist),
@@ -94,7 +98,13 @@ private fun ArtistContent(detail: ArtistDetail) {
             meta = MetaFormat.join(countText, albumsText),
             wash = wash,
         ),
-        art = { m -> ArtistArt(s.coverPath, s.name, m) },
+        art = { m ->
+            ArtistArt(
+                s.coverPath,
+                s.name,
+                m.clip(androidx.compose.foundation.shape.CircleShape).clickable(enabled = s.coverPath != null) { viewing = true },
+            )
+        },
         artShape = ArtShape.Circle,
         snackbar = snackbar,
         playing = status.isPlaying,

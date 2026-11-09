@@ -130,4 +130,45 @@ class JamSyncTest {
         assertNull(JamSync.moved(jam(index = 0), local(index = 0)))
         assertNull(JamSync.moved(jam(index = 0), local(index = 1, queue = listOf(song(1), song(9)))))
     }
+
+    @Test
+    fun aSongFarDownALongListIsTheOneThatPlays() {
+        val list = (1..500).map { song(it) }
+        val p = JamSync.play(list, 349)!!
+        assertEquals(song(350).videoId, p.current!!.videoId)
+        assertTrue(p.queue.size <= JamSync.MAX_QUEUE)
+        // Mostly what comes after it.
+        assertTrue(p.queue.size - p.index > p.index)
+    }
+
+    @Test
+    fun aQueueIsCutToWhatOneMessageCarriesAroundTheSongPlaying() {
+        val list = (1..300).map { song(it) }
+        val size = { _: SongRef -> 300 }
+        val (queue, index) = JamSync.fit(list, 120, size, budget = 300 * 40)
+        assertEquals(40, queue.size)
+        assertEquals(song(121).videoId, queue[index].videoId)
+        // The songs after it first: here all 39 fit after.
+        assertEquals(0, index)
+        // Near the end, the room left goes to the ones before it.
+        val (tail, at) = JamSync.fit(list, 295, size, budget = 300 * 40)
+        assertEquals(40, tail.size)
+        assertEquals(song(296).videoId, tail[at].videoId)
+        assertEquals(listOf(song(300).videoId), listOf(tail.last().videoId))
+        // A queue that already fits stays as it is.
+        val small = list.take(10)
+        assertEquals(small to 3, JamSync.fit(small, 3, size))
+    }
+
+    @Test
+    fun aSongTravelsWithoutWhatTheOthersWorkOut() {
+        val s = SongRef("abcdefghijk", "T", "A", cover = SongRef.thumbnailOf("abcdefghijk"), url = com.villamediana.sound.online.YouTubeLinks.watchUrl("abcdefghijk", music = true))
+        val c = s.compact()
+        assertNull(c.cover)
+        assertNull(c.url)
+        // The other phone gets the same picture and link back.
+        assertEquals(s.toRemote(), c.toRemote())
+        val own = s.copy(cover = "https://lh3.googleusercontent.com/x=w544-h544")
+        assertEquals(own.cover, own.compact().cover)
+    }
 }

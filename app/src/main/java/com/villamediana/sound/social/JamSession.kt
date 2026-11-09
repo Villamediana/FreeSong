@@ -88,7 +88,7 @@ class JamSession(
     /** A jam with these friends, starting from what this phone plays now. */
     suspend fun start(friends: List<String>): Result<Jam> = runCatching {
         // Where the song is now (the jam starts from there for everyone, this phone included).
-        val state = withContext(main) { currentLocalState(player.livePositionMs()) }
+        val state = withContext(main) { fitted(currentLocalState(player.livePositionMs())) }
         val jam = withContext(Dispatchers.IO) { relay.startJam(friends, state) }
         withContext(main) { activate(jam, held = false) }
         jam
@@ -289,9 +289,10 @@ class JamSession(
 
     // ------------------------------------------------------------------ the app's commands → the jam
 
-    private fun propose(next: JamState) {
+    private fun propose(proposed: JamState) {
         val jam = _jam.value ?: return
         val base = jam.state
+        val next = if (proposed.queue != base.queue) fitted(proposed) else proposed
         val withQueue = next.queue != base.queue
         val optimistic = next.copy(rev = base.rev, updatedAt = relay.serverNow(), by = me())
         _jam.value = jam.copy(state = optimistic)
@@ -357,9 +358,31 @@ class JamSession(
 
     // ------------------------------------------------------------------ helpers
 
+    /** The queue as the relay takes it in one message: smaller songs, cut around the one playing. */
+    private fun fitted(s: JamState): JamState {
+        val (queue, index) = JamSync.fit(s.queue.map { it.compact() }, s.index, ::wireSize)
+        return s.copy(queue = queue, index = index)
+    }
+
+    private fun wireSize(song: SongRef): Int = RelayJson.encodeToString(SongRef.serializer(), song).toByteArray().size + 1
+
+    /** Someone's new name or photo, in the jam and its invites (what plays doesn't change). */
+    fun updateProfile(user: Profile) {
+        scope.launch(main) {
+            fun swap(list: List<Profile>) = list.map { if (it.id == user.id) it.copy(name = user.name, avatar = user.avatar) else it }
+            _jam.value = _jam.value?.let { j -> j.copy(members = swap(j.members), invited = swap(j.invited)) }
+            _invites.value = _invites.value.map { inv ->
+                inv.copy(
+                    jam = inv.jam.copy(members = swap(inv.jam.members), invited = swap(inv.jam.invited)),
+                    from = if (inv.from.id == user.id) inv.from.copy(name = user.name, avatar = user.avatar) else inv.from,
+                )
+            }
+        }
+    }
+
     private fun currentLocalState(positionMs: Long): JamState {
         val st = playback.value
-        val songs = st.queue.mapNotNull(SongRef::of).take(JamSync.MAX_QUEUE)
+        val songs = st.queue.mapNotNull(SongRef::of)
         val current = st.current?.let(SongRef::of)
         val index = current?.let { c -> songs.indexOfFirst { it.videoId == c.videoId } }?.takeIf { it >= 0 }
         // The song playing isn't one the others can play (no YouTube id): the jam starts at the top, from 0.

@@ -74,6 +74,13 @@ CREATE TABLE IF NOT EXISTS vaults (
   data       BLOB NOT NULL,
   updated_at INTEGER NOT NULL
 );
+-- Áudio de uma mensagem de voz, preso à entrega: some junto com ela (ack, 14 dias ou perfil apagado).
+CREATE TABLE IF NOT EXISTS voice_notes (
+  delivery_id INTEGER PRIMARY KEY REFERENCES deliveries(id) ON DELETE CASCADE,
+  to_id       TEXT NOT NULL,
+  data        BLOB NOT NULL
+);
+CREATE INDEX IF NOT EXISTS voice_notes_to ON voice_notes(to_id);
 `;
 
 export const sha256 = (text) => createHash('sha256').update(text).digest('hex');
@@ -334,9 +341,23 @@ export class Store {
 
   // ---------------------------------------------------------------- entregas (não é histórico)
 
-  addDelivery(fromId, toId, kind, payload, now) {
-    const r = this.st('INSERT INTO deliveries (from_id, to_id, kind, payload, created_at) VALUES (?, ?, ?, ?, ?)').run(fromId, toId, kind, JSON.stringify(payload), now);
-    return this.st('SELECT * FROM deliveries WHERE id = ?').get(r.lastInsertRowid);
+  /** Uma entrega; com [audio], o áudio da mensagem de voz entra junto (as duas coisas ou nenhuma). */
+  addDelivery(fromId, toId, kind, payload, now, audio = null) {
+    return this.tx(() => {
+      const r = this.st('INSERT INTO deliveries (from_id, to_id, kind, payload, created_at) VALUES (?, ?, ?, ?, ?)').run(fromId, toId, kind, JSON.stringify(payload), now);
+      if (audio) this.st('INSERT INTO voice_notes (delivery_id, to_id, data) VALUES (?, ?, ?)').run(r.lastInsertRowid, toId, audio);
+      return this.st('SELECT * FROM deliveries WHERE id = ?').get(r.lastInsertRowid);
+    });
+  }
+
+  /** O áudio da entrega [id], só pra quem vai receber; null se não há (ou já foi confirmado). */
+  voice(id, toId) {
+    return this.st('SELECT data FROM voice_notes WHERE delivery_id = ? AND to_id = ?').get(id, toId)?.data ?? null;
+  }
+
+  /** Bytes de áudio esperando [toId] confirmar. */
+  pendingVoiceBytes(toId) {
+    return Number(this.st('SELECT coalesce(sum(length(data)), 0) AS n FROM voice_notes WHERE to_id = ?').get(toId).n);
   }
 
   pendingCount(toId) {

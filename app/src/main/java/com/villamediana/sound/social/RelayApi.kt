@@ -158,25 +158,62 @@ class RelayApi(
 
     // ---------------------------------------------------------------- shared songs (delivered, not kept)
 
-    /** Sends [song] to a friend; the relay answers with its delivery id and time. */
-    fun share(to: String, song: SongRef): SentShare = call(
+    /** Sends [song] to a friend ([replyTo]: the message it answers); the relay answers with its delivery id and time. */
+    fun share(to: String, song: SongRef, replyTo: Long? = null): SentShare = call(
         "POST", "/v1/shares",
         json(buildJsonObject {
             put("to", to)
             put("track", RelayJson.encodeToJsonElement(SongRef.serializer(), song))
+            if (replyTo != null) put("replyTo", replyTo)
         }),
         ShareBox.serializer(),
     ).share
 
-    /** A text to a friend (relay 1.5.0); the relay answers with its delivery id and time. */
-    fun sendText(to: String, text: String): SentShare = call(
+    /** A text to a friend (relay 1.5.0; [replyTo] since 1.6.0); the relay answers with its delivery id and time. */
+    fun sendText(to: String, text: String, replyTo: Long? = null): SentShare = call(
         "POST", "/v1/messages",
         json(buildJsonObject {
             put("to", to)
             put("text", text)
+            if (replyTo != null) put("replyTo", replyTo)
         }),
         MessageBox.serializer(),
     ).message
+
+    /** The new text of your message [ref] (relay 1.6.0). */
+    fun editText(to: String, ref: Long, text: String): SentShare = call(
+        "POST", "/v1/messages/edit",
+        json(buildJsonObject {
+            put("to", to)
+            put("ref", ref)
+            put("text", text)
+        }),
+        EditBox.serializer(),
+    ).edit
+
+    /** A voice message ([audio]: AAC in MP4) to a friend (relay 1.6.0). */
+    fun sendVoice(to: String, audio: ByteArray, ms: Long, wave: String, replyTo: Long? = null): SentShare {
+        val url = (baseUrl.trimEnd('/') + "/v1/voice").toHttpUrl().newBuilder()
+            .addQueryParameter("to", to)
+            .addQueryParameter("ms", ms.toString())
+            .addQueryParameter("wave", wave)
+            .apply { if (replyTo != null) addQueryParameter("replyTo", replyTo.toString()) }
+            .build()
+        return call("POST", url.encodedPath + "?" + url.encodedQuery, audio.toRequestBody("audio/mp4".toMediaType()), VoiceBox.serializer()).voice
+    }
+
+    /** The audio of the voice message [deliveryId] that came to this phone (gone from the relay after the ack). */
+    fun voiceAudio(deliveryId: Long): ByteArray {
+        val t = token() ?: throw RelayException(401, "no_account")
+        val request = Request.Builder().url(baseUrl.trimEnd('/') + "/v1/voice/$deliveryId").header("Authorization", "Bearer $t").get().build()
+        http.newCall(request).execute().use { r ->
+            if (!r.isSuccessful) {
+                val code = runCatching { RelayJson.parseToJsonElement(r.body.string()).jsonObject["error"]?.jsonPrimitive?.content }.getOrNull()
+                throw RelayException(r.code, code ?: "http_${r.code}")
+            }
+            return r.body.bytes()
+        }
+    }
 
     /** A reaction ([emoji], "" to take it back) to the message [ref] of the conversation with [to]. */
     fun react(to: String, ref: Long, emoji: String) {
@@ -256,6 +293,8 @@ class RelayApi(
     @Serializable internal data class ShareBox(val share: SentShare)
     @Serializable internal data class MessageBox(val message: SentShare)
     @Serializable internal data class ReactionBox(val reaction: SentShare)
+    @Serializable internal data class EditBox(val edit: SentShare)
+    @Serializable internal data class VoiceBox(val voice: SentShare)
     @Serializable internal data class JamBox(val jam: Jam)
 }
 

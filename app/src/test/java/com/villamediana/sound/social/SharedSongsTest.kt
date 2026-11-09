@@ -127,4 +127,70 @@ class SharedSongsTest {
         val streamed = song(3).toRemote().asTransientTrack()
         assertEquals(song(3).cover, SongRef.of(streamed)!!.cover)
     }
+
+    @Test fun aFriendsCorrectionChangesOnlyTheirOwnTextAndTheNewestWins() = runBlocking {
+        songs.keep(Delivery(30, "text", "uana", 1_000, text = "bora ouvir?"))
+        db.sharedSongs().insert(SharedSong(friendId = "uana", direction = SharedSong.OUT, deliveryId = 31, videoId = "", title = "", artist = "", at = 1_500, seen = true, kind = SharedSong.TEXT, text = "bora!"))
+        // Ana corrects hers.
+        assertFalse(songs.keep(Delivery(32, "edit", "uana", 2_000, ref = 30, text = "bora ouvir agora?")))
+        val fixed = db.sharedSongs().find("uana", 30)!!
+        assertEquals("bora ouvir agora?", fixed.text)
+        assertTrue(fixed.edited)
+        // An older correction arriving late doesn't undo the newer one.
+        songs.keep(Delivery(33, "edit", "uana", 1_800, ref = 30, text = "bora?"))
+        assertEquals("bora ouvir agora?", db.sharedSongs().find("uana", 30)!!.text)
+        // Nobody corrects your messages, nor someone else's conversation.
+        songs.keep(Delivery(34, "edit", "uana", 3_000, ref = 31, text = "não"))
+        assertEquals("bora!", db.sharedSongs().find("uana", 31)!!.text)
+        songs.keep(Delivery(35, "edit", "ubia", 3_000, ref = 30, text = "não"))
+        assertEquals("bora ouvir agora?", db.sharedSongs().find("uana", 30)!!.text)
+    }
+
+    @Test fun anAnswerKeepsWhatItAnswers() = runBlocking {
+        songs.keep(Delivery(40, "text", "uana", 1_000, text = "conhece essa?"))
+        songs.keep(Delivery(41, "share", "uana", 2_000, song(4), replyTo = 40))
+        assertEquals(40L, db.sharedSongs().find("uana", 41)!!.replyTo)
+        assertNull(db.sharedSongs().find("uana", 40)!!.replyTo)
+    }
+
+    @Test fun aVoiceMessageWhoseAudioDidNotComeIsNotKept() = runBlocking {
+        // The relay is unreachable: the audio can't come, so the delivery must stay on the relay.
+        val d = Delivery(50, "voice", "uana", 1_000, voice = VoiceInfo(4_200, "0369cf", 2_048))
+        assertTrue(runCatching { songs.keep(d) }.exceptionOrNull() is java.io.IOException)
+        assertNull(db.sharedSongs().find("uana", 50))
+    }
+
+    @Test fun onlyYourOwnTextsCanBeCorrected() = runBlocking {
+        songs.keep(Delivery(60, "text", "uana", 1_000, text = "oi"))
+        val theirs = db.sharedSongs().find("uana", 60)!!
+        assertTrue(songs.edit(theirs, "tchau").isFailure)
+        assertEquals("oi", db.sharedSongs().find("uana", 60)!!.text)
+    }
+
+    @Test fun theUnreadCountsArePerFriend() = runBlocking {
+        songs.keep(Delivery(70, "text", "uana", 1_000, text = "a"))
+        songs.keep(Delivery(71, "text", "uana", 1_100, text = "b"))
+        songs.keep(Delivery(72, "share", "ubia", 1_200, song(2)))
+        assertEquals(mapOf("uana" to 2, "ubia" to 1), songs.unread.first())
+        songs.markSeen("uana")
+        assertEquals(mapOf("ubia" to 1), songs.unread.first())
+    }
+
+    @Test fun version7DatabasesGainAnswersCorrectionsAndVoice() {
+        migrations.createDatabase("migrate8.db", 7).apply {
+            execSQL("INSERT INTO shared_songs (friendId, direction, deliveryId, videoId, title, artist, at, seen, kind, text) VALUES ('uana', 'in', 3, '', '', '', 1000, 0, 'text', 'oi')")
+            close()
+        }
+        val v8 = migrations.runMigrationsAndValidate("migrate8.db", 8, true)
+        v8.query("SELECT text, replyTo, editedAt, voiceMs, voiceWave, voiceFile FROM shared_songs").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals("oi", c.getString(0))
+            assertTrue(c.isNull(1))
+            assertEquals(0L, c.getLong(2))
+            assertTrue(c.isNull(3))
+            assertTrue(c.isNull(4))
+            assertTrue(c.isNull(5))
+        }
+        v8.close()
+    }
 }

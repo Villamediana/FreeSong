@@ -314,6 +314,135 @@ test('conversa: texto (com quebras, limpo) e reação só entre amigos, pela mes
   appB.close();
 });
 
+test('conversa 1.6: resposta, edição e "escrevendo…" (só entre amigos, sem guardar nada)', async () => {
+  const a = await person();
+  const b = await person();
+  const c = await person();
+  await friends(a, b);
+  const appB = await online(b);
+  const first = await api('POST', '/v1/messages', { token: a.token, body: { to: b.id, text: 'bora ouvir?' } });
+  await appB.next((e) => e.t === 'delivery' && e.delivery.kind === 'text');
+  for (const replyTo of [0, -1, '3', 1.5]) {
+    assert.equal((await api('POST', '/v1/messages', { token: b.token, body: { to: a.id, text: 'x', replyTo } })).json.error, 'invalid_reply');
+  }
+  const appA = await online(a);
+  assert.equal((await api('POST', '/v1/messages', { token: b.token, body: { to: a.id, text: 'bora!', replyTo: first.json.message.id } })).status, 201);
+  const reply = await appA.next((e) => e.t === 'delivery' && e.delivery.kind === 'text');
+  assert.deepEqual([reply.delivery.text, reply.delivery.replyTo], ['bora!', first.json.message.id]);
+  assert.equal((await api('POST', '/v1/shares', { token: b.token, body: { to: a.id, track: track(9), replyTo: first.json.message.id } })).status, 201);
+  assert.equal((await appA.next((e) => e.t === 'delivery' && e.delivery.kind === 'share')).delivery.replyTo, first.json.message.id);
+  // Edição: texto limpo como uma mensagem nova; ref inválido ou texto vazio é recusado.
+  assert.equal((await api('POST', '/v1/messages/edit', { token: a.token, body: { to: b.id, ref: 0, text: 'x' } })).json.error, 'invalid_edit');
+  assert.equal((await api('POST', '/v1/messages/edit', { token: a.token, body: { to: b.id, ref: first.json.message.id, text: ' ‮ ' } })).json.error, 'invalid_text');
+  assert.equal((await api('POST', '/v1/messages/edit', { token: c.token, body: { to: b.id, ref: first.json.message.id, text: 'oi' } })).status, 403);
+  const edit = await api('POST', '/v1/messages/edit', { token: a.token, body: { to: b.id, ref: first.json.message.id, text: 'bora ouvir agora?' } });
+  assert.equal(edit.status, 201);
+  const ev = await appB.next((e) => e.t === 'delivery' && e.delivery.kind === 'edit');
+  assert.deepEqual([ev.delivery.ref, ev.delivery.text, ev.delivery.id], [first.json.message.id, 'bora ouvir agora?', edit.json.edit.id]);
+  // "Escrevendo…" vai na hora pra amigo com o app aberto; pra quem não é amigo, nada.
+  appA.send({ t: 'typing', to: b.id });
+  assert.deepEqual(await appB.next((e) => e.t === 'typing'), { t: 'typing', from: a.id, on: true });
+  appA.send({ t: 'typing', to: b.id, on: false });
+  assert.equal((await appB.next((e) => e.t === 'typing')).on, false);
+  const appC = await online(c);
+  appC.send({ t: 'typing', to: b.id });
+  appA.send({ t: 'typing', to: c.id });
+  await tick();
+  assert.equal(appB.events.filter((e) => e.t === 'typing').length, 0);
+  assert.equal(appC.events.filter((e) => e.t === 'typing').length, 0);
+  appA.close();
+  appB.close();
+  appC.close();
+});
+
+/** Um "MP4" mínimo: o relay só confere a caixa ftyp. */
+const voiceBytes = (n = 2048) => {
+  const buf = Buffer.alloc(n, 7);
+  buf.writeUInt32BE(24, 0);
+  buf.write('ftypM4A ', 4, 'latin1');
+  return buf;
+};
+
+test('mensagem de voz: o áudio fica só até quem recebe baixar e confirmar', async () => {
+  const a = await person();
+  const b = await person();
+  const c = await person();
+  const path = (q) => '/v1/voice?' + new URLSearchParams(q).toString();
+  const headers = { 'content-type': 'audio/mp4' };
+  assert.equal((await api('POST', path({ to: b.id, ms: 4000, wave: '0369cf' }), { token: a.token, raw: voiceBytes(), headers })).status, 403);
+  await friends(a, b);
+  const bad = [
+    { to: b.id, ms: 100, wave: '0369' },
+    { to: b.id, ms: 400_000, wave: '0369' },
+    { to: b.id, ms: 4000, wave: 'xyz' },
+    { to: b.id, ms: 4000, wave: '' },
+    { to: b.id, ms: 4000, wave: '0'.repeat(65) },
+  ];
+  for (const q of bad) assert.equal((await api('POST', path(q), { token: a.token, raw: voiceBytes(), headers })).json.error, 'invalid_voice');
+  assert.equal((await api('POST', path({ to: b.id, ms: 4000, wave: '01' }), { token: a.token, raw: Buffer.alloc(2048, 1), headers })).json.error, 'invalid_voice');
+  assert.equal((await api('POST', path({ to: b.id, ms: 4000, wave: '01', replyTo: 'x' }), { token: a.token, raw: voiceBytes(), headers })).json.error, 'invalid_reply');
+  const big = await api('POST', path({ to: b.id, ms: 4000, wave: '01' }), { token: a.token, raw: voiceBytes(1536 * 1024 + 1), headers });
+  assert.equal(big.status, 413);
+  const appB = await online(b);
+  const audio = voiceBytes(4096);
+  const sent = await api('POST', path({ to: b.id, ms: 4200, wave: '0369cf', replyTo: 12 }), { token: a.token, raw: audio, headers });
+  assert.equal(sent.status, 201);
+  const ev = await appB.next((e) => e.t === 'delivery' && e.delivery.kind === 'voice');
+  assert.deepEqual(ev.delivery.voice, { ms: 4200, wave: '0369cf', bytes: 4096 });
+  assert.equal(ev.delivery.replyTo, 12);
+  // Só quem recebe baixa.
+  assert.equal((await api('GET', `/v1/voice/${ev.delivery.id}`, { token: a.token })).status, 404);
+  assert.equal((await api('GET', `/v1/voice/${ev.delivery.id}`, { token: c.token })).status, 404);
+  const got = await api('GET', `/v1/voice/${ev.delivery.id}`, { token: b.token });
+  assert.equal(got.status, 200);
+  assert.equal(got.res.headers.get('content-type'), 'audio/mp4');
+  assert.deepEqual(Buffer.from(await got.res.arrayBuffer()), audio);
+  // Confirmado: some a entrega e o áudio.
+  assert.equal((await api('POST', '/v1/mailbox/ack', { token: b.token, body: { ids: [ev.delivery.id] } })).json.removed, 1);
+  assert.equal((await api('GET', `/v1/voice/${ev.delivery.id}`, { token: b.token })).status, 404);
+  assert.equal(relay.store.pendingVoiceBytes(b.id), 0);
+  // Vencido (14 dias) também leva o áudio junto.
+  await api('POST', path({ to: b.id, ms: 4200, wave: '03' }), { token: a.token, raw: audio, headers });
+  assert.equal(relay.store.pendingVoiceBytes(b.id), 4096);
+  now += DELIVERY_TTL_MS + 1;
+  relay.store.expireDeliveries(now - DELIVERY_TTL_MS);
+  assert.equal(relay.store.pendingVoiceBytes(b.id), 0);
+  appB.close();
+});
+
+test('nome ou foto mudou: amigos, quem está na jam e os outros celulares veem na hora', async () => {
+  const a = await person();
+  const b = await person();
+  const c = await person();
+  const d = await person();
+  await friends(a, b);
+  await friends(b, c);
+  const appB = await online(b);
+  const appC = await online(c);
+  const appD = await online(d);
+  const appA2 = await online(a);
+  // a e c (amigo de amigo) na mesma jam, pelo b.
+  const jam = await api('POST', '/v1/jams', { token: b.token, body: { invite: [a.id, c.id] } });
+  await api('POST', `/v1/jams/${jam.json.jam.id}/join`, { token: a.token });
+  await api('POST', `/v1/jams/${jam.json.jam.id}/join`, { token: c.token });
+  await api('PATCH', '/v1/me', { token: a.token, body: { name: 'Osorio' } });
+  const forFriend = await appB.next((e) => e.t === 'profile');
+  assert.deepEqual([forFriend.user.id, forFriend.user.name], [a.id, 'Osorio']);
+  assert.ok('numbers' in forFriend.user);
+  const forJam = await appC.next((e) => e.t === 'profile');
+  assert.deepEqual([forJam.user.id, forJam.user.name], [a.id, 'Osorio']);
+  assert.ok(!('numbers' in forJam.user));
+  assert.equal((await appA2.next((e) => e.t === 'profile')).user.name, 'Osorio');
+  // O mesmo nome de novo não avisa ninguém.
+  await api('PATCH', '/v1/me', { token: a.token, body: { name: 'Osorio' } });
+  await api('PUT', '/v1/me/avatar', { token: a.token, raw: TINY_JPEG, headers: { 'content-type': 'image/jpeg' } });
+  assert.match((await appB.next((e) => e.t === 'profile')).user.avatar, /\/avatars\//);
+  await tick();
+  assert.equal(appB.events.filter((e) => e.t === 'profile').length, 0);
+  assert.equal(appD.events.filter((e) => e.t === 'profile').length, 0);
+  for (const app of [appB, appC, appD, appA2]) app.close();
+});
+
 test('entrega não buscada some depois de 14 dias', async () => {
   const a = await person();
   const b = await person();
@@ -540,7 +669,10 @@ test('números do perfil: só totais, conferidos, e só a pessoa e os amigos vee
 test('o banco guarda só o básico: nada de histórico legível, IP, último acesso ou versão do app', async () => {
   const db = new DatabaseSync(join(dir, 'freesong.db'), { readOnly: true });
   const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'").all().map((t) => t.name).sort();
-  assert.deepEqual(tables, ['deliveries', 'friend_requests', 'friendships', 'tokens', 'users', 'vaults']);
+  assert.deepEqual(tables, ['deliveries', 'friend_requests', 'friendships', 'tokens', 'users', 'vaults', 'voice_notes']);
+  // Áudio de voz: só o que está esperando entrega, preso a ela (sem quem mandou nem quando).
+  const voiceCols = db.prepare('PRAGMA table_info(voice_notes)').all().map((c) => c.name).sort();
+  assert.deepEqual(voiceCols, ['data', 'delivery_id', 'to_id']);
   // O cofre é um blob opaco (cifrado no celular) e a chave dele embrulhada pelo código: nada legível.
   const vaultCols = db.prepare('PRAGMA table_info(vaults)').all().map((c) => c.name).sort();
   assert.deepEqual(vaultCols, ['data', 'key', 'rev', 'updated_at', 'user_id']);

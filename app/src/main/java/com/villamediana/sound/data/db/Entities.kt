@@ -296,14 +296,27 @@ data class SharedSong(
     /** The friend's reaction. */
     val theirReaction: String? = null,
     @androidx.room.ColumnInfo(defaultValue = "0") val theirReactionAt: Long = 0,
+    /** The message this one answers (its [deliveryId]), or null. */
+    val replyTo: Long? = null,
+    /** When the text was last corrected (0: never; the newest correction wins across phones). */
+    @androidx.room.ColumnInfo(defaultValue = "0") val editedAt: Long = 0,
+    /** A voice message: how long it is, its waves (one level 0–f per bar) and its audio in filesDir/voice. */
+    val voiceMs: Long? = null,
+    val voiceWave: String? = null,
+    val voiceFile: String? = null,
 ) {
     val isText: Boolean get() = kind == TEXT
+    val isVoice: Boolean get() = kind == VOICE
+    val isSong: Boolean get() = kind == SONG
+    val mine: Boolean get() = direction == OUT
+    val edited: Boolean get() = editedAt > 0
 
     companion object {
         const val IN = "in"
         const val OUT = "out"
         const val SONG = "song"
         const val TEXT = "text"
+        const val VOICE = "voice"
     }
 }
 
