@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -265,15 +266,15 @@ class SocialHub(
 
     private fun typingFrom(friendId: String, on: Boolean) {
         if (!on) {
-            _typing.value = _typing.value - friendId
+            _typing.update { it - friendId }
             return
         }
         val until = System.currentTimeMillis() + TYPING_MS
-        _typing.value = _typing.value + (friendId to until)
+        _typing.update { it + (friendId to until) }
         scope.launch {
             delay(TYPING_MS)
             val now = System.currentTimeMillis()
-            _typing.value = _typing.value.filterValues { it > now }
+            _typing.update { map -> map.filterValues { it > now } }
         }
     }
 

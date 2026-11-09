@@ -153,4 +153,5 @@
     <string name="friend_jam_invited">Invitado a la jam</string>
     <string name="friend_in_jam">En la jam</string>
     <string name="photo_close">Cerrar</string>
+    <string name="chat_mic_busy">El micrófono está ocupado ahora.</string>
 </resources>

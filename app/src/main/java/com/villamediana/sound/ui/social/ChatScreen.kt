@@ -147,6 +147,8 @@ internal class ChatVoice(
     val fileOf: (SharedSong) -> java.io.File?,
     val canRecord: () -> Boolean,
     val onRecorded: (VoiceRecorder.Recorded?) -> Unit,
+    /** The microphone is taken (a call, another app recording). */
+    val onBusy: () -> Unit = {},
 )
 
 /**
@@ -219,6 +221,7 @@ fun ChatScreen(id: String) {
                 if (!ok) micAsk.launch(Manifest.permission.RECORD_AUDIO)
                 ok
             },
+            onBusy = { snackbar.feedback.show(res.getString(R.string.chat_mic_busy)) },
             onRecorded = { rec ->
                 if (rec == null) {
                     snackbar.feedback.show(res.getString(R.string.chat_voice_hold))
@@ -800,7 +803,7 @@ private fun SongBody(m: SharedSong, time: String) {
  */
 @Composable
 private fun VoiceBody(m: SharedSong?, ms: Long, wave: String?, voice: ChatVoice?, mine: Boolean, time: String?, edited: Boolean) {
-    val file = m?.let { voice?.fileOf?.invoke(it) }
+    val file = remember(m?.id, m?.voiceFile) { m?.let { voice?.fileOf?.invoke(it) } }
     val player = voice?.player
     val here = m != null && player?.current == m.id
     val playing = here && player?.playing == true
@@ -1142,6 +1145,7 @@ private fun Composer(
                         }
                         recording = ok
                         slide = 0f
+                        if (!ok) voice.onBusy()
                         ok
                     },
                     onSlide = { slide = it },

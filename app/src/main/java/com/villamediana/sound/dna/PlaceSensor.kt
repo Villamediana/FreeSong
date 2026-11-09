@@ -114,7 +114,7 @@ class PlaceSensor(
         /** A place found stays "where you are" this long without a new fix. */
         const val KEEP_MS = 45 * 60_000L
         const val ASK_TIMEOUT_MS = 20_000L
-        /** A fix vaguer than this says nothing about a place. */
-        const val MAX_ACCURACY_M = 2_500f
+        /** A fix vaguer than this says nothing about a place (Android's "aproximada" is ~2–3 km and still counts). */
+        const val MAX_ACCURACY_M = 3_500f
     }
 }
