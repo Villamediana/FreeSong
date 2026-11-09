@@ -117,12 +117,26 @@ class HomeScreensSmokeTest {
         seed()
         compose.setContent { Host { HomeScreen() } }
         waitForText("Suas músicas")
-        waitForText("Tocadas recentemente")
         shot("home")
+        // "Tocadas recentemente" left the Home (Miguel: not useful there).
+        check(compose.onAllNodesWithText("Tocadas recentemente").fetchSemanticsNodes().isEmpty())
         // The library has its own pills: no shortcuts, no added / genres / artists rows here.
         listOf("Curtidas", "Aleatório inteligente", "Adicionadas recentemente", "Por gênero", "Seus artistas").forEach {
             check(compose.onAllNodesWithText(it).fetchSemanticsNodes().isEmpty()) { "$it on the Home" }
         }
+    }
+
+    @Test
+    fun aHomeMixCardOpensItsVeryList() {
+        // A genre card's mix, as the Home put it: its page shows the same songs, ready to play.
+        val songs = (1..10).map { com.villamediana.sound.online.RemoteTrack("lat$it", "https://music.youtube.com/watch?v=lat$it", "Canción $it", if (it % 2 == 0) "Maná" else "Juanes") }
+        val mix = com.villamediana.sound.discover.HomeMixes.build("home:genre:latino", "Latino hoje", songs, com.villamediana.sound.smart.Mix.Kind.GENRE, subtitle = { "$it e mais" })
+        SoundApplication.graph.homeMixes.replace(com.villamediana.sound.discover.HomeMixes.GENRE, listOf(mix))
+        compose.setContent { Host { com.villamediana.sound.ui.detail.MixScreen(com.villamediana.sound.ui.nav.MixRoute("home:genre:latino")) } }
+        waitForText("Latino hoje")
+        waitForText("Canción 1")
+        waitForText("Juanes, Maná e mais")
+        shot("home-mix-page")
     }
 
     @Test

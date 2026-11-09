@@ -430,3 +430,25 @@ Pedido do Miguel: "não pode ser só uma página… cheia de animações, efeito
   novo"); `SOUND_FILM=1` renderiza a história quadro a quadro em `app/build/recap-film` (ffmpeg junta
   em vídeo). No Robolectric as capas ficam no desenho padrão: decodificar arquivo fora da thread
   principal aborta os gráficos nativos.
+
+## Início enxuto: uma faixa por ideia (1.20.0, 2026-11-09)
+
+Pedido do Miguel: o Início "não é pra bombardear", tem que ser útil pra desfrutar.
+- Saiu "Tocadas recentemente" (só da tela; o histórico e o Android Auto seguem iguais).
+- "Porque você curte <artista>" deixou de ser uma faixa por artista: é **uma** faixa de cards, um por
+  artista (os 2 favoritos do momento + 2 em rodízio a cada 6 h, `ForYou.because()`), cada card um mix
+  de 30 músicas no estilo dele.
+- "X pra você" (uma faixa de músicas por gênero) virou **uma** faixa "Seus gêneros" com um card por
+  gênero ("Latino hoje"), o mix de 30 do `ForYou.shelf()`.
+- Os mixes ficam em `discover/HomeMixes.kt` (`graph.homeMixes`, ids `home:genre:` / `home:because:`):
+  o card abre a mesma lista na página de mix (`MixScreen`, ramo `HomeMixes.PREFIX`) e o botão toca
+  (`DiscoverViewModel.playMix`). "Descobertas pra você" segue em músicas soltas.
+- Ordem: Suas músicas → Feitos pra você → Descobertas → Porque você curte → Seus gêneros →
+  Playlists → Escolher gêneros.
+
+## Páginas cheias sem engasgo (1.20.0)
+
+Ajustes (e equalizador, vídeo…) travavam ao entrar e sair: o espaço do mini player no rodapé
+encolhia animado (tudo embaixo e a própria página se remontavam a cada quadro do deslize) e o player
+era recriado no primeiro quadro da volta. Agora, em `SoundRoot`, o espaço fica congelado enquanto
+uma página cheia está por cima e o player volta só depois do deslize (`PAGE_MS`).

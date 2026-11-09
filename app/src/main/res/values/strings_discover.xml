@@ -22,15 +22,18 @@
     <string name="discover_pick_subtitle">Escolha alguns gêneros.</string>
     <string name="discover_continue">Continuar</string>
     <string name="discover_skip">Pular</string>
-    <string name="discover_for_you">%1$s pra você</string>
     <string name="discover_title">Descobrir</string>
     <string name="discover_edit">Editar</string>
     <string name="discover_offline">Sem conexão. Mostrando as últimas sugestões.</string>
     <string name="discover_selected">Selecionado</string>
-    <string name="discover_because_artist">Porque você curte %1$s</string>
     <string name="discover_discoveries">Descobertas pra você</string>
     <string name="discover_discoveries_subtitle">Músicas novas no seu estilo, todo dia</string>
     <string name="discover_playlists">Playlists pra você</string>
     <string name="discover_edit_genres">Editar gêneros</string>
     <string name="discover_pick_genres">Escolher gêneros</string>
+    <string name="discover_because_row">Porque você curte</string>
+    <string name="discover_genres_row">Seus gêneros</string>
+    <string name="discover_genre_mix">%1$s hoje</string>
+    <string name="discover_mix_artists">%1$s e mais</string>
+    <string name="discover_because_card_plain">No mesmo estilo</string>
 </resources>

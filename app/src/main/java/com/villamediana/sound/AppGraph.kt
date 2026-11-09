@@ -185,6 +185,9 @@ class AppGraph(context: Context) {
     }
 
     /** "Feitos pra você": the day's genre mixes (your songs + new ones alike). */
+    /** The Home's genre and "Porque você curte" mixes (what the card shows is what opens and plays). */
+    val homeMixes: com.villamediana.sound.discover.HomeMixes by lazy { com.villamediana.sound.discover.HomeMixes() }
+
     val madeForYou: com.villamediana.sound.smart.MadeForYouStore by lazy {
         com.villamediana.sound.smart.MadeForYouStore(
             library = library,

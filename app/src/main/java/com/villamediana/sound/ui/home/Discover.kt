@@ -6,6 +6,7 @@ import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.PlayArrow
 import com.villamediana.sound.online.RemoteCollection
 import com.villamediana.sound.online.RemoteTrack
+import com.villamediana.sound.smart.Mix
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
@@ -177,7 +178,11 @@ private fun GenreCard(genre: GenreDef, covers: List<String>, selected: Boolean, 
     }
 }
 
-/** Everything live on the Home: the day's discoveries, "porque você curte", playlists, genre shelves. */
+/**
+ * Everything live on the Home, without crowding it: the day's discoveries (songs), then one row of
+ * cards per idea — "Porque você curte" (a mix per loved artist), "Seus gêneros" (a mix per genre,
+ * "Latino hoje") — and the playlists. A card opens its list; its button plays it.
+ */
 internal fun LazyListScope.discoverSections(
     state: DiscoverUiState,
     playback: PlaybackState,
@@ -185,6 +190,8 @@ internal fun LazyListScope.discoverSections(
     onPlaylist: (RemoteCollection) -> Unit,
     onEdit: () -> Unit,
     onSongMenu: (RemoteTrack) -> Unit,
+    onOpenMix: (Mix) -> Unit = {},
+    onPlayMix: (Mix) -> Unit = {},
 ) {
     if (state.discoveries.isNotEmpty()) {
         item(key = "d-discoveries", contentType = "row") {
@@ -195,10 +202,14 @@ internal fun LazyListScope.discoverSections(
             }
         }
     }
-    state.because.forEach { row ->
-        item(key = "d-because:" + row.artistKey, contentType = "row") {
-            val title = stringResource(R.string.discover_because_artist, row.artist)
-            SongRow(title, row.tracks, playback, onSongMenu) { i -> onPlay(row.tracks, i, title, "because:" + row.artistKey); Chrome.openPlayer() }
+    if (state.because.isNotEmpty()) {
+        item(key = "d-because", contentType = "mixes") {
+            MixRow(stringResource(R.string.discover_because_row), state.because, playback, onOpenMix, onPlayMix)
+        }
+    }
+    if (state.genres.isNotEmpty()) {
+        item(key = "d-genres", contentType = "mixes") {
+            MixRow(stringResource(R.string.discover_genres_row), state.genres, playback, onOpenMix, onPlayMix)
         }
     }
     if (state.playlists.isNotEmpty()) {
@@ -206,12 +217,6 @@ internal fun LazyListScope.discoverSections(
             DiscoverRow(stringResource(R.string.discover_playlists)) {
                 items(state.playlists, key = { it.url }) { c -> PlaylistCard(c, onClick = { onPlaylist(c) }) }
             }
-        }
-    }
-    state.shelves.forEach { shelf ->
-        item(key = "shelf:" + shelf.genre.id, contentType = "row") {
-            val title = shelfTitle(shelf.genre)
-            SongRow(title, shelf.tracks, playback, onSongMenu) { i -> onPlay(shelf.tracks, i, title, "genre:" + shelf.genre.id); Chrome.openPlayer() }
         }
     }
     // No genres yet (songs came in before the picker was answered): the way to choose them.
@@ -231,6 +236,17 @@ private fun DiscoverRow(title: String, subtitle: String? = null, content: LazyLi
         Spacer(Modifier.height(16.dp))
         SectionHeader(title, subtitle = subtitle)
         LazyRow(modifier = Modifier.keepHorizontalDrags(), contentPadding = PaddingValues(horizontal = Dimens.Gutter), horizontalArrangement = Arrangement.spacedBy(14.dp), content = content)
+    }
+}
+
+/** One row of mix cards: a tap opens the mix, its button plays (or pauses) it. */
+@Composable
+private fun MixRow(title: String, mixes: List<Mix>, playback: PlaybackState, onOpen: (Mix) -> Unit, onPlay: (Mix) -> Unit) {
+    DiscoverRow(title) {
+        items(mixes, key = { it.id }) { mix ->
+            val active = playback.hasMedia && playback.isFromMix(mix.id)
+            MixCard(mix = mix, playing = active && playback.isPlaying, onOpen = { onOpen(mix) }, onPlay = { onPlay(mix) })
+        }
     }
 }
 
@@ -306,6 +322,8 @@ internal fun DiscoverHome(
     onPlaylist: (RemoteCollection) -> Unit,
     onEdit: () -> Unit,
     onSongMenu: (RemoteTrack) -> Unit,
+    onOpenMix: (Mix) -> Unit = {},
+    onPlayMix: (Mix) -> Unit = {},
 ) {
     val embedded = LocalHomeEmbedded.current
     val top = if (embedded) 0.dp else WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
@@ -327,9 +345,7 @@ internal fun DiscoverHome(
         if (!state.hasContent && state.loading) {
             item(key = "loading") { Box(Modifier.fillMaxWidth().height(240.dp)) }
         }
-        discoverSections(state, playback, onPlay, onPlaylist, onEdit, onSongMenu)
+        discoverSections(state, playback, onPlay, onPlaylist, onEdit, onSongMenu, onOpenMix, onPlayMix)
     }
 }
 
-@Composable
-internal fun shelfTitle(genre: GenreDef): String = stringResource(R.string.discover_for_you, stringResource(genre.label))

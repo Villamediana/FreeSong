@@ -103,8 +103,9 @@ class ForYou(
     }
 
     /**
-     * "Porque você curte…": the favourite artist of the moment, and one of the next ones taking
-     * turns each 6-hour slot. Each row stays the same through its slot.
+     * "Porque você curte…": the two favourite artists of the moment and two of the next ones taking
+     * turns each 6-hour slot (one card each on the Home, in a single row). Each stays the same
+     * through its slot.
      */
     suspend fun because(): List<BecauseRow> {
         val p = profile()
@@ -112,8 +113,12 @@ class ForYou(
         val chosen = anchors?.takeIf { it.first == slot }?.second ?: run {
             val favorites = p.favoritesNow(BECAUSE_POOL)
             buildList {
-                if (favorites.isNotEmpty()) add(favorites[0])
-                if (favorites.size > 1) add(favorites[1 + (slot % (favorites.size - 1)).toInt()])
+                addAll(favorites.take(BECAUSE_FIXED))
+                val rest = favorites.drop(BECAUSE_FIXED)
+                if (rest.isNotEmpty()) {
+                    val start = (slot % rest.size).toInt()
+                    repeat(minOf(BECAUSE_TURNS, rest.size)) { add(rest[(start + it) % rest.size]) }
+                }
             }.also { if (it.isNotEmpty()) anchors = slot to it }
         }
         if (chosen.isEmpty()) return emptyList()
@@ -185,15 +190,20 @@ class ForYou(
         const val LEARN_FROM = 20
         const val DISCOVERY_SEEDS = 6
         const val DISCOVERIES = 20
-        const val BECAUSE_POOL = 4
+        const val BECAUSE_POOL = 8
+        /** The favourites always on the row; the others take turns. */
+        const val BECAUSE_FIXED = 2
+        const val BECAUSE_TURNS = 2
         const val BECAUSE_SEEDS = 2
-        const val BECAUSE_SIZE = 16
+        /** A card opens a mix: long enough to be one. */
+        const val BECAUSE_SIZE = 30
         const val MIN_ROW = 4
         const val MAX_SHELVES = 6
         /** A learned genre gets a shelf when it has at least this share of the strongest one. */
         const val LEARNED_SHARE = 0.2
         const val SHELF_SEEDS = 2
-        const val SHELF_SIZE = 16
+        /** A genre's card opens a mix: long enough to be one. */
+        const val SHELF_SIZE = 30
         const val RADIO_SIZE = 30
     }
 }

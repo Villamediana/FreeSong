@@ -132,6 +132,26 @@ class ForYouTest {
     }
 
     @Test
+    fun becauseYouLikeIsOneRowOfFourArtistsTheTwoFavouritesAlwaysOnIt() = runBlocking {
+        // Six artists loved, in order: the first two always have a card, two of the others take turns.
+        listOf("Samba" to 9, "RockBand" to 8, "Jazzy" to 6, "Folky" to 5, "Bluesy" to 4, "Poppy" to 3).forEach { (artist, n) ->
+            val style = artist.lowercase()
+            stream("$style-1", artist, times = n)
+            stream("$style-2", artist, times = n - 1)
+        }
+        val first = forYou.because().map { it.artist }
+        assertEquals(4, first.size)
+        assertEquals(setOf("Samba", "RockBand"), first.take(2).toSet())
+        // Each card is a mix: long enough to be one.
+        assertTrue(forYou.because().all { it.tracks.size >= 12 })
+        now += 6 * 3_600_000L
+        forYou.invalidate()
+        val next = forYou.because().map { it.artist }
+        assertEquals(setOf("Samba", "RockBand"), next.take(2).toSet())
+        assertTrue("the others take turns", next.drop(2) != first.drop(2))
+    }
+
+    @Test
     fun aSongSkippedAgainAndAgainLeavesTheRowsAndTheGenresAreLearned() = runBlocking {
         stream("samba-1", "Samba", times = 5)
         stream("samba-2", "Samba", times = 3)
@@ -151,7 +171,7 @@ class ForYouTest {
         stream("samba-1", "Samba", times = 5)
         val pagode = GenreCatalog.byId("pagode")!!
         val shelf = forYou.shelf(pagode)
-        assertEquals(16, shelf.size)
+        assertEquals(30, shelf.size)
         // Half from the radio of their own samba, half from the genre's live pool, woven.
         assertTrue(shelf.count { it.videoId.startsWith("samba-new") } >= 6)
         assertTrue(shelf.count { it.videoId.startsWith("g-") } >= 6)

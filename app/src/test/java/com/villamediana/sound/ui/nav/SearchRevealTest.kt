@@ -20,6 +20,7 @@ import androidx.compose.ui.test.onRoot
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.villamediana.sound.data.ThemeMode
 import com.villamediana.sound.ui.theme.SoundColors
 import com.villamediana.sound.ui.theme.SoundTheme
 import org.junit.Assert.assertTrue
@@ -43,7 +44,9 @@ class SearchRevealTest {
     fun midwayTheCircleIsTheSearchPageInItsOwnColor() {
         lateinit var navigator: Navigator
         compose.setContent {
-            SoundTheme {
+            // Its own theme, always: the palette is global and an earlier test may have left it dark,
+            // where the 22% dim over a near-black page is ~1 point and can't be told apart.
+            SoundTheme(mode = ThemeMode.LIGHT) {
                 val nav = rememberNavController()
                 navigator = remember(nav) { Navigator(nav) }
                 CompositionLocalProvider(LocalNavigator provides navigator) {
