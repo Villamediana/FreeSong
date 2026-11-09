@@ -107,7 +107,7 @@ class YouTubeVideoPlayback internal constructor(
             val music = music()
             val wasPlaying = session?.musicWasPlaying ?: music.state.value.isPlaying
             releasePlayer()
-            music.pause()
+            music.pauseHere()
             val start = startAtMs.coerceAtLeast(0)
             session = Session(videoId, start, wasPlaying)
             _state.value = VideoState(videoId = videoId, title = title, loading = true)
@@ -150,7 +150,7 @@ class YouTubeVideoPlayback internal constructor(
                 return@launch
             }
             // Music started meanwhile (notification, headset): the video takes over again.
-            music().takeIf { it.state.value.isPlaying }?.pause()
+            music().takeIf { it.state.value.isPlaying }?.pauseHere()
             when (player.playbackState) {
                 Player.STATE_ENDED -> player.seekToDefaultPosition()
                 Player.STATE_IDLE -> if (player.mediaItemCount > 0) {
@@ -189,7 +189,8 @@ class YouTubeVideoPlayback internal constructor(
             val music = music()
             val now = music.state.value
             val sameSong = now.current?.videoId == s.videoId
-            if (sameSong && position != null && s.sameTimeline) {
+            // In a jam the song's place is everyone's: back from the video it rejoins the jam instead.
+            if (sameSong && position != null && s.sameTimeline && !music.shared) {
                 val duration = now.durationMs.takeIf { it > 0 } ?: now.current?.durationMs?.takeIf { it > 0 }
                 music.seekTo(if (duration != null) position.coerceAtMost(duration - END_MARGIN_MS).coerceAtLeast(0) else position)
             }

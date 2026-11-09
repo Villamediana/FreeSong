@@ -113,17 +113,36 @@ class SocialHub(
         }
         // Every time the app comes to the screen: the profile (made now if needed), friends, what arrived, the stats.
         scope.launch {
-            _foreground.collect { fg -> if (fg) bootstrap() }
+            _foreground.collect { fg -> if (fg) quietly { bootstrap() } }
         }
-        scope.launch { link.events.collect { handle(it) } }
+        // One event that goes wrong doesn't stop the ones after it.
+        scope.launch { link.events.collect { quietly { handle(it) } } }
+    }
+
+    /** Runs [block]; a failure in it is dropped (the next foreground or event tries again). */
+    private suspend fun quietly(block: suspend () -> Unit) {
+        try {
+            block()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            android.util.Log.w("SocialHub", "social step failed", e)
+        }
     }
 
     suspend fun bootstrap() {
-        account.ensure() ?: return
-        refreshFriends()
-        drainMailbox()
-        jam.refresh()
-        syncStats()
+        val me = try {
+            account.ensure()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        }
+        me ?: return
+        quietly { refreshFriends() }
+        quietly { drainMailbox() }
+        quietly { jam.refresh() }
+        quietly { syncStats() }
     }
 
     private suspend fun handle(event: RelayEvent) {
@@ -200,7 +219,7 @@ class SocialHub(
 
     /** Deleting the profile also takes the songs swapped with friends off this phone. */
     suspend fun deleteProfile(): Result<Unit> = account.delete {
-        jam.leave()
+        jam.forget()
         songs.clear()
         _friends.value = FriendsPage()
         withContext(Dispatchers.IO) { friendsFile().delete() }

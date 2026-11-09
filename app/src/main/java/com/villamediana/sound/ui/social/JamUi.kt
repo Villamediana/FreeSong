@@ -131,10 +131,9 @@ fun JamSheet(onDismiss: () -> Unit) {
     val me by hub.account.me.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     var picking by rememberSaveable { mutableStateOf(false) }
-    val current = jam ?: run {
-        onDismiss()
-        return
-    }
+    // The jam ended while the sheet was open: it closes (not from inside the drawing).
+    androidx.compose.runtime.LaunchedEffect(jam == null) { if (jam == null) onDismiss() }
+    val current = jam ?: return
     if (picking) {
         val inJam = (current.members + current.invited).map { it.id }.toSet()
         FriendPickerSheet(

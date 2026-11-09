@@ -153,7 +153,7 @@ class SocialViewModel(app: Application) : AndroidViewModel(app) {
     fun accept(r: FriendRequest) = viewModelScope.launch { hub.accept(r.requestId) }
     fun decline(r: FriendRequest) = viewModelScope.launch { hub.decline(r.requestId) }
     fun createProfile() = viewModelScope.launch {
-        hub.account.ensure(force = true)
+        runCatching { hub.account.ensure(force = true) }
         hub.bootstrap()
         loadMore(reset = true)
     }
@@ -179,6 +179,8 @@ fun SocialScreen() {
     val jam by hub.jam.jam.collectAsStateWithLifecycle()
     val invites by hub.jam.invites.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
+    val feedback = com.villamediana.sound.ui.sheets.rememberSheetFeedback()
+    val jamFailed = stringResource(R.string.jam_failed)
     var tab by rememberSaveable { mutableStateOf(SocialTab.FRIENDS) }
     var starting by rememberSaveable { mutableStateOf(false) }
     var jamOpen by rememberSaveable { mutableStateOf(false) }
@@ -219,7 +221,11 @@ fun SocialScreen() {
         if (invites.isNotEmpty()) {
             item(key = "invites") { Label(stringResource(R.string.jam_invites_title)) }
             items(invites, key = { "inv-" + it.jam.id }) { inv ->
-                InviteLine(inv, onJoin = { scope.launch { hub.jam.join(inv) } }, onDecline = { scope.launch { hub.jam.decline(inv) } })
+                InviteLine(
+                    inv,
+                    onJoin = { scope.launch { hub.jam.join(inv).onFailure { feedback.show(jamFailed) } } },
+                    onDecline = { scope.launch { hub.jam.decline(inv) } },
+                )
             }
         }
 
@@ -285,7 +291,7 @@ fun SocialScreen() {
         FriendPickerSheet(
             title = stringResource(R.string.jam_start_title),
             confirm = stringResource(R.string.jam_start),
-            onPick = { ids -> scope.launch { hub.jam.start(ids) } },
+            onPick = { ids -> scope.launch { hub.jam.start(ids).onFailure { feedback.show(jamFailed) } } },
             onDismiss = { starting = false },
         )
     }

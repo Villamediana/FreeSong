@@ -86,22 +86,27 @@ class JamSession(
     // ------------------------------------------------------------------ joining and leaving
 
     /** A jam with these friends, starting from what this phone plays now. */
-    suspend fun start(friends: List<String>): Result<Jam> = call {
-        val state = currentLocalState()
-        val jam = relay.startJam(friends, state)
-        activate(jam, held = false)
+    suspend fun start(friends: List<String>): Result<Jam> = runCatching {
+        // Where the song is now (the jam starts from there for everyone, this phone included).
+        val state = withContext(main) { currentLocalState(player.livePositionMs()) }
+        val jam = withContext(Dispatchers.IO) { relay.startJam(friends, state) }
+        withContext(main) { activate(jam, held = false) }
         jam
     }
 
-    suspend fun invite(friends: List<String>): Result<Jam> = call {
+    suspend fun invite(friends: List<String>): Result<Jam> = runCatching {
         val current = _jam.value ?: throw IOException("no jam")
-        relay.inviteToJam(current.id, friends).also { _jam.value = it }
+        val fresh = withContext(Dispatchers.IO) { relay.inviteToJam(current.id, friends) }
+        withContext(main) { if (_jam.value?.id == fresh.id) _jam.value = fresh }
+        fresh
     }
 
-    suspend fun join(invite: JamInvite): Result<Jam> = call {
-        val jam = relay.joinJam(invite.jam.id)
-        _invites.value = _invites.value.filterNot { it.jam.id == invite.jam.id }
-        activate(jam, held = false)
+    suspend fun join(invite: JamInvite): Result<Jam> = runCatching {
+        val jam = withContext(Dispatchers.IO) { relay.joinJam(invite.jam.id) }
+        withContext(main) {
+            _invites.value = _invites.value.filterNot { it.jam.id == invite.jam.id }
+            activate(jam, held = false)
+        }
         jam
     }
 
@@ -110,26 +115,45 @@ class JamSession(
         runCatching { withContext(Dispatchers.IO) { relay.declineJam(invite.jam.id) } }
     }
 
-    /** Leaves (the one who created it ends it for all). The music here goes on as it is. */
-    suspend fun leave(): Result<Unit> = call {
-        val current = _jam.value ?: return@call
-        if (current.hostId == me()) relay.endJam(current.id) else relay.leaveJam(current.id)
+    /**
+     * Leaves (the one who created it ends it for all). The music here goes on as it is. This phone
+     * is out at once, even offline (the relay lets it go when it sees it, or after a while).
+     */
+    suspend fun leave(): Result<Unit> {
+        val current = _jam.value ?: return Result.success(Unit)
+        withContext(main) { deactivate() }
+        return runCatching {
+            withContext(Dispatchers.IO) { if (current.hostId == me()) relay.endJam(current.id) else relay.leaveJam(current.id) }
+        }
+    }
+
+    /** The profile is gone (deleted): out of the jam here, nothing to tell the relay. */
+    suspend fun forget() = withContext(main) {
         deactivate()
+        _invites.value = emptyList()
     }
 
     /** After launching or reconnecting: the jam this phone is in (paused here until the person plays) and the invites. */
     suspend fun refresh() {
         val current = runCatching { withContext(Dispatchers.IO) { relay.currentJam() } }.getOrNull() ?: return
-        _invites.value = current.invites
-        val jam = current.jam
-        when {
-            jam == null -> if (_jam.value != null) deactivate()
-            _jam.value == null -> activate(jam, held = true)
-            else -> _jam.value = jam
+        withContext(main) {
+            _invites.value = current.invites
+            val jam = current.jam
+            when {
+                jam == null -> if (_jam.value != null) deactivate()
+                _jam.value == null -> activate(jam, held = true)
+                _jam.value?.id != jam.id -> activate(jam, held = true)
+                else -> _jam.value = jam
+            }
         }
     }
 
+    /** The relay's news, handled on the main thread like everything that moves the player. */
     fun onEvent(event: RelayEvent) {
+        scope.launch(main) { handle(event) }
+    }
+
+    private fun handle(event: RelayEvent) {
         when (event) {
             is RelayEvent.JamInvited -> _invites.value = _invites.value.filterNot { it.jam.id == event.invite.jam.id } + event.invite
             is RelayEvent.JamChanged -> {
@@ -185,7 +209,9 @@ class JamSession(
         val now = System.currentTimeMillis()
         val jam = _jam.value
         val st = playback.value
-        if (jam != null && lastPositionAt > 0 && st.queueIndex == lastIndex && st.isPlaying && now - lastStepAt > settleMs) {
+        // Only between two ticks of a song playing (a gap means paused or not watched: no jump to judge).
+        val ticking = lastPositionAt > 0 && now - lastPositionAt <= SAMPLE_GAP_MS
+        if (jam != null && ticking && st.queueIndex == lastIndex && st.isPlaying && now - lastStepAt > settleMs) {
             val expected = lastPosition + (now - lastPositionAt)
             if (kotlin.math.abs(p - expected) > SEEK_JUMP_MS && JamSync.sameQueue(jam.state, local()) && st.queueIndex == jam.state.index) {
                 propose(JamSync.seek(jam.state, p))
@@ -253,8 +279,8 @@ class JamSession(
         if (jam.hostId != me() || !JamSync.nearEnd(jam.state) || extendingAt == jam.state.queue.size) return
         val last = jam.state.queue.lastOrNull()?.videoId ?: return
         extendingAt = jam.state.queue.size
-        scope.launch {
-            val more = runCatching { related(last) }.getOrDefault(emptyList())
+        scope.launch(main) {
+            val more = withContext(Dispatchers.IO) { runCatching { related(last) }.getOrDefault(emptyList()) }
             val now = _jam.value ?: return@launch
             if (now.state.queue.lastOrNull()?.videoId != last) return@launch
             JamSync.extend(now.state, more)?.let { propose(it) }
@@ -272,7 +298,7 @@ class JamSession(
         scope.launch(Dispatchers.IO) {
             if (!relay.sendState(jam.id, base.rev, optimistic, withQueue)) {
                 runCatching { relay.postState(jam.id, base.rev, optimistic, withQueue) }.onSuccess { fresh ->
-                    if (_jam.value?.id == fresh.id) _jam.value = fresh
+                    withContext(main) { if (_jam.value?.id == fresh.id) _jam.value = fresh }
                 }
             }
         }
@@ -329,15 +355,19 @@ class JamSession(
 
     // ------------------------------------------------------------------ helpers
 
-    private fun currentLocalState(): JamState {
+    private fun currentLocalState(positionMs: Long): JamState {
         val st = playback.value
-        val songs = st.queue.mapNotNull(SongRef::of)
+        val songs = st.queue.mapNotNull(SongRef::of).take(JamSync.MAX_QUEUE)
         val current = st.current?.let(SongRef::of)
-        val index = current?.let { c -> songs.indexOfFirst { it.videoId == c.videoId } }?.takeIf { it >= 0 } ?: 0
-        return JamState(queue = songs.take(JamSync.MAX_QUEUE), index = index.coerceAtMost((songs.size - 1).coerceAtLeast(0)), positionMs = lastPosition, playing = st.isPlaying && songs.isNotEmpty())
+        val index = current?.let { c -> songs.indexOfFirst { it.videoId == c.videoId } }?.takeIf { it >= 0 }
+        // The song playing isn't one the others can play (no YouTube id): the jam starts at the top, from 0.
+        return JamState(
+            queue = songs,
+            index = index ?: 0,
+            positionMs = if (index != null) positionMs else 0,
+            playing = st.isPlaying && songs.isNotEmpty(),
+        )
     }
-
-    private suspend fun <T> call(block: suspend () -> T): Result<T> = runCatching { withContext(Dispatchers.IO) { block() } }
 
     companion object {
         /** After a step of ours, the player's changes are ours too for this long. */
@@ -346,6 +376,8 @@ class JamSession(
         const val RETRY_MS = 1_500L
         const val TICK_MS = 1_000L
         const val SEEK_JUMP_MS = 3_000L
+        /** Position ticks come every 250 ms while playing; a longer gap starts the judging over. */
+        const val SAMPLE_GAP_MS = 1_200L
     }
 }
 

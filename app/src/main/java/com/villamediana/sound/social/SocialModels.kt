@@ -69,7 +69,8 @@ data class SongRef(
                 ?: thumbnailOf(videoId)
             return SongRef(
                 videoId = videoId,
-                title = track.title,
+                // The relay refuses a song without a title (and the others would see nothing).
+                title = track.title.ifBlank { videoId },
                 artist = track.artist,
                 album = track.album?.takeIf { it.isNotBlank() },
                 durationMs = track.durationMs.takeIf { it > 0 },

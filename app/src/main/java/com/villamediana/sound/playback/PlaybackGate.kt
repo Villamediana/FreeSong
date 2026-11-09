@@ -31,4 +31,7 @@ interface FollowingPlayer {
     fun followSeek(positionMs: Long)
     fun followPlay()
     fun followPause()
+
+    /** Where the song is right now, from the player itself (call on the main thread). */
+    fun livePositionMs(): Long
 }

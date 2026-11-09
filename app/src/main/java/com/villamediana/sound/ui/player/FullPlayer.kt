@@ -100,6 +100,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -354,7 +355,8 @@ private fun TopBar(source: PlaySource?, actions: PlayerActions, hasVideo: Boolea
                 color = ink.copy(alpha = 0.72f),
                 maxLines = 1,
             )
-            if (source?.type == PlaySource.Type.JAM && com.villamediana.sound.SoundApplication.graph.social.jam.active) {
+            val inJam = com.villamediana.sound.SoundApplication.graph.social.jam.jam.collectAsStateWithLifecycle().value != null
+            if (source?.type == PlaySource.Type.JAM && inJam) {
                 // In a jam: the faces of who is in (tap for the jam).
                 com.villamediana.sound.ui.social.JamBadge(ink)
             } else if (source != null) {

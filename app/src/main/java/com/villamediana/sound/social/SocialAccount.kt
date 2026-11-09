@@ -12,7 +12,6 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
-import com.villamediana.sound.download.squareJpeg
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -115,8 +114,13 @@ class SocialAccount(
             p
         } catch (e: RelayException) {
             // The profile is gone on the relay (deleted on another phone): this phone forgets it.
-            if (e.status == 401) forget(optOut = false)
-            null
+            // Any other refusal (busy, an odd answer) keeps the profile as last seen.
+            if (e.status == 401) {
+                forget(optOut = false)
+                null
+            } else {
+                _me.value
+            }
         } catch (e: IOException) {
             _me.value
         }
@@ -135,7 +139,7 @@ class SocialAccount(
                 }
             }
         }
-        save(r.token, code.trim().uppercase(), r.me)
+        save(r.token, formatCode(code), r.me)
         r.me
     }
 
@@ -218,29 +222,50 @@ class SocialAccount(
         _status.value = if (optOut) AccountStatus.OPTED_OUT else AccountStatus.NONE
     }
 
-    /** The picked photo upright (EXIF), center-cropped to a 512 px square JPEG. */
+    /** The picked photo upright (EXIF, Android 9+), its center square at 512 px, JPEG. */
     private fun avatarJpeg(uri: Uri): ByteArray? {
-        val raw = if (Build.VERSION.SDK_INT >= 28) {
-            val bitmap = runCatching {
+        val bitmap = if (Build.VERSION.SDK_INT >= 28) {
+            runCatching {
                 ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, uri)) { decoder, info, _ ->
-                    val longest = maxOf(info.size.width, info.size.height)
-                    if (longest > 2048) decoder.setTargetSampleSize(longest / 2048)
+                    val shortest = minOf(info.size.width, info.size.height)
+                    if (shortest > AVATAR_PX * 2) decoder.setTargetSampleSize(shortest / (AVATAR_PX * 2))
                     decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
                 }
-            }.getOrNull() ?: return null
-            ByteArrayOutputStream().use { out ->
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 95, out)
-                bitmap.recycle()
-                out.toByteArray()
-            }
+            }.getOrNull()
         } else {
-            context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return null
-        }
-        return squareJpeg(raw, maxSize = AVATAR_PX, quality = 85)
+            val resolver = context.contentResolver
+            val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            resolver.openInputStream(uri)?.use { android.graphics.BitmapFactory.decodeStream(it, null, bounds) }
+            var sample = 1
+            while (minOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= AVATAR_PX * 2) sample *= 2
+            resolver.openInputStream(uri)?.use { android.graphics.BitmapFactory.decodeStream(it, null, android.graphics.BitmapFactory.Options().apply { inSampleSize = sample }) }
+        } ?: return null
+        return centerSquareJpeg(bitmap, AVATAR_PX, quality = 85)
     }
 
     companion object {
         const val AVATAR_PX = 512
+
+        /** "7k2q m9xd 4tfa h3rb" → "7K2Q-M9XD-4TFA-H3RB" (shown as the relay gives it). */
+        fun formatCode(raw: String): String {
+            val chars = raw.uppercase().filter { it.isLetterOrDigit() }
+            return if (chars.length == 16) chars.chunked(4).joinToString("-") else raw.trim().uppercase()
+        }
+
+        /** The middle square of [source], at most [size] px, as JPEG (no trimming: it's a face, not a cover). */
+        internal fun centerSquareJpeg(source: Bitmap, size: Int, quality: Int): ByteArray {
+            val side = minOf(source.width, source.height)
+            val square = Bitmap.createBitmap(source, (source.width - side) / 2, (source.height - side) / 2, side, side)
+            val scaled = if (side > size) Bitmap.createScaledBitmap(square, size, size, true) else square
+            return ByteArrayOutputStream().use { out ->
+                scaled.compress(Bitmap.CompressFormat.JPEG, quality, out)
+                out.toByteArray()
+            }.also {
+                if (scaled !== square) scaled.recycle()
+                if (square !== source) square.recycle()
+                source.recycle()
+            }
+        }
         const val STATS_EVERY_MS = 6L * 3_600_000
         private val TOKEN = stringPreferencesKey("token")
         private val RECOVERY = stringPreferencesKey("recovery_code")

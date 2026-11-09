@@ -55,7 +55,14 @@ class RelayApi(
                 val code = runCatching { RelayJson.parseToJsonElement(text).jsonObject["error"]?.jsonPrimitive?.content }.getOrNull()
                 throw RelayException(r.code, code ?: "http_${r.code}")
             }
-            return RelayJson.decodeFromString(out, text)
+            // An answer out of shape is a failed call like any other (never an error that escapes).
+            return try {
+                RelayJson.decodeFromString(out, text)
+            } catch (e: kotlinx.serialization.SerializationException) {
+                throw RelayException(r.code, "bad_response")
+            } catch (e: IllegalArgumentException) {
+                throw RelayException(r.code, "bad_response")
+            }
         }
     }
 

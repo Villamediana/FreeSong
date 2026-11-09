@@ -34,6 +34,8 @@ class JamSessionTest {
     private inner class FakeRelay : JamRelay {
         var current: CurrentJam = CurrentJam()
         val sent = mutableListOf<Sent>()
+        var offline = false
+        var left = 0
         var started: JamState? = null
         override fun currentJam() = current
         override fun startJam(invite: List<String>, state: JamState?): Jam {
@@ -43,8 +45,14 @@ class JamSessionTest {
         override fun inviteToJam(jamId: String, userIds: List<String>) = error("unused")
         override fun joinJam(jamId: String) = Jam(jamId, "host", state = JamState(q, 1, 30_000, true, serverNow, rev = 5))
         override fun declineJam(jamId: String) = Unit
-        override fun leaveJam(jamId: String) = Unit
-        override fun endJam(jamId: String) = Unit
+        override fun leaveJam(jamId: String) {
+            left++
+            if (offline) throw java.io.IOException("offline")
+        }
+        override fun endJam(jamId: String) {
+            left++
+            if (offline) throw java.io.IOException("offline")
+        }
         override fun sendState(jamId: String, baseRev: Long, state: JamState, withQueue: Boolean): Boolean {
             synchronized(sent) { sent += Sent(baseRev, state, withQueue) }
             return true
@@ -79,6 +87,7 @@ class JamSessionTest {
             synchronized(steps) { steps += "pause" }
             playback.value = playback.value.copy(isPlaying = false)
         }
+        override fun livePositionMs() = position.value
     }
 
     private val playback = MutableStateFlow(PlaybackState())
@@ -135,7 +144,50 @@ class JamSessionTest {
         assertEquals(q.map { it.videoId }, s.queue.map { it.videoId })
         assertEquals(1, s.index)
         assertTrue(s.playing)
+        // From where the song is now (not from the start).
+        assertEquals(42_000, s.positionMs)
         assertTrue(session.active)
+    }
+
+    @Test
+    fun startingFromASongTheOthersCantPlayBeginsAtTheTop() {
+        val local = Track(id = 9, title = "Sem YouTube", artist = "A", filePath = "/x.m4a")
+        playback.value = PlaybackState(current = local, isPlaying = true, queue = listOf(local) + tracks(q), queueIndex = 0)
+        position.value = 42_000
+        runBlocking { session.start(emptyList()) }
+        assertEquals(0, relay.started!!.index)
+        assertEquals(0, relay.started!!.positionMs)
+        assertEquals(3, relay.started!!.queue.size)
+    }
+
+    @Test
+    fun playFromTheEarphonesAfterALongPauseDoesNotPullTheJamBack() {
+        runBlocking { session.join(JamInvite(Jam("j9", "host"), Profile("host", "h", "Host"))) }
+        waitFor { playback.value.isPlaying && playback.value.queueIndex == 1 }
+        Thread.sleep(250)
+        playback.value = playback.value.copy(isPlaying = false)
+        waitFor { session.held.value }
+        // Minutes later (here: past the sampling gap), play from the earphones: no seek for everyone.
+        Thread.sleep(3_400)
+        val before = relay.sent.size
+        playback.value = playback.value.copy(isPlaying = true)
+        position.value = 30_250
+        Thread.sleep(300)
+        position.value = 30_500
+        Thread.sleep(300)
+        assertEquals(before, relay.sent.size)
+        assertFalse(session.held.value)
+    }
+
+    @Test
+    fun leavingOfflineStillLeavesHere() {
+        runBlocking { session.join(JamInvite(Jam("j9", "host"), Profile("host", "h", "Host"))) }
+        relay.offline = true
+        val result = runBlocking { session.leave() }
+        assertTrue(result.isFailure)
+        assertNull(session.jam.value)
+        assertNull(gate)
+        assertEquals(1, relay.left)
     }
 
     @Test
@@ -191,7 +243,7 @@ class JamSessionTest {
     @Test
     fun theOneWhoStartedItKeepsTheQueueFromRunningOut() {
         runBlocking { session.start(emptyList()) }
-        runBlocking { session.onEvent(RelayEvent.JamChanged(Jam("j1", "me", state = JamState(q, 2, 0, true, serverNow, rev = 3)), null)) }
+        session.onEvent(RelayEvent.JamChanged(Jam("j1", "me", state = JamState(q, 2, 0, true, serverNow, rev = 3)), null))
         waitFor { relay.sent.any { it.withQueue && it.state.queue.size == 5 } }
         assertEquals(listOf(song(7).videoId, song(8).videoId), relay.sent.first { it.withQueue }.state.queue.drop(3).map { it.videoId })
     }
@@ -200,7 +252,7 @@ class JamSessionTest {
     fun whenTheJamEndsThePlayerIsFreeAgain() {
         runBlocking { session.join(JamInvite(Jam("j9", "host"), Profile("host", "h", "Host"))) }
         session.onEvent(RelayEvent.JamEnded("j9"))
-        assertNull(session.jam.value)
+        waitFor { session.jam.value == null }
         assertNull(gate)
     }
 
@@ -218,8 +270,10 @@ class JamSessionTest {
         val inv = JamInvite(Jam("j5", "x"), Profile("x", "x", "X"))
         session.onEvent(RelayEvent.JamInvited(inv))
         session.onEvent(RelayEvent.JamInvited(inv))
+        waitFor { session.invites.value.isNotEmpty() }
+        Thread.sleep(100)
         assertEquals(1, session.invites.value.size)
         session.onEvent(RelayEvent.JamEnded("j5"))
-        assertTrue(session.invites.value.isEmpty())
+        waitFor { session.invites.value.isEmpty() }
     }
 }

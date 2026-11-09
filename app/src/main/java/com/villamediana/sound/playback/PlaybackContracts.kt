@@ -78,6 +78,15 @@ interface PlayerConnection {
     fun playSmart(seed: SmartSeed)
     fun togglePlayPause()
     fun pause()
+
+    /**
+     * A pause of this phone only, asked by the app itself (the video opening, the microphone
+     * listening to the room): in a jam it doesn't pause the others.
+     */
+    fun pauseHere() = pause()
+
+    /** In a jam: the queue, the song and its place are everyone's (a seek here would move them all). */
+    val shared: Boolean get() = false
     fun next()
     /** Restarts the track if more than ~3 s in, otherwise goes to the previous one. */
     fun previous()

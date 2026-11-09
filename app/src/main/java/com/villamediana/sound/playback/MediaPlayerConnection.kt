@@ -435,6 +435,10 @@ class MediaPlayerConnection(
         withController { it.pause() }
     }
 
+    override fun pauseHere() = withController { it.pause() }
+
+    override val shared: Boolean get() = gate != null
+
     override fun next() {
         if (gate?.next() == true) return
         nextNow()
@@ -591,6 +595,8 @@ class MediaPlayerConnection(
     override fun followPlay() = resumeNow()
 
     override fun followPause() = withController { it.pause() }
+
+    override fun livePositionMs(): Long = controller?.currentPosition?.coerceAtLeast(0) ?: _position.value
 
     override fun setSleepTimer(timer: SleepTimer) {
         _sleep.value = timer

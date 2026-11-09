@@ -9,7 +9,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import okhttp3.OkHttpClient
-import org.junit.AfterClass
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
@@ -28,43 +27,55 @@ import java.util.concurrent.TimeUnit
  * The app's client (RelayApi + RelayLink) against the real relay (relay/src/server.js) started
  * here with Node on a free port and a throwaway data folder. Skipped where Node isn't installed.
  */
+/** The real relay (relay/src/server.js), started once per test run with Node on a free port. */
+object LocalRelay {
+    private var process: Process? = null
+    private var dataDir: File? = null
+    private var url: String? = null
+    val http: OkHttpClient = OkHttpClient.Builder().readTimeout(10, TimeUnit.SECONDS).build()
+
+    /** The relay's address; the test is skipped where Node or relay/node_modules is missing. */
+    @Synchronized
+    fun base(): String {
+        url?.let { return it }
+        val root = generateSequence(File("").absoluteFile) { it.parentFile }.firstOrNull { File(it, "relay/src/server.js").isFile }
+        val node = listOf("/usr/bin/node", "/usr/local/bin/node").firstOrNull { File(it).canExecute() }
+        assumeTrue("Node e relay/ precisam existir", root != null && node != null && File(root, "relay/node_modules/ws").isDirectory)
+        val port = ServerSocket(0).use { it.localPort }
+        val dir = Files.createTempDirectory("relay-test").toFile()
+        dataDir = dir
+        process = ProcessBuilder(node, "--no-warnings", "src/server.js")
+            .directory(File(root, "relay"))
+            .apply { environment().putAll(mapOf("PORT" to "$port", "HOST" to "127.0.0.1", "DATA_DIR" to dir.path)) }
+            .redirectErrorStream(true)
+            .redirectOutput(File(dir, "log"))
+            .start()
+        Runtime.getRuntime().addShutdownHook(Thread {
+            process?.destroy()
+            dir.deleteRecursively()
+        })
+        val base = "http://127.0.0.1:$port"
+        val until = System.currentTimeMillis() + 10_000
+        while (true) {
+            val up = runCatching { http.newCall(okhttp3.Request.Builder().url("$base/v1/health").build()).execute().use { it.isSuccessful } }.getOrDefault(false)
+            if (up) break
+            check(System.currentTimeMillis() < until) { "relay não subiu: " + File(dir, "log").readText() }
+            Thread.sleep(100)
+        }
+        url = base
+        return base
+    }
+}
+
 class RelayClientTest {
     companion object {
-        private var process: Process? = null
-        private var dataDir: File? = null
         lateinit var base: String
-        val http: OkHttpClient = OkHttpClient.Builder().readTimeout(10, TimeUnit.SECONDS).build()
+        val http: OkHttpClient get() = LocalRelay.http
 
         @JvmStatic
         @BeforeClass
         fun startRelay() {
-            val root = generateSequence(File("").absoluteFile) { it.parentFile }.firstOrNull { File(it, "relay/src/server.js").isFile }
-            val node = listOf("/usr/bin/node", "/usr/local/bin/node").firstOrNull { File(it).canExecute() }
-            assumeTrue("Node e relay/ precisam existir", root != null && node != null && File(root, "relay/node_modules/ws").isDirectory)
-            val port = ServerSocket(0).use { it.localPort }
-            dataDir = Files.createTempDirectory("relay-test").toFile()
-            process = ProcessBuilder(node, "--no-warnings", "src/server.js")
-                .directory(File(root, "relay"))
-                .apply { environment().putAll(mapOf("PORT" to "$port", "HOST" to "127.0.0.1", "DATA_DIR" to dataDir!!.path)) }
-                .redirectErrorStream(true)
-                .redirectOutput(File(dataDir, "log"))
-                .start()
-            base = "http://127.0.0.1:$port"
-            val until = System.currentTimeMillis() + 10_000
-            while (true) {
-                val up = runCatching { http.newCall(okhttp3.Request.Builder().url("$base/v1/health").build()).execute().use { it.isSuccessful } }.getOrDefault(false)
-                if (up) break
-                check(System.currentTimeMillis() < until) { "relay não subiu: " + File(dataDir, "log").readText() }
-                Thread.sleep(100)
-            }
-        }
-
-        @JvmStatic
-        @AfterClass
-        fun stopRelay() {
-            process?.destroy()
-            process?.waitFor(5, TimeUnit.SECONDS)
-            dataDir?.deleteRecursively()
+            base = LocalRelay.base()
         }
     }
 
