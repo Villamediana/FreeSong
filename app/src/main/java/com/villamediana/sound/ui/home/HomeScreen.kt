@@ -116,7 +116,6 @@ fun HomeScreen() {
     }
 
     var songSheet by remember { mutableStateOf<Track?>(null) }
-    var menuTarget by remember { mutableStateOf<CollectionTarget?>(null) }
 
     val phase = when {
         !state.loaded || !discover.ready -> HomePhase.LOADING
@@ -130,6 +129,9 @@ fun HomeScreen() {
     val openPlaylist: (com.villamediana.sound.online.RemoteCollection) -> Unit = { nav.openRemote(it) }
     // Holding a song of the Home: its actions (queue, playlist, like…), as a streamed song.
     val songMenu: (com.villamediana.sound.online.RemoteTrack) -> Unit = { songSheet = it.asTransientTrack() }
+    // A mix card ("Porque você curte", "Seus gêneros"): the tap opens its list, the button plays it.
+    val openMix: (com.villamediana.sound.smart.Mix) -> Unit = { nav.openMix(it.id) }
+    val playMix: (com.villamediana.sound.smart.Mix) -> Unit = discoverVm::playMix
     // The genre picker is an intro: no mini player over it. Back to normal when it goes (or Home does).
     val picking = phase == HomePhase.PICKER
     DisposableEffect(picking) {
@@ -171,7 +173,7 @@ fun HomeScreen() {
                     onContinue = discoverVm::confirm,
                     onSkip = discoverVm::skip,
                 )
-                HomePhase.DISCOVER -> DiscoverHome(discover, playback, downloads, nav, onPlay = playDiscover, onPlaylist = openPlaylist, onEdit = discoverVm::edit, onSongMenu = songMenu)
+                HomePhase.DISCOVER -> DiscoverHome(discover, playback, downloads, nav, onPlay = playDiscover, onPlaylist = openPlaylist, onEdit = discoverVm::edit, onSongMenu = songMenu, onOpenMix = openMix, onPlayMix = playMix)
                 HomePhase.FEED -> HomeFeed(
                     state = state,
                     playback = playback,
@@ -180,16 +182,13 @@ fun HomeScreen() {
                     nav = nav,
                     intro = intro,
                     recap = recap,
-                    onSong = { songSheet = it },
-                    onMenu = { menuTarget = it },
-                    extra = { discoverSections(discover, playback, playDiscover, openPlaylist, discoverVm::edit, songMenu) },
+                    extra = { discoverSections(discover, playback, playDiscover, openPlaylist, discoverVm::edit, songMenu, openMix, playMix) },
                 )
             }
         }
     }
 
     songSheet?.let { TrackActionsSheet(track = it, onDismiss = { songSheet = null }) }
-    menuTarget?.let { CollectionMenuSheet(target = it, onDismiss = { menuTarget = null }) }
 }
 
 /** Current hour, refreshed when the clock turns. */
@@ -239,8 +238,6 @@ private fun HomeFeed(
     vm: HomeViewModel,
     nav: Navigator,
     intro: Boolean,
-    onSong: (Track) -> Unit,
-    onMenu: (CollectionTarget) -> Unit,
     extra: LazyListScope.() -> Unit = {},
     /** January: last year's retrospective (year, time listened). */
     recap: Pair<Int, Long>? = null,
@@ -248,7 +245,6 @@ private fun HomeFeed(
     val embedded = LocalHomeEmbedded.current
     val top = if (embedded) 0.dp else WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val listState = rememberLazyListState()
-    val playedTitle = stringResource(R.string.home_recently_played)
 
     LazyColumn(
         state = listState,
@@ -321,15 +317,6 @@ private fun HomeFeed(
             }
         }
 
-        if (state.recentlyPlayed.isNotEmpty()) {
-            val idx = order++
-            item(key = "played", contentType = "carousel") {
-                Carousel(playedTitle, Modifier.animateItem().staggerIn(idx, intro)) {
-                    homeItems(state.recentlyPlayed, playback, nav, playedTitle, vm, onSong, onMenu)
-                }
-            }
-        }
-
         extra()
     }
 }
@@ -348,49 +335,6 @@ private fun Carousel(title: String, modifier: Modifier = Modifier, content: Lazy
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             content = content,
         )
-    }
-}
-
-/** Albums and loose songs; tapping a song plays the songs of that carousel from it. */
-private fun LazyListScope.homeItems(
-    list: List<HomeItem>,
-    playback: PlaybackState,
-    nav: Navigator,
-    sourceTitle: String,
-    vm: HomeViewModel,
-    onSong: (Track) -> Unit,
-    onMenu: (CollectionTarget) -> Unit,
-) {
-    val songs = list.filterIsInstance<HomeItem.SongItem>().map { it.track }
-    itemsIndexed(list, key = { _, it -> it.key }) { _, item ->
-        when (item) {
-            is HomeItem.AlbumItem -> {
-                val a = item.summary
-                CoverCard(
-                    cover = a.coverPath,
-                    seed = a.title,
-                    title = a.title,
-                    subtitle = a.artist,
-                    onClick = { nav.openAlbum(a.key) },
-                    onLongClick = { onMenu(CollectionTarget.Album(a)) },
-                    playing = if (playback.isFromAlbum(a.key.normalized)) playback.isPlaying else null,
-                    modifier = Modifier.animateItem(),
-                )
-            }
-            is HomeItem.SongItem -> {
-                val t = item.track
-                CoverCard(
-                    cover = t.coverPath,
-                    seed = t.album ?: t.title,
-                    title = t.title,
-                    subtitle = t.artist,
-                    onClick = { vm.playSongs(songs, songs.indexOfFirst { it.id == t.id }, sourceTitle) },
-                    onLongClick = { onSong(t) },
-                    playing = if (playback.current?.id == t.id) playback.isPlaying else null,
-                    modifier = Modifier.animateItem(),
-                )
-            }
-        }
     }
 }
 

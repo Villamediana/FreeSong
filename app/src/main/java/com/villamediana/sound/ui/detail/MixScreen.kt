@@ -43,7 +43,15 @@ import kotlinx.coroutines.flow.map
 @OptIn(ExperimentalCoroutinesApi::class)
 internal class MixViewModel(private val id: String, private val labels: MixLabels) : ViewModel() {
     val mix: StateFlow<Load<Mix>> = (
-        if (id.startsWith(com.villamediana.sound.smart.MadeForYou.PREFIX)) {
+        if (id.startsWith(com.villamediana.sound.discover.HomeMixes.PREFIX)) {
+            // A card of the Home ("Porque você curte", "Seus gêneros"): the very list of the card;
+            // a song downloaded since shows as its library song.
+            kotlinx.coroutines.flow.combine(graph.homeMixes.mixes, graph.library.tracks) { mixes, all ->
+                val base = mixes[id] ?: return@combine null
+                val byVideo = all.filter { it.videoId != null }.associateBy { it.videoId!! }
+                base.copy(tracks = base.tracks.map { t -> byVideo[t.videoId] ?: t }.distinctBy { it.videoId ?: "t:${it.id}" })
+            }
+        } else if (id.startsWith(com.villamediana.sound.smart.MadeForYou.PREFIX)) {
             // "Feitos pra você": the very mix of the card (your songs + new ones). A new song that
             // got downloaded since shows as its library song.
             kotlinx.coroutines.flow.combine(graph.madeForYou.mixes, graph.library.tracks) { mixes, all ->

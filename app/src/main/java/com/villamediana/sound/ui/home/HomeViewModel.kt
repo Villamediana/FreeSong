@@ -30,7 +30,6 @@ data class HomeUiState(
     val loaded: Boolean = false,
     val empty: Boolean = true,
     val mixes: List<Mix> = emptyList(),
-    val recentlyPlayed: List<HomeItem> = emptyList(),
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -75,13 +74,8 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     /** The Home shows: today's mixes (remade when the day turns). */
     fun refreshMixes() = graph.madeForYou.refresh()
 
-    val state: StateFlow<HomeUiState> = combine(library.tracks, library.albums, mixes) { tracks, albums, mixes ->
-        HomeUiState(
-            loaded = true,
-            empty = tracks.isEmpty(),
-            mixes = mixes,
-            recentlyPlayed = recentlyPlayedItems(tracks, albums.associateBy { it.key.normalized }),
-        )
+    val state: StateFlow<HomeUiState> = combine(library.tracks, mixes) { tracks, mixes ->
+        HomeUiState(loaded = true, empty = tracks.isEmpty(), mixes = mixes)
     }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
 
     // ------------------------------------------------------------------ actions
@@ -95,9 +89,4 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     }
     fun togglePlayPause() = graph.player.togglePlayPause()
 
-    fun playSongs(tracks: List<Track>, index: Int, sourceTitle: String) {
-        if (tracks.isEmpty()) return
-        graph.player.play(tracks, index.coerceIn(0, tracks.lastIndex), PlaySource(PlaySource.Type.SONGS, sourceTitle))
-        Chrome.openPlayer()
-    }
 }

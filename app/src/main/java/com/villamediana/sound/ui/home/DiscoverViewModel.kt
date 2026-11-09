@@ -8,6 +8,9 @@ import com.villamediana.sound.discover.DiscoverMixes
 import com.villamediana.sound.discover.ForYou
 import com.villamediana.sound.discover.GenreCatalog
 import com.villamediana.sound.discover.GenreDef
+import com.villamediana.sound.discover.HomeMixes
+import com.villamediana.sound.R
+import com.villamediana.sound.smart.Mix
 import com.villamediana.sound.online.RemoteCollection
 import com.villamediana.sound.online.RemoteTrack
 import com.villamediana.sound.playback.PlaySource
@@ -21,9 +24,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-
-/** One "Rock pra você" row. */
-data class Shelf(val genre: GenreDef, val tracks: List<RemoteTrack>)
 
 data class DiscoverUiState(
     /** Settings read at least once. */
@@ -39,16 +39,17 @@ data class DiscoverUiState(
     val covers: Map<String, List<String>> = emptyMap(),
     /** "Descobertas pra você": the day's new songs in the listener's style. */
     val discoveries: List<RemoteTrack> = emptyList(),
-    /** "Porque você curte <artista>" rows (fixed for the 6-hour slot). */
-    val because: List<ForYou.BecauseRow> = emptyList(),
+    /** "Porque você curte": one mix per loved artist, a single row of cards (fixed for the 6-hour slot). */
+    val because: List<Mix> = emptyList(),
     val playlists: List<RemoteCollection> = emptyList(),
-    val shelves: List<Shelf> = emptyList(),
+    /** "Seus gêneros": one mix per genre listened to and picked ("Latino hoje"), a single row of cards. */
+    val genres: List<Mix> = emptyList(),
     val loading: Boolean = false,
     /** Pulled down to refresh, until the new lists are in. */
     val refreshing: Boolean = false,
 ) {
     val showPicker: Boolean get() = ready && (!chosen || editing)
-    val hasContent: Boolean get() = discoveries.isNotEmpty() || because.isNotEmpty() || shelves.isNotEmpty()
+    val hasContent: Boolean get() = discoveries.isNotEmpty() || because.isNotEmpty() || genres.isNotEmpty()
 }
 
 class DiscoverViewModel(app: Application) : AndroidViewModel(app) {
@@ -109,12 +110,18 @@ class DiscoverViewModel(app: Application) : AndroidViewModel(app) {
                     runCatching { forYou.discoveries() }.onSuccess { list -> _state.update { it.copy(discoveries = list) } }
                 }
                 launch {
-                    runCatching { forYou.because() }.onSuccess { rows -> _state.update { it.copy(because = rows) } }
+                    runCatching { forYou.because() }.onSuccess { rows ->
+                        val mixes = rows.map(::becauseMix)
+                        graph.homeMixes.replace(HomeMixes.BECAUSE, mixes)
+                        _state.update { it.copy(because = mixes) }
+                    }
                 }
                 launch {
-                    val list = genres.map { g -> async { Shelf(g, runCatching { forYou.shelf(g, force) }.getOrDefault(emptyList())) } }.awaitAll()
-                        .filter { it.tracks.isNotEmpty() }
-                    _state.update { it.copy(shelves = list) }
+                    val mixes = genres.map { g -> async { g to runCatching { forYou.shelf(g, force) }.getOrDefault(emptyList()) } }.awaitAll()
+                        .filter { (_, tracks) -> tracks.size >= MIN_MIX }
+                        .map { (g, tracks) -> genreMix(g, tracks) }
+                    graph.homeMixes.replace(HomeMixes.GENRE, mixes)
+                    _state.update { it.copy(genres = mixes) }
                 }
                 launch {
                     val lists = genres.take(PLAYLIST_GENRES).map { g -> async { runCatching { repo.playlists(g, 3, force) }.getOrDefault(emptyList()) } }.awaitAll()
@@ -140,9 +147,43 @@ class DiscoverViewModel(app: Application) : AndroidViewModel(app) {
 
     fun edit() = _state.update { it.copy(editing = true, selection = it.favorites.toSet()) }
 
+    private fun res() = getApplication<Application>().resources
+
+    /** "Latino hoje": the genre's mix of the day, with its main artists. */
+    private fun genreMix(g: GenreDef, tracks: List<RemoteTrack>) = HomeMixes.build(
+        id = HomeMixes.GENRE + g.id,
+        title = res().getString(R.string.discover_genre_mix, res().getString(g.label)),
+        tracks = tracks,
+        kind = Mix.Kind.GENRE,
+        subtitle = { artists -> res().getString(R.string.discover_mix_artists, artists) },
+    )
+
+    /** An artist's card: songs in their style, the other artists of the mix underneath. */
+    private fun becauseMix(row: ForYou.BecauseRow) = HomeMixes.build(
+        id = HomeMixes.BECAUSE + row.artistKey,
+        title = row.artist,
+        tracks = row.tracks,
+        kind = Mix.Kind.ARTIST,
+        subtitle = { artists -> if (artists.isBlank()) res().getString(R.string.discover_because_card_plain) else res().getString(R.string.discover_mix_artists, artists) },
+        except = row.artist,
+    )
+
+    /** A mix card plays it from the start (or pauses/resumes it when it is what plays). */
+    fun playMix(mix: Mix) {
+        val player = graph.player
+        val state = player.state.value
+        if (state.source?.type == PlaySource.Type.MIX && state.source.id == mix.id) {
+            player.togglePlayPause()
+            return
+        }
+        player.play(mix.tracks, 0, PlaySource(PlaySource.Type.MIX, mix.title, mix.id))
+    }
+
     private companion object {
         /** Playlists come from the genres listened most. */
         const val PLAYLIST_GENRES = 3
+        /** A genre with fewer songs than this has no card (not a mix yet). */
+        const val MIN_MIX = 8
     }
 
     /**

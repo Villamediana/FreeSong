@@ -54,6 +54,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -132,7 +133,24 @@ fun SoundRoot(incoming: MutableStateFlow<Inbound?>) {
     val dest = entry?.destination
     val fullPage = dest?.isFullPage() == true
     val chromeHidden = fullPage || Chrome.hideMiniPlayer
-    val miniPlayerSpace by animateDpAsState(if (playback.hasMedia && !chromeHidden) Dimens.MiniPlayerHeight + 8.dp else 0.dp, label = "mini")
+    // The mini player's room at the bottom. A full page (Ajustes, equalizer, video…) covers everything
+    // and only fades the mini player: the room stays as it was, so neither the page beneath nor the
+    // full page re-lays out frame by frame while it slides in or out.
+    val spaceTarget = if (playback.hasMedia && !Chrome.hideMiniPlayer) Dimens.MiniPlayerHeight + 8.dp else 0.dp
+    val spaceOutside = remember { arrayOf(spaceTarget) }
+    if (!fullPage) spaceOutside[0] = spaceTarget
+    val miniPlayerSpace by animateDpAsState(if (fullPage) spaceOutside[0] else spaceTarget, label = "mini")
+    // The player comes back once the page has slid away (building it is heavy: done during the slide,
+    // it hitches the animation); hiding is at once.
+    var chromeShown by remember { mutableStateOf(!chromeHidden) }
+    LaunchedEffect(chromeHidden) {
+        if (chromeHidden) {
+            chromeShown = false
+        } else if (!chromeShown) {
+            kotlinx.coroutines.delay(PAGE_MS.toLong())
+            chromeShown = true
+        }
+    }
     // Back to the page the open player was on when a page was opened from it: open it again.
     navigator.FollowBackStack()
     // Open/closed player outlives the layer, hidden under full pages (equalizer, video…).
@@ -216,7 +234,7 @@ fun SoundRoot(incoming: MutableStateFlow<Inbound?>) {
             }
 
             AnimatedVisibility(
-                visible = !chromeHidden,
+                visible = chromeShown && !chromeHidden,
                 enter = fadeIn(tween(220)),
                 exit = fadeOut(tween(160)),
             ) {
