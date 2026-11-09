@@ -2,9 +2,12 @@ package com.villamediana.sound.social
 
 import com.villamediana.sound.stats.ListeningStats
 
-/** The phone's own numbers ([ListeningStats]) as the profile shows them and friends receive them. */
+/**
+ * The phone's own numbers ([ListeningStats]) as the profile shows them ([forFriends] = false) and
+ * friends receive them ([forFriends] = true).
+ */
 object NumbersOf {
-    fun period(s: ListeningStats): NumPeriod {
+    fun period(s: ListeningStats, forFriends: Boolean = true): NumPeriod {
         val r = s.recap
         return NumPeriod(
             minutes = r.listenedMs / 60_000L,
@@ -13,7 +16,7 @@ object NumbersOf {
             hour = r.favoriteHour,
             weekdays = s.weekdays.map { it / 60_000L },
             // An artist's face is the cover of their most played song; a file on this phone means nothing elsewhere.
-            top = r.topArtists.map { a -> NumArtist(a.name, a.listenedMs / 60_000L, a.cover?.takeIf { it.startsWith("https://") }) },
+            top = r.topArtists.map { a -> NumArtist(a.name, a.listenedMs / 60_000L, a.cover?.takeIf { !forFriends || it.startsWith("https://") }) },
         )
     }
 }

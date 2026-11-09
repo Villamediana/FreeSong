@@ -53,6 +53,12 @@ class ListeningStatsTest {
         )
         assertEquals("Djavan", local.top.single().name)
         assertEquals(null, local.top.single().cover)
+        // On your own profile the file is right here: the artist keeps the face.
+        val mine = NumbersOf.period(
+            ListeningStatsMaker.build(StatsPeriod.MONTH, listOf(PlayEvent(trackId = 1, playedAt = at(2026, 11, 8), listenedMs = 600_000, completed = true, skipped = false)), mapOf(1L to track), emptyList(), now, zone),
+            forFriends = false,
+        )
+        assertEquals("/data/covers/1.jpg", mine.top.single().cover)
     }
 
     @Test
