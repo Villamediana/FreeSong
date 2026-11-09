@@ -291,3 +291,22 @@ interface PlaylistOnlineDao {
     @Query("UPDATE playlist_online SET position = :position WHERE rowId = :rowId")
     suspend fun setPosition(rowId: Long, position: Int)
 }
+
+@Dao
+interface SharedSongDao {
+    @Insert(onConflict = androidx.room.OnConflictStrategy.IGNORE)
+    suspend fun insert(song: SharedSong): Long
+
+    @Query("SELECT * FROM shared_songs WHERE friendId = :friendId ORDER BY at, id")
+    fun observeThread(friendId: String): Flow<List<SharedSong>>
+
+    @Query("SELECT * FROM shared_songs ORDER BY at DESC, id DESC")
+    fun observeAll(): Flow<List<SharedSong>>
+
+    @Query("UPDATE shared_songs SET seen = 1 WHERE friendId = :friendId AND seen = 0")
+    suspend fun markSeen(friendId: String)
+
+    @Query("DELETE FROM shared_songs")
+    suspend fun clear()
+}
+

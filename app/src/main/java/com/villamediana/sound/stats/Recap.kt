@@ -88,8 +88,9 @@ object Recaps {
         tracksById: Map<Long, Track>,
         online: List<OnlinePlay>,
         zone: ZoneId = ZoneId.systemDefault(),
+        /** The time it sums up: [year] by default (the profile's stats sum up all time). */
+        span: LongRange = span(year, zone),
     ): Recap {
-        val span = span(year, zone)
         val songs = LinkedHashMap<String, Acc>()
         val hours = LongArray(24)
         val days = HashMap<DayOfWeek, Long>()

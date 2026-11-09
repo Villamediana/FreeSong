@@ -354,7 +354,10 @@ private fun TopBar(source: PlaySource?, actions: PlayerActions, hasVideo: Boolea
                 color = ink.copy(alpha = 0.72f),
                 maxLines = 1,
             )
-            if (source != null) {
+            if (source?.type == PlaySource.Type.JAM && com.villamediana.sound.SoundApplication.graph.social.jam.active) {
+                // In a jam: the faces of who is in (tap for the jam).
+                com.villamediana.sound.ui.social.JamBadge(ink)
+            } else if (source != null) {
                 Spacer(Modifier.height(1.dp))
                 // Long sources ("Porque você ouviu …") scroll instead of being cut, fading at the edges.
                 Box(Modifier.fillMaxWidth().fadedEdges(), contentAlignment = Alignment.Center) {

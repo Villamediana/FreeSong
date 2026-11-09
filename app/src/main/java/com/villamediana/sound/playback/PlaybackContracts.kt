@@ -9,7 +9,7 @@ enum class RepeatMode { OFF, ALL, ONE }
 
 /** Where the current queue came from — shown as "Tocando de …" in the player. */
 data class PlaySource(val type: Type, val title: String, val id: String? = null) {
-    enum class Type { SONGS, ALBUM, ARTIST, PLAYLIST, GENRE, LIKED, MIX, SEARCH, RADIO, SMART_SHUFFLE, QUEUE }
+    enum class Type { SONGS, ALBUM, ARTIST, PLAYLIST, GENRE, LIKED, MIX, SEARCH, RADIO, SMART_SHUFFLE, QUEUE, JAM }
 }
 
 /** Seeds for the "smart" playback modes (offline, computed from the library). */

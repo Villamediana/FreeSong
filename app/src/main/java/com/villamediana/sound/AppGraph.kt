@@ -228,6 +228,19 @@ class AppGraph(context: Context) {
         com.villamediana.sound.online.SongCovers({ youTube }, appContext.filesDir.resolve("covers.json"), scope)
     }
 
+    /** Profile, friends, songs swapped with them and the jam (relay: BuildConfig.RELAY_URL). */
+    val social: com.villamediana.sound.social.SocialHub by lazy {
+        com.villamediana.sound.social.SocialHub(
+            context = appContext,
+            scope = scope,
+            http = http,
+            dao = db.sharedSongs(),
+            player = { player as MediaPlayerConnection },
+            library = library,
+            related = { videoId -> youTube.related(videoId, 25).map(com.villamediana.sound.social.SongRef::of) },
+        )
+    }
+
     /** The app updating itself from the GitHub releases (Ajustes › Sobre, the update sheet). */
     val updates: com.villamediana.sound.update.Updates by lazy { com.villamediana.sound.update.createUpdates(appContext, http, scope) }
 

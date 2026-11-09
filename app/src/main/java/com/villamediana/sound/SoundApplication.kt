@@ -29,6 +29,9 @@ class SoundApplication : Application(), SingletonImageLoader.Factory {
                 runCatching { com.villamediana.sound.download.SmartDownloads.sync(this@SoundApplication, on) }
             }
         }
+        // Profile (made by itself), friends, shared songs and the jam; a check an hour with the app closed.
+        graph.social.start()
+        runCatching { com.villamediana.sound.social.SocialWorker.schedule(this) }
         // New versions from GitHub: a check a day in the background (release builds only).
         if (graph.updates.enabled) runCatching { com.villamediana.sound.update.UpdateCheckWorker.schedule(this) }
     }

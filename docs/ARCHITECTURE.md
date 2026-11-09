@@ -262,3 +262,33 @@ O app se atualiza pelas releases do GitHub (`Villamediana/FreeSong`), sem Play S
 - Testes: `update/ReleaseFeedTest`, `UpdatesTest` (GitHub falso: ETag, falhas, integridade, pacote
   errado, permissão, cancelar, memória), `SessionInstallerTest` (Robolectric), `UpdateLiveTest`
   (GitHub real: lê a última release, 304 com ETag, baixa a APK e confere o SHA-256).
+
+## Amigos e jam (1.14.0, 2026-11-09)
+
+Servidor em `relay/` (Node 22, `node:sqlite`, `ws`; instalação em `relay/DEPLOY.md`), em
+`https://freesong.simplyonegoal.com` (`BuildConfig.RELAY_URL`). Regras do Miguel: sem admin; lista
+global com foto/@/nome de todos, horas e top 5 só pra amigos; o servidor guarda só perfil e amizades
+— música trocada vive no celular (o relay entrega e apaga no ack ou em 14 dias); jam só na memória.
+
+- `social/SocialAccount` — perfil criado sozinho no primeiro uso (@ e nome sorteados), token e
+  código de recuperação no DataStore "social" (vai no backup do Android). Recuperar pelo código
+  apaga do relay o perfil automático vazio deste celular. Apagar perfil = `OPTED_OUT` (não recria).
+- `social/RelayApi` (HTTP) e `social/RelayLink` (WebSocket, ligado com o app na tela ou numa jam;
+  reconecta; mede o relógio do relay por ping). `social/SocialHub` (`graph.social`) junta tudo,
+  notifica quando o app não está na tela e tem o `SocialWorker` (a cada 1 h com o app fechado).
+- `SharedSongs` — tabela `shared_songs` (banco v6, AutoMigration 5→6), única por (direção, entrega).
+- Jam: `social/JamSync` (puro: seguir e comandos → estado) e `social/JamSession`. Cada celular toca
+  sozinho; o relay guarda fila, índice, posição no relógio dele e play. Os comandos do app passam
+  por `playback/PlaybackGate` (`MediaPlayerConnection.gate`) e viram estado da jam pra todos; a jam
+  move o player pelo `FollowingPlayer` (PLAY com `ARG_START_POSITION`/`ARG_AUTOPLAY`, fonte `JAM`,
+  sem aleatório e sem a continuação local da fila). Pausa que não vem do app (ligação, fone, timer)
+  fica só neste celular (`held`) até tocar play. Fim de música e "próxima" do fone propagam (erro de
+  stream não). Quem criou a jam estende a fila com o rádio da última música. Dois toques ao mesmo
+  tempo: o relay aceita o primeiro (`baseRev`) e manda a versão atual pro outro.
+- UI em `ui/social/` (Amigos, Perfil, página do amigo com as músicas trocadas, folhas de jam e de
+  mandar música); entrada pela foto no topo da tela principal; "Mandar pra um amigo" no ⋮ das
+  músicas; rostos da jam no topo do player.
+- Testes: `social/JamSyncTest`, `JamSessionTest` (relay e player falsos), `SharedSongsTest`
+  (inclui migração 5→6), `RelayClientTest` (o relay Node de verdade numa porta livre; precisa de
+  `relay/node_modules`), `ui/social/SocialUiTest` (prints com `SOUND_SHOTS=1`); servidor:
+  `cd relay && npm test`.

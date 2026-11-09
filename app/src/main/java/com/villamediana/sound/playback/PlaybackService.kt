@@ -425,7 +425,7 @@ class PlaybackService : MediaLibraryService() {
         return videoId != null && videoId == track.videoId
     }
 
-    private suspend fun playPlan(plan: QueuePlan, shuffleMode: Int, keepCurrent: Boolean = false) {
+    private suspend fun playPlan(plan: QueuePlan, shuffleMode: Int, keepCurrent: Boolean = false, startPositionMs: Long = 0L, autoPlay: Boolean = true) {
         val tracks = plan.tracks
         if (tracks.isEmpty()) return
         val start = plan.startIndex.coerceIn(0, tracks.lastIndex)
@@ -465,7 +465,7 @@ class PlaybackService : MediaLibraryService() {
                 if (before.isNotEmpty()) player.addMediaItems(0, before)
                 if (after.isNotEmpty()) player.addMediaItems(player.mediaItemCount, after)
             } else {
-                player.setMediaItems(tracks.map(::mediaItemOf), order?.timelineIndexOf(0) ?: start, 0)
+                player.setMediaItems(tracks.map(::mediaItemOf), order?.timelineIndexOf(0) ?: start, startPositionMs.coerceAtLeast(0))
             }
             if (order != null) player.setShuffleOrder(DefaultShuffleOrder(order.toIntArray(), seed))
         } finally {
@@ -473,7 +473,7 @@ class PlaybackService : MediaLibraryService() {
         }
         listen.updateContext(source?.type?.name)
         player.prepare()
-        player.play()
+        if (autoPlay) player.play() else player.pause()
         publishExtras()
         updateButtons()
         maybeExtend()
@@ -576,6 +576,9 @@ class PlaybackService : MediaLibraryService() {
         if (shuffleJob?.isActive == true) return
         val count = player.mediaItemCount
         if (count == 0 || player.repeatMode != Player.REPEAT_MODE_OFF) return
+        // A jam's queue is everyone's: it grows from the jam itself (JamSession), not here. Out of
+        // the jam, the queue it left behind goes on like any other.
+        if (source?.type == PlaySource.Type.JAM && graph.social.jam.active) return
         if (!settings.autoplaySimilar && !smart) return
         val current = player.currentMediaItemIndex
         if (current == C.INDEX_UNSET) return
@@ -1009,13 +1012,15 @@ class PlaybackService : MediaLibraryService() {
                     val src = SessionProtocol.getSource(args)
                     val isSmart = args.getBoolean(SessionProtocol.ARG_SMART)
                     val keepCurrent = args.getBoolean(SessionProtocol.ARG_CONTINUE)
+                    val startPosition = args.getLong(SessionProtocol.ARG_START_POSITION, 0L)
+                    val autoPlay = args.getBoolean(SessionProtocol.ARG_AUTOPLAY, true)
                     val online = SessionProtocol.getOnline(args)
                     return serialized {
                         val kept = resolveIds(ids, online).withIndex().mapNotNull { (i, t) -> t?.let { IndexedValue(i, it) } }
                         if (kept.isNotEmpty()) {
                             // The requested song plays first, shuffled or not ("Aleatório" buttons pick a random start themselves).
                             val startIdx = kept.indexOfFirst { it.index >= start }.coerceAtLeast(0)
-                            playPlan(QueuePlan(kept.map { it.value }, startIdx, src, isSmart), shuffle, keepCurrent)
+                            playPlan(QueuePlan(kept.map { it.value }, startIdx, src, isSmart), shuffle, keepCurrent, startPosition, autoPlay)
                         }
                     }
                 }

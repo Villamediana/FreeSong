@@ -210,6 +210,9 @@ fun SoundRoot(incoming: MutableStateFlow<Inbound?>) {
                 composable<EqualizerRoute> { Page { EqualizerScreen() } }
                 composable<ThemeRoute> { Page { com.villamediana.sound.ui.settings.ThemeScreen() } }
                 composable<VideoRoute> { Page { VideoScreen(it.toRoute()) } }
+                composable<SocialRoute> { Page { com.villamediana.sound.ui.social.SocialScreen() } }
+                composable<ProfileRoute> { Page { com.villamediana.sound.ui.social.ProfileScreen() } }
+                composable<FriendRoute> { Page { com.villamediana.sound.ui.social.FriendScreen(it.toRoute<FriendRoute>().id) } }
             }
 
             AnimatedVisibility(
@@ -227,6 +230,8 @@ fun SoundRoot(incoming: MutableStateFlow<Inbound?>) {
 
             // A new version on GitHub: the quiet check, the sheet and Android's install screens.
             com.villamediana.sound.ui.update.UpdateHost()
+            // Jam invites while the app is open, and what a social notification asked to open.
+            com.villamediana.sound.ui.social.SocialHost(navigator)
         }
     }
 }

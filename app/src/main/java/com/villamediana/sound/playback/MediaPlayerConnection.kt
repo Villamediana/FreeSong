@@ -62,7 +62,7 @@ class MediaPlayerConnection(
     private val library: LibraryRepository,
     @Suppress("unused") settings: SettingsStore,
     scope: CoroutineScope,
-) : PlayerConnection, ResumablePlayer {
+) : PlayerConnection, ResumablePlayer, FollowingPlayer {
     private val app: Context = context.applicationContext
     private val main = CoroutineScope(scope.coroutineContext + Dispatchers.Main.immediate)
     private val strings by lazy { PlaybackStrings.from(app) }
@@ -75,6 +75,9 @@ class MediaPlayerConnection(
 
     private val _sleep = MutableStateFlow<SleepTimer>(SleepTimer.Off)
     override val sleepTimer: StateFlow<SleepTimer> = _sleep.asStateFlow()
+
+    /** The jam, when there is one: the app's commands go to it instead of straight to the player. */
+    @Volatile var gate: PlaybackGate? = null
 
     private var controller: MediaController? = null
     private var connecting: ListenableFuture<MediaController>? = null
@@ -330,6 +333,7 @@ class MediaPlayerConnection(
 
     private fun play(tracks: List<Track>, startIndex: Int, source: PlaySource, shuffle: Boolean, smart: Boolean) {
         if (tracks.isEmpty()) return
+        if (gate?.play(tracks, startIndex.coerceIn(0, tracks.lastIndex)) == true) return
         val start = startIndex.coerceIn(0, tracks.lastIndex)
         // The song already playing, tapped again in its own list: keep it going, don't start over
         // (only turning shuffle on when that was asked).
@@ -372,6 +376,7 @@ class MediaPlayerConnection(
             val plan = withContext(Dispatchers.Default) {
                 SmartPlans.plan(seed, all, taste, strings, System.currentTimeMillis())
             } ?: return@launch
+            if (gate?.play(plan.tracks, plan.startIndex) == true) return@launch
             remember(plan.tracks)
             clearError()
             val startTrack = plan.tracks.getOrNull(plan.startIndex)
@@ -395,12 +400,22 @@ class MediaPlayerConnection(
         SessionProtocol.putOnline(this, tracks)
     }
 
-    override fun togglePlayPause() = withController { c ->
+    override fun togglePlayPause() {
+        if (gate?.togglePlayPause() == true) return
+        togglePlayPauseNow()
+    }
+
+    private fun togglePlayPauseNow() = withController { c ->
         if (c.isPlaying || (c.playWhenReady && c.playbackState == Player.STATE_BUFFERING)) c.pause()
         else resume(c)
     }
 
-    override fun resume() = withController { c ->
+    override fun resume() {
+        if (gate?.resume() == true) return
+        resumeNow()
+    }
+
+    private fun resumeNow() = withController { c ->
         val playing = c.isPlaying || (c.playWhenReady && c.playbackState == Player.STATE_BUFFERING)
         if (c.mediaItemCount > 0 && !playing) resume(c)
     }
@@ -415,31 +430,55 @@ class MediaPlayerConnection(
         c.play()
     }
 
-    override fun pause() = withController { it.pause() }
+    override fun pause() {
+        if (gate?.pause() == true) return
+        withController { it.pause() }
+    }
 
-    override fun next() = withController { c ->
+    override fun next() {
+        if (gate?.next() == true) return
+        nextNow()
+    }
+
+    private fun nextNow() = withController { c ->
         clearError()
         c.seekToNext()
     }
 
-    override fun previous() = withController { c ->
+    override fun previous() {
+        if (gate?.previous() == true) return
+        previousNow()
+    }
+
+    private fun previousNow() = withController { c ->
         clearError()
         if (c.currentPosition > RESTART_THRESHOLD_MS || !c.hasPreviousMediaItem()) c.seekTo(0) else c.seekToPreviousMediaItem()
         emitPosition()
     }
 
-    override fun seekTo(positionMs: Long) = withController { c ->
+    override fun seekTo(positionMs: Long) {
+        if (gate?.seekTo(positionMs) == true) return
+        seekNow(positionMs)
+    }
+
+    private fun seekNow(positionMs: Long) = withController { c ->
         c.seekTo(positionMs.coerceAtLeast(0))
         _position.value = positionMs.coerceAtLeast(0)
     }
 
     override fun seekBlended(positionMs: Long) {
+        if (gate?.seekTo(positionMs) == true) return
         val pos = positionMs.coerceAtLeast(0)
         send(SessionProtocol.SEEK_BLEND, Bundle().apply { putLong(SessionProtocol.ARG_POSITION, pos) })
         _position.value = pos
     }
 
-    override fun skipTo(queueIndex: Int) = withController { c ->
+    override fun skipTo(queueIndex: Int) {
+        if (gate?.skipTo(queueIndex) == true) return
+        skipNow(queueIndex)
+    }
+
+    private fun skipNow(queueIndex: Int) = withController { c ->
         val t = order.timelineIndexOf(playIndex(queueIndex))
         if (t < 0) return@withController
         c.seekTo(t, 0)
@@ -451,9 +490,19 @@ class MediaPlayerConnection(
      * [playOnline] it applies to the new queue, whose start song stays first, even while the
      * service is still computing that queue's order.
      */
-    override fun setShuffle(enabled: Boolean) = send(SessionProtocol.SET_SHUFFLE, Bundle().apply { putBoolean(SessionProtocol.ARG_ENABLED, enabled) })
+    override fun setShuffle(enabled: Boolean) {
+        if (gate?.setShuffle(enabled) == true) return
+        setShuffleNow(enabled)
+    }
 
-    override fun cycleRepeat() = withController { c ->
+    private fun setShuffleNow(enabled: Boolean) = send(SessionProtocol.SET_SHUFFLE, Bundle().apply { putBoolean(SessionProtocol.ARG_ENABLED, enabled) })
+
+    override fun cycleRepeat() {
+        if (gate?.cycleRepeat() == true) return
+        cycleRepeatNow()
+    }
+
+    private fun cycleRepeatNow() = withController { c ->
         c.repeatMode = when (c.repeatMode) {
             Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
             Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
@@ -467,6 +516,7 @@ class MediaPlayerConnection(
 
     private fun addToQueue(tracks: List<Track>, where: String) {
         if (tracks.isEmpty()) return
+        if (gate?.enqueue(tracks, next = where == SessionProtocol.WHERE_NEXT) == true) return
         main.launch { remember(tracks) }
         send(
             SessionProtocol.QUEUE_ADD,
@@ -478,13 +528,23 @@ class MediaPlayerConnection(
         )
     }
 
-    override fun removeAt(queueIndex: Int) = withController { c ->
+    override fun removeAt(queueIndex: Int) {
+        if (gate?.removeAt(queueIndex) == true) return
+        removeNow(queueIndex)
+    }
+
+    private fun removeNow(queueIndex: Int) = withController { c ->
         val p = playIndex(queueIndex)
         if (p < 0) return@withController
         c.sendCustomCommand(SessionProtocol.command(SessionProtocol.QUEUE_REMOVE), Bundle().apply { putInt(SessionProtocol.ARG_INDEX, p) })
     }
 
-    override fun move(from: Int, to: Int) = withController { c ->
+    override fun move(from: Int, to: Int) {
+        if (gate?.move(from, to) == true) return
+        moveNow(from, to)
+    }
+
+    private fun moveNow(from: Int, to: Int) = withController { c ->
         val f = playIndex(from)
         val t = playIndex(to)
         if (f < 0 || t < 0 || f == t) return@withController
@@ -496,6 +556,41 @@ class MediaPlayerConnection(
             },
         )
     }
+
+    // ================================================================ following a jam (no gate)
+
+    override fun followLoad(tracks: List<Track>, index: Int, positionMs: Long, play: Boolean) {
+        if (tracks.isEmpty()) return
+        val start = index.coerceIn(0, tracks.lastIndex)
+        val source = PlaySource(PlaySource.Type.JAM, app.getString(R.string.social_jam_source))
+        main.launch {
+            remember(tracks)
+            clearError()
+        }
+        send(
+            SessionProtocol.PLAY,
+            playArgs(
+                tracks, start, source, SessionProtocol.SHUFFLE_OFF, smart = false,
+                continueCurrent = PlayRequests.continuesCurrent(_state.value.current, tracks[start], source),
+            ).apply {
+                putLong(SessionProtocol.ARG_START_POSITION, positionMs.coerceAtLeast(0))
+                putBoolean(SessionProtocol.ARG_AUTOPLAY, play)
+            },
+        )
+    }
+
+    override fun followSkip(index: Int, positionMs: Long, play: Boolean) = withController { c ->
+        val t = order.timelineIndexOf(playIndex(index))
+        if (t < 0) return@withController
+        c.seekTo(t, positionMs.coerceAtLeast(0))
+        if (play) resume(c) else c.pause()
+    }
+
+    override fun followSeek(positionMs: Long) = seekNow(positionMs)
+
+    override fun followPlay() = resumeNow()
+
+    override fun followPause() = withController { it.pause() }
 
     override fun setSleepTimer(timer: SleepTimer) {
         _sleep.value = timer
