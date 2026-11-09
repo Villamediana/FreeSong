@@ -171,4 +171,20 @@ class JamSyncTest {
         val own = s.copy(cover = "https://lh3.googleusercontent.com/x=w544-h544")
         assertEquals(own.cover, own.compact().cover)
     }
+
+    @Test
+    fun aJamGoesOnWithItsRadioWhatYouHeardTogetherAndTheFriendsFavourites() {
+        val radio = (1..10).map { song(it) }
+        val together = listOf(song(50), song(51), song(3))
+        val friends = listOf(song(70), song(50))
+        val out = JamSync.weave(radio, together, friends, count = 10)
+        assertEquals(10, out.size)
+        assertEquals(out.size, out.map { it.videoId }.toSet().size)
+        // Every third: a song you've heard together; every fifth: a friend's favourite.
+        assertEquals(song(50).videoId, out[2].videoId)
+        assertEquals(song(70).videoId, out[4].videoId)
+        assertTrue(out.any { it.videoId == song(51).videoId })
+        // Without any of those, the radio alone.
+        assertEquals(ids(radio.take(4)), ids(JamSync.weave(radio, emptyList(), emptyList(), count = 4)))
+    }
 }

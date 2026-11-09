@@ -158,6 +158,14 @@ fun SettingsScreen() {
                 )
                 Hairline()
                 SwitchRow(Icons.Rounded.Movie, Chip.Pink, stringResource(R.string.settings_player_video), stringResource(R.string.settings_player_video_sub), s.playerVideo, vm::setPlayerVideo)
+                Hairline()
+                // The DNA: how you listen, the places (turned on there) and the mix for now.
+                NavRow(
+                    icon = Icons.Rounded.AutoAwesome, chip = Chip.Amber,
+                    title = stringResource(R.string.dna_title),
+                    value = stringResource(if (s.learnPlaces) R.string.settings_dna_places_on else R.string.settings_dna_value),
+                    onClick = nav::openDna,
+                )
             }
         }
 

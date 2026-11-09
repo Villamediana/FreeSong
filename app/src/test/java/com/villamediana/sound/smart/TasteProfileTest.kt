@@ -42,7 +42,8 @@ class TasteProfileTest {
     @Test
     fun whatIsSkippedAgainAndAgainIsNotSuggestedAgainButAHeartWins() {
         val listens = listOf(
-            skipped("Meh", 1, 3.0), skipped("Meh", 1, 2.0), // one song, twice skipped
+            skipped("Meh", 1, 6.0), skipped("Meh", 1, 5.0), skipped("Meh", 1, 3.0), skipped("Meh", 1, 2.0), // skipped again and again
+            skipped("Maybe", 1, 3.0), skipped("Maybe", 1, 2.0), heard("Maybe", 2, 1.0), // twice: maybe just not the moment
             heard("Meh", 2, 2.0),
             skipped("Nope", 1, 4.0), skipped("Nope", 2, 3.0), skipped("Nope", 3, 2.0), skipped("Nope", 4, 1.0),
             skipped("Loved", 1, 2.0), skipped("Loved", 1, 1.0),
@@ -51,6 +52,8 @@ class TasteProfileTest {
         val p = TasteProfile.build(listens, hearts, now)
         assertTrue(vid("Meh", 1) in p.avoidSongs)
         assertFalse(vid("Meh", 2) in p.avoidSongs)
+        // Skipped twice is not "never again" (Miguel: maybe it just wasn't the vibe).
+        assertFalse(vid("Maybe", 1) in p.avoidSongs)
         assertTrue("nope" in p.avoidArtists)
         assertTrue(p.avoids("whatever123", "Nope feat. Someone"))
         assertTrue(p.artists.none { it.key == "nope" })

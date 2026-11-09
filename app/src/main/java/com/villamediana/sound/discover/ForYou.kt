@@ -2,7 +2,13 @@ package com.villamediana.sound.discover
 
 import com.villamediana.sound.data.LibraryRepository
 import com.villamediana.sound.online.RemoteTrack
+import com.villamediana.sound.data.asTransientTrack
+import com.villamediana.sound.smart.DnaMoment
+import com.villamediana.sound.smart.MomentPlan
+import com.villamediana.sound.social.SongRef
+import com.villamediana.sound.smart.GenreMatch
 import com.villamediana.sound.smart.Heart
+import com.villamediana.sound.smart.MusicDna
 import com.villamediana.sound.smart.Listen
 import com.villamediana.sound.smart.Recommend
 import com.villamediana.sound.smart.SmartMixes
@@ -35,12 +41,17 @@ class ForYou(
     private val picked: suspend () -> Set<String>,
     private val scope: CoroutineScope,
     private val clock: () -> Long = System::currentTimeMillis,
+    /** Where the phone is now (a learned place), when places are on. */
+    private val placeNow: () -> Long? = { null },
+    /** Who is listening along now (the friends in the jam). */
+    private val peopleNow: () -> Set<String> = { emptySet() },
 ) {
     /** One "Porque você curte <artist>" row. */
     data class BecauseRow(val artist: String, val artistKey: String, val tracks: List<RemoteTrack>)
 
     private val lock = Mutex()
     private var cached: Pair<Long, TasteProfile>? = null
+    private var cachedDna: MusicDna? = null
     private var learning: Job? = null
     /** The artists of this slot's "Porque você curte…" rows: chosen once per slot, they don't move with each song. */
     @Volatile private var anchors: Pair<Long, List<TasteProfile.ArtistTaste>>? = null
@@ -49,10 +60,52 @@ class ForYou(
     suspend fun profile(): TasteProfile = lock.withLock {
         val now = clock()
         cached?.let { (at, p) -> if (now - at in 0 until PROFILE_TTL_MS) return@withLock p }
-        val p = withContext(Dispatchers.Default) { build(now) }
+        val (p, dna) = withContext(Dispatchers.Default) { build(now) }
         cached = now to p
+        cachedDna = dna
         learnGenres(p)
         p
+    }
+
+    /** The musical DNA (built with the taste, from the same listening). */
+    suspend fun dna(): MusicDna {
+        profile()
+        return cachedDna ?: MusicDna.build(emptyList(), emptySet(), clock())
+    }
+
+    /** The moment now: the part of the day, the day of the week, the place and the friends along. */
+    fun moment(): DnaMoment = DnaMoment.at(clock(), place = placeNow(), people = peopleNow())
+
+    /**
+     * "Pra agora": your songs that fit this moment best ([MusicDna.songsFor]) and new ones from
+     * their radios in the taste of the moment (made once per moment and day). Null while the DNA
+     * has too little to say.
+     */
+    suspend fun momentPlan(names: (Set<String>) -> List<String> = { emptyList() }): MomentPlan? {
+        val p = profile()
+        val dna = dna()
+        if (dna.isEmpty) return null
+        val m = moment()
+        val songs = dna.songsFor(m, MOMENT_OWN)
+        if (songs.size < MOMENT_MIN) return null
+        val tracks = library.allTracks()
+        val byVideo = tracks.filter { it.videoId != null }.associateBy { it.videoId!! }
+        val own = songs.map { s -> byVideo[s.videoId] ?: SongRef(s.videoId, s.title, s.artist).toRemote().asTransientTrack() }
+        val inLibrary = tracks.mapNotNullTo(HashSet()) { it.videoId }
+        val seeds = songs.take(MOMENT_SEEDS).map { it.videoId }
+        val day = SmartMixes.dayNumber(clock())
+        val fresh = runCatching {
+            discover.daily("moment-v1:" + m.key, day) {
+                Recommend.fromRadios(radios(seeds), p.inMoment(dna, m), inLibrary + songs.map { it.videoId }, MOMENT_NEW)
+            }
+        }.getOrDefault(emptyList()).filter { it.videoId !in inLibrary && !p.avoids(it.videoId, it.artist) }
+        return MomentPlan(m, own, fresh, names(m.people))
+    }
+
+    /** The taste for right now ([TasteProfile.inMoment]): what radios and suggestions use. */
+    suspend fun profileNow(): TasteProfile {
+        val p = profile()
+        return p.inMoment(dna(), moment())
     }
 
     /** Something changed (a heart, a song heard): the next [profile] is built again. */
@@ -60,23 +113,32 @@ class ForYou(
         cached = null
     }
 
-    private suspend fun build(now: Long): TasteProfile {
+    private suspend fun build(now: Long): Pair<TasteProfile, MusicDna> {
         val since = now - HISTORY_MS
         val tracks = library.allTracks()
         val byId = tracks.associateBy { it.id }
         val listens = ArrayList<Listen>()
+        fun people(raw: String?) = raw?.split(',')?.filter { it.isNotBlank() }.orEmpty()
         for (e in library.playEventsListSince(since)) {
             val t = byId[e.trackId] ?: continue
-            listens += Listen(t.videoId, t.title, t.artist, t.genre, e.playedAt, e.listenedMs, t.durationMs, e.completed, e.skipped)
+            listens += Listen(t.videoId, t.title, t.artist, t.genre, e.playedAt, e.listenedMs, t.durationMs, e.completed, e.skipped, e.placeId, people(e.people))
         }
         for (p in library.onlinePlaysListSince(since)) {
-            listens += Listen(p.videoId, p.title, p.artist, null, p.playedAt, p.listenedMs, p.durationMs, p.completed, p.skipped)
+            listens += Listen(p.videoId, p.title, p.artist, null, p.playedAt, p.listenedMs, p.durationMs, p.completed, p.skipped, p.placeId, people(p.people))
         }
         val hearts = tracks.filter { it.liked }.map { Heart(it.videoId, it.title, it.artist, it.genre, it.likedAt ?: it.addedAt) } +
             library.likedOnlineList().map { Heart(it.videoId, it.title, it.artist, null, it.likedAt) }
         // Downloading a song says something too (less than a heart): the library's songs count a little.
         val saved = tracks.filter { !it.liked }.map { Heart(it.videoId, it.title, it.artist, it.genre, it.addedAt) }
-        return TasteProfile.build(listens, hearts, now, artistGenres.known(), picked(), saved)
+        val known = artistGenres.known()
+        val profile = TasteProfile.build(listens, hearts, now, known, picked(), saved)
+        val dna = MusicDna.build(
+            listens,
+            hearts.mapNotNullTo(HashSet()) { it.videoId },
+            now,
+            genreOf = { artist, songGenre -> GenreMatch.idOf(songGenre ?: known[artist]) },
+        )
+        return profile to dna
     }
 
     /** The genres of the artists listened most that nobody knows yet: a few asked in the background. */
@@ -99,7 +161,9 @@ class ForYou(
             val seeds = p.seeds(DISCOVERY_SEEDS).mapNotNull { it.videoId }
             Recommend.fromRadios(radios(seeds), p, inLibrary + seeds, DISCOVERIES)
         }
+        // Skipped since: further down the row (out of it only when skipped again and again).
         return list.filter { it.videoId !in inLibrary && !p.avoids(it.videoId, it.artist) }
+            .sortedByDescending { p.songFactor(it.videoId) }
     }
 
     /**
@@ -187,6 +251,11 @@ class ForYou(
         const val PROFILE_TTL_MS = 2L * 60_000L
         /** How far back the listening is read (the long memory fades long before). */
         const val HISTORY_MS = 180L * 24 * 3_600_000L
+        /** "Pra agora": your songs, the least to make it, the seeds of its new songs and how many new. */
+        const val MOMENT_OWN = 16
+        const val MOMENT_MIN = 5
+        const val MOMENT_SEEDS = 3
+        const val MOMENT_NEW = 9
         const val LEARN_FROM = 20
         const val DISCOVERY_SEEDS = 6
         const val DISCOVERIES = 20

@@ -15,8 +15,19 @@ data class Mix(
     /** ARGB tint for the card (from the covers), null = theme accent. */
     val tint: Int?,
 ) {
-    enum class Kind { GENRE, LIKED, ON_REPEAT, REDISCOVER, FRESH, DECADE, ARTIST, DAILY }
+    enum class Kind { GENRE, LIKED, ON_REPEAT, REDISCOVER, FRESH, DECADE, ARTIST, DAILY, MOMENT }
 }
+
+/**
+ * What the "Pra agora" mix is made of: the [moment], your songs that fit it ([own], library or
+ * streamed) and new ones in their style ([new]); [people] are the names of the friends along.
+ */
+data class MomentPlan(
+    val moment: DnaMoment,
+    val own: List<com.villamediana.sound.data.db.Track>,
+    val new: List<com.villamediana.sound.online.RemoteTrack>,
+    val people: List<String> = emptyList(),
+)
 
 /** Library facts the smart algorithms read. Built from the repository; pure data, easy to test. */
 data class Taste(

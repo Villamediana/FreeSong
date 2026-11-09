@@ -213,18 +213,31 @@ class LibraryRepository(
         trackDao.setLiked(trackId, liked, if (liked) System.currentTimeMillis() else null)
 
     /** Called by the player when a listening session of a track ends. */
-    suspend fun recordPlay(trackId: Long, listenedMs: Long, durationMs: Long, context: String?) {
+    suspend fun recordPlay(trackId: Long, listenedMs: Long, durationMs: Long, context: String?, placeId: Long? = null, people: List<String> = emptyList()) {
         if (listenedMs < 1_000) return
         val now = System.currentTimeMillis()
         val (completed, skipped) = listenOutcome(listenedMs, durationMs)
         db.withTransaction {
-            eventDao.insert(PlayEvent(trackId = trackId, playedAt = now, listenedMs = listenedMs, completed = completed, skipped = skipped, context = context))
+            eventDao.insert(
+                PlayEvent(
+                    trackId = trackId, playedAt = now, listenedMs = listenedMs, completed = completed, skipped = skipped, context = context,
+                    placeId = placeId, people = people.takeIf { it.isNotEmpty() }?.joinToString(","),
+                ),
+            )
             if (skipped) trackDao.markSkipped(trackId) else trackDao.markPlayed(trackId, now)
         }
     }
 
     /** A song listened to online (not in the library): kept for the retrospective and the smart downloads. */
-    suspend fun recordOnlinePlay(song: RemoteTrack, listenedMs: Long, durationMs: Long, context: String?, now: Long = System.currentTimeMillis()) {
+    suspend fun recordOnlinePlay(
+        song: RemoteTrack,
+        listenedMs: Long,
+        durationMs: Long,
+        context: String?,
+        now: Long = System.currentTimeMillis(),
+        placeId: Long? = null,
+        people: List<String> = emptyList(),
+    ) {
         if (listenedMs < 1_000) return
         val (completed, skipped) = listenOutcome(listenedMs, durationMs)
         onlinePlayDao.insert(
@@ -232,6 +245,7 @@ class LibraryRepository(
                 videoId = song.videoId, title = song.title, artist = song.artist, album = song.album,
                 thumbnailUrl = song.thumbnailUrl, url = song.url, durationMs = durationMs,
                 playedAt = now, listenedMs = listenedMs, completed = completed, skipped = skipped, context = context,
+                placeId = placeId, people = people.takeIf { it.isNotEmpty() }?.joinToString(","),
             ),
         )
     }

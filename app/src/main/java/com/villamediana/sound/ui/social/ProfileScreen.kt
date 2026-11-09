@@ -7,6 +7,13 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material3.Icon
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -68,6 +75,7 @@ import kotlinx.coroutines.launch
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen() {
+    val dnaNav = com.villamediana.sound.ui.nav.navigator()
     val hub = SoundApplication.graph.social
     val nav = navigator()
     val me by hub.account.me.collectAsStateWithLifecycle()
@@ -114,6 +122,7 @@ fun ProfileScreen() {
         },
         onNewCode = { scope.launch { hub.newRecoveryCode() } },
         onUseCode = { recovering = true },
+        onOpenDna = { dnaNav.openDna() },
         sheets = {
             framing?.let { photo ->
                 PhotoCropDialog(
@@ -182,6 +191,7 @@ internal fun ProfilePage(
     onCopy: () -> Unit,
     onNewCode: () -> Unit,
     onUseCode: () -> Unit,
+    onOpenDna: () -> Unit = {},
     sheets: @Composable () -> Unit = {},
 ) {
     PersonPage(
@@ -203,6 +213,7 @@ internal fun ProfilePage(
         },
         sheets = sheets,
         more = {
+            item(key = "dna", contentType = "card") { DnaEntry(onOpenDna) }
             item(key = "recovery", contentType = "card") { RecoveryCard(code, onCopy = onCopy, onNew = onNewCode, onUseCode = onUseCode) }
         },
     )
@@ -319,4 +330,28 @@ private fun RecoverDialog(onDismiss: () -> Unit, onRecovered: () -> Unit) {
             TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel), color = SoundColors.TextMuted, style = MaterialTheme.typography.labelLarge) }
         },
     )
+}
+
+/** The door to "Seu DNA musical" on your page. */
+@Composable
+private fun DnaEntry(onOpen: () -> Unit) {
+    Row(
+        Modifier
+            .padding(horizontal = Dimens.Gutter)
+            .padding(top = Dimens.SectionGap)
+            .fillMaxWidth()
+            .clip(androidx.compose.foundation.shape.RoundedCornerShape(24.dp))
+            .background(SoundColors.Surface1)
+            .clickable(onClick = onOpen)
+            .padding(horizontal = 20.dp, vertical = 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(androidx.compose.material.icons.Icons.Rounded.AutoAwesome, null, tint = SoundColors.Accent, modifier = Modifier.size(26.dp))
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(stringResource(R.string.dna_title), style = MaterialTheme.typography.titleMedium, color = SoundColors.Text)
+            Text(stringResource(R.string.dna_entry_hint), style = MaterialTheme.typography.bodySmall, color = SoundColors.TextMuted)
+        }
+        Icon(androidx.compose.material.icons.Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = SoundColors.TextMuted)
+    }
 }

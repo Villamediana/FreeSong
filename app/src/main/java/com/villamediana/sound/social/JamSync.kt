@@ -145,6 +145,34 @@ object JamSync {
     const val MAX_QUEUE = 200
 
     /**
+     * More songs for a jam, for everyone in it: the radio of the last songs (already in the taste of
+     * this moment and of these people) carries it; every third song is one you have heard together
+     * before, and every fifth one of the friends' favourites. No repeats; at most [count].
+     */
+    fun weave(radio: List<SongRef>, together: List<SongRef>, friends: List<SongRef>, count: Int = 25): List<SongRef> {
+        val seen = HashSet<String>()
+        val r = radio.iterator()
+        val t = together.iterator()
+        val f = friends.iterator()
+        fun next(it: Iterator<SongRef>): SongRef? {
+            while (it.hasNext()) it.next().let { if (seen.add(it.videoId)) return it }
+            return null
+        }
+        val out = ArrayList<SongRef>(count)
+        var i = 0
+        while (out.size < count) {
+            i++
+            val pick = when {
+                i % 5 == 0 -> next(f) ?: next(t) ?: next(r)
+                i % 3 == 0 -> next(t) ?: next(r) ?: next(f)
+                else -> next(r) ?: next(t) ?: next(f)
+            } ?: break
+            out += pick
+        }
+        return out
+    }
+
+    /**
      * Bytes of songs one change to the relay may carry: its messages stop at 64 KB, and a longer
      * one closed the line without changing anything (a song tapped in a long list didn't play).
      */

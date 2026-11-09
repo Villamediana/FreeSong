@@ -152,6 +152,30 @@ object MadeForYou {
         )
     }
 
+    /** The "Pra agora" mix's id (a card of "Feitos pra você", first in the row). */
+    const val MOMENT_ID = PREFIX + "moment"
+
+    /** The words of the "Pra agora" mix: its title for the moment, and its subtitle from the artists. */
+    data class MomentLabels(val title: (DnaMoment, List<String>) -> String, val subtitle: (String) -> String)
+
+    /**
+     * "Pra agora": your songs that fit this moment best (the part of the day, the weekday or the
+     * weekend, the place, the friends along) with new ones in their style in between.
+     */
+    fun assembleMoment(plan: MomentPlan, labels: MomentLabels): Mix {
+        val order = apart(SmartMixes.interleave(plan.own, plan.new.map { it.asTransientTrack() }))
+        val artists = order.map { com.villamediana.sound.stats.Recaps.mainArtist(it.artist) }.filter { it.isNotBlank() }.distinct().take(3)
+        return Mix(
+            id = MOMENT_ID,
+            title = labels.title(plan.moment, plan.people),
+            subtitle = labels.subtitle(artists.joinToString(", ")),
+            kind = Mix.Kind.MOMENT,
+            tracks = order,
+            covers = SmartMixes.coversOf(order),
+            tint = plan.own.firstNotNullOfOrNull { it.accentColor },
+        )
+    }
+
     /** Keeps the order but moves a song down a little when its artist just played. */
     internal fun apart(order: List<Track>): List<Track> {
         val left = order.toMutableList()

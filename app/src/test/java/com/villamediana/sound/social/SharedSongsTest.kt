@@ -193,4 +193,22 @@ class SharedSongsTest {
         }
         v8.close()
     }
+
+    @Test fun version8DatabasesGainPlacesAndWhoWasAlong() {
+        migrations.createDatabase("migrate9.db", 8).apply {
+            execSQL("INSERT INTO online_plays (videoId, title, artist, durationMs, playedAt, listenedMs, completed, skipped) VALUES ('vid00000001', 'Oceano', 'Djavan', 200000, 1000, 200000, 1, 0)")
+            close()
+        }
+        val v9 = migrations.runMigrationsAndValidate("migrate9.db", 9, true)
+        v9.query("SELECT placeId, people FROM online_plays").use { c ->
+            assertTrue(c.moveToFirst())
+            assertTrue(c.isNull(0))
+            assertTrue(c.isNull(1))
+        }
+        v9.query("SELECT COUNT(*) FROM places").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals(0, c.getInt(0))
+        }
+        v9.close()
+    }
 }
