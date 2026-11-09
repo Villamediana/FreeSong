@@ -50,6 +50,7 @@ fun createUpdates(context: Context, http: OkHttpClient, scope: CoroutineScope): 
         currentVersion = BuildConfig.VERSION_NAME,
         enabled = !BuildConfig.DEBUG,
         onFound = { UpdateAutoWorker.schedule(app) },
+        onManual = { UpdateAutoWorker.cancel(app) },
     )
 }
 
@@ -73,7 +74,7 @@ internal class SessionInstaller(private val context: Context) : ApkInstaller {
     override fun installWhenIdle(apk: File): Boolean {
         if (Build.VERSION.SDK_INT < 34) return false
         val installer = context.packageManager.packageInstaller
-        val id = write(apk)
+        val id = write(apk, ask = false)
         return try {
             // Not on screen and not playing (or doing anything for the person): then Android installs it.
             val constraints = PackageInstaller.InstallConstraints.Builder()
@@ -95,9 +96,9 @@ internal class SessionInstaller(private val context: Context) : ApkInstaller {
         return ApkInfo(info.packageName, PackageInfoCompat.getLongVersionCode(info))
     }
 
-    override fun install(apk: File) {
+    override fun install(apk: File, ask: Boolean) {
         val installer = context.packageManager.packageInstaller
-        val id = write(apk)
+        val id = write(apk, ask)
         try {
             installer.openSession(id).use { session -> session.commit(statusSender(id)) }
         } catch (e: Exception) {
@@ -106,15 +107,27 @@ internal class SessionInstaller(private val context: Context) : ApkInstaller {
         }
     }
 
-    /** A new session with the APK written in (any older one of ours abandoned first: one at a time). */
-    private fun write(apk: File): Int {
+    override fun cancelPending() {
         val installer = context.packageManager.packageInstaller
         installer.mySessions.forEach { runCatching { installer.abandonSession(it.sessionId) } }
+    }
+
+    /**
+     * A new session with the APK written in (any older one of ours abandoned first: one at a time).
+     * [ask]: Android shows its "Atualizar?"; otherwise it may go in without asking (Android 12+).
+     */
+    private fun write(apk: File, ask: Boolean): Int {
+        val installer = context.packageManager.packageInstaller
+        cancelPending()
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
             setAppPackageName(context.packageName)
             setSize(apk.length())
             setInstallReason(PackageManager.INSTALL_REASON_USER)
-            if (Build.VERSION.SDK_INT >= 31) setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
+            if (Build.VERSION.SDK_INT >= 31) {
+                setRequireUserAction(
+                    if (ask) PackageInstaller.SessionParams.USER_ACTION_REQUIRED else PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED,
+                )
+            }
         }
         val id = installer.createSession(params)
         try {
@@ -133,16 +146,18 @@ internal class SessionInstaller(private val context: Context) : ApkInstaller {
         return id
     }
 
+    /**
+     * Opened as is (an app can open the installer without seeing it on the phone's list); when no
+     * installer answers, the update goes to Android with its "Atualizar?" ([Updates.screenUnavailable]).
+     */
     override fun installScreen(apk: File): Intent? {
         val uri = runCatching { androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.files", apk) }.getOrNull() ?: return null
-        fun asked(action: String) = Intent(action)
+        @Suppress("DEPRECATION")
+        return Intent(Intent.ACTION_INSTALL_PACKAGE)
             .setDataAndType(uri, APK_TYPE)
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             // FreeSong stays the one that updates FreeSong (so the next ones can still install by themselves).
             .putExtra(Intent.EXTRA_INSTALLER_PACKAGE_NAME, context.packageName)
-        @Suppress("DEPRECATION")
-        return listOf(asked(Intent.ACTION_INSTALL_PACKAGE), asked(Intent.ACTION_VIEW))
-            .firstOrNull { it.resolveActivity(context.packageManager) != null }
     }
 
     private fun statusSender(id: Int): android.content.IntentSender {
@@ -200,12 +215,15 @@ class UpdatedReceiver : BroadcastReceiver() {
 
 /**
  * The automatic update's download, on Wi-Fi (an APK a few times a day is too much for mobile data),
- * then handed to Android to install once the app is not in use.
+ * then handed to Android to install once the app is not in use. Only while the app is not on screen:
+ * with it open, the button is the way (and the two never race).
  */
 class UpdateAutoWorker(appContext: Context, params: WorkerParameters) : CoroutineWorker(appContext, params) {
     override suspend fun doWork(): Result {
         val updates = SoundApplication.graph.updates
         if (!updates.enabled) return Result.success()
+        val onScreen = withContext(Dispatchers.Main) { ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) }
+        if (onScreen) return Result.retry()
         updates.prepareAuto()
         return Result.success()
     }
@@ -221,8 +239,13 @@ class UpdateAutoWorker(appContext: Context, params: WorkerParameters) : Coroutin
                         .setRequiresBatteryNotLow(true)
                         .build(),
                 )
+                .setBackoffCriteria(androidx.work.BackoffPolicy.LINEAR, 15, TimeUnit.MINUTES)
                 .build()
             runCatching { WorkManager.getInstance(context).enqueueUniqueWork(NAME, androidx.work.ExistingWorkPolicy.KEEP, request) }
+        }
+
+        fun cancel(context: Context) {
+            runCatching { WorkManager.getInstance(context).cancelUniqueWork(NAME) }
         }
     }
 }

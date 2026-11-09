@@ -58,9 +58,19 @@ class UpdatesTest {
         }
         override fun canInstall() = allowed
         override fun inspect(apk: File) = info(apk)
-        override fun install(apk: File) {
+        /** For each install: whether Android was told to ask ("Atualizar?"). */
+        val asked = mutableListOf<Boolean>()
+        var cancelled = 0
+        override fun install(apk: File, ask: Boolean) {
             throwOnInstall?.let { throw it }
-            synchronized(installed) { installed += apk.readBytes() }
+            synchronized(installed) {
+                installed += apk.readBytes()
+                asked += ask
+            }
+        }
+        override fun cancelPending() {
+            cancelled++
+            synchronized(whenIdle) { whenIdle.clear() }
         }
         override fun canInstallQuietly() = allowed && quiet
         override fun installWhenIdle(apk: File): Boolean {
@@ -71,6 +81,7 @@ class UpdatesTest {
     }
 
     private val found = mutableListOf<String>()
+    private var manualCalls = 0
 
     @Before
     fun setUp() {
@@ -104,6 +115,7 @@ class UpdatesTest {
         enabled = enabled,
         clock = { now },
         onFound = { synchronized(found) { found += it.version } },
+        onManual = { manualCalls++ },
     )
 
     private fun apiCalls() = github.count { it.url.toString() == ReleaseFeed.LATEST_URL }
@@ -591,6 +603,51 @@ class UpdatesTest {
         u.update()
         runBlocking { withTimeout(5_000) { while (installer.screens.size < 2) kotlinx.coroutines.delay(10) } }
         assertEquals(1, apkCalls())
+    }
+
+    @Test
+    fun theButtonCallsOffAnAutomaticInstallWaitingAndNeverInstallsQuietly() {
+        // What closed the app: an automatic install waiting with Android went in the moment
+        // Android's installer screen covered the app. The button calls it off first.
+        installer.quiet = true
+        installer.waitsBySelf = true
+        installer.screen = true
+        val u = updates()
+        runBlocking { assertTrue(u.prepareAuto()) }
+        assertEquals(1, installer.whenIdle.size)
+        u.update()
+        runBlocking { withTimeout(5_000) { while (u.confirm.value == null) kotlinx.coroutines.delay(10) } }
+        assertEquals(1, installer.cancelled)
+        assertTrue(installer.whenIdle.isEmpty())
+        assertEquals(1, manualCalls)
+        assertNull(u.autoReady.value)
+        assertTrue(installer.installed.isEmpty()) // nothing behind the person's back
+        // From then on nothing gets ready by itself in this run of the app.
+        runBlocking {
+            assertFalse(u.prepareAuto())
+            assertFalse(u.onIdle())
+        }
+        assertTrue(installer.whenIdle.isEmpty())
+    }
+
+    @Test
+    fun withoutAndroidsInstallerScreenTheButtonStillAsks() {
+        installer.quiet = true // Android would let it go in quietly…
+        val u = updates()
+        runBlocking { u.check(manual = false) }
+        u.update() // no screen (installer.screen = false)
+        runBlocking { withTimeout(5_000) { while (installer.installed.isEmpty()) kotlinx.coroutines.delay(10) } }
+        assertEquals(listOf(true), installer.asked) // …but the button's update asks ("Atualizar?")
+        // A screen that can't be opened on this phone: asked the same way.
+        val v = updates()
+        installer.screen = true
+        runBlocking { v.check(manual = true) }
+        v.update()
+        runBlocking { withTimeout(5_000) { while (v.confirm.value == null) kotlinx.coroutines.delay(10) } }
+        v.confirmShown()
+        v.screenUnavailable("no activity")
+        runBlocking { withTimeout(5_000) { while (installer.installed.size < 2) kotlinx.coroutines.delay(10) } }
+        assertEquals(listOf(true, true), installer.asked)
     }
 
     @Test

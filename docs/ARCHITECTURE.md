@@ -351,7 +351,12 @@ ouvindo; atualizar fechava o app duas vezes.
   "Atualizar" → progresso → "Abrir". O app fecha por baixo dessa tela. `EXTRA_INSTALLER_PACKAGE_NAME`
   = FreeSong, pra ele seguir como quem atualiza (as automáticas dependem disso). Sem resposta de
   volta: voltar ao app ainda na versão velha = desistiu (`onResume` → Available, nada recomeça
-  sozinho). Sem instalador que responda, cai na sessão do PackageInstaller como antes.
+  sozinho). Sem instalador que responda (`screenUnavailable`), cai na sessão do PackageInstaller
+  **com** `USER_ACTION_REQUIRED` — o botão nunca instala em silêncio.
+- 1.16.3: o app fechava logo depois de baixar. Corrida: a automática (disparada pela busca) deixava
+  uma instalação esperando com o Android 14+, que entrava assim que a tela do instalador cobria o app
+  ("fora de uso"). Agora o botão chama `standDownAuto()` (abandona sessões, cancela o worker) e a
+  automática só roda com o app fora da tela (`UpdateAutoWorker` → `Result.retry()` se estiver).
 - Testes: `smart/RadioMixTest` (variedade: tirar o acaso derruba), `QueueContinuationTest` (seeds),
   `UpdatesTest` (automático 14+, 12–13, onde o Android perguntaria, falha quieta, botão com
   automático esperando).

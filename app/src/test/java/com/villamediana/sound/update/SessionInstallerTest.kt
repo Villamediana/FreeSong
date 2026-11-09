@@ -61,19 +61,7 @@ class SessionInstallerTest {
         val dir = File(context.cacheDir, "update").apply { mkdirs() }
         val apk = File(dir, "FreeSong-9.9.9.apk").apply { writeBytes(ByteArray(64)) }
         val installer = SessionInstaller(context)
-        // No installer on the phone answers: none (the APK then goes to Android another way).
-        assertNull(installer.installScreen(apk))
-        @Suppress("DEPRECATION")
-        val ask = Intent(Intent.ACTION_INSTALL_PACKAGE).setDataAndType(
-            androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.files", apk),
-            "application/vnd.android.package-archive",
-        )
-        shadowOf(context.packageManager).addResolveInfoForIntent(
-            ask,
-            android.content.pm.ResolveInfo().apply {
-                activityInfo = android.content.pm.ActivityInfo().apply { packageName = "com.android.packageinstaller"; name = "InstallStart" }
-            },
-        )
+        // Opened as is, even when the phone's list doesn't show the installer (opening it still works).
         val screen = installer.installScreen(apk)!!
         @Suppress("DEPRECATION")
         assertEquals(Intent.ACTION_INSTALL_PACKAGE, screen.action)

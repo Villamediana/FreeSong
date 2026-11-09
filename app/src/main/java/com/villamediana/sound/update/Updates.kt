@@ -47,8 +47,14 @@ interface ApkInstaller {
     /** Whether the user let FreeSong install apps ("Instalar apps desconhecidos"). */
     fun canInstall(): Boolean
     fun inspect(apk: File): ApkInfo?
-    /** Hands the APK to Android; the answer arrives later through [Updates.onInstallStatus]. */
-    fun install(apk: File)
+    /**
+     * Hands the APK to Android; the answer arrives later through [Updates.onInstallStatus]. [ask]:
+     * Android shows its "Atualizar?" (the button's update never goes in behind the person's back).
+     */
+    fun install(apk: File, ask: Boolean = false)
+
+    /** Drops an install handed to Android and not done yet (an automatic one waiting). */
+    fun cancelPending() {}
 
     /**
      * Whether Android lets FreeSong update itself without asking: Android 12+, the install
@@ -139,6 +145,8 @@ class Updates internal constructor(
     private val clock: () -> Long = System::currentTimeMillis,
     /** A newer version was found: the automatic update gets ready (a worker, on Wi-Fi). */
     private val onFound: (AppRelease) -> Unit = {},
+    /** The button was tapped: the automatic update stands down (its worker is called off). */
+    private val onManual: () -> Unit = {},
 ) {
     private val _state = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val state: StateFlow<UpdateState> = _state
@@ -162,6 +170,8 @@ class Updates internal constructor(
     private var work: Job? = null
     /** Android's installer screen was opened for the button's update (it says nothing back when backed out of). */
     @Volatile private var screenOpened = false
+    /** The button was tapped in this run of the app: nothing installs by itself from here on. */
+    @Volatile private var manual = false
     private val restored: Job? = if (enabled) scope.launch(Dispatchers.IO) { restore() } else null
 
     /** What the last answer said, without the network: an update found before is still there. */
@@ -263,7 +273,11 @@ class Updates internal constructor(
     fun update(fresh: Boolean = true) {
         val release = _state.value.release ?: return
         if (work?.isActive == true) return
+        manual = true
         work = scope.launch {
+            // An automatic install waiting with Android would go in the moment Android's screen covers
+            // the app (the app looks "not in use" then): it's called off first.
+            standDownAuto()
             // Kept until Android answers the install: if the app is closed on the way, it carries on.
             withContext(Dispatchers.IO) {
                 memory.change { it.copy(wants = release.version, resumed = if (fresh) 0 else it.resumed) }
@@ -293,11 +307,42 @@ class Updates internal constructor(
                 _confirm.value = screen
                 return@launch
             }
-            try {
-                withContext(Dispatchers.IO) { installer.install(apk) }
-            } catch (e: Exception) {
-                fail(release, if (e is IOException) UpdateFailure.STORAGE else UpdateFailure.INSTALL, e.message)
-            }
+            askAndroid(release, apk)
+        }
+    }
+
+    /** The button's update without Android's installer screen: its "Atualizar?" all the same, never quietly. */
+    private suspend fun askAndroid(release: AppRelease, apk: File) {
+        try {
+            withContext(Dispatchers.IO) { installer.install(apk, ask = true) }
+        } catch (e: Exception) {
+            fail(release, if (e is IOException) UpdateFailure.STORAGE else UpdateFailure.INSTALL, e.message)
+        }
+    }
+
+    private suspend fun standDownAuto() {
+        runCatching { onManual() }
+        withContext(Dispatchers.IO) {
+            runCatching { installer.cancelPending() }
+            memory.change { m -> if (m.mode == MODE_AUTO) m.copy(auto = null, installing = null, mode = null) else m.copy(auto = null) }
+        }
+        _auto.value = null
+    }
+
+    /**
+     * Android's installer screen couldn't be opened (none on this phone answers): the APK goes to
+     * Android with its "Atualizar?" instead. Anything else that failed to open: a failure the sheet shows.
+     */
+    fun screenUnavailable(message: String?) {
+        if (!screenOpened) {
+            onInstallStatus(InstallResult.FAILED, message, null)
+            return
+        }
+        screenOpened = false
+        val release = _state.value.release ?: return
+        scope.launch {
+            val apk = withContext(Dispatchers.IO) { ready(release) }
+            if (apk == null) fail(release, UpdateFailure.INSTALL, message) else askAndroid(release, apk)
         }
     }
 
@@ -313,7 +358,7 @@ class Updates internal constructor(
         if (_state.value.release == null) check(manual = false)
         val s = _state.value
         val release = s.release ?: return false
-        if (s is UpdateState.Downloading || s is UpdateState.Installing || work?.isActive == true) return false
+        if (manual || s is UpdateState.Downloading || s is UpdateState.Installing || work?.isActive == true) return false
         val saved = withContext(Dispatchers.IO) { memory.read() }
         if (saved.installing == release.version) return true // already with Android
         val apk = try {
@@ -326,6 +371,8 @@ class Updates internal constructor(
             apk.delete()
             return false
         }
+        // The button may have been tapped during the download: then it's the button's.
+        if (manual || work?.isActive == true) return false
         withContext(Dispatchers.IO) { memory.change { it.copy(auto = release.version) } }
         _auto.value = release.version
         val handed = withContext(Dispatchers.IO) { runCatching { installer.installWhenIdle(apk) }.getOrDefault(false) }
@@ -341,7 +388,7 @@ class Updates internal constructor(
         if (!enabled || !installer.canInstallQuietly()) return false
         restored?.join()
         val release = _state.value.release ?: return false
-        if (work?.isActive == true) return false
+        if (manual || work?.isActive == true) return false
         val saved = withContext(Dispatchers.IO) { memory.read() }
         if (saved.auto != release.version || saved.installing == release.version) return false
         val apk = withContext(Dispatchers.IO) { ready(release) } ?: return false
