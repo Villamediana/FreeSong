@@ -12,6 +12,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Alignment
+import com.villamediana.sound.ui.theme.Dimens
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -121,7 +126,18 @@ private fun MixContent(mix: Mix) {
             meta = MetaFormat.countAndDuration(countText, duration),
             wash = tint,
         ),
-        art = { m -> GeneratedArt(mix.covers, tint, mix.title, m) },
+        art = { m ->
+            if (mix.kind == com.villamediana.sound.smart.Mix.Kind.MOMENT) {
+                // The mix of this moment wears its light and spark here too.
+                androidx.compose.foundation.layout.Box(m) {
+                    GeneratedArt(mix.covers, tint, mix.title, Modifier.matchParentSize())
+                    com.villamediana.sound.ui.home.MomentLight(Modifier.matchParentSize().clip(RoundedCornerShape(Dimens.CoverCorner)))
+                    com.villamediana.sound.ui.home.MomentSeal(Modifier.align(Alignment.TopStart).padding(12.dp), size = 36.dp)
+                }
+            } else {
+                GeneratedArt(mix.covers, tint, mix.title, m)
+            }
+        },
         snackbar = snackbar,
         playing = status.isPlaying,
         loading = status.isLoading,

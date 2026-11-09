@@ -159,21 +159,6 @@ class MusicDnaTest {
     }
 
     @Test
-    fun theSummaryTellsTheDayTheWeekAndThePlaces() {
-        val listens = life() + (1..12).map { heard("Gaiteros", it % 5, at(it, 21), place = 7L) }
-        val s = MusicDna.build(listens, emptySet(), now, zone).summary
-        assertEquals(24, s.hourMinutes.size)
-        assertTrue(s.hourMinutes[21] > s.hourMinutes[3])
-        assertEquals(DayPart.EVENING, s.mainPart)
-        assertEquals("Gaiteros", s.parts.first { it.part == DayPart.EVENING }.artists.first())
-        assertEquals("Eighties", s.parts.first { it.part == DayPart.MORNING }.artists.first())
-        val place = s.places.single()
-        assertEquals(7L, place.id)
-        assertEquals(DayPart.EVENING, place.part)
-        assertEquals("Gaiteros", place.artists.first())
-    }
-
-    @Test
     fun aMomentIsTheClockTheWeekThePlaceAndWhoIsAlong() {
         val saturdayNight = LocalDate.of(2026, 11, 14).atTime(22, 30).toInstant(zone).toEpochMilli()
         val m = DnaMoment.at(saturdayNight, zone, place = 3L, people = setOf("ub", "ua"))

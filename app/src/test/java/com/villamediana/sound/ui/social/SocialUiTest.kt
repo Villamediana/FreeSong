@@ -381,12 +381,6 @@ class SocialUiTest {
                     photoBusy = false,
                     snackbar = com.villamediana.sound.ui.detail.rememberDetailSnackbar(),
                     onPhoto = {}, onEdit = {}, onMenu = {}, onCopy = {}, onNewCode = {}, onUseCode = {},
-                    dna = com.villamediana.sound.smart.DnaSummary(
-                        hourMinutes = List(24) { h -> if (h == 22) 200L else if (h in 19..23) 90L else 3L },
-                        weekdayMinutes = listOf(300, 240, 360, 300, 540, 420, 180),
-                        parts = listOf(com.villamediana.sound.smart.DnaSummary.Part(com.villamediana.sound.smart.DayPart.EVENING, 600, listOf("Maná", "Paramore"), null)),
-                        weekdayTop = listOf("Djavan"), weekendTop = listOf("Maná"), places = emptyList(), people = emptyList(),
-                    ),
                 )
             }
         }
@@ -401,12 +395,8 @@ class SocialUiTest {
         val list = compose.onAllNodes(androidx.compose.ui.test.hasScrollAction()).onFirst()
         list.performScrollToNode(androidx.compose.ui.test.hasText("Seus artistas"))
         compose.onNodeWithText("Maná").assertExists()
-        // Your DNA takes the place of "Seu ritmo" on your own page.
-        list.performScrollToNode(androidx.compose.ui.test.hasText("Seu dia"))
         list.performScrollToNode(androidx.compose.ui.test.hasText("Você é da noite"))
         compose.onNodeWithText("O som sobe mais às 22h").assertExists()
-        check(compose.onAllNodesWithText("Seu ritmo").fetchSemanticsNodes().isEmpty())
-        list.performScrollToNode(androidx.compose.ui.test.hasText("Sua semana"))
         shot("social-profile-numbers-2")
     }
 

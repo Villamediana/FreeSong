@@ -1,20 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="dna_now">Pra agora</string>
-    <string name="dna_day">Seu dia</string>
-    <string name="dna_week">Sua semana</string>
-    <string name="dna_weekdays">Dias de semana</string>
-    <string name="dna_weekend">Fim de semana</string>
-    <string name="dna_places">Seus lugares</string>
     <string name="dna_places_toggle">Lembrar lugares</string>
     <string name="dna_places_hint">Aprende onde você ouve o quê. Fica só neste celular, sem GPS.</string>
     <string name="dna_places_pocket_action">Permitir com a tela apagada</string>
-    <string name="dna_place_n">Lugar %1$d</string>
-    <string name="dna_people">Com quem você ouve</string>
-    <string name="dna_part_late">Madrugada</string>
-    <string name="dna_part_morning">Manhã</string>
-    <string name="dna_part_afternoon">Tarde</string>
-    <string name="dna_part_evening">Noite</string>
     <string name="dna_mix_late">Pra sua madrugada</string>
     <string name="dna_mix_morning">Pra sua manhã</string>
     <string name="dna_mix_afternoon">Pra sua tarde</string>

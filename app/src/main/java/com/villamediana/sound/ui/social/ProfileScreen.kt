@@ -7,13 +7,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
-import androidx.compose.material.icons.rounded.AutoAwesome
-import androidx.compose.material3.Icon
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -52,7 +45,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.villamediana.sound.R
-import com.villamediana.sound.ui.dna.dnaSections
 import com.villamediana.sound.SoundApplication
 import com.villamediana.sound.social.Profile
 import com.villamediana.sound.social.RelayException
@@ -76,12 +68,6 @@ import kotlinx.coroutines.launch
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen() {
-    // Your DNA (only on your page): worked out while it is open.
-    val dnaVm: com.villamediana.sound.ui.dna.DnaViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
-    val dnaSummary by dnaVm.summary.collectAsStateWithLifecycle()
-    val dnaPlaces by dnaVm.places.collectAsStateWithLifecycle()
-    val socialFriends by SoundApplication.graph.social.friends.collectAsStateWithLifecycle()
-    val dnaPeople = remember(socialFriends) { socialFriends.friends.associateBy { it.id } }
     val hub = SoundApplication.graph.social
     val nav = navigator()
     val me by hub.account.me.collectAsStateWithLifecycle()
@@ -128,9 +114,6 @@ fun ProfileScreen() {
         },
         onNewCode = { scope.launch { hub.newRecoveryCode() } },
         onUseCode = { recovering = true },
-        dna = dnaSummary,
-        dnaPlaces = dnaPlaces,
-        dnaPeople = dnaPeople,
         sheets = {
             framing?.let { photo ->
                 PhotoCropDialog(
@@ -199,9 +182,6 @@ internal fun ProfilePage(
     onCopy: () -> Unit,
     onNewCode: () -> Unit,
     onUseCode: () -> Unit,
-    dna: com.villamediana.sound.smart.DnaSummary? = null,
-    dnaPlaces: Boolean = false,
-    dnaPeople: Map<String, Profile> = emptyMap(),
     sheets: @Composable () -> Unit = {},
 ) {
     PersonPage(
@@ -214,8 +194,6 @@ internal fun ProfilePage(
         snackbar = snackbar,
         numbers = numbers,
         numbersEmpty = stringResource(R.string.profile_stats_empty),
-        // Your DNA (day, week, places, friends) takes the place of "Seu ritmo".
-        rhythm = false,
         avatar = { size -> CardAvatar(me, size, onCamera = onPhoto, busy = photoBusy) },
         buttons = {
             PersonButton(stringResource(R.string.profile_edit_name_action), onClick = onEdit, icon = Icons.Rounded.Edit, modifier = Modifier.weight(1f))
@@ -225,7 +203,6 @@ internal fun ProfilePage(
         },
         sheets = sheets,
         more = {
-            dnaSections(dna, dnaPlaces, dnaPeople)
             item(key = "recovery", contentType = "card") { RecoveryCard(code, onCopy = onCopy, onNew = onNewCode, onUseCode = onUseCode) }
         },
     )
