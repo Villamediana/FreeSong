@@ -137,6 +137,7 @@ class ForYou(
             hearts.mapNotNullTo(HashSet()) { it.videoId },
             now,
             genreOf = { artist, songGenre -> GenreMatch.idOf(songGenre ?: known[artist]) },
+            sounds = library.sounds(),
         )
         return profile to dna
     }

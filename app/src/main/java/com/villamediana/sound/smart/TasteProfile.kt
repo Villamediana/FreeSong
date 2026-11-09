@@ -46,6 +46,8 @@ class TasteProfile private constructor(
     private val byArtist: Map<String, ArtistTaste>,
     /** For a moment's profile: how much each song skipped in it is wanted, 0..1 (absent = 1). */
     private val songFactors: Map<String, Double> = emptyMap(),
+    /** For a moment's profile: how a song's own sound fits it against its artist's usual one (absent = 1). */
+    private val soundFits: Map<String, Double> = emptyMap(),
 ) {
     /** A song of an artist, as the profile remembers it. */
     data class SongTaste(val videoId: String?, val title: String, val score: Double, val genre: String?)
@@ -82,18 +84,25 @@ class TasteProfile private constructor(
     fun songFactor(videoId: String): Double = songFactors[videoId] ?: 1.0
 
     /**
+     * How a song's own sound (mood, rhythm) fits this moment, against what its artist usually
+     * sounds like: 1 = the same or not known; above, it fits better (for a moment's profile; else 1).
+     */
+    fun soundFit(videoId: String): Double = soundFits[videoId] ?: 1.0
+
+    /**
      * This taste for [m], with the [dna]: the artists and genres of this part of the day, of
      * weekdays or the weekend, of this place and of these friends move up (the others down a
      * little), and what is skipped in this moment — songs, artists, genres — goes down in it (only
-     * in it: the taste of every other moment stays), out when skipped here again and again.
+     * in it: the taste of every other moment stays), out when skipped here again and again. So do
+     * the artists whose sound is the moment's (calm, intense, still, moving), heard in it or not.
      */
     fun inMoment(dna: MusicDna, m: DnaMoment): TasteProfile {
         if (dna.isEmpty || isEmpty) return this
-        val lifted = artists.map { a -> a.copy(affinity = (a.affinity * dna.lift(a.key, m)).coerceAtMost(1.0)) }
+        val lifted = artists.map { a -> a.copy(affinity = (a.affinity * dna.lift(a.key, m) * dna.soundLift(null, a.key, m)).coerceAtMost(1.0)) }
             .sortedWith(compareByDescending<ArtistTaste> { it.affinity }.thenBy { it.key })
         val moved = genres.map { g -> g.copy(score = g.score * dna.genreLift(g.id, m)) }
             .sortedWith(compareByDescending<GenreTaste> { it.score }.thenBy { it.id })
-        return TasteProfile(lifted, moved, avoidSongs + dna.avoidNow(m), avoidArtists, known, lifted.associateBy { it.key }, dna.songFactors(m))
+        return TasteProfile(lifted, moved, avoidSongs + dna.avoidNow(m), avoidArtists, known, lifted.associateBy { it.key }, dna.songFactors(m), dna.soundFits(m))
     }
 
     /**

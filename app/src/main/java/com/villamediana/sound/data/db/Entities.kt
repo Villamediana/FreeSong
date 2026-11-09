@@ -256,6 +256,23 @@ data class Place(
 )
 
 /**
+ * What a song sounds like (smart/SoundPrint: its mood and rhythm), measured from its own audio
+ * while it played on this phone. About the song, not about who heard it; it stays on this phone.
+ */
+@Entity(tableName = "song_sounds")
+data class SongSound(
+    @PrimaryKey val videoId: String,
+    val loud: Float,
+    val bright: Float,
+    val drive: Float,
+    val pulse: Float,
+    val tempo: Float,
+    /** How much of the song was measured. */
+    val seconds: Float,
+    val at: Long,
+)
+
+/**
  * A streamed song in one of your playlists (not on the phone): it plays online, like an imported
  * playlist's. Shares the playlist's positions with [PlaylistTrack]; downloaded later, it becomes a
  * [PlaylistTrack] at the same position.

@@ -16,6 +16,7 @@ import com.villamediana.sound.data.db.LikedOnline
 import com.villamediana.sound.data.db.PlayEvent
 import com.villamediana.sound.data.db.Playlist
 import com.villamediana.sound.data.db.PlaylistTrack
+import com.villamediana.sound.data.db.SongSound
 import com.villamediana.sound.data.db.SoundDatabase
 import com.villamediana.sound.data.db.Track
 import com.villamediana.sound.data.model.AlbumDetail
@@ -30,6 +31,7 @@ import com.villamediana.sound.data.model.PlaylistDetail
 import com.villamediana.sound.data.model.PlaylistSummary
 import com.villamediana.sound.data.model.TrackSort
 import com.villamediana.sound.online.RemoteTrack
+import com.villamediana.sound.smart.SoundPrint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -61,6 +63,7 @@ class LibraryRepository(
     private val importedDao = db.importedPlaylists()
     private val onlinePlayDao = db.onlinePlays()
     private val playlistOnlineDao = db.playlistOnline()
+    private val soundDao = db.songSounds()
 
     /** All tracks, newest first. Shared: every derived flow reuses one Room query. */
     val tracks: Flow<List<Track>> = trackDao.observeAll()
@@ -352,6 +355,22 @@ class LibraryRepository(
     suspend fun importedList(): List<ImportedPlaylist> = importedDao.all()
 
     suspend fun putImportedFromVault(p: ImportedPlaylist) = importedDao.upsert(p)
+
+    // ---------------------------------------------------------------- what songs sound like
+    // Measured on this phone while they play (smart/SoundPrint); it stays here (not in the vault).
+
+    /** What every song measured so far sounds like, by video id. */
+    suspend fun sounds(): Map<String, SoundPrint> = soundDao.all().associate { it.videoId to it.print() }
+
+    suspend fun soundOf(videoId: String): SoundPrint? = soundDao.of(videoId)?.print()
+
+    /** One more listen of a song's sound: joins what was already known about it. */
+    suspend fun learnSound(videoId: String, heard: SoundPrint, now: Long = System.currentTimeMillis()) = db.withTransaction {
+        val p = soundDao.of(videoId)?.print()?.merge(heard) ?: heard
+        soundDao.put(SongSound(videoId, p.loud, p.bright, p.drive, p.pulse, p.tempo, p.seconds, now))
+    }
+
+    private fun SongSound.print() = SoundPrint(loud, bright, drive, pulse, tempo, seconds)
 
     suspend fun clearHistory() = db.withTransaction {
         eventDao.clear()

@@ -1,6 +1,7 @@
 package com.villamediana.sound.smart
 
 import com.villamediana.sound.online.RemoteTrack
+import kotlin.math.ln
 import kotlin.random.Random
 
 /**
@@ -55,6 +56,8 @@ object RadioMix {
     private const val CHANCE = 1.0
     /** How far a song skipped in this moment goes down. */
     private const val SKIPPED = 1.6
+    /** How far a song whose own sound fits this moment (more or less than its artist's) moves. */
+    private const val SOUND = 0.6
 
     fun rank(
         direct: List<List<RemoteTrack>>,
@@ -90,7 +93,8 @@ object RadioMix {
             val tired = if ((session.skippedArtists[artistKey(t.artist)] ?: 0) >= 1) 0.6 else 0.0
             // Skipped in this moment (for a moment's profile): further down now, not out.
             val skips = SKIPPED * (1.0 - (profile?.songFactor(t.videoId) ?: 1.0))
-            t.videoId to score.getValue(t.videoId) + agree + taste - tired - skips + rnd.nextDouble() * CHANCE
+            val sound = SOUND * ln(profile?.soundFit(t.videoId) ?: 1.0)
+            t.videoId to score.getValue(t.videoId) + agree + taste + sound - tired - skips + rnd.nextDouble() * CHANCE
         }
         val ranked = found.values.sortedWith(compareByDescending<RemoteTrack> { total.getValue(it.videoId) }.thenBy { it.videoId })
 

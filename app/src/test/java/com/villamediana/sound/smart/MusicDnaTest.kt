@@ -262,4 +262,88 @@ class MusicDnaTest {
         assertEquals(0L, PlaceClusters.locate(known, -23.5325, -46.6333, 3_000).id)
         assertEquals(2_000.0, PlaceClusters.distanceM(-23.5505, -46.6333, -23.5325, -46.6333), 50.0)
     }
+
+    private fun id(artist: String, song: Int) = "${artist.take(4)}$song".padEnd(11, 'x')
+
+    /** A song's sound, from calm and still (0) to intense and moving (1). */
+    private fun sound(e: Float) = SoundPrint(-30f + 20f * e, 500f + 3_000f * e, 5f + 40f * e, 0.1f + 0.7f * e, 70f + 90f * e, 120f)
+
+    /** Soft songs in the mornings, hard ones at night; Hush (soft) and Bang (hard) only a couple of afternoons. */
+    private fun soundLife(): List<Listen> = (1..20).flatMap { d ->
+        listOf(
+            heard("Soft", d % 8, at(d, 8)),
+            heard("Soft", (d + 3) % 8, at(d, 9)),
+            heard("Hard", d % 8, at(d, 21)),
+            heard("Hard", (d + 3) % 8, at(d, 22)),
+        )
+    } + listOf(heard("Hush", 1, at(2, 15)), heard("Hush", 2, at(3, 15)), heard("Bang", 1, at(2, 15)), heard("Bang", 2, at(3, 15)))
+
+    private fun sounds(): Map<String, SoundPrint> =
+        (0..7).associate { id("Soft", it) to sound(0.05f + 0.03f * it) } +
+            (0..7).associate { id("Hard", it) to sound(0.75f + 0.03f * it) } +
+            mapOf(id("Hush", 1) to sound(0.1f), id("Hush", 2) to sound(0.15f), id("Bang", 1) to sound(0.9f), id("Bang", 2) to sound(0.85f))
+
+    @Test
+    fun theSoundOfAMomentCarriesToWhatWasNeverHeardInIt() {
+        val dna = MusicDna.build(soundLife(), emptySet(), now, zone, sounds = sounds())
+        // Hush was never heard in the morning, but it sounds like the mornings.
+        assertTrue(dna.soundLift(id("Hush", 1), "hush", morning) > 1.3)
+        assertTrue(dna.soundLift(id("Hush", 1), "hush", night) < 0.8)
+        assertTrue(dna.soundLift(id("Bang", 1), "bang", night) > 1.3)
+        assertTrue(dna.soundLift(id("Bang", 1), "bang", morning) < 0.8)
+        // A song not measured yet goes by what its artist usually sounds like.
+        assertTrue(dna.soundLift("neverheard1", "hush", morning) > 1.3)
+        assertTrue(dna.soundLift(null, "bang", night) > 1.3)
+        // Nothing known about the sound: nothing to say.
+        assertEquals(1.0, dna.soundLift("neverheard1", "nobody", morning), 0.0)
+        // The moment's taste and its own songs follow.
+        val taste = TasteProfile.build(soundLife(), emptyList(), now)
+        fun hush(m: DnaMoment) = taste.inMoment(dna, m).affinityOf("Hush")
+        assertTrue(hush(morning) > hush(night))
+    }
+
+    @Test
+    fun withoutEnoughSongsMeasuredTheSoundSaysNothing() {
+        val few = sounds().entries.take(SoundMap.MIN_SONGS - 1).associate { it.key to it.value }
+        val dna = MusicDna.build(soundLife(), emptySet(), now, zone, sounds = few)
+        assertEquals(1.0, dna.soundLift(id("Soft", 0), "soft", morning), 0.0)
+        assertTrue(dna.soundFits(morning).isEmpty())
+        // And the DNA without any sound is the one it was.
+        val plain = MusicDna.build(soundLife(), emptySet(), now, zone)
+        assertEquals(plain.lift("soft", morning), dna.lift("soft", morning), 0.0)
+    }
+
+    @Test
+    fun theQuietSongOfALoudBandFitsTheMorning() {
+        val quiet = id("Hard", 9)
+        val dna = MusicDna.build(soundLife() + heard("Hard", 9, at(2, 15)), emptySet(), now, zone, sounds = sounds() + (quiet to sound(0.08f)))
+        assertTrue(dna.soundFits(morning).getValue(quiet) > 1.3)
+        assertTrue(dna.soundFits(night).getValue(quiet) < 0.8)
+        // A song that sounds like its artist: nothing of its own to say.
+        assertFalse(id("Soft", 3) in dna.soundFits(morning))
+        val taste = TasteProfile.build(soundLife(), emptyList(), now).inMoment(dna, morning)
+        assertTrue(taste.soundFit(quiet) > 1.3)
+        assertEquals(1.0, taste.soundFit("neverheard1"), 0.0)
+    }
+
+    @Test
+    fun aSoundSkippedInTheMorningFitsItLessAndTheNightTheSame() {
+        // Soft and hard at any hour; then the hard ones skipped in the mornings, whoever plays them.
+        val any = (1..20).flatMap { d ->
+            listOf(
+                heard("Soft", d % 8, at(d, if (d % 2 == 0) 8 else 21)),
+                heard("Hard", d % 8, at(d, if (d % 2 == 0) 9 else 22)),
+                heard("Soft", (d + 3) % 8, at(d, if (d % 2 == 0) 22 else 9)),
+                heard("Hard", (d + 3) % 8, at(d, if (d % 2 == 0) 21 else 8)),
+            )
+        }
+        val skips = (1..6).flatMap { d -> listOf(skipped("Bang", 1, at(d, 8)), skipped("Bang", 2, at(d, 9))) }
+        val plain = MusicDna.build(any, emptySet(), now, zone, sounds = sounds())
+        val dna = MusicDna.build(any + skips, emptySet(), now, zone, sounds = sounds())
+        val hard = id("Hard", 7)
+        assertEquals(1.0, plain.soundLift(hard, "hard", morning), 0.2)
+        assertTrue(dna.soundLift(hard, "hard", morning) < plain.soundLift(hard, "hard", morning) - 0.1)
+        assertEquals(plain.soundLift(hard, "hard", night), dna.soundLift(hard, "hard", night), 0.05)
+        assertEquals(plain.soundLift(id("Soft", 0), "soft", morning), dna.soundLift(id("Soft", 0), "soft", morning), 0.05)
+    }
 }

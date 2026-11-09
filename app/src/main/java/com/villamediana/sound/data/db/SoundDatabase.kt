@@ -7,10 +7,10 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 
 @Database(
-    entities = [Track::class, Playlist::class, PlaylistTrack::class, AlbumPin::class, PlayEvent::class, DownloadTask::class, LikedOnline::class, ImportedPlaylist::class, OnlinePlay::class, PlaylistOnline::class, SharedSong::class, Place::class],
-    version = 9,
+    entities = [Track::class, Playlist::class, PlaylistTrack::class, AlbumPin::class, PlayEvent::class, DownloadTask::class, LikedOnline::class, ImportedPlaylist::class, OnlinePlay::class, PlaylistOnline::class, SharedSong::class, Place::class, SongSound::class],
+    version = 10,
     exportSchema = true,
-    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4), AutoMigration(from = 4, to = 5), AutoMigration(from = 5, to = 6), AutoMigration(from = 6, to = 7), AutoMigration(from = 7, to = 8), AutoMigration(from = 8, to = 9)],
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4), AutoMigration(from = 4, to = 5), AutoMigration(from = 5, to = 6), AutoMigration(from = 6, to = 7), AutoMigration(from = 7, to = 8), AutoMigration(from = 8, to = 9), AutoMigration(from = 9, to = 10)],
 )
 abstract class SoundDatabase : RoomDatabase() {
     abstract fun tracks(): TrackDao
@@ -24,6 +24,7 @@ abstract class SoundDatabase : RoomDatabase() {
     abstract fun playlistOnline(): PlaylistOnlineDao
     abstract fun sharedSongs(): SharedSongDao
     abstract fun places(): PlaceDao
+    abstract fun songSounds(): SongSoundDao
 
     companion object {
         fun build(context: Context): SoundDatabase =

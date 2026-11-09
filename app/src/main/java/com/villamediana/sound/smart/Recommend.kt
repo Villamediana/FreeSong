@@ -1,6 +1,7 @@
 package com.villamediana.sound.smart
 
 import com.villamediana.sound.online.RemoteTrack
+import kotlin.math.ln
 import kotlin.random.Random
 
 /**
@@ -15,6 +16,8 @@ object Recommend {
     private const val NEW_ARTIST_LIFT = 0.25
     /** How far a song skipped in this moment goes down (for a moment's profile). */
     private const val SKIPPED = 1.6
+    /** How far a song whose own sound fits this moment (more or less than its artist's) moves. */
+    private const val SOUND = 0.6
 
     /**
      * The best [count] new songs from [radios] (each a radio of a song the listener loves): a song
@@ -48,7 +51,8 @@ object Recommend {
         val firstSeen = found.keys.withIndex().associate { (i, id) -> id to i }
         fun total(t: RemoteTrack): Double {
             val agree = 0.4 * ((radiosWith[artistKey(t.artist)] ?: 1) - 1)
-            return score.getValue(t.videoId) + agree + lift(t, profile) - SKIPPED * (1.0 - profile.songFactor(t.videoId))
+            return score.getValue(t.videoId) + agree + lift(t, profile) + SOUND * ln(profile.soundFit(t.videoId)) -
+                SKIPPED * (1.0 - profile.songFactor(t.videoId))
         }
         val ranked = found.values.sortedWith(compareByDescending<RemoteTrack> { total(it) }.thenBy { firstSeen.getValue(it.videoId) })
         return capped(ranked, count, perArtist)
@@ -65,7 +69,7 @@ object Recommend {
             id = { it.videoId.hashCode().toLong() },
             weight = { t ->
                 val known = t.videoId in profile.known
-                (1.0 + 3.0 * profile.affinityOf(t.artist)) * (if (known) 0.55 else 1.0) * profile.songFactor(t.videoId)
+                (1.0 + 3.0 * profile.affinityOf(t.artist)) * (if (known) 0.55 else 1.0) * profile.songFactor(t.videoId) * profile.soundFit(t.videoId)
             },
             rnd = Random(seed),
         )

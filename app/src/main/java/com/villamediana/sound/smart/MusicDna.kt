@@ -69,6 +69,11 @@ data class DnaMoment(
  *   happened, for the song, its artist and its genre (the "ritmo"). Heard through in that moment,
  *   it is forgiven; skips fade by half every [SKIP_HALF_LIFE_MS] (the truth comes back); a heart
  *   keeps a song from going far down. [songFactor] and [avoidNow] say it for a moment.
+ * - The sound itself (smart/SoundPrint: mood and rhythm, measured on the phone while a song plays)
+ *   is learned the same way: which sound — calm or intense, still or moving — belongs to which
+ *   hour, day, place and company, and which is skipped there. [soundLift] says it for a song, by
+ *   its own sound or else by what its artist usually sounds like; so a song never heard in the
+ *   morning still fits it when it sounds like the mornings.
  */
 class MusicDna private constructor(
     private val all: Stat,
@@ -78,6 +83,12 @@ class MusicDna private constructor(
     private val songSkips: Map<String, Skips>,
     private val artistSkips: Map<String, Skips>,
     private val genreSkips: Map<String, Skips>,
+    /** The listening that has a sound, and each corner of the sound map ([VIBES] of them) in it. */
+    private val sounded: Stat,
+    private val vibes: Array<Stat?>,
+    private val vibeSkips: Array<Skips?>,
+    private val songSpots: Map<String, Spot>,
+    private val artistSpots: Map<String, Spot>,
 ) {
     /**
      * Listening (fading with [HALF_LIFE_MS]) of an artist, a genre or of everything: in each hour
@@ -244,6 +255,8 @@ class MusicDna private constructor(
     }
 
     @Volatile private var clock: Clock? = null
+    @Volatile private var soundClock: Clock? = null
+    @Volatile private var vibeLifts: Pair<DnaMoment, DoubleArray>? = null
 
     private fun clockOf(m: DnaMoment): Clock {
         val day = m.weekday.ordinal
@@ -251,34 +264,76 @@ class MusicDna private constructor(
         return Clock(m.hour, day, all).also { clock = it }
     }
 
+    private fun soundClockOf(m: DnaMoment): Clock {
+        val day = m.weekday.ordinal
+        soundClock?.let { if (it.hour == m.hour && it.day == day) return it }
+        return Clock(m.hour, day, sounded).also { soundClock = it }
+    }
+
     val isEmpty: Boolean get() = all.total <= 0.0
 
     /** How much more the artist fits [m] than usual: 1 = as usual; between [MIN_LIFT] and [MAX_LIFT]. */
     fun lift(artistKey: String, m: DnaMoment): Double =
-        liftOf(artists[artistKey], artistSkips[artistKey], ARTIST_SKIP, ARTIST_PRIOR, m)
+        liftOf(artists[artistKey], artistSkips[artistKey], ARTIST_SKIP, ARTIST_PRIOR, m, all, clockOf(m))
 
     /** How much more a genre (home genre id) fits [m] than usual. */
     fun genreLift(genre: String, m: DnaMoment): Double =
-        liftOf(genres[genre], genreSkips[genre], GENRE_SKIP, GENRE_PRIOR, m)
+        liftOf(genres[genre], genreSkips[genre], GENRE_SKIP, GENRE_PRIOR, m, all, clockOf(m))
 
-    private fun liftOf(stat: Stat?, skips: Skips?, skipWeight: Double, skipPrior: Double, m: DnaMoment): Double {
+    /**
+     * How much more a song's sound fits [m] than usual (1 = as usual, or nothing known about its
+     * sound): its own when it was measured, else what [artistKey] usually sounds like. Between
+     * [SOUND_MIN] and [SOUND_MAX].
+     */
+    fun soundLift(videoId: String?, artistKey: String, m: DnaMoment): Double {
+        val spot = videoId?.let(songSpots::get) ?: artistSpots[artistKey] ?: return 1.0
+        return soundLift(spot, m)
+    }
+
+    private fun soundLift(spot: Spot, m: DnaMoment): Double {
+        val cached = vibeLifts
+        val lifts = if (cached != null && cached.first == m) cached.second else {
+            val c = soundClockOf(m)
+            DoubleArray(VIBES) { liftOf(vibes[it], vibeSkips[it], SOUND_SKIP, SOUND_PRIOR, m, sounded, c) }.also { vibeLifts = m to it }
+        }
+        var lift = 0.0
+        spread(spot) { cell, w -> lift += w * lifts[cell] }
+        return lift.coerceIn(SOUND_MIN, SOUND_MAX)
+    }
+
+    /**
+     * For the songs whose sound was measured: how their own sound fits [m] against what their
+     * artist usually sounds like (1 = the same, left out): the quiet song of a loud band.
+     */
+    fun soundFits(m: DnaMoment): Map<String, Double> {
+        if (songSpots.isEmpty()) return emptyMap()
+        val out = HashMap<String, Double>()
+        for ((id, spot) in songSpots) {
+            val usual = songs[id]?.let { artistSpots[artistKey(it.artist)] } ?: continue
+            val fit = (soundLift(spot, m) / soundLift(usual, m)).coerceIn(SOUND_MIN, SOUND_MAX)
+            if (abs(fit - 1.0) > 0.03) out[id] = fit
+        }
+        return out
+    }
+
+    /** [stat]'s lift in [m] among the listening [of] ([c]: [m]'s clock over it). */
+    private fun liftOf(stat: Stat?, skips: Skips?, skipWeight: Double, skipPrior: Double, m: DnaMoment, of: Stat, c: Clock): Double {
         // Skipped in this moment: it fits it less, wherever it stands otherwise.
         var log = ln((1.0 - skipWeight * (skips?.rate(m, skipPrior) ?: 0.0)).coerceAtLeast(0.05))
-        if (stat != null && stat.total > 0 && all.total > 0) {
-            val share = stat.total / all.total
-            val c = clockOf(m)
+        if (stat != null && stat.total > 0 && of.total > 0) {
+            val share = stat.total / of.total
             log += HOUR_WEIGHT * ln(ratio(stat.sum(c.nearHour), c.nearHourTotal, share))
             log += DAY_WEIGHT * ln(ratio(stat.sum(c.sameKind), c.sameKindTotal, share))
             log += SLOT_WEIGHT * ln(ratio(stat.sum(c.sameDay), c.sameDayTotal, share))
             val place = m.place
-            val atPlace = if (place != null) all.places[place] ?: 0.0 else 0.0
+            val atPlace = if (place != null) of.places[place] ?: 0.0 else 0.0
             if (place != null && atPlace >= MIN_CONTEXT) {
                 log += PLACE_WEIGHT * ln(ratio(stat.places[place] ?: 0.0, atPlace, share))
             }
             var along = 0.0
             var known = 0
             for (p in m.people) {
-                val with = all.people[p] ?: continue
+                val with = of.people[p] ?: continue
                 if (with < MIN_CONTEXT) continue
                 along += ln(ratio(stat.people[p] ?: 0.0, with, share))
                 known++
@@ -325,7 +380,9 @@ class MusicDna private constructor(
                 val here = s.around(m.hour)
                 val there = if (place == null) 1.0 else PLACE_BASE + PLACE_SPAN * ((s.places[place] ?: 0.0) / (s.weight + 1.0))
                 val people = if (m.people.isEmpty()) 0.0 else m.people.sumOf { s.together[it] ?: 0.0 }
-                val score = (s.weight.pow(0.5) * (0.4 + 1.6 * here) * there + 1.5 * people) * lift(artistKey(s.artist), m) * songFactor(s.videoId, m)
+                val artist = artistKey(s.artist)
+                val score = (s.weight.pow(0.5) * (0.4 + 1.6 * here) * there + 1.5 * people) *
+                    lift(artist, m) * soundLift(s.videoId, artist, m) * songFactor(s.videoId, m)
                 s to score
             }
             .sortedByDescending { it.second }
@@ -388,6 +445,15 @@ class MusicDna private constructor(
         /** Not among the moment's own songs below this. */
         const val SONGS_FOR_FLOOR = 0.45
 
+        /** How far a sound's fit to the moment moves a song, and how far skips push a sound down in it. */
+        const val SOUND_MIN = 0.5
+        const val SOUND_MAX = 2.0
+        const val SOUND_SKIP = 0.4
+        const val SOUND_PRIOR = 5.0
+        /** The sound map: this many steps from calm to intense, and from still to moving. */
+        private const val SIDE = 4
+        private const val VIBES = SIDE * SIDE
+
         /** The hours of the week. */
         private const val SLOTS = 7 * 24
         /** The first weekend day (0 = Monday). */
@@ -405,9 +471,25 @@ class MusicDna private constructor(
             return if (around < HOUR_KERNEL.size) HOUR_KERNEL[around] else 0.0
         }
 
+        /** Shares [spot] among the (up to four) corners of the sound map around it. */
+        private inline fun spread(spot: Spot, to: (cell: Int, weight: Double) -> Unit) {
+            val x = (spot.energy * SIDE - 0.5f).coerceIn(0f, SIDE - 1f)
+            val y = (spot.motion * SIDE - 0.5f).coerceIn(0f, SIDE - 1f)
+            val x0 = min(x.toInt(), SIDE - 2)
+            val y0 = min(y.toInt(), SIDE - 2)
+            val fx = (x - x0).toDouble()
+            val fy = (y - y0).toDouble()
+            val at = y0 * SIDE + x0
+            if ((1 - fx) * (1 - fy) > 0) to(at, (1 - fx) * (1 - fy))
+            if (fx * (1 - fy) > 0) to(at + 1, fx * (1 - fy))
+            if ((1 - fx) * fy > 0) to(at + SIDE, (1 - fx) * fy)
+            if (fx * fy > 0) to(at + SIDE + 1, fx * fy)
+        }
+
         /**
          * Builds the DNA from [listens] (each with its time, and where and with whom when known),
-         * [hearts] (video ids) and [genreOf] (an artist key → home genre id).
+         * [hearts] (video ids), [genreOf] (an artist key → home genre id) and [sounds] (what the
+         * songs measured so far sound like, by video id).
          */
         fun build(
             listens: List<Listen>,
@@ -415,6 +497,7 @@ class MusicDna private constructor(
             now: Long,
             zone: ZoneId = ZoneId.systemDefault(),
             genreOf: (artistKey: String, songGenre: String?) -> String? = { _, g -> g },
+            sounds: Map<String, SoundPrint> = emptyMap(),
         ): MusicDna {
             val all = Stat()
             val artists = HashMap<String, Stat>()
@@ -423,6 +506,29 @@ class MusicDna private constructor(
             val songSkips = HashMap<String, Skips>()
             val artistSkips = HashMap<String, Skips>()
             val genreSkips = HashMap<String, Skips>()
+
+            // Each measured song's place on this listener's own scale, and each artist's usual one.
+            val map = SoundMap.of(sounds.values)
+            val songSpots = if (map == null) emptyMap() else sounds.mapValues { map.spot(it.value) }
+            val artistSpots = HashMap<String, Spot>()
+            if (songSpots.isNotEmpty()) {
+                val seen = HashSet<String>()
+                val sums = HashMap<String, FloatArray>()
+                for (l in listens) {
+                    val id = l.videoId ?: continue
+                    val spot = songSpots[id] ?: continue
+                    val a = artistKey(l.artist)
+                    if (a.isEmpty() || !seen.add(id)) continue
+                    val sum = sums.getOrPut(a) { FloatArray(3) }
+                    sum[0] += spot.energy
+                    sum[1] += spot.motion
+                    sum[2] += 1f
+                }
+                for ((a, sum) in sums) artistSpots[a] = Spot(sum[0] / sum[2], sum[1] / sum[2])
+            }
+            val sounded = Stat()
+            val vibes = arrayOfNulls<Stat>(VIBES)
+            val vibeSkips = arrayOfNulls<Skips>(VIBES)
 
             for (l in listens) {
                 val a = artistKey(l.artist)
@@ -443,6 +549,10 @@ class MusicDna private constructor(
                 if (id != null) songSkips.getOrPut(id) { Skips() }.mark(hour, weekend, l.place, skip, through)
                 artistSkips.getOrPut(a) { Skips() }.mark(hour, weekend, l.place, skip, through)
                 if (genre != null) genreSkips.getOrPut(genre) { Skips() }.mark(hour, weekend, l.place, skip, through)
+                val spot = id?.let(songSpots::get) ?: artistSpots[a]
+                if (spot != null) spread(spot) { cell, w ->
+                    (vibeSkips[cell] ?: Skips().also { vibeSkips[cell] = it }).mark(hour, weekend, l.place, skip * w, through * w)
+                }
                 // The taste of the moment learns from what is heard; a skip only told the moment.
                 if (l.skipped) continue
                 val value = when {
@@ -460,12 +570,19 @@ class MusicDna private constructor(
                 all.add(slot, value, l.place, l.people)
                 artists.getOrPut(a) { Stat() }.add(slot, value, l.place, l.people)
                 if (genre != null) genres.getOrPut(genre) { Stat() }.add(slot, value, l.place, l.people)
+                if (spot != null) {
+                    sounded.add(slot, value, l.place, l.people)
+                    spread(spot) { cell, w ->
+                        (vibes[cell] ?: Stat().also { vibes[cell] = it }).add(slot, value * w, l.place, l.people)
+                    }
+                }
             }
             return MusicDna(
                 all, artists, genres, songs,
                 songSkips.filterValues { it.any },
                 artistSkips.filterValues { it.any },
                 genreSkips.filterValues { it.any },
+                sounded, vibes, vibeSkips, songSpots, artistSpots,
             )
         }
     }
