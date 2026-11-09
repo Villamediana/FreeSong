@@ -103,6 +103,8 @@ data class VPlay(
     @SerialName("d") val durationMs: Long = 0,
     @SerialName("c") val completed: Boolean = false,
     @SerialName("k") val skipped: Boolean = false,
+    /** Who listened along (jam friends): the DNA's "com quem" goes to the other phones; places don't. */
+    @SerialName("pp") val people: String? = null,
 ) {
     val key: String get() = "$videoId@$at"
 }

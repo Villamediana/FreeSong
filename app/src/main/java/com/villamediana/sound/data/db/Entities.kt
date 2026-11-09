@@ -144,6 +144,10 @@ data class PlayEvent(
     val skipped: Boolean,
     /** PlaySource.type name, for stats. */
     val context: String? = null,
+    /** The place it was heard at ([Place]), when the app learns places. */
+    val placeId: Long? = null,
+    /** Who listened along (jam friends' ids, comma-separated). */
+    val people: String? = null,
 )
 
 enum class DownloadState { QUEUED, RUNNING, DONE, FAILED, CANCELED }
@@ -231,6 +235,24 @@ data class OnlinePlay(
     val completed: Boolean,
     val skipped: Boolean,
     val context: String? = null,
+    val placeId: Long? = null,
+    val people: String? = null,
+)
+
+/**
+ * A place where music is heard, learned by itself from the phone's coarse location (only when
+ * "Lembrar lugares" is on): the middle of the fixes taken there and how much was heard there. No
+ * name, no address — it stays on this phone (not even in the vault).
+ */
+@Entity(tableName = "places")
+data class Place(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val lat: Double,
+    val lon: Double,
+    /** Fixes that made the middle (the next one moves it less). */
+    val fixes: Int,
+    val firstAt: Long,
+    val lastAt: Long,
 )
 
 /**

@@ -33,10 +33,11 @@ class RecommendTest {
         // In both radios: first. A song of a liked artist rises past ones only one radio has.
         assertEquals("both", ids.first())
         assertTrue(ids.indexOf("dj2") < ids.indexOf("onlyB"))
-        // Never: a song already heard to the end, one skipped twice, the seed itself.
+        // Never: a song already heard to the end, the seed itself.
         assertFalse("known" in ids)
-        assertFalse("bad" in ids)
         assertFalse("seed1" in ids)
+        // Skipped twice: further down, not gone (maybe it just wasn't the moment).
+        assertTrue(ids.indexOf("bad") > ids.indexOf("onlyA"))
         // A known artist's song that is new to the listener is fine.
         assertTrue("caet2" in ids)
     }

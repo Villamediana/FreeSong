@@ -9,7 +9,10 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /**
@@ -26,9 +29,17 @@ class MadeForYouStore(
     private val clock: () -> Long = System::currentTimeMillis,
     /** The listener's taste: the songs and artists they keep skipping stay out of the mixes. */
     private val profile: (suspend () -> TasteProfile)? = null,
+    /** "Pra agora", from the DNA: what fits this moment (null: not enough listening yet). */
+    private val moment: (suspend () -> MomentPlan?)? = null,
+    private val momentLabels: () -> MadeForYou.MomentLabels = { MadeForYou.MomentLabels({ _, _ -> "" }, { it }) },
 ) {
     private val _mixes = MutableStateFlow<List<Mix>>(emptyList())
-    val mixes: StateFlow<List<Mix>> = _mixes.asStateFlow()
+    private val _moment = MutableStateFlow<Mix?>(null)
+    /** "Pra agora" first, then the day's genre mixes. */
+    val mixes: StateFlow<List<Mix>> = combine(_moment, _mixes) { m, list -> listOfNotNull(m) + list }
+        .stateIn(scope, SharingStarted.Eagerly, emptyList())
+    /** The moment the "Pra agora" mix was made for, and the day. */
+    private var momentMadeFor: String? = null
 
     /** What the current mixes were made from: the day, and each mix with how many of your songs it had. */
     private var built: Pair<Long, List<Pair<String, Int>>>? = null
@@ -50,6 +61,7 @@ class MadeForYouStore(
             do {
                 again.set(false)
                 // Never let a failure here take the app down: the mixes just wait for the next try.
+                runCatching { makeMoment(SmartMixes.dayNumber(clock())) }
                 runCatching { make(SmartMixes.dayNumber(clock())) }
             } while (again.get())
         }
@@ -90,7 +102,21 @@ class MadeForYouStore(
         complete = made.all { (plan, mix) -> plan.seeds.isEmpty() || mix.tracks.any { it.id < 0 } }
     }
 
-    fun byId(id: String): Mix? = _mixes.value.firstOrNull { it.id == id }
+    fun byId(id: String): Mix? = mixes.value.firstOrNull { it.id == id } ?: _mixes.value.firstOrNull { it.id == id }
+
+    /** "Pra agora": made again when the moment changes (another part of the day, another place, a jam). */
+    private suspend fun makeMoment(day: Long) {
+        val make = moment ?: return
+        val plan = make() ?: run {
+            _moment.value = null
+            momentMadeFor = null
+            return
+        }
+        val key = "$day|${plan.moment.key}"
+        if (key == momentMadeFor && _moment.value != null) return
+        _moment.value = MadeForYou.assembleMoment(plan, momentLabels())
+        momentMadeFor = key
+    }
 
     private companion object {
         /** Songs asked of each radio: the more each brings, the better they can be compared. */

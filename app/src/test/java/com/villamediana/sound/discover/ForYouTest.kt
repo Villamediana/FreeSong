@@ -159,6 +159,12 @@ class ForYouTest {
         val victim = first.first()
         stream(victim.videoId, victim.artist, times = 2, skipped = true, hoursAgo = 0)
         forYou.invalidate()
+        // Skipped twice: it goes down the row (it may just not have been the moment)…
+        val after = forYou.discoveries()
+        assertTrue(after.indexOfFirst { it.videoId == victim.videoId } > 0)
+        // …and again and again: out of it.
+        stream(victim.videoId, victim.artist, times = 2, skipped = true, hoursAgo = 0)
+        forYou.invalidate()
         assertFalse(forYou.discoveries().any { it.videoId == victim.videoId })
         // Samba streamed (no genre on the songs): its shelf comes first, though nothing was picked.
         assertEquals("pagode", forYou.genres(emptyList()).first().id)

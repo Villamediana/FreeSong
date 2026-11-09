@@ -660,6 +660,11 @@ class PlaybackService : MediaLibraryService() {
     private fun startListen(item: MediaItem?) {
         val id = listenId(item) ?: return
         listeningOnline = MediaItems.onlineItem(item)
+        // The DNA: who is along (the jam) and where the phone is (when places are on), for this listen.
+        listenPeople = runCatching { graph.jamPeople().toList() }.getOrDefault(emptyList())
+        listenPlace = graph.places.last
+        placeAsk?.cancel()
+        placeAsk = scope.launch { runCatching { graph.places.now() }.getOrNull()?.let { listenPlace = it } }
         val duration = player.duration.takeIf { it != C.TIME_UNSET && it > 0 }
             ?: tracksById[id]?.durationMs ?: listeningOnline?.durationMs ?: 0
         listen.start(id, duration, source?.type?.name, player.isPlaying)
@@ -670,13 +675,20 @@ class PlaybackService : MediaLibraryService() {
         val online = listeningOnline?.takeIf { it.trackId == s.trackId }
         listeningOnline = null
         tasteCache = null
+        val place = listenPlace
+        val people = listenPeople
         graph.scope.launch {
             runCatching {
-                if (online != null) library.recordOnlinePlay(online.toRemote(), s.listenedMs, s.durationMs, s.context)
-                else if (s.trackId >= 0) library.recordPlay(s.trackId, s.listenedMs, s.durationMs, s.context)
+                if (online != null) library.recordOnlinePlay(online.toRemote(), s.listenedMs, s.durationMs, s.context, placeId = place, people = people)
+                else if (s.trackId >= 0) library.recordPlay(s.trackId, s.listenedMs, s.durationMs, s.context, placeId = place, people = people)
             }
         }
     }
+
+    /** Where and with whom the song being heard is heard (the DNA learns it with the song). */
+    private var listenPlace: Long? = null
+    private var listenPeople: List<String> = emptyList()
+    private var placeAsk: kotlinx.coroutines.Job? = null
 
     // ================================================================ persistence
 

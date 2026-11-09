@@ -172,14 +172,52 @@ class AppGraph(context: Context) {
             artistGenres = artistGenres,
             picked = { settings.settings.first().favoriteGenres },
             scope = scope,
+            placeNow = { places.last },
+            peopleNow = { jamPeople() },
         )
+    }
+
+    /** DNA musical: the places music is heard at ("Lembrar lugares", off until turned on). */
+    val places: com.villamediana.sound.dna.PlaceSensor by lazy {
+        com.villamediana.sound.dna.PlaceSensor(appContext, db.places(), enabled = { settings.settings.first().learnPlaces })
+    }
+
+    /**
+     * The jam's next songs (made by the phone that started it): the radio of its last songs in the
+     * taste of this moment and of the people in it, with songs you've heard together and the
+     * friends' favourites in between.
+     */
+    private suspend fun jamMore(last: String): List<com.villamediana.sound.social.SongRef> {
+        val queue = social.jam.jam.value?.state?.queue.orEmpty()
+        val queued = queue.mapTo(HashSet()) { it.videoId } + last
+        val seeds = (queue.map { it.videoId } + last).distinct().takeLast(3)
+        val radio = runCatching { songRadio.songs(seeds, queued, 25) }.getOrDefault(emptyList())
+            .map(com.villamediana.sound.social.SongRef::of)
+            .ifEmpty { runCatching { youTube.related(last, 25) }.getOrDefault(emptyList()).map(com.villamediana.sound.social.SongRef::of) }
+        val people = jamPeople()
+        val together = runCatching { forYou.dna().together(people, 10) }.getOrDefault(emptyList())
+            .map { com.villamediana.sound.social.SongRef(it.videoId, it.title, it.artist) }
+        val tops = social.friends.value.friends.filter { it.id in people }.flatMap { it.top.orEmpty() }
+        return com.villamediana.sound.social.JamSync.weave(
+            radio.filter { it.videoId !in queued },
+            together.filter { it.videoId !in queued },
+            tops.filter { it.videoId !in queued },
+        )
+    }
+
+    /** The friends in the jam with you now (none outside a jam). */
+    fun jamPeople(): Set<String> {
+        val jam = social.jam.jam.value ?: return emptySet()
+        val me = social.account.me.value?.id
+        return jam.members.mapTo(HashSet()) { it.id } - setOfNotNull(me)
     }
 
     /** Songs like the ones being heard: every radio and the queue's "a seguir". */
     val songRadio: com.villamediana.sound.discover.SongRadio by lazy {
         com.villamediana.sound.discover.SongRadio(
             related = { id, size -> discover.related(id, size) },
-            profile = { forYou.profile() },
+            // The taste of this moment (the part of the day, the place, who is along): the DNA.
+            profile = { forYou.profileNow() },
             session = { com.villamediana.sound.discover.SongRadio.sessionOf(library) },
         )
     }
@@ -193,6 +231,35 @@ class AppGraph(context: Context) {
             library = library,
             discover = discover,
             profile = { forYou.profile() },
+            moment = {
+                forYou.momentPlan { ids ->
+                    val friends = social.friends.value.friends.associateBy { it.id }
+                    val jam = social.jam.jam.value?.members.orEmpty().associateBy { it.id }
+                    ids.mapNotNull { id -> (friends[id] ?: jam[id])?.name?.trim()?.substringBefore(' ') }
+                }
+            },
+            momentLabels = {
+                val res = appContext.resources
+                com.villamediana.sound.smart.MadeForYou.MomentLabels(
+                    title = { m, people ->
+                        when {
+                            people.isNotEmpty() -> res.getString(com.villamediana.sound.R.string.dna_mix_with, people.joinToString(", "))
+                            else -> res.getString(
+                                when (m.part) {
+                                    com.villamediana.sound.smart.DayPart.NIGHT_LATE -> com.villamediana.sound.R.string.dna_mix_late
+                                    com.villamediana.sound.smart.DayPart.MORNING -> com.villamediana.sound.R.string.dna_mix_morning
+                                    com.villamediana.sound.smart.DayPart.AFTERNOON -> com.villamediana.sound.R.string.dna_mix_afternoon
+                                    com.villamediana.sound.smart.DayPart.EVENING -> com.villamediana.sound.R.string.dna_mix_evening
+                                },
+                            )
+                        }
+                    },
+                    subtitle = { artists ->
+                        if (artists.isBlank()) res.getString(com.villamediana.sound.R.string.dna_mix_subtitle_plain)
+                        else res.getString(com.villamediana.sound.R.string.home_foryou_subtitle, artists)
+                    },
+                )
+            },
             labels = {
                 val res = appContext.resources
                 com.villamediana.sound.smart.MadeForYou.Labels(
@@ -280,7 +347,7 @@ class AppGraph(context: Context) {
             dao = db.sharedSongs(),
             player = { player as MediaPlayerConnection },
             library = library,
-            related = { videoId -> youTube.related(videoId, 25).map(com.villamediana.sound.social.SongRef::of) },
+            related = { videoId -> jamMore(videoId) },
             genres = { settings.settings.first().let { it.genresChosen to it.favoriteGenres } },
             setGenres = { settings.setFavoriteGenres(it) },
             listenedBefore = { settings.settings.first().listenedBeforeMs },

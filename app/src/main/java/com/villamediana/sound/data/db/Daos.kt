@@ -378,3 +378,24 @@ interface SharedSongDao {
     suspend fun setTheirReaction(friendId: String, deliveryId: Long, emoji: String?, at: Long): Int
 }
 
+@Dao
+interface PlaceDao {
+    @Query("SELECT * FROM places")
+    suspend fun all(): List<Place>
+
+    @Insert
+    suspend fun insert(place: Place): Long
+
+    @androidx.room.Update
+    suspend fun update(place: Place)
+
+    @Query("DELETE FROM places")
+    suspend fun clear()
+
+    /** Forgetting places also takes them off the listening (the DNA forgets where, not what). */
+    @Query("UPDATE play_events SET placeId = NULL WHERE placeId IS NOT NULL")
+    suspend fun clearFromEvents()
+
+    @Query("UPDATE online_plays SET placeId = NULL WHERE placeId IS NOT NULL")
+    suspend fun clearFromOnline()
+}

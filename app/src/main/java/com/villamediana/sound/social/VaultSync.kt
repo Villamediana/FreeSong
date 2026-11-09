@@ -148,9 +148,9 @@ class PhoneVault(
         val plays = library.playEventsListSince(since).mapNotNull { e ->
             val t = tracks[e.trackId] ?: return@mapNotNull null
             val v = t.videoId?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-            VPlay(v, t.title, t.artist, t.genre, e.playedAt, e.listenedMs, t.durationMs, e.completed, e.skipped)
+            VPlay(v, t.title, t.artist, t.genre, e.playedAt, e.listenedMs, t.durationMs, e.completed, e.skipped, e.people)
         } + library.onlinePlaysListSince(since).map { p ->
-            VPlay(p.videoId, p.title, p.artist, null, p.playedAt, p.listenedMs, p.durationMs, p.completed, p.skipped)
+            VPlay(p.videoId, p.title, p.artist, null, p.playedAt, p.listenedMs, p.durationMs, p.completed, p.skipped, p.people)
         }
         val (chosen, ids) = genres()
         val sortedIds = ids.sorted()
@@ -198,7 +198,7 @@ class PhoneVault(
                 OnlinePlay(
                     videoId = p.videoId, title = p.title, artist = p.artist, durationMs = p.durationMs,
                     url = "https://music.youtube.com/watch?v=${p.videoId}", playedAt = p.at, listenedMs = p.listenedMs,
-                    completed = p.completed, skipped = p.skipped, context = "vault",
+                    completed = p.completed, skipped = p.skipped, context = "vault", people = p.people,
                 )
             },
         )
