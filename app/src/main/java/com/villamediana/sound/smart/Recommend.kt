@@ -18,6 +18,8 @@ object Recommend {
     private const val SKIPPED = 1.6
     /** How far a song whose own sound fits this moment (more or less than its artist's) moves. */
     private const val SOUND = 0.6
+    /** How far an artist the friends like moves a song up (all of it when they are listening along). */
+    private const val FRIENDS = 0.5
 
     /**
      * The best [count] new songs from [radios] (each a radio of a song the listener loves): a song
@@ -69,7 +71,8 @@ object Recommend {
             id = { it.videoId.hashCode().toLong() },
             weight = { t ->
                 val known = t.videoId in profile.known
-                (1.0 + 3.0 * profile.affinityOf(t.artist)) * (if (known) 0.55 else 1.0) * profile.songFactor(t.videoId) * profile.soundFit(t.videoId)
+                (1.0 + 3.0 * profile.affinityOf(t.artist) + FRIENDS * profile.friendsLike(t.artist)) * (if (known) 0.55 else 1.0) *
+                    profile.songFactor(t.videoId) * profile.soundFit(t.videoId)
             },
             rnd = Random(seed),
         )
@@ -81,7 +84,8 @@ object Recommend {
 
     private fun lift(t: RemoteTrack, profile: TasteProfile): Double {
         val aff = profile.affinityOf(t.artist)
-        return if (aff > 0) TASTE_LIFT * aff else if (!profile.isKnownArtist(t.artist)) NEW_ARTIST_LIFT else 0.0
+        val own = if (aff > 0) TASTE_LIFT * aff else if (!profile.isKnownArtist(t.artist)) NEW_ARTIST_LIFT else 0.0
+        return own + FRIENDS * profile.friendsLike(t.artist)
     }
 
     private fun capped(ranked: List<RemoteTrack>, count: Int, perArtist: Int): List<RemoteTrack> {

@@ -174,6 +174,7 @@ class AppGraph(context: Context) {
             scope = scope,
             placeNow = { places.last },
             peopleNow = { jamPeople() },
+            friends = { com.villamediana.sound.smart.FriendsTaste.of(social.friends.value.friends.map { it.favourites() }) },
         )
     }
 

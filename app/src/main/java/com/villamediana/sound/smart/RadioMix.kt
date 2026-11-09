@@ -58,6 +58,8 @@ object RadioMix {
     private const val SKIPPED = 1.6
     /** How far a song whose own sound fits this moment (more or less than its artist's) moves. */
     private const val SOUND = 0.6
+    /** How far an artist the friends like moves a song up (all of it when they are listening along). */
+    private const val FRIENDS = 0.5
 
     fun rank(
         direct: List<List<RemoteTrack>>,
@@ -89,7 +91,7 @@ object RadioMix {
         // Drawn in a fixed order first, so the same rnd gives the same radio.
         val total = found.values.sortedBy { it.videoId }.associate { t ->
             val agree = AGREE * ((radiosOf[t.videoId] ?: 1) - 1)
-            val taste = profile?.affinityOf(t.artist)?.let { TASTE * it } ?: 0.0
+            val taste = profile?.let { TASTE * it.affinityOf(t.artist) + FRIENDS * it.friendsLike(t.artist) } ?: 0.0
             val tired = if ((session.skippedArtists[artistKey(t.artist)] ?: 0) >= 1) 0.6 else 0.0
             // Skipped in this moment (for a moment's profile): further down now, not out.
             val skips = SKIPPED * (1.0 - (profile?.songFactor(t.videoId) ?: 1.0))

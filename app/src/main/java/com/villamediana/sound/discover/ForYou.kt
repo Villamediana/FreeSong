@@ -4,6 +4,7 @@ import com.villamediana.sound.data.LibraryRepository
 import com.villamediana.sound.online.RemoteTrack
 import com.villamediana.sound.data.asTransientTrack
 import com.villamediana.sound.smart.DnaMoment
+import com.villamediana.sound.smart.FriendsTaste
 import com.villamediana.sound.smart.MomentPlan
 import com.villamediana.sound.social.SongRef
 import com.villamediana.sound.smart.GenreMatch
@@ -45,6 +46,8 @@ class ForYou(
     private val placeNow: () -> Long? = { null },
     /** Who is listening along now (the friends in the jam). */
     private val peopleNow: () -> Set<String> = { emptySet() },
+    /** What the friends like, as they show it to their friends (already on this phone). */
+    private val friends: () -> FriendsTaste = { FriendsTaste.NONE },
 ) {
     /** One "Porque você curte <artist>" row. */
     data class BecauseRow(val artist: String, val artistKey: String, val tracks: List<RemoteTrack>)
@@ -131,7 +134,7 @@ class ForYou(
         // Downloading a song says something too (less than a heart): the library's songs count a little.
         val saved = tracks.filter { !it.liked }.map { Heart(it.videoId, it.title, it.artist, it.genre, it.addedAt) }
         val known = artistGenres.known()
-        val profile = TasteProfile.build(listens, hearts, now, known, picked(), saved)
+        val profile = TasteProfile.build(listens, hearts, now, known, picked(), saved, runCatching { friends() }.getOrDefault(FriendsTaste.NONE))
         val dna = MusicDna.build(
             listens,
             hearts.mapNotNullTo(HashSet()) { it.videoId },
