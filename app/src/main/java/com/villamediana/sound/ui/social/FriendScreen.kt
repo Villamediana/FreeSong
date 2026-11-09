@@ -192,6 +192,9 @@ internal fun FriendPage(
         snackbar = snackbar,
         avatar = { size -> CardAvatar(person, size) },
         showHours = isFriend,
+        // Their month, as their phone last sent it.
+        numbers = if (isFriend) person?.numbers?.month else null,
+        firstName = person?.name?.trim()?.substringBefore(' ')?.ifBlank { person.name },
         buttons = {
             if (isFriend) {
                 PersonButton(stringResource(R.string.friend_send), onClick = onSend, icon = Icons.AutoMirrored.Rounded.Send, filled = true, modifier = Modifier.weight(1f))
@@ -215,10 +218,6 @@ internal fun FriendPage(
         sheets = sheets,
         more = {
             if (isFriend) {
-                // Their numbers of the month and the year (as their phone last sent them).
-                person?.numbers?.let { numbers ->
-                    item(key = "stats", contentType = "stats") { FriendStats(numbers, person.name) }
-                }
                 item(key = "swapped-title", contentType = "section") {
                     Column(Modifier.padding(top = Dimens.SectionGap)) { SectionHeader(stringResource(R.string.friend_swapped)) }
                 }
