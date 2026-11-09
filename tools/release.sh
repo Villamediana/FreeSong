@@ -72,10 +72,11 @@ mkdir -p dist
 cp app/build/outputs/apk/release/app-release.apk "$apk"
 
 # 4. A APK é este app, nesta versão, com a chave de sempre.
-badging=$("$BUILD_TOOLS/aapt2" dump badging "$apk" | head -1)
+# (awk lê tudo: um "head" fecharia o pipe e o pipefail mataria o script com SIGPIPE)
+badging=$("$BUILD_TOOLS/aapt2" dump badging "$apk" | awk 'NR == 1')
 [[ $badging == *"name='$PACKAGE'"* && $badging == *"versionCode='$code'"* && $badging == *"versionName='$name'"* ]] \
   || die "APK não bate com $PACKAGE $name ($code): $badging"
-cert=$("$BUILD_TOOLS/apksigner" verify --print-certs "$apk" | sed -nE 's/.*Signer.*certificate SHA-256 digest: ([0-9a-f]+).*/\1/p' | head -1)
+cert=$("$BUILD_TOOLS/apksigner" verify --print-certs "$apk" | awk '/Signer.*certificate SHA-256 digest:/ && !seen { print $NF; seen = 1 }')
 [[ $cert == "$CERT_SHA256" ]] || die "APK assinada com outra chave ($cert): os celulares recusariam a atualização"
 sha=$(sha256sum "$apk" | cut -d' ' -f1)
 size=$(stat -c %s "$apk")
