@@ -29,6 +29,8 @@ class SoundApplication : Application(), SingletonImageLoader.Factory {
                 runCatching { com.villamediana.sound.download.SmartDownloads.sync(this@SoundApplication, on) }
             }
         }
+        // New versions from GitHub: a check a day in the background (release builds only).
+        if (graph.updates.enabled) runCatching { com.villamediana.sound.update.UpdateCheckWorker.schedule(this) }
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader =

@@ -69,7 +69,8 @@ quando ela existe ou são reconhecidos no próprio aparelho quando não existe.
 1. Baixe a APK mais recente em [**Releases**](../../releases/latest).
 2. Abra o arquivo no celular e permita a instalação de fora da loja quando o Android pedir.
 
-Não precisa de conta nem de e-mail.
+Não precisa de conta nem de e-mail. A partir da 1.13.0, o próprio app avisa quando sai uma versão
+nova e se atualiza com um toque.
 
 ## Privacidade
 
@@ -87,6 +88,7 @@ O app só acessa a internet para o que precisa, sempre por HTTPS:
 | Traduzir uma letra | Google Tradutor |
 | Ler uma playlist pública que você importou | Spotify |
 | Completar capa e dados do álbum | iTunes Search |
+| Procurar e baixar versão nova do app | GitHub (Releases deste repositório) |
 
 ## Para desenvolvedores
 
@@ -106,6 +108,9 @@ A versão debug instala ao lado da normal (pacote `com.villamediana.sound.debug`
 Para gerar a release assinada com a sua chave, copie `keystore.properties.example` para
 `keystore.properties`, aponte para a sua chave e rode `./gradlew :app:assembleRelease`. Chaves,
 senhas e APKs ficam fora do repositório (`.gitignore`).
+
+As versões oficiais saem por `tools/release.sh`, que compila, confere a assinatura e publica a APK
+nos Releases; é de lá que o app instalado procura as atualizações.
 
 Os testes rodam na JVM, sem emulador:
 

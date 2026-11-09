@@ -227,3 +227,38 @@ cifra lá é **ouvida no celular** a partir do áudio (1.12.0, pedido do Miguel:
 - O áudio chega na taxa do decodificador (44,1/48 kHz, 16 bits ou float) e o `MonoResampler` desce
   pra 22 kHz com filtro anti-aliasing (Butterworth de 8ª ordem).
 - Validação: `tools/chords/README.md` (régua Billboard e músicas avulsas, inclusive comparação com cifra).
+
+## Atualização sem loja (1.13.0, 2026-11-09)
+
+O app se atualiza pelas releases do GitHub (`Villamediana/FreeSong`), sem Play Store.
+
+- **Publicar**: subir `versionCode`/`versionName`, commit, PR, merge na main e
+  `tools/release.sh -n $'- novidade\n- outra'` (ou `-F notas.md`). O script confere git (HEAD na
+  `origin/main`), versão maior que a última, compila a release, confere pacote/versão/**certificado**
+  (SHA-256 fixado no script: APK de outra chave o Android recusa por cima) e cria a release com a APK.
+  Termina lendo `/releases/latest` como os celulares leem e só diz `published` se tag, tamanho e
+  SHA-256 batem. As notas são o texto da tela "Nova versão" (Markdown leve).
+- **Pré-release e rascunho não chegam aos celulares** (`/releases/latest` ignora): dá pra subir um
+  teste como pre-release e promover depois.
+- `update/Releases.kt` (puro): `ReleaseFeed.parse` (tag `vX.Y.Z`, primeira `.apk`, `digest`
+  sha256), `Versions` (número a número), `ReleaseNotes` (linhas pra folha).
+- `update/Updates.kt` (`graph.updates`): estados `Idle/Checking/UpToDate/CheckFailed/Available/
+  NeedsPermission/Downloading/Installing/Failed`. Checagem quieta no máximo a cada 6 h (abrir o app
+  + `UpdateCheckWorker` diário com rede) com ETag (`304` não gasta o limite de 60/h da API).
+  A folha abre sozinha **uma vez por versão**; "Agora não" grava `dismissed`. Ajustes › Sobre tem a
+  linha "Procurar atualização" / "Atualizar para X". Memória em `filesDir/update.json`, APK em
+  `cacheDir/update/` (apagada quando a versão nova sobe ou some do GitHub).
+- Atualizar = permissão "instalar apps desconhecidos" (uma vez, `ACTION_MANAGE_UNKNOWN_APP_SOURCES`;
+  volta pro app e segue sozinho no `onResume`) → download com progresso no próprio botão
+  (`ApkDownloader`: tamanho + SHA-256 do GitHub, `.part` e rename) → `getPackageArchiveInfo`
+  confere pacote e versionCode maior → `SessionInstaller` (PackageInstaller, uma sessão; Android 12+
+  com `USER_ACTION_NOT_REQUIRED`: depois da 1ª atualização feita pelo app, as próximas não pedem
+  confirmação). A tela "Atualizar este app?" do Android (`STATUS_PENDING_USER_ACTION`) só abre com o
+  app em primeiro plano (`UpdateHost`, `repeatOnLifecycle(RESUMED)`).
+- `UpdatedReceiver` (`MY_PACKAGE_REPLACED`): a versão nova avisa "FreeSong atualizado" só quando a
+  atualização veio do app (`installing` na memória = versão atual).
+- Debug (`.debug`) não procura atualização (`Updates.enabled = !BuildConfig.DEBUG`): a release não
+  atualiza outro pacote.
+- Testes: `update/ReleaseFeedTest`, `UpdatesTest` (GitHub falso: ETag, falhas, integridade, pacote
+  errado, permissão, cancelar, memória), `SessionInstallerTest` (Robolectric), `UpdateLiveTest`
+  (GitHub real: lê a última release, 304 com ETag, baixa a APK e confere o SHA-256).
