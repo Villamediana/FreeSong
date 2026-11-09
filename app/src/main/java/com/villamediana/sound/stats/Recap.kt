@@ -41,6 +41,15 @@ data class Recap(
     /** 0–23, the hour with the most listening. */
     val favoriteHour: Int? = null,
     val favoriteDay: DayOfWeek? = null,
+    /** Listening per month, January first (12 values). */
+    val months: List<Long> = List(12) { 0L },
+    /** Days with any listening. */
+    val daysListened: Int = 0,
+    /** The most days in a row with listening. */
+    val longestStreak: Int = 0,
+    /** The first song of the year (the first one not skipped) and when it played. */
+    val firstSong: RecapSong? = null,
+    val firstAt: Long? = null,
 ) {
     val empty: Boolean get() = listenedMs <= 0L
 }
@@ -95,6 +104,9 @@ object Recaps {
         val hours = LongArray(24)
         val days = HashMap<DayOfWeek, Long>()
         val genres = HashMap<String, Int>()
+        val months = LongArray(12)
+        val heardOn = HashSet<LocalDate>()
+        var first: Pair<Long, String>? = null
         var total = 0L
         var plays = 0
 
@@ -102,6 +114,12 @@ object Recaps {
             val t = Instant.ofEpochMilli(at).atZone(zone)
             hours[t.hour] += listened
             days.merge(t.dayOfWeek, listened, Long::plus)
+            months[t.monthValue - 1] += listened
+            if (listened > 0) heardOn += t.toLocalDate()
+        }
+
+        fun firstCandidate(at: Long, key: String, skipped: Boolean) {
+            if (!skipped && (first == null || at < first!!.first)) first = at to key
         }
 
         for (e in events) {
@@ -117,6 +135,7 @@ object Recaps {
             acc.listened += e.listenedMs
             total += e.listenedMs
             moment(e.playedAt, e.listenedMs)
+            firstCandidate(e.playedAt, key, e.skipped)
             if (!e.skipped) {
                 acc.plays++
                 plays++
@@ -144,6 +163,7 @@ object Recaps {
             acc.listened += p.listenedMs
             total += p.listenedMs
             moment(p.playedAt, p.listenedMs)
+            firstCandidate(p.playedAt, p.videoId, p.skipped)
             if (!p.skipped) {
                 acc.plays++
                 plays++
@@ -186,6 +206,23 @@ object Recaps {
             topGenre = genres.maxByOrNull { it.value }?.key,
             favoriteHour = hours.indices.maxByOrNull { hours[it] }?.takeIf { hours[it] > 0 },
             favoriteDay = days.maxByOrNull { it.value }?.key,
+            months = months.toList(),
+            daysListened = heardOn.size,
+            longestStreak = longestRun(heardOn),
+            firstSong = first?.let { (_, key) -> songs[key]?.let { a -> RecapSong(key, a.title, a.artist, a.cover, a.plays, a.listened, a.track, a.remote) } },
+            firstAt = first?.first,
         )
+    }
+
+    /** The most consecutive days in [days]. */
+    internal fun longestRun(days: Set<LocalDate>): Int {
+        var best = 0
+        for (d in days) {
+            if (d.minusDays(1) in days) continue // not the start of a run
+            var n = 1
+            while (d.plusDays(n.toLong()) in days) n++
+            best = maxOf(best, n)
+        }
+        return best
     }
 }

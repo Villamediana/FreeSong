@@ -89,6 +89,28 @@ class RecapTest {
         assertEquals(DayOfWeek.FRIDAY, Recaps.build(2026, emptyList(), emptyMap(), online, zone).favoriteDay)
     }
 
+    @Test fun theStoryKnowsTheMonthsTheDaysTheRunAndTheFirstSong() {
+        val lib = track(1, "Oceano", "Djavan", videoId = "oceano")
+        val events = listOf(
+            event(1, at(2026, 1, 1, 0) + 14 * 60_000L, skipped = true), // skipped: not the first song
+            event(1, at(2026, 7, 10, 22), ms = 300_000),
+            event(1, at(2026, 7, 11, 22), ms = 300_000),
+        )
+        val online = listOf(
+            online("trem", "Trem-Bala", "Ana Vilela", at(2026, 1, 1, 9)),
+            online("trem", "Trem-Bala", "Ana Vilela", at(2026, 7, 12, 8)),
+            online("trem", "Trem-Bala", "Ana Vilela", at(2025, 12, 31, 23)), // last year
+        )
+        val r = Recaps.build(2026, events, mapOf(1L to lib), online, zone)
+        assertEquals("Trem-Bala", r.firstSong!!.title)
+        assertEquals(at(2026, 1, 1, 9), r.firstAt)
+        assertEquals(200_000L + 180_000L, r.months[0])
+        assertEquals(600_000L + 180_000L, r.months[6])
+        assertEquals(12, r.months.size)
+        assertEquals(4, r.daysListened) // Jan 1, Jul 10, 11, 12
+        assertEquals(3, r.longestStreak)
+    }
+
     @Test fun mainArtistDropsTheGuests() {
         assertEquals("Lady Gaga", Recaps.mainArtist("Lady Gaga, Bruno Mars"))
         assertEquals("Shakira", Recaps.mainArtist("Shakira feat. Wyclef Jean"))

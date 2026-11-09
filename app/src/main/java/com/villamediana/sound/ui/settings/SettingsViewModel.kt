@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
@@ -25,19 +26,21 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     private val store = graph.settings
     private val library = graph.library
 
-    val settings: StateFlow<Settings?> = store.settings.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    // Already read at app start: the screen's first frame has them (nothing pops in while it opens).
+    val settings: StateFlow<Settings?> = graph.settingsNow
 
-    val stats: StateFlow<LibraryStats?> = library.stats.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    val stats: StateFlow<LibraryStats?> = graph.libraryStats
 
     /** Everything Sound keeps on the phone (audio, covers, lyrics) — re-measured when the library's size changes. */
-    val usedBytes: StateFlow<Long?> = library.stats
+    val usedBytes: StateFlow<Long?> = graph.libraryStats.filterNotNull()
         .map { it.trackCount to it.bytes }
         .distinctUntilChanged()
-        .mapLatest { withContext(Dispatchers.IO) { graph.storage.usedBytes() } }
+        // Walking the files waits for the screen to be in (it competes with the opening for the CPU).
+        .mapLatest { kotlinx.coroutines.delay(OPEN_SETTLE_MS); withContext(Dispatchers.IO) { graph.storage.usedBytes() } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /** Room left on the phone where the app keeps its files (re-measured with [usedBytes]). */
-    val freeBytes: StateFlow<Long?> = library.stats
+    val freeBytes: StateFlow<Long?> = graph.libraryStats.filterNotNull()
         .map { it.trackCount to it.bytes }
         .distinctUntilChanged()
         .mapLatest { withContext(Dispatchers.IO) { runCatching { android.os.StatFs(graph.appContext.filesDir.path).availableBytes }.getOrNull() } }
@@ -54,7 +57,11 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     val caches: StateFlow<Map<com.villamediana.sound.data.CacheKind, Long>?> = _caches
 
     init {
-        viewModelScope.launch { _caches.value = graph.caches.sizes() }
+        // Measured once the screen is in (the sizes touch the disk; nothing to show before the row).
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(OPEN_SETTLE_MS)
+            _caches.value = graph.caches.sizes()
+        }
     }
 
     fun clearCache(kind: com.villamediana.sound.data.CacheKind) = viewModelScope.launch {
@@ -79,5 +86,10 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun launch(block: suspend () -> Unit) {
         viewModelScope.launch { block() }
+    }
+
+    private companion object {
+        /** About the time Ajustes takes to slide in. */
+        const val OPEN_SETTLE_MS = 450L
     }
 }

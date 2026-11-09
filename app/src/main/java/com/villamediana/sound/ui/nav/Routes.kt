@@ -35,7 +35,7 @@ import kotlinx.serialization.Serializable
 @Serializable data class FriendRoute(val id: String)
 
 /** Pages that take the whole screen: no mini player over them, the player layer is hidden. */
-fun isFullPage(route: Any): Boolean = route is VideoRoute || route == SettingsRoute || route == EqualizerRoute || route == ThemeRoute
+fun isFullPage(route: Any): Boolean = route is VideoRoute || route == SettingsRoute || route == EqualizerRoute || route == ThemeRoute || route is RecapRoute
 
 fun NavDestination.isFullPage(): Boolean =
-    hasRoute(VideoRoute::class) || hasRoute(SettingsRoute::class) || hasRoute(EqualizerRoute::class) || hasRoute(ThemeRoute::class)
+    hasRoute(VideoRoute::class) || hasRoute(SettingsRoute::class) || hasRoute(EqualizerRoute::class) || hasRoute(ThemeRoute::class) || hasRoute(RecapRoute::class)
