@@ -19,6 +19,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.onAllNodesWithText
@@ -243,11 +244,21 @@ class HomeScreensSmokeTest {
         }
         // Outside January the Início has no way in (the retrospective is once a year).
         val year = java.time.LocalDate.now().year
-        compose.setContent { Host { com.villamediana.sound.ui.recap.RecapScreen(year) } }
-        waitForText("Sua retrospectiva $year")
-        waitForText("Mais tocadas")
+        // The story: it opens on the year, and tapping the right side walks to the poster at the end,
+        // with the song and the artist of the year.
+        val story = com.villamediana.sound.ui.recap.StoryState()
+        compose.setContent { Host { com.villamediana.sound.ui.recap.RecapScreen(year, soundtrack = false, auto = false, story = story) } }
+        waitForText("Retrospectiva $year")
+        waitForText("SUA RETROSPECTIVA")
+        repeat(12) {
+            if (compose.onAllNodesWithText("Ver de novo").fetchSemanticsNodes().isEmpty()) {
+                compose.onRoot().performTouchInput { click(androidx.compose.ui.geometry.Offset(width * 0.85f, height * 0.5f)) }
+                compose.waitForIdle()
+            }
+        }
+        waitForText("Ver de novo")
+        compose.runOnIdle { story.t = 6f }
         waitForText("De Música Ligera")
-        waitForText("Streamed Love")
         waitForText("Soda Stereo")
         shot("recap")
     }

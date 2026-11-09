@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="recap_title">Tu resumen</string>
-    <string name="recap_listening">escuchando música</string>
+    <string name="recap_title_year">Tu resumen %1$d</string>
+    <string name="recap_entry_sub">Tu año en música · %1$s</string>
+    <string name="recap_hero_label">Tu año en música</string>
+    <string name="recap_story_label">Resumen %1$d</string>
     <plurals name="recap_songs">
         <item quantity="one">canción</item>
         <item quantity="other">canciones</item>
@@ -18,15 +21,60 @@
         <item quantity="one">%d×</item>
         <item quantity="other">%d×</item>
     </plurals>
-    <string name="recap_top_songs">Las más escuchadas</string>
-    <string name="recap_top_artists">Tus artistas</string>
-    <string name="recap_fact_hour">Hora favorita</string>
+    <plurals name="recap_times_long">
+        <item quantity="one">%d vez</item>
+        <item quantity="other">%d veces</item>
+    </plurals>
     <string name="recap_hour">%dh</string>
-    <string name="recap_fact_day">Día favorito</string>
-    <string name="recap_fact_genre">Género</string>
     <string name="recap_empty_title">Todavía sin historia</string>
     <string name="recap_empty_body">Escucha unas canciones y vuelve aquí.</string>
-    <string name="recap_title_year">Tu resumen %1$d</string>
-    <string name="recap_entry_sub">Tu año en música · %1$s</string>
-    <string name="recap_hero_label">Tu año en música</string>
+    <string name="recap_intro_hint">Toca para seguir · mantén para pausar</string>
+    <string name="recap_date_pattern">d \'de\' MMMM</string>
+    <string name="recap_first_label">Todo empezó el</string>
+    <string name="recap_first_time">a las %1$s</string>
+    <string name="recap_first_with">con</string>
+    <string name="recap_time_label">Este año escuchaste</string>
+    <string name="recap_time_unit">minutos de música</string>
+    <plurals name="recap_time_days">
+        <item quantity="one">eso es %d día entero de música sin parar</item>
+        <item quantity="other">eso son %d días enteros de música sin parar</item>
+    </plurals>
+    <plurals name="recap_time_hours">
+        <item quantity="one">eso es %d hora de música sin parar</item>
+        <item quantity="other">eso son %d horas de música sin parar</item>
+    </plurals>
+    <string name="recap_months_title">Tu año, mes a mes</string>
+    <string name="recap_months_peak">fue tu mes más musical · %1$s escuchando</string>
+    <string name="recap_rhythm_label">Tu horario</string>
+    <string name="recap_rhythm_dawn">Eres de la madrugada</string>
+    <string name="recap_rhythm_morning">Eres de la mañana</string>
+    <string name="recap_rhythm_afternoon">Eres de la tarde</string>
+    <string name="recap_rhythm_night">Eres de la noche</string>
+    <string name="recap_rhythm_day">%1$s fue tu día más lleno</string>
+    <plurals name="recap_rhythm_streak">
+        <item quantity="one">día seguido</item>
+        <item quantity="other">días seguidos</item>
+    </plurals>
+    <string name="recap_rhythm_days">días con música</string>
+    <string name="recap_genre_label">El sonido de tu año</string>
+    <string name="recap_artist_tease">Hubo alguien que no salió de tus audífonos…</string>
+    <string name="recap_artist_label">Tu artista del año</string>
+    <string name="recap_artist_stats">%1$s juntos · %2$s</string>
+    <string name="recap_artists_title">Quién más sonó en tu año</string>
+    <string name="recap_song_tease">Y la canción de tu año es…</string>
+    <string name="recap_song_label">Tu canción del año</string>
+    <plurals name="recap_song_plays">
+        <item quantity="one">La pusiste %d vez</item>
+        <item quantity="other">La pusiste %d veces</item>
+    </plurals>
+    <string name="recap_songs_title">Las más escuchadas de tu año</string>
+    <string name="recap_outro_minutes">Minutos</string>
+    <string name="recap_outro_artist">Artista</string>
+    <string name="recap_outro_song">Canción</string>
+    <string name="recap_outro_genre">Género</string>
+    <string name="recap_outro_hour">Horario</string>
+    <string name="recap_again">Ver otra vez</string>
+    <string name="recap_sound_on">Activar el sonido</string>
+    <string name="recap_sound_off">Silenciar</string>
+    <string name="recap_close">Cerrar</string>
 </resources>

@@ -399,3 +399,34 @@ o servidor guardasse só o básico: por isso o cofre é **cifrado no celular**.
   o perfil. O teste "o banco guarda só o básico" confere que o cofre é só bytes opacos.
 - Testes: `VaultTest` (cifra, junção), `VaultSyncTest` (relay de verdade + dois/três celulares:
   recuperar traz tudo, descurtir num some no outro, escrita simultânea, código novo).
+
+## Ajustes sem engasgo e histórico com teto (1.18.0, 2026-11-09)
+
+- Ajustes abria "travado": as configurações chegavam depois do primeiro quadro e a tela se montava no
+  meio da animação. Agora `graph.settingsNow` e `graph.libraryStats` (StateFlow quentes, lidos ao
+  abrir o app) entregam tudo no primeiro quadro; medir pastas/caches espera ~450 ms (a abertura).
+- `LibraryRepository.pruneHistory` ao abrir o app: escutas de 400 dias, no máximo 50 mil de cada
+  tipo; as horas podadas somam em `Settings.listenedBeforeMs` (horas do perfil não caem). Nada lê
+  mais longe que isso (a Retrospectiva de janeiro precisa do ano anterior inteiro).
+
+## Retrospectiva como história (1.19.0, 2026-11-09)
+
+Pedido do Miguel: "não pode ser só uma página… cheia de animações, efeitos e narrativa".
+- `stats/Recap.kt` ganhou o que a narrativa conta: escuta por mês, dias com música, maior
+  sequência, a primeira música do ano (a primeira não pulada) e quando tocou.
+- `stats/RecapStoryPlan.kt` (puro): capítulos na ordem — abertura, a primeira música, o tempo, mês a
+  mês, o horário (você é da noite…), o gênero, o artista (suspense → revelação), os artistas, a
+  música do ano (rufar → revelação), as 5 em contagem regressiva, o pôster final. Capítulo sem o
+  que contar fica de fora. `soundtrack()`: a #2 toca até o capítulo da #1, que entra nele.
+- `ui/recap/RecapStory.kt`: tela cheia (rota "full page"), barra de progresso por capítulo, toque à
+  direita/esquerda, segurar pausa, som liga/desliga (sem som numa jam). Cada cena é função de `t`
+  (segundos no capítulo): pausar para o tempo, e um teste mostra qualquer instante. O relógio só
+  anda com a tela RESUMED, sem dedo segurando e até o pôster assentar (bateria).
+- `ui/recap/RecapScenes.kt` + `StoryKit.kt`: as cenas e as peças (fundo com luz que deriva + grão +
+  vinheta, anéis, flash da revelação, palavras chegando uma a uma, vinil girando, medidor, relógio
+  de 24 h com o céu do horário). Cores: a do app girada no círculo cromático, a da capa onde ela
+  estrela. Tipo e objetos medidos em % da largura (`LocalStoryUnit`).
+- Testes: `RecapStoryPlanTest`; `RecapStoryTest` (cada capítulo com seu texto, toques, "Ver de
+  novo"); `SOUND_FILM=1` renderiza a história quadro a quadro em `app/build/recap-film` (ffmpeg junta
+  em vídeo). No Robolectric as capas ficam no desenho padrão: decodificar arquivo fora da thread
+  principal aborta os gráficos nativos.

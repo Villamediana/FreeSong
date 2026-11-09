@@ -25,6 +25,9 @@ class SoundApplication : Application(), SingletonImageLoader.Factory {
         instance = this
         Notifications.createChannels(this)
         graph.downloads.kick()
+        // Read now, so Ajustes opens with everything in place (no filling in while it slides in).
+        graph.settingsNow
+        graph.libraryStats
         // The listening history keeps a bit over a year (no table growing forever); the hours keep counting.
         graph.scope.launch {
             runCatching {

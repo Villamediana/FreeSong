@@ -4,6 +4,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import com.villamediana.sound.data.db.DownloadState
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
 import android.content.Context
 import com.villamediana.sound.data.LibraryRepository
 import com.villamediana.sound.data.SettingsStore
@@ -49,6 +50,19 @@ class AppGraph(context: Context) {
     val storage: Storage by lazy { Storage(appContext) }
     val settings: SettingsStore by lazy { SettingsStore(appContext) }
     val library: LibraryRepository by lazy { LibraryRepository(db, scope) }
+
+    /**
+     * The settings, read once and kept up to date: a screen that shows them (Ajustes) has them on its
+     * very first frame instead of filling in mid-way through opening.
+     */
+    val settingsNow: kotlinx.coroutines.flow.StateFlow<com.villamediana.sound.data.Settings?> by lazy {
+        settings.settings.stateIn(scope, kotlinx.coroutines.flow.SharingStarted.Eagerly, null)
+    }
+
+    /** The library's numbers (songs, albums, size), kept up to date the same way. */
+    val libraryStats: kotlinx.coroutines.flow.StateFlow<com.villamediana.sound.data.model.LibraryStats?> by lazy {
+        library.stats.stateIn(scope, kotlinx.coroutines.flow.SharingStarted.Eagerly, null)
+    }
 
     val youTube: YouTubeSource by lazy {
         NewPipeHttp.init(http)
