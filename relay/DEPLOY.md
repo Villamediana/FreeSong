@@ -11,7 +11,7 @@ Instruções pra quem vai configurar o servidor do FreeSong: um celular com **Te
 |---|---|
 | Endereço público | `https://freesong.simplyonegoal.com` |
 | Código | `https://github.com/Villamediana/FreeSong`, pasta `relay/` (branch `main`) |
-| Porta local | `8787`, só em `127.0.0.1` (a única entrada é o túnel) |
+| Porta local | `8787` por padrão (`PORT` muda), só em `127.0.0.1` (a única entrada é o túnel). **No celular do Miguel é `3980`**: a 8787 é do luna-relay |
 | Node | **22.13 ou mais novo** (usa o SQLite embutido do Node, `node:sqlite`) |
 | Dependências | só `ws` (JavaScript puro, nada pra compilar) |
 | Dados | `~/freesong-relay-data/` (`freesong.db` + `avatars/`): é isso que se guarda em backup |
@@ -64,6 +64,11 @@ curl -s http://127.0.0.1:8787/v1/health
 (se a 8787 já estiver em uso no servidor, escolha outra e aponte o túnel pra ela), `HOST`,
 `DATA_DIR`, `NEW_ACCOUNTS_PER_HOUR` (teto de contas novas no servidor todo, padrão 300).
 O `run.sh` roda o Node na caixa de areia (`--permission`): ver "Segurança" no fim.
+
+Antes, confira se a porta está livre com `curl -s http://127.0.0.1:8787/` (qualquer resposta =
+ocupada): dentro do proot o `ss` não enxerga as portas em uso. Se estiver ocupada, use outra
+(`PORT=3980 scripts/run.sh`) e a mesma no túnel. Passe `PORT` sempre explícito se o shell já
+herdar um `PORT` de outra app.
 
 ## 4. Deixar rodando sempre
 
@@ -122,6 +127,14 @@ Cuidados nesse hostname (o app não tem tela de login nem resolve desafio):
   `403 https_only` o que chega por `http://`, mas com isso nem o primeiro pedido sai aberto.
 
 ## 6. Atualizar depois
+
+No celular do Miguel o relay roda no PM2 como `freesong` (com `PORT=3980` salvo no `pm2 save`):
+
+```bash
+cd ~/freesong && git pull && cd relay && npm ci --omit=dev && pm2 restart freesong
+```
+
+Com tmux:
 
 ```bash
 cd ~/freesong && git pull && cd relay && npm ci --omit=dev

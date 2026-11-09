@@ -54,6 +54,10 @@ quando ela existe ou são reconhecidos no próprio aparelho quando não existe.
 - **Reconhece a música que está tocando** no ambiente, pelo microfone.
 - **Importa playlists e álbuns do Spotify** a partir do link público (ou compartilhando direto
   do app do Spotify).
+- **Amigos**: cada pessoa ganha um perfil sozinha (sem e-mail nem senha), com foto e nome
+  editáveis. Dá para achar quem usa o FreeSong, mandar pedido de amizade, mandar músicas para
+  os amigos e fazer uma **jam**: todo mundo ouvindo a mesma música ao mesmo tempo, e qualquer
+  um escolhe o que toca.
 - **Retrospectiva** todo janeiro: as músicas, artistas e horas que você mais ouviu no ano.
 - **Economiza dados**: o que você já ouviu fica em cache no celular, e Ajustes › Armazenamento
   mostra o tamanho de cada cache para limpar quando quiser.
@@ -74,8 +78,13 @@ nova e se atualiza com um toque.
 
 ## Privacidade
 
-Não há conta, rastreamento, anúncio nem servidor próprio. Biblioteca, histórico e ajustes ficam
-no celular.
+Não há e-mail, senha, rastreamento nem anúncio. Biblioteca, histórico e ajustes ficam no celular.
+
+O servidor do FreeSong guarda só o básico para os amigos funcionarem: o perfil (nome, @, foto,
+data de entrada, horas ouvidas e as cinco mais ouvidas, que só os amigos veem) e as amizades. As
+músicas trocadas com os amigos ficam em cada celular: o servidor só segura a entrega até o
+celular do amigo receber e apaga. A jam existe só enquanto acontece. O perfil pode ser apagado a
+qualquer momento em Amigos › Editar.
 
 O app só acessa a internet para o que precisa, sempre por HTTPS:
 
@@ -88,6 +97,7 @@ O app só acessa a internet para o que precisa, sempre por HTTPS:
 | Traduzir uma letra | Google Tradutor |
 | Ler uma playlist pública que você importou | Spotify |
 | Completar capa e dados do álbum | iTunes Search |
+| Perfil, amigos, músicas trocadas e jam | Servidor do FreeSong (`freesong.simplyonegoal.com`, código em [`relay/`](relay/)) |
 | Procurar e baixar versão nova do app | GitHub (Releases deste repositório) |
 
 ## Para desenvolvedores

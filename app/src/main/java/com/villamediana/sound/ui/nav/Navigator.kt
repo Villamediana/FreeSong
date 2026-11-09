@@ -98,6 +98,9 @@ class Navigator(
     fun openEqualizer() = go(EqualizerRoute)
     fun openTheme() = go(ThemeRoute)
     fun openRecap(year: Int) = go(RecapRoute(year))
+    fun openSocial() = go(SocialRoute)
+    fun openProfile() = go(ProfileRoute)
+    fun openFriend(id: String) = go(FriendRoute(id))
     fun openVideo(videoId: String, title: String?) = go(VideoRoute(videoId, title))
 
     /** Bottom-bar tab switch: single top, state saved/restored per tab. */

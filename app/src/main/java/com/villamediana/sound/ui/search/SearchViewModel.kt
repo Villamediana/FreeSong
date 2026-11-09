@@ -245,7 +245,7 @@ class SearchViewModel(
     fun listen() {
         val l = listener ?: return
         hearJob?.cancel()
-        player.pause()
+        player.pauseHere()
         hearJob = viewModelScope.launch {
             _hearing.value = Hearing.Listening(0f)
             val outcome = l.recognize(

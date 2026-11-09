@@ -261,3 +261,36 @@ data class PlaylistOnline(
 ) {
     companion object
 }
+
+/**
+ * A song swapped with a friend (FreeSong social: the friend area has no text, only songs). Kept
+ * only on the phone — the relay delivers it and forgets it.
+ */
+@Entity(
+    tableName = "shared_songs",
+    indices = [Index("friendId"), Index(value = ["direction", "deliveryId"], unique = true)],
+)
+data class SharedSong(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val friendId: String,
+    /** [IN] (the friend sent it) or [OUT] (sent to the friend). */
+    val direction: String,
+    /** The relay's id for it: the same delivery arriving twice is kept once. */
+    val deliveryId: Long,
+    val videoId: String,
+    val title: String,
+    val artist: String,
+    val album: String? = null,
+    val durationMs: Long? = null,
+    val cover: String? = null,
+    val url: String? = null,
+    val at: Long,
+    /** An incoming song opened in the friend's page (the outgoing ones are seen by definition). */
+    val seen: Boolean,
+) {
+    companion object {
+        const val IN = "in"
+        const val OUT = "out"
+    }
+}
+
