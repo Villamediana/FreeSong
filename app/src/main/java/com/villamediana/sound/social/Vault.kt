@@ -132,7 +132,7 @@ data class VImported(
     @SerialName("at") val at: Long,
 )
 
-/** A song swapped with a friend. */
+/** A message of a conversation with a friend: a song, or a text ([kind] "text", [song] empty). */
 @Serializable
 data class VShared(
     @SerialName("f") val friendId: String,
@@ -141,6 +141,13 @@ data class VShared(
     @SerialName("s") val song: VSong,
     @SerialName("at") val at: Long,
     @SerialName("sn") val seen: Boolean,
+    @SerialName("k") val kind: String = "song",
+    @SerialName("t") val text: String? = null,
+    /** Your reaction and when it was set; the friend's and when it arrived. */
+    @SerialName("mr") val myReaction: String? = null,
+    @SerialName("mra") val myReactionAt: Long = 0,
+    @SerialName("tr") val theirReaction: String? = null,
+    @SerialName("tra") val theirReactionAt: Long = 0,
 ) {
     val key: String get() = "$direction#$deliveryId"
 }
@@ -166,7 +173,7 @@ data class VaultData(
  * ([remote], written by the others) and what both had at the last sync ([base]). Something added on
  * either side stays; something removed on either side since the last sync goes (a heart taken back
  * on one phone is taken back on all); a playlist changed on both keeps the newer change; the
- * listening and the songs swapped only add up. With no [base] (a phone just recovered, the first
+ * listening and the conversations only add up (each reaction keeps its newest setting). With no [base] (a phone just recovered, the first
  * sync) nothing is removed: everything is put together. Pure.
  */
 object VaultMerge {
@@ -187,7 +194,15 @@ object VaultMerge {
         imported = threeWay(base?.imported, local.imported, remote.imported, { it.url }) { l, r -> if (r.at > l.at) r else l }
             .sortedBy { it.url },
         shared = (local.shared + remote.shared).groupBy { it.key }.values
-            .map { same -> same.first().copy(seen = same.any { it.seen }) }
+            .map { same ->
+                val mine = same.maxBy { it.myReactionAt }
+                val theirs = same.maxBy { it.theirReactionAt }
+                same.first().copy(
+                    seen = same.any { it.seen },
+                    myReaction = mine.myReaction, myReactionAt = mine.myReactionAt,
+                    theirReaction = theirs.theirReaction, theirReactionAt = theirs.theirReactionAt,
+                )
+            }
             .sortedWith(compareBy<VShared> { it.at }.thenBy { it.key }),
         genres = listOfNotNull(local.genres, remote.genres).maxByOrNull { it.at },
     )

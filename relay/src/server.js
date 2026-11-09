@@ -1,8 +1,8 @@
-// Relay do FreeSong: perfis criados sozinhos, lista global, amizades, músicas compartilhadas
-// entre amigos e jam (todos ouvindo a mesma coisa). HTTP JSON + um WebSocket por app aberto.
+// Relay do FreeSong: perfis criados sozinhos, lista global, amizades, conversa entre amigos
+// (texto, música e reação) e jam (todos ouvindo a mesma coisa). HTTP JSON + um WebSocket por app aberto.
 //
-// Guarda só o básico (perfil e amizades). Música compartilhada não vira histórico aqui: fica em
-// cada celular; o servidor só segura a entrega até o celular do amigo confirmar, depois apaga.
+// Guarda só o básico (perfil e amizades). A conversa não vira histórico aqui: fica em cada
+// celular; o servidor só segura a entrega até o celular do amigo confirmar, depois apaga.
 //
 // Variáveis: PORT (8787), HOST (127.0.0.1), DATA_DIR (./data), NEW_ACCOUNTS_PER_HOUR (300, no
 // servidor todo). Ver relay/DEPLOY.md.
@@ -17,9 +17,9 @@ import { Store, sha256 } from './db.js';
 import { Jams, cleanState, cleanTrack, MAX_MEMBERS } from './jams.js';
 import { cleanNumbers } from './numbers.js';
 import { cleanJpeg } from './jpeg.js';
-import { cleanDisplayName, normalizeUsername, randomIdentity } from './names.js';
+import { cleanDisplayName, cleanMessage, normalizeUsername, randomIdentity } from './names.js';
 
-export const VERSION = '1.4.0';
+export const VERSION = '1.5.0';
 const JSON_LIMIT = 64 * 1024;
 const AVATAR_LIMIT = 600 * 1024;
 /** O cofre (cifrado no celular): corpo do PUT e bytes guardados. */
@@ -31,6 +31,8 @@ export const DELIVERY_TTL_MS = 14 * 24 * 3600_000;
 /** Teto de entregas esperando por pessoa (e de pedidos de amizade em aberto por pessoa). */
 const MAX_PENDING = 500;
 const MAX_OUTGOING_REQUESTS = 100;
+/** Reações que a conversa aceita ("" tira a reação). */
+export const REACTIONS = ['❤️', '😂', '😮', '😢', '🔥', '👍'];
 /** WebSockets abertos por pessoa (o mais antigo cai) e no servidor todo. */
 export const MAX_SOCKETS_PER_USER = 5;
 const MAX_SOCKETS = 2000;
@@ -128,6 +130,8 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
     friendRequests: new Limiter(60, HOUR, clock), // pedidos de amizade novos por pessoa
     friendPair: new Limiter(3, DAY, clock), // o mesmo pedido de novo depois de recusado ou cancelado
     shares: new Limiter(120, HOUR, clock), // músicas mandadas por pessoa
+    messages: new Limiter(600, HOUR, clock), // mensagens de texto por pessoa
+    reactions: new Limiter(600, HOUR, clock), // reações por pessoa
     jamChanges: new Limiter(120, MINUTE, clock), // por jam: cada mudança vai pra até 30 pessoas
     jamInvites: new Limiter(20, HOUR, clock), // convites de jam de uma pessoa pra outra
     jamRejects: new Limiter(10, MINUTE, clock), // por pessoa: jam devolvida pelo WebSocket quando passou do teto
@@ -498,21 +502,53 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
     return { status: 'none' };
   });
 
-  // Músicas compartilhadas: só entre amigos, sem texto. O servidor entrega e esquece: quem
-  // estava com o app aberto recebe na hora (e confirma); quem não estava busca na caixa depois.
+  // A conversa entre amigos: música, texto e reação. O servidor entrega e esquece: quem estava
+  // com o app aberto recebe na hora (e confirma); quem não estava busca na caixa depois.
+  /** O amigo [to] de quem manda, com espaço na caixa; senão o erro certo. */
+  function conversationWith(me, rawTo) {
+    const to = String(rawTo ?? '');
+    if (!store.user(to)) throw new HttpError(404, 'unknown_user');
+    if (!store.areFriends(me.id, to)) throw new HttpError(403, 'not_friends');
+    return to;
+  }
+
+  function deliver(me, to, kind, payload, limit) {
+    if (store.pendingCount(to) >= MAX_PENDING) throw new HttpError(429, 'inbox_full');
+    if (!limit.take(me.id)) throw new HttpError(429, 'slow_down');
+    const d = deliveryView(store.addDelivery(me.id, to, kind, payload, clock()));
+    emit(to, { t: 'delivery', delivery: d, from: publicProfile(me) });
+    return { id: d.id, at: d.at };
+  }
+
   route('POST', /^\/v1\/shares$/, async (req) => {
     const me = auth(req);
     const b = await json(req);
-    const to = String(b.to ?? '');
-    if (!store.user(to)) throw new HttpError(404, 'unknown_user');
-    if (!store.areFriends(me.id, to)) throw new HttpError(403, 'not_friends');
+    const to = conversationWith(me, b.to);
     const track = cleanTrack(b.track);
     if (!track) throw new HttpError(400, 'invalid_track');
-    if (store.pendingCount(to) >= MAX_PENDING) throw new HttpError(429, 'inbox_full');
-    if (!limits.shares.take(me.id)) throw new HttpError(429, 'slow_down');
-    const d = deliveryView(store.addDelivery(me.id, to, 'share', { track }, clock()));
-    emit(to, { t: 'delivery', delivery: d, from: publicProfile(me) });
-    return { status: 201, body: { share: { id: d.id, at: d.at } } };
+    return { status: 201, body: { share: deliver(me, to, 'share', { track }, limits.shares) } };
+  });
+
+  route('POST', /^\/v1\/messages$/, async (req) => {
+    const me = auth(req);
+    const b = await json(req);
+    const to = conversationWith(me, b.to);
+    const text = cleanMessage(b.text);
+    if (!text) throw new HttpError(400, 'invalid_text');
+    return { status: 201, body: { message: deliver(me, to, 'text', { text }, limits.messages) } };
+  });
+
+  // Reação a uma mensagem da conversa ([ref] = id da entrega, que os dois celulares guardam).
+  route('POST', /^\/v1\/reactions$/, async (req) => {
+    const me = auth(req);
+    const b = await json(req);
+    const to = conversationWith(me, b.to);
+    const ref = b.ref;
+    const emoji = typeof b.emoji === 'string' ? b.emoji : null;
+    if (!Number.isSafeInteger(ref) || ref <= 0 || emoji === null || (emoji !== '' && !REACTIONS.includes(emoji))) {
+      throw new HttpError(400, 'invalid_reaction');
+    }
+    return { status: 201, body: { reaction: deliver(me, to, 'reaction', { ref, emoji }, limits.reactions) } };
   });
 
   // O que chegou enquanto o app estava fechado (some depois do ack).

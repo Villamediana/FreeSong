@@ -20,7 +20,7 @@
     <string name="social_requested">Pedido enviado</string>
     <string name="social_is_friend">Amigos</string>
     <string name="social_search_people">Buscar por nome ou @</string>
-    <string name="social_since">No FreeSong desde %1$s</string>
+    <string name="social_since">Desde %1$s</string>
     <string name="social_empty_friends_title">Seus amigos aparecem aqui</string>
     <string name="social_empty_friends_body">Ache as pessoas do FreeSong e mande um pedido.</string>
     <string name="social_find_people">Achar pessoas</string>
@@ -64,7 +64,6 @@
     <string name="friend_unfriend_title">Desfazer amizade com %1$s?</string>
     <string name="friend_unfriend_body">As músicas que vocês trocaram continuam neste celular.</string>
     <string name="friend_unfriend_confirm">Desfazer</string>
-    <string name="friend_empty">Mande a primeira música.</string>
     <string name="friend_not_friend">Vocês ainda não são amigos.</string>
     <string name="send_sheet_title">Mandar pra %1$s</string>
     <string name="send_now_playing">Tocando agora</string>
@@ -97,7 +96,6 @@
     <string name="profile_username_fixed">@%1$s é seu identificador no FreeSong e não muda.</string>
     <string name="friend_since">Amigos desde %1$s</string>
     <string name="friend_top_of">Mais ouvidas de %1$s</string>
-    <string name="friend_swapped">Músicas trocadas</string>
     <string name="profile_top_private">Só seus amigos veem</string>
     <string name="person_hours_value">%1$s h</string>
     <string name="person_hours_label">ouvidas</string>
@@ -119,4 +117,14 @@
     <string name="friend_rhythm_morning">%1$s é da manhã</string>
     <string name="friend_rhythm_afternoon">%1$s é da tarde</string>
     <string name="friend_rhythm_night">%1$s é da noite</string>
+    <string name="friend_chat">Conversar</string>
+    <string name="friend_chat_unread">Conversar · %1$d</string>
+    <string name="chat_hint">Mensagem</string>
+    <string name="chat_send">Enviar</string>
+    <string name="chat_react">Reagir</string>
+    <string name="chat_empty">Mande um oi ou uma música.</string>
+    <string name="chat_failed">Não foi. Tente de novo.</string>
+    <string name="chat_today">Hoje</string>
+    <string name="chat_yesterday">Ontem</string>
+    <string name="chat_not_friends">Vocês não são mais amigos.</string>
 </resources>

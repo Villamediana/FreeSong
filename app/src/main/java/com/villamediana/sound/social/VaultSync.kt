@@ -173,7 +173,11 @@ class PhoneVault(
             }.sortedBy { it.key },
             imported = library.importedList().map { VImported(it.url, it.name, it.owner, it.coverUrl, it.tracksJson, it.trackCount, it.importedAt) }.sortedBy { it.url },
             shared = shared.all().map {
-                VShared(it.friendId, it.direction, it.deliveryId, VSong(it.videoId, it.title, it.artist, it.album, it.durationMs, it.cover, it.url), it.at, it.seen)
+                VShared(
+                    it.friendId, it.direction, it.deliveryId, VSong(it.videoId, it.title, it.artist, it.album, it.durationMs, it.cover, it.url), it.at, it.seen,
+                    kind = it.kind, text = it.text,
+                    myReaction = it.myReaction, myReactionAt = it.myReactionAt, theirReaction = it.theirReaction, theirReactionAt = it.theirReactionAt,
+                )
             }.sortedWith(compareBy<VShared> { it.at }.thenBy { it.key }),
             genres = VGenres(chosen, sortedIds, genreAt),
         )
@@ -218,7 +222,7 @@ class PhoneVault(
         }
         val keptImported = merged.imported.mapTo(HashSet()) { it.url }
         for (url in mineImported.keys) if (url !in keptImported) library.removeImported(url)
-        // Songs swapped with friends.
+        // Conversations with friends: messages, what was seen, the reactions.
         val mineShared = local.shared.associateBy { it.key }
         for (s in merged.shared) {
             val mine = mineShared[s.key]
@@ -228,11 +232,15 @@ class PhoneVault(
                         friendId = s.friendId, direction = s.direction, deliveryId = s.deliveryId, videoId = s.song.videoId,
                         title = s.song.title, artist = s.song.artist, album = s.song.album, durationMs = s.song.durationMs,
                         cover = s.song.cover, url = s.song.url, at = s.at, seen = s.seen,
+                        kind = s.kind, text = s.text,
+                        myReaction = s.myReaction, myReactionAt = s.myReactionAt, theirReaction = s.theirReaction, theirReactionAt = s.theirReactionAt,
                     ),
                 )
-            } else if (s.seen && !mine.seen) {
-                shared.markSeenOne(s.direction, s.deliveryId)
+                continue
             }
+            if (s.seen && !mine.seen) shared.markSeenOne(s.direction, s.deliveryId)
+            if (s.myReactionAt > mine.myReactionAt) shared.setMyReaction(s.friendId, s.deliveryId, s.myReaction, s.myReactionAt)
+            if (s.theirReactionAt > mine.theirReactionAt) shared.setTheirReaction(s.friendId, s.deliveryId, s.theirReaction, s.theirReactionAt)
         }
         // Genres picked on the Home.
         val g = merged.genres

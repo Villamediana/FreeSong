@@ -29,7 +29,8 @@ sealed interface RelayEvent {
     data class FriendRequestIn(val request: FriendRequest) : RelayEvent
     data class FriendAccepted(val user: Profile) : RelayEvent
     data class FriendRemoved(val userId: String) : RelayEvent
-    data class SongIn(val delivery: Delivery, val from: Profile) : RelayEvent
+    /** A friend sent a song, a text or a reaction. */
+    data class DeliveryIn(val delivery: Delivery, val from: Profile) : RelayEvent
     data class JamInvited(val invite: JamInvite) : RelayEvent
     /** The jam changed (someone played, joined, left…); [rejected] when this phone's change lost the race. */
     data class JamChanged(val jam: Jam, val rejected: String?) : RelayEvent
@@ -180,7 +181,7 @@ class RelayLink(
                 "friend.accepted" -> _events.tryEmit(RelayEvent.FriendAccepted(RelayJson.decodeFromJsonElement(Profile.serializer(), o["user"]!!)))
                 "friend.removed" -> _events.tryEmit(RelayEvent.FriendRemoved(o["userId"]!!.jsonPrimitive.content))
                 "delivery" -> _events.tryEmit(
-                    RelayEvent.SongIn(
+                    RelayEvent.DeliveryIn(
                         RelayJson.decodeFromJsonElement(Delivery.serializer(), o["delivery"]!!),
                         RelayJson.decodeFromJsonElement(Profile.serializer(), o["from"]!!),
                     ),

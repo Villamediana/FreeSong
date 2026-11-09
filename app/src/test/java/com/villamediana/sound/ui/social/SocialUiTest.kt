@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -194,33 +196,111 @@ class SocialUiTest {
     }
 
     @Test
-    fun aFriendsPageWithTheirTopAndTheSongsSwapped() {
-        var sent = 0
+    fun aFriendsPageOpensTheConversation() {
+        var chats = 0
         compose.setContent {
             PageHost {
                 FriendPage(
                     person = ana.copy(top = top5),
                     isFriend = true,
-                    songs = listOf(
-                        shared(1, "uana", SharedSong.IN, "Garota de Ipanema", "Tom Jobim"),
-                        shared(2, "uana", SharedSong.OUT, "Vapor Barato", "O Rappa"),
-                    ),
+                    unread = 2,
                     relation = "friends",
                     inJam = false,
                     snackbar = com.villamediana.sound.ui.detail.rememberDetailSnackbar(),
-                    onSend = { sent++ }, onJam = {}, onMenu = {}, onAdd = {}, onPlaySwapped = {},
+                    onChat = { chats++ }, onJam = {}, onMenu = {}, onAdd = {},
                 )
             }
         }
         compose.onAllNodesWithText("Ana Lima").onFirst().assertExists()
         compose.onNodeWithText("Amigos desde", substring = true).assertExists()
         compose.onNodeWithText("52 h").assertExists()
+        // The songs swapped live in the conversation now, not on the page.
+        check(compose.onAllNodesWithText("Músicas trocadas").fetchSemanticsNodes().isEmpty())
         shot("social-friend")
-        compose.onNodeWithText("Mandar música").performClick()
+        compose.onNodeWithText("Conversar · 2").performClick()
+        assertEquals(1, chats)
+    }
+
+    private fun text(id: Long, dir: String, text: String, at: Long, mine: String? = null, theirs: String? = null) =
+        SharedSong(id = id, friendId = "uana", direction = dir, deliveryId = id, videoId = "", title = "", artist = "", at = at, seen = true, kind = SharedSong.TEXT, text = text, myReaction = mine, theirReaction = theirs)
+
+    @Test
+    fun theConversationHasTextsSongsAndReactions() {
+        val day = java.time.LocalDate.now().atTime(10, 0).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val messages = listOf(
+            text(1, SharedSong.IN, "Ouviu o disco novo?", day - 86_400_000L),
+            text(2, SharedSong.OUT, "Ainda não! Manda uma", day - 86_400_000L + 60_000, theirs = "😂"),
+            shared(3, "uana", SharedSong.IN, "Garota de Ipanema", "Tom Jobim").copy(at = day, seen = true, myReaction = "❤️"),
+            text(4, SharedSong.IN, "Essa aqui é demais", day + 30_000),
+            text(5, SharedSong.OUT, "Que linda 🥹\nVou ouvir no caminho", day + 120_000, theirs = "❤️", mine = "❤️"),
+        )
+        var sent = 0
+        var played: SharedSong? = null
+        var draft by androidx.compose.runtime.mutableStateOf("")
+        compose.setContent {
+            PageHost {
+                ChatPage(
+                    friend = ana,
+                    messages = messages,
+                    pending = emptyList(),
+                    draft = draft,
+                    onDraft = { draft = it },
+                    snackbar = com.villamediana.sound.ui.detail.rememberDetailSnackbar(),
+                    onSend = { sent++ },
+                    onPickSong = {},
+                    onPlay = { played = it },
+                    onReact = { _, _ -> },
+                    onOpenFriend = {},
+                )
+            }
+        }
+        compose.onNodeWithText("Hoje").assertExists()
+        compose.onNodeWithText("Ontem").assertExists()
+        compose.onNodeWithText("Ouviu o disco novo?").assertExists()
+        compose.onNodeWithText("❤️ 2").assertExists()
+        shot("social-chat")
+        compose.onNodeWithText("Garota de Ipanema").performClick()
+        assertEquals(3L, played?.id)
+        // Nothing typed: send does nothing.
+        compose.onNodeWithContentDescription("Enviar").performClick()
+        assertEquals(0, sent)
+        draft = "bora"
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Enviar").performClick()
         assertEquals(1, sent)
-        compose.onAllNodes(androidx.compose.ui.test.hasScrollAction()).onFirst().performScrollToNode(androidx.compose.ui.test.hasText("Vapor Barato"))
-        compose.onNodeWithText("Músicas trocadas").assertExists()
-        shot("social-friend-swapped")
+    }
+
+    @Test
+    fun anEmptyConversationInvitesTheFirstMessage() {
+        var pending by androidx.compose.runtime.mutableStateOf(listOf(PendingText(1, "oi!")))
+        compose.setContent {
+            PageHost(dark = false) {
+                ChatPage(
+                    friend = ana, messages = emptyList(), pending = pending, draft = "", onDraft = {},
+                    snackbar = com.villamediana.sound.ui.detail.rememberDetailSnackbar(),
+                    onSend = {}, onPickSong = {}, onPlay = {}, onReact = { _, _ -> }, onOpenFriend = {},
+                )
+            }
+        }
+        // A text on its way shows already.
+        compose.onNodeWithText("oi!").assertExists()
+        pending = emptyList()
+        compose.waitForIdle()
+        compose.onNodeWithText("Mande um oi ou uma música.").assertExists()
+        shot("social-chat-empty")
+    }
+
+    @Test
+    fun dayLabelsFallWhereTheDayChangesAndARunStaysTogether() {
+        val zone = java.time.ZoneOffset.UTC
+        val today = java.time.LocalDate.of(2026, 11, 9)
+        val t = { d: Int, h: Int -> java.time.LocalDate.of(2026, 11, d).atTime(h, 0).toInstant(zone).toEpochMilli() }
+        val rows = chatRows(
+            listOf(text(1, SharedSong.IN, "a", t(8, 9)), text(2, SharedSong.IN, "b", t(8, 10)), text(3, SharedSong.OUT, "c", t(9, 9)), text(4, SharedSong.OUT, "d", t(9, 9))),
+            zone, today,
+        )
+        assertEquals(listOf("day", "text", "text", "day", "text", "text"), rows.map { it.type })
+        assertEquals(listOf(true, false, true, false), rows.filterIsInstance<ChatRow.Message>().map { it.joined })
     }
 
     @Test
@@ -228,9 +308,9 @@ class SocialUiTest {
         compose.setContent {
             PageHost(dark = false) {
                 FriendPage(
-                    person = carla, isFriend = false, songs = emptyList(), relation = null, inJam = false,
+                    person = carla, isFriend = false, unread = 0, relation = null, inJam = false,
                     snackbar = com.villamediana.sound.ui.detail.rememberDetailSnackbar(),
-                    onSend = {}, onJam = {}, onMenu = {}, onAdd = {}, onPlaySwapped = {},
+                    onChat = {}, onJam = {}, onMenu = {}, onAdd = {},
                 )
             }
         }
@@ -264,8 +344,6 @@ class SocialUiTest {
     fun aJamInvite() {
         compose.setContent {
             Page {
-                SongBubble(shared(1, "uana", SharedSong.IN, "Garota de Ipanema", "Tom Jobim"), onPlay = {})
-                Spacer(Modifier.height(12.dp))
                 InviteLine(JamInvite(Jam("j", "uana"), ana), onJoin = {}, onDecline = {})
             }
         }
@@ -341,9 +419,9 @@ class SocialUiTest {
         compose.setContent {
             PageHost {
                 FriendPage(
-                    person = friend, isFriend = true, relation = "friends", songs = emptyList(), inJam = false,
+                    person = friend, isFriend = true, relation = "friends", unread = 0, inJam = false,
                     snackbar = com.villamediana.sound.ui.detail.rememberDetailSnackbar(),
-                    onSend = {}, onJam = {}, onMenu = {}, onAdd = {}, onPlaySwapped = {},
+                    onChat = {}, onJam = {}, onMenu = {}, onAdd = {},
                 )
             }
         }

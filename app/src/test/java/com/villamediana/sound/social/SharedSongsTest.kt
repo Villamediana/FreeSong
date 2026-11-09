@@ -58,6 +58,52 @@ class SharedSongsTest {
         assertTrue(songs.all.first().isEmpty())
     }
 
+    @Test fun textsAndSongsAreOneConversationAndTheFriendsReactionLandsOnItsMessage() = runBlocking {
+        assertTrue(songs.keep(Delivery(10, "text", "uana", 1_000, text = "oi!\ntudo bem?")))
+        assertTrue(songs.keep(Delivery(11, "share", "uana", 2_000, song(1))))
+        assertFalse(songs.keep(Delivery(12, "text", "uana", 3_000, text = "  "))) // nothing to show
+        assertFalse(songs.keep(Delivery(13, "poll", "uana", 3_000))) // a kind this app doesn't know
+        val thread = songs.thread("uana").first()
+        assertEquals(listOf(SharedSong.TEXT, SharedSong.SONG), thread.map { it.kind })
+        assertEquals("oi!\ntudo bem?", thread.first().text)
+        // A reaction is not a message (no notification), it marks the message it points at.
+        assertFalse(songs.keep(Delivery(14, "reaction", "uana", 4_000, ref = 11, emoji = "🔥")))
+        assertEquals("🔥", db.sharedSongs().find("uana", 11)!!.theirReaction)
+        // Taken back ("").
+        songs.keep(Delivery(15, "reaction", "uana", 5_000, ref = 11, emoji = ""))
+        assertNull(db.sharedSongs().find("uana", 11)!!.theirReaction)
+        // Someone else can't react on this conversation's messages.
+        songs.keep(Delivery(16, "reaction", "ubia", 6_000, ref = 10, emoji = "❤️"))
+        assertNull(db.sharedSongs().find("uana", 10)!!.theirReaction)
+        assertEquals(2, songs.thread("uana").first().size)
+    }
+
+    @Test fun yourReactionThatDoesNotGoIsPutBack() = runBlocking {
+        songs.keep(Delivery(20, "text", "uana", 1_000, text = "oi"))
+        val m = db.sharedSongs().find("uana", 20)!!
+        // The relay here is unreachable: the heart shows, then comes back off.
+        assertTrue(songs.react(m, "❤️").isFailure)
+        val after = db.sharedSongs().find("uana", 20)!!
+        assertNull(after.myReaction)
+        assertTrue(after.myReactionAt > 0)
+    }
+
+    @Test fun version6DatabasesGainTextsAndReactions() {
+        migrations.createDatabase("migrate7.db", 6).apply {
+            execSQL("INSERT INTO shared_songs (friendId, direction, deliveryId, videoId, title, artist, at, seen) VALUES ('uana', 'in', 3, 'vid00000001', 'Oceano', 'Djavan', 1000, 0)")
+            close()
+        }
+        val v7 = migrations.runMigrationsAndValidate("migrate7.db", 7, true)
+        v7.query("SELECT kind, text, myReaction, myReactionAt FROM shared_songs").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals("song", c.getString(0))
+            assertTrue(c.isNull(1))
+            assertTrue(c.isNull(2))
+            assertEquals(0L, c.getLong(3))
+        }
+        v7.close()
+    }
+
     @Test fun version5DatabasesGainTheSharedSongs() {
         migrations.createDatabase("migrate6.db", 5).close()
         val v6 = migrations.runMigrationsAndValidate("migrate6.db", 6, true)

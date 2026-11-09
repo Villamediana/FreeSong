@@ -137,7 +137,10 @@ fun SocialHost(navigator: Navigator) {
     LaunchedEffect(asked) {
         when (val what = SocialRequests.consume() ?: return@LaunchedEffect) {
             "friends", "jam" -> navigator.openSocial()
-            else -> if (what.startsWith("friend:")) navigator.openFriend(what.removePrefix("friend:"))
+            else -> when {
+                what.startsWith("chat:") -> navigator.openChat(what.removePrefix("chat:"))
+                what.startsWith("friend:") -> navigator.openFriend(what.removePrefix("friend:"))
+            }
         }
     }
     // Each invite asks once, in a sheet; turned down here it stays listed on the Amigos page.

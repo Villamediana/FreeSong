@@ -382,6 +382,8 @@ internal fun FriendRow(line: FriendLine, onOpen: () -> Unit) {
             Text(f.name, style = MaterialTheme.typography.titleMedium, color = SoundColors.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
             val sub = when {
                 last == null -> "@${f.username}"
+                last.isText && last.direction == SharedSong.OUT -> stringResource(R.string.social_you_sent, last.text.orEmpty().lines().first())
+                last.isText -> last.text.orEmpty().lines().first()
                 last.direction == SharedSong.OUT -> stringResource(R.string.social_you_sent, last.title)
                 else -> "${last.title} · ${last.artist}"
             }
@@ -394,7 +396,7 @@ internal fun FriendRow(line: FriendLine, onOpen: () -> Unit) {
             )
         }
         // The last song swapped, as a little cover: the list reads like music, not like contacts.
-        if (last != null) {
+        if (last != null && !last.isText) {
             Spacer(Modifier.width(12.dp))
             com.villamediana.sound.ui.components.Cover(last.cover, Modifier.size(48.dp), seed = last.title, shape = RoundedCornerShape(12.dp))
         }

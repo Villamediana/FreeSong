@@ -231,6 +231,7 @@ fun SoundRoot(incoming: MutableStateFlow<Inbound?>) {
                 composable<SocialRoute> { Page { com.villamediana.sound.ui.social.SocialScreen() } }
                 composable<ProfileRoute> { Page { com.villamediana.sound.ui.social.ProfileScreen() } }
                 composable<FriendRoute> { Page { com.villamediana.sound.ui.social.FriendScreen(it.toRoute<FriendRoute>().id) } }
+                composable<ChatRoute> { Page { com.villamediana.sound.ui.social.ChatScreen(it.toRoute<ChatRoute>().id) } }
             }
 
             AnimatedVisibility(

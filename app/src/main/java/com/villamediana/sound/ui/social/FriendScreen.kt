@@ -27,6 +27,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Send
+import androidx.compose.material.icons.rounded.ChatBubble
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.PersonAdd
@@ -76,10 +77,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Someone's page, laid out like an artist's. A friend: their color, photo, name, @ and since when
- * you're friends, the hours, the round play (their five most heard), "Mandar música", "Jam", the
- * five as a list and the songs you swapped (theirs on the left, yours on the right; tap to play).
- * Someone else: photo, name and the friend request.
+ * Someone's page. A friend: their card (color, photo, name, @, since when you're friends, hours,
+ * the month), "Conversar" (the conversation: texts, songs, reactions) and "Jam", their five most
+ * heard, their artists and rhythm. Someone else: photo, name and the friend request.
  */
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
@@ -98,23 +98,16 @@ fun FriendScreen(id: String) {
     }
     val incoming = friends.incoming.firstOrNull { it.user.id == id }
     val profile = asFriend ?: fetched ?: incoming?.user
-    val songs by remember(id) { hub.songs.thread(id) }.collectAsStateWithLifecycle(initialValue = emptyList())
-
-    // Open here: its songs are seen, and new ones come in without a notification.
-    DisposableEffect(id) {
-        hub.openFriend = id
-        onDispose { if (hub.openFriend == id) hub.openFriend = null }
-    }
-    LaunchedEffect(id, songs.size) { hub.songs.markSeen(id) }
+    val nav = com.villamediana.sound.ui.nav.navigator()
+    val thread by remember(id) { hub.songs.thread(id) }.collectAsStateWithLifecycle(initialValue = emptyList())
 
     var menu by rememberSaveable { mutableStateOf(false) }
     var unfriending by rememberSaveable { mutableStateOf(false) }
-    var sending by rememberSaveable { mutableStateOf(false) }
 
     FriendPage(
         person = profile,
         isFriend = asFriend != null,
-        songs = songs,
+        unread = thread.count { it.direction == SharedSong.IN && !it.seen },
         relation = when {
             incoming != null -> "incoming"
             friends.outgoing.any { it.user.id == id } || profile?.relation == "outgoing" -> "outgoing"
@@ -122,7 +115,7 @@ fun FriendScreen(id: String) {
         },
         inJam = jam != null,
         snackbar = snackbar,
-        onSend = { sending = true },
+        onChat = { nav.openChat(id) },
         onJam = {
             scope.launch {
                 val result = if (jam != null) hub.jam.invite(listOf(id)) else hub.jam.start(listOf(id))
@@ -135,7 +128,6 @@ fun FriendScreen(id: String) {
                 if (incoming != null) hub.accept(incoming.requestId) else hub.requestFriend(id)
             }
         },
-        onPlaySwapped = { s -> playShared(s.toRef(), res.getString(R.string.playback_source_radio, s.title)) },
         sheets = {
             if (menu) {
                 SoundSheet(onDismissRequest = { menu = false }) {
@@ -157,7 +149,6 @@ fun FriendScreen(id: String) {
                     onDismiss = { unfriending = false },
                 )
             }
-            if (sending && asFriend != null) SendSongSheet(asFriend, onDismiss = { sending = false })
         },
     )
 }
@@ -167,15 +158,14 @@ fun FriendScreen(id: String) {
 internal fun FriendPage(
     person: Profile?,
     isFriend: Boolean,
-    songs: List<SharedSong>,
+    unread: Int,
     relation: String?,
     inJam: Boolean,
     snackbar: com.villamediana.sound.ui.detail.DetailSnackbar,
-    onSend: () -> Unit,
+    onChat: () -> Unit,
     onJam: () -> Unit,
     onMenu: () -> Unit,
     onAdd: () -> Unit,
-    onPlaySwapped: (SharedSong) -> Unit,
     sheets: @Composable () -> Unit = {},
 ) {
     val since = person?.let {
@@ -197,7 +187,13 @@ internal fun FriendPage(
         firstName = person?.name?.trim()?.substringBefore(' ')?.ifBlank { person.name },
         buttons = {
             if (isFriend) {
-                PersonButton(stringResource(R.string.friend_send), onClick = onSend, icon = Icons.AutoMirrored.Rounded.Send, filled = true, modifier = Modifier.weight(1f))
+                PersonButton(
+                    if (unread > 0) stringResource(R.string.friend_chat_unread, unread) else stringResource(R.string.friend_chat),
+                    onClick = onChat,
+                    icon = Icons.Rounded.ChatBubble,
+                    filled = true,
+                    modifier = Modifier.weight(1f),
+                )
                 PersonButton(
                     stringResource(if (inJam) R.string.friend_invite_jam else R.string.friend_jam),
                     onClick = onJam,
@@ -217,29 +213,7 @@ internal fun FriendPage(
         },
         sheets = sheets,
         more = {
-            if (isFriend) {
-                item(key = "swapped-title", contentType = "section") {
-                    Column(Modifier.padding(top = Dimens.SectionGap)) { SectionHeader(stringResource(R.string.friend_swapped)) }
-                }
-                if (songs.isEmpty()) {
-                    item(key = "swapped-empty", contentType = "empty") {
-                        Column(
-                            Modifier.fillMaxWidth().padding(horizontal = Dimens.Gutter, vertical = 18.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            Text(
-                                stringResource(R.string.friend_empty),
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = SoundColors.TextMuted,
-                                textAlign = TextAlign.Center,
-                            )
-                            Spacer(Modifier.height(14.dp))
-                            PillButton(stringResource(R.string.friend_send), onClick = onSend, icon = Icons.AutoMirrored.Rounded.Send, filled = true)
-                        }
-                    }
-                }
-                items(songs, key = { "s-" + it.id }, contentType = { "bubble" }) { s -> SongBubble(s, onPlay = { onPlaySwapped(s) }) }
-            } else if (person != null) {
+            if (!isFriend && person != null) {
                 item(key = "not-friend", contentType = "empty") {
                     Text(
                         stringResource(R.string.friend_not_friend),
@@ -252,35 +226,6 @@ internal fun FriendPage(
             }
         },
     )
-}
-
-private fun SharedSong.toRef() = SongRef(videoId, title, artist, album, durationMs, cover, url)
-
-/** A song in the conversation: the friend's on the left, yours on the right. */
-@Composable
-internal fun SongBubble(s: SharedSong, onPlay: () -> Unit) {
-    val mine = s.direction == SharedSong.OUT
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = Dimens.Gutter, vertical = 5.dp),
-        horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start,
-    ) {
-        Row(
-            Modifier
-                .widthIn(max = 300.dp)
-                .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = if (mine) 20.dp else 6.dp, bottomEnd = if (mine) 6.dp else 20.dp))
-                .background(if (mine) SoundColors.AccentSoft else SoundColors.Surface1)
-                .clickable(onClick = onPlay)
-                .padding(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Cover(s.cover, Modifier.size(52.dp), seed = s.title, shape = RoundedCornerShape(12.dp))
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.padding(end = 8.dp)) {
-                Text(s.title, style = MaterialTheme.typography.titleSmall, color = SoundColors.Text, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(s.artist, style = MaterialTheme.typography.bodySmall, color = SoundColors.TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-        }
-    }
 }
 
 /** "Mandar pra Fulano": the song playing now, then your likes (filterable). */
