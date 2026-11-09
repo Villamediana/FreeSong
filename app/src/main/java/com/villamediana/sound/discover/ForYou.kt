@@ -159,6 +159,10 @@ class ForYou(
         return weave(personal, rest)
     }
 
+    /** New songs like [seeds] (a page's "Recomendadas"): what their radios agree on, in the listener's taste. */
+    suspend fun like(seeds: List<String>, exclude: Set<String>, count: Int): List<RemoteTrack> =
+        Recommend.fromRadios(radios(seeds), profile(), exclude + seeds, count)
+
     private suspend fun radios(seeds: List<String>): List<List<RemoteTrack>> = coroutineScope {
         seeds.map { id -> async { runCatching { discover.related(id, RADIO_SIZE) }.getOrNull() } }.awaitAll().filterNotNull()
     }

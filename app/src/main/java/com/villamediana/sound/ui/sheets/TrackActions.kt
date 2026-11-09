@@ -389,15 +389,14 @@ fun TrackActionsSheet(
 }
 
 /**
- * "Iniciar rádio" for a streamed song: the song, then YouTube Music's "up next" for it, streamed.
- * Runs on the app scope (the sheet is gone by then).
+ * "Iniciar rádio" for a streamed song: the song, then songs like it ([com.villamediana.sound.discover.SongRadio]:
+ * its radio and those of songs drawn from it, in the listener's taste — another radio every time),
+ * streamed. Runs on the app scope (the sheet is gone by then).
  */
 private fun startOnlineRadio(track: Track, graph: AppGraph, feedback: SheetFeedback, res: Resources) {
     val seed = track.toRemoteTrack() ?: return
     graph.scope.launch {
-        val related = runCatching { graph.youTube.related(seed.videoId) }.getOrDefault(emptyList())
-            .filter { it.videoId != seed.videoId }
-            .distinctBy { it.videoId }
+        val related = runCatching { graph.songRadio.songs(listOf(seed.videoId), setOf(seed.videoId), RADIO_START) }.getOrDefault(emptyList())
         withContext(Dispatchers.Main) {
             if (related.isEmpty()) {
                 feedback.show(res.getString(R.string.sheet_radio_unavailable))
@@ -408,6 +407,9 @@ private fun startOnlineRadio(track: Track, graph: AppGraph, feedback: SheetFeedb
         }
     }
 }
+
+/** Songs a radio started from a song's sheet begins with (the queue keeps going on its own after). */
+private const val RADIO_START = 30
 
 /** Removes one row of a playlist and offers "Desfazer", which puts it back in the same slot. */
 private fun removeFromPlaylist(

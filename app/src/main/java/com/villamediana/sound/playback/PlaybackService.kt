@@ -592,12 +592,15 @@ class PlaybackService : MediaLibraryService() {
         extendJob = scope.launch {
             val local = tracksFor(items.mapNotNull(MediaItems::trackId).distinct()).associateBy { it.id }
             val list = items.mapNotNull { item -> MediaItems.trackId(item)?.let(local::get) ?: MediaItems.onlineTrack(item) }
-            // What the listener keeps skipping doesn't come back on its own.
-            val profile = runCatching { graph.forYou.profile() }.getOrNull()
-            val radios = QueueContinuation.seeds(list)
-                .map { id -> async { graph.youTube.related(id, QueueContinuation.PER_SEED) } }
-                .awaitAll()
-                .map { r -> if (profile == null) r else r.filterNot { profile.avoids(it.videoId, it.artist) } }
+            // Like what is being heard: the queue's last songs not skipped just now, their radios
+            // and one drawn from them (another draw every time), in the listener's taste.
+            val session = runCatching { com.villamediana.sound.discover.SongRadio.sessionOf(library) }
+                .getOrDefault(com.villamediana.sound.smart.Session())
+            val seeds = QueueContinuation.seeds(list, skipped = session.skipped)
+            val radio = runCatching {
+                graph.songRadio.songs(seeds, list.mapNotNullTo(HashSet()) { it.videoId }, QueueContinuation.SIZE + 10, Random(seed), session)
+            }.getOrDefault(emptyList())
+            val radios = listOf(radio)
             val lib = libraryTracks()
             val taste = taste()
             val byVideo = localByVideoId(radios.flatten().map { it.videoId })

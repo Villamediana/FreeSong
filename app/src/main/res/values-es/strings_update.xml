@@ -26,4 +26,6 @@
     <string name="settings_update_failed">No se pudo verificar ahora</string>
     <string name="settings_update_available">Actualizar a %1$s</string>
     <string name="settings_update_going">Actualizando a %1$s</string>
+    <string name="update_auto_note">Ya descargada: se instala sola cuando no estés usando FreeSong.</string>
+    <string name="update_installing_note">FreeSong se cierra un momento para instalarse.</string>
 </resources>
