@@ -61,8 +61,8 @@ import com.villamediana.sound.ui.theme.SoundColors
 import kotlinx.coroutines.launch
 
 /**
- * Your page, as your friends see it (photo, name, @, hours, five most heard), laid out like an
- * artist's. The name changes; the @ is your identifier on FreeSong and stays. Also: the photo,
+ * Your page, as your friends see it (photo, name, @, hours, this month's numbers, five most heard,
+ * your artists and rhythm). The name changes; the @ is your identifier on FreeSong and stays. Also: the photo,
  * the recovery code, using another phone's code, deleting the profile.
  */
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
@@ -95,9 +95,13 @@ fun ProfileScreen() {
     }
     val pickPhoto = { gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
 
+    val stats: ProfileStatsViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+    val numbers by stats.stats.collectAsStateWithLifecycle()
+
     val p = me
     ProfilePage(
         me = p,
+        numbers = numbers,
         code = code,
         photoBusy = photoBusy,
         snackbar = snackbar,
@@ -168,6 +172,7 @@ fun ProfileScreen() {
 @Composable
 internal fun ProfilePage(
     me: Profile?,
+    numbers: com.villamediana.sound.social.NumPeriod?,
     code: String?,
     photoBusy: Boolean,
     snackbar: com.villamediana.sound.ui.detail.DetailSnackbar,
@@ -187,6 +192,8 @@ internal fun ProfilePage(
         topHint = stringResource(R.string.profile_top_private),
         playTitle = stringResource(R.string.profile_top),
         snackbar = snackbar,
+        numbers = numbers,
+        numbersEmpty = stringResource(R.string.profile_stats_empty),
         avatar = { size -> CardAvatar(me, size, onCamera = onPhoto, busy = photoBusy) },
         buttons = {
             PersonButton(stringResource(R.string.profile_edit_name_action), onClick = onEdit, icon = Icons.Rounded.Edit, modifier = Modifier.weight(1f))
@@ -196,8 +203,6 @@ internal fun ProfilePage(
         },
         sheets = sheets,
         more = {
-            // Your numbers (worked out on the phone, only you see them), then the recovery code.
-            item(key = "stats", contentType = "stats") { ProfileStats() }
             item(key = "recovery", contentType = "card") { RecoveryCard(code, onCopy = onCopy, onNew = onNewCode, onUseCode = onUseCode) }
         },
     )

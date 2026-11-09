@@ -107,14 +107,16 @@
     <string name="crop_hint">Arrastra para encuadrar · dos dedos o la barra para acercar</string>
     <string name="crop_apply">Aplicar</string>
     <string name="crop_preview">Así te ven tus amigos</string>
-    <string name="profile_stats_title">Tus números</string>
-    <string name="profile_stats_month">Mes</string>
-    <string name="profile_stats_year">Año</string>
+    <string name="person_month">Este mes</string>
     <string name="profile_stats_minutes">minutos</string>
     <string name="profile_stats_rhythm">Tu ritmo</string>
+    <string name="friend_stats_rhythm">Ritmo de %1$s</string>
     <string name="profile_stats_peak">La música sube más a las %1$dh</string>
     <string name="profile_stats_artists">Tus artistas</string>
-    <string name="profile_stats_empty">Escucha unas canciones y tus números aparecen aquí.</string>
-    <string name="profile_stats_friends_see">Tus amigos también los ven</string>
-    <string name="friend_stats_title">Números de %1$s</string>
+    <string name="friend_stats_artists">Artistas de %1$s</string>
+    <string name="profile_stats_empty">Escucha unas canciones y tus números del mes aparecen aquí.</string>
+    <string name="friend_rhythm_dawn">%1$s es de la madrugada</string>
+    <string name="friend_rhythm_morning">%1$s es de la mañana</string>
+    <string name="friend_rhythm_afternoon">%1$s es de la tarde</string>
+    <string name="friend_rhythm_night">%1$s es de la noche</string>
 </resources>

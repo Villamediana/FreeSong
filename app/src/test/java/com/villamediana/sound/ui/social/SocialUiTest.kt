@@ -172,6 +172,7 @@ class SocialUiTest {
             PageHost {
                 ProfilePage(
                     me = me.copy(top = top5),
+                    numbers = null,
                     code = "7K2Q-M9XD-4TFA-H3RB",
                     photoBusy = false,
                     snackbar = com.villamediana.sound.ui.detail.rememberDetailSnackbar(),
@@ -272,7 +273,7 @@ class SocialUiTest {
     }
 
     @Test
-    fun yourNumbersFillTheProfile() {
+    fun yourMonthLivesInYourCardAndYourArtistsAndRhythmFollow() {
         val numbers = com.villamediana.sound.social.NumPeriod(
             minutes = 2_412, songs = 212, artists = 74, hour = 22,
             weekdays = listOf(300L, 240L, 360L, 300L, 540L, 420L, 180L),
@@ -282,24 +283,50 @@ class SocialUiTest {
                 com.villamediana.sound.social.NumArtist("Djavan", 250),
             ),
         )
-        var period = com.villamediana.sound.stats.StatsPeriod.MONTH
         compose.setContent {
             PageHost {
-                androidx.compose.foundation.lazy.LazyColumn(Modifier.background(SoundColors.Ink)) {
-                    item { ProfileStatsContent("Seus números", "Seus amigos também veem", numbers, period, onPeriod = { period = it }) }
-                }
+                ProfilePage(
+                    me = me.copy(top = top5),
+                    numbers = numbers,
+                    code = "7K2Q-M9XD-4TFA-H3RB",
+                    photoBusy = false,
+                    snackbar = com.villamediana.sound.ui.detail.rememberDetailSnackbar(),
+                    onPhoto = {}, onEdit = {}, onMenu = {}, onCopy = {}, onNewCode = {}, onUseCode = {},
+                )
             }
         }
-        compose.onNodeWithText("Seus números").assertExists()
+        // The month in the card, under the hours.
+        compose.onAllNodesWithText("ESTE MÊS").onFirst().assertExists()
         compose.onNodeWithText(java.text.NumberFormat.getIntegerInstance().format(2_412)).assertExists()
-        compose.onNodeWithText("Você é da noite").assertExists()
-        compose.onNodeWithText("O som sobe mais às 22h").assertExists()
+        compose.onNodeWithText("212").assertExists()
+        // No more Mês/Ano switch and no "Seus números" block (Miguel).
+        check(compose.onAllNodesWithText("Ano").fetchSemanticsNodes().isEmpty())
+        check(compose.onAllNodesWithText("Seus números").fetchSemanticsNodes().isEmpty())
+        shot("social-profile-numbers")
+        val list = compose.onAllNodes(androidx.compose.ui.test.hasScrollAction()).onFirst()
+        list.performScrollToNode(androidx.compose.ui.test.hasText("Seus artistas"))
         compose.onNodeWithText("Maná").assertExists()
-        // No streak and no genres any more (Miguel: not needed).
-        check(compose.onAllNodesWithText("dias seguidos").fetchSemanticsNodes().isEmpty())
-        compose.onNodeWithText("Ano").performClick()
-        assertEquals(com.villamediana.sound.stats.StatsPeriod.YEAR, period)
-        shot("profile-stats")
+        list.performScrollToNode(androidx.compose.ui.test.hasText("Você é da noite"))
+        compose.onNodeWithText("O som sobe mais às 22h").assertExists()
+        shot("social-profile-numbers-2")
+    }
+
+    @Test
+    fun anEmptyMonthSaysSoInTheCard() {
+        compose.setContent {
+            PageHost {
+                ProfilePage(
+                    me = me,
+                    numbers = com.villamediana.sound.social.NumPeriod(),
+                    code = null,
+                    photoBusy = false,
+                    snackbar = com.villamediana.sound.ui.detail.rememberDetailSnackbar(),
+                    onPhoto = {}, onEdit = {}, onMenu = {}, onCopy = {}, onNewCode = {}, onUseCode = {},
+                )
+            }
+        }
+        compose.onNodeWithText("Ouça umas músicas e seus números do mês aparecem aqui.").assertExists()
+        check(compose.onAllNodesWithText("Seu ritmo").fetchSemanticsNodes().isEmpty())
     }
 
     @Test
@@ -320,9 +347,12 @@ class SocialUiTest {
                 )
             }
         }
-        compose.onAllNodes(androidx.compose.ui.test.hasScrollAction())[0].performScrollToNode(androidx.compose.ui.test.hasText("Números de Ana"))
-        compose.onNodeWithText("Números de Ana").assertExists()
+        compose.onNodeWithText(java.text.NumberFormat.getIntegerInstance().format(900)).assertExists()
+        shot("social-friend-numbers")
+        val list = compose.onAllNodes(androidx.compose.ui.test.hasScrollAction())[0]
+        list.performScrollToNode(androidx.compose.ui.test.hasText("Artistas de Ana"))
         compose.onNodeWithText("Rubel").assertExists()
-        compose.onNodeWithText("Você é da manhã").assertExists()
+        list.performScrollToNode(androidx.compose.ui.test.hasText("Ana é da manhã"))
+        compose.onNodeWithText("Ritmo de Ana").assertExists()
     }
 }

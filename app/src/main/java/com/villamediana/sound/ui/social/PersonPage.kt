@@ -59,6 +59,7 @@ import androidx.compose.ui.unit.sp
 import com.villamediana.sound.R
 import com.villamediana.sound.SoundApplication
 import com.villamediana.sound.playback.PlaySource
+import com.villamediana.sound.social.NumPeriod
 import com.villamediana.sound.social.Profile
 import com.villamediana.sound.social.SongRef
 import com.villamediana.sound.ui.components.Cover
@@ -81,9 +82,10 @@ import com.villamediana.sound.ui.theme.SoundColors
 /**
  * A person's page — yours or a friend's. Not an artist's page: a person is a card. At the top,
  * their card in their own color (sound waves rippling from a corner): the photo, the name, the @,
- * the hours listened set big and since when. Under it the page's buttons ("Mandar música" / "Jam",
- * or yours), then their five most heard as big covers with the rank over them ("Tocar" plays them),
- * then [more].
+ * the hours listened set big and since when, and at its foot this month in three numbers. Under it
+ * the page's buttons ("Mandar música" / "Jam", or yours), their five most heard as big covers with
+ * the rank over them ("Tocar" plays them), the month's artists, their rhythm lit in their color,
+ * then [more]. [firstName] is null on your own page ("Seus artistas") and the friend's otherwise.
  */
 @Composable
 internal fun PersonPage(
@@ -98,6 +100,9 @@ internal fun PersonPage(
     topActions: @Composable RowScope.() -> Unit = {},
     topHint: String? = null,
     showHours: Boolean = true,
+    numbers: NumPeriod? = null,
+    numbersEmpty: String? = null,
+    firstName: String? = null,
     sheets: @Composable () -> Unit = {},
     more: LazyListScope.() -> Unit = {},
 ) {
@@ -106,6 +111,7 @@ internal fun PersonPage(
     val songs = remember(top) { top.map { it.toRemote() } }
     val source = PlaySource(PlaySource.Type.RADIO, playTitle, "top:" + person?.id.orEmpty())
     val statusBar = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val tint = remember(person?.username) { if (person == null) SoundColors.Surface3 else personTint(seedColor(person.username)) }
     fun play(i: Int) {
         player.playOnline(songs, i, source)
         Chrome.openPlayer()
@@ -122,7 +128,7 @@ internal fun PersonPage(
                     }
                 }
                 item(key = "card", contentType = "card") {
-                    PersonCard(person, since, hours = person?.listenedMs?.takeIf { showHours }, avatar = avatar)
+                    PersonCard(person, since, hours = person?.listenedMs?.takeIf { showHours }, avatar = avatar, numbers = numbers, numbersEmpty = numbersEmpty)
                 }
                 item(key = "buttons", contentType = "buttons") {
                     Row(
@@ -154,6 +160,12 @@ internal fun PersonPage(
                         }
                     }
                 }
+                if (numbers != null && !numbers.empty) {
+                    if (numbers.top.isNotEmpty()) {
+                        item(key = "artists", contentType = "artists") { PersonArtists(numbers, firstName) }
+                    }
+                    item(key = "rhythm", contentType = "rhythm") { PersonRhythm(numbers, firstName, tint) }
+                }
                 more()
             }
             SoundSnackbarHost(
@@ -167,11 +179,18 @@ internal fun PersonPage(
 
 /**
  * The person's card: their color, lit from the top-left and deepening to the corner, with sound
- * waves rippling out of the top-right; the photo ringed in white, the name, the @; at the foot the
- * hours set big and since when.
+ * waves rippling out of the top-right; the photo ringed in white, the name, the @; the hours set
+ * big and since when; at the foot, under a hairline, this month's numbers ([CardNumbers]).
  */
 @Composable
-internal fun PersonCard(person: Profile?, since: String?, hours: Long?, avatar: @Composable (Dp) -> Unit) {
+internal fun PersonCard(
+    person: Profile?,
+    since: String?,
+    hours: Long?,
+    avatar: @Composable (Dp) -> Unit,
+    numbers: NumPeriod? = null,
+    numbersEmpty: String? = null,
+) {
     val base = remember(person?.username) { if (person == null) SoundColors.Surface3 else seedColor(person.username) }
     val fill = remember(base) { personFill(base) }
     Box(
@@ -231,6 +250,7 @@ internal fun PersonCard(person: Profile?, since: String?, hours: Long?, avatar: 
                     )
                 }
             }
+            CardNumbers(numbers, numbersEmpty)
         }
     }
 }
@@ -238,6 +258,9 @@ internal fun PersonCard(person: Profile?, since: String?, hours: Long?, avatar: 
 /** The person's color as their card paints it: lit from the top-left, deepening to the corner. */
 internal fun personFill(base: Color): Brush =
     Brush.linearGradient(listOf(lerp(base, Color.White, 0.14f), lerp(base, Color.Black, 0.38f)), start = Offset.Zero, end = Offset.Infinite)
+
+/** The person's color where it lights something on the page (the fullest day of their week). */
+internal fun personTint(base: Color): Color = lerp(base, Color.White, 0.14f)
 
 /** Sound waves rippling out of the card's top-right corner. */
 private fun Modifier.waves(first: Dp = 96.dp, step: Dp = 54.dp): Modifier = drawBehind {
