@@ -29,6 +29,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.PersonAdd
 import androidx.compose.material.icons.rounded.PersonRemove
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -60,7 +61,9 @@ import com.villamediana.sound.social.Profile
 import com.villamediana.sound.social.SongRef
 import com.villamediana.sound.ui.components.Cover
 import com.villamediana.sound.ui.components.PillButton
-import com.villamediana.sound.ui.nav.navigator
+import com.villamediana.sound.ui.components.SectionHeader
+import com.villamediana.sound.ui.detail.HeaderIconButton
+import com.villamediana.sound.ui.detail.rememberDetailSnackbar
 import com.villamediana.sound.ui.sheets.ConfirmDialog
 import com.villamediana.sound.ui.sheets.SheetAction
 import com.villamediana.sound.ui.sheets.SoundSheet
@@ -73,21 +76,20 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Someone's page. A friend: photo, hours and top 5, the songs you swapped (theirs on the left,
- * yours on the right; tap to play), "Mandar música" and "Jam". Someone else: photo and name, and
- * the friend request.
+ * Someone's page, laid out like an artist's. A friend: their color, photo, name, @ and since when
+ * you're friends, the hours, the round play (their five most heard), "Mandar música", "Jam", the
+ * five as a list and the songs you swapped (theirs on the left, yours on the right; tap to play).
+ * Someone else: photo, name and the friend request.
  */
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun FriendScreen(id: String) {
     val hub = SoundApplication.graph.social
-    val nav = navigator()
     val friends by hub.friends.collectAsStateWithLifecycle()
     val jam by hub.jam.jam.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
-    val feedback = rememberSheetFeedback()
+    val snackbar = rememberDetailSnackbar()
     val res = LocalContext.current.resources
-    val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
     val asFriend = friends.friends.firstOrNull { it.id == id }
     var fetched by remember(id) { mutableStateOf<Profile?>(null) }
@@ -96,7 +98,6 @@ fun FriendScreen(id: String) {
     }
     val incoming = friends.incoming.firstOrNull { it.user.id == id }
     val profile = asFriend ?: fetched ?: incoming?.user
-    val isFriend = asFriend != null
     val songs by remember(id) { hub.songs.thread(id) }.collectAsStateWithLifecycle(initialValue = emptyList())
 
     // Open here: its songs are seen, and new ones come in without a notification.
@@ -110,93 +111,144 @@ fun FriendScreen(id: String) {
     var unfriending by rememberSaveable { mutableStateOf(false) }
     var sending by rememberSaveable { mutableStateOf(false) }
 
-    LazyColumn(
-        Modifier.fillMaxSize().background(SoundColors.Ink),
-        contentPadding = PaddingValues(top = top, bottom = LocalBottomInset.current),
-    ) {
-        item(key = "top") {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { nav.back() }) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.back), tint = SoundColors.Text) }
-                Spacer(Modifier.weight(1f))
-                if (isFriend) IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, stringResource(R.string.more_options), tint = SoundColors.Text) }
+    FriendPage(
+        person = profile,
+        isFriend = asFriend != null,
+        songs = songs,
+        relation = when {
+            incoming != null -> "incoming"
+            friends.outgoing.any { it.user.id == id } || profile?.relation == "outgoing" -> "outgoing"
+            else -> profile?.relation
+        },
+        inJam = jam != null,
+        snackbar = snackbar,
+        onSend = { sending = true },
+        onJam = {
+            scope.launch {
+                val result = if (jam != null) hub.jam.invite(listOf(id)) else hub.jam.start(listOf(id))
+                result.onFailure { snackbar.feedback.show(res.getString(R.string.jam_failed)) }
             }
-        }
-        item(key = "head") {
-            Column(Modifier.fillMaxWidth().padding(horizontal = Dimens.Gutter), horizontalAlignment = Alignment.CenterHorizontally) {
-                ProfileAvatar(profile, 112.dp)
-                Spacer(Modifier.height(14.dp))
-                Text(profile?.name.orEmpty(), style = MaterialTheme.typography.headlineMedium, color = SoundColors.Text, textAlign = TextAlign.Center, maxLines = 2)
-                if (profile != null) {
-                    Text("@${profile.username}", style = MaterialTheme.typography.bodyLarge, color = SoundColors.TextMuted)
-                    Spacer(Modifier.height(2.dp))
-                    Text(stringResource(R.string.social_since, monthYear(profile.since)), style = MaterialTheme.typography.bodySmall, color = SoundColors.TextFaint)
-                }
-                Spacer(Modifier.height(18.dp))
-                if (isFriend) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        PillButton(stringResource(R.string.friend_send), onClick = { sending = true }, icon = Icons.AutoMirrored.Rounded.Send, filled = true)
-                        PillButton(
-                            stringResource(if (jam != null) R.string.friend_invite_jam else R.string.friend_jam),
-                            icon = Icons.Rounded.GraphicEq,
-                            onClick = {
-                                scope.launch {
-                                    val result = if (jam != null) hub.jam.invite(listOf(id)) else hub.jam.start(listOf(id))
-                                    result.onFailure { feedback.show(res.getString(R.string.jam_failed)) }
-                                }
-                            },
-                        )
-                    }
-                } else if (profile != null) {
-                    Text(stringResource(R.string.friend_not_friend), style = MaterialTheme.typography.bodyMedium, color = SoundColors.TextMuted)
-                    Spacer(Modifier.height(12.dp))
-                    when {
-                        incoming != null -> PillButton(stringResource(R.string.social_accept), onClick = { scope.launch { hub.accept(incoming.requestId) } }, filled = true)
-                        friends.outgoing.any { it.user.id == id } || profile.relation == "outgoing" ->
-                            Text(stringResource(R.string.social_requested), style = MaterialTheme.typography.labelLarge, color = SoundColors.TextFaint)
-                        else -> PillButton(stringResource(R.string.social_add), onClick = { scope.launch { hub.requestFriend(id) } }, filled = true)
-                    }
+        },
+        onMenu = { menu = true },
+        onAdd = {
+            scope.launch {
+                if (incoming != null) hub.accept(incoming.requestId) else hub.requestFriend(id)
+            }
+        },
+        onPlaySwapped = { s -> playShared(s.toRef(), res.getString(R.string.playback_source_radio, s.title)) },
+        sheets = {
+            if (menu) {
+                SoundSheet(onDismissRequest = { menu = false }) {
+                    SheetAction(Icons.Rounded.PersonRemove, stringResource(R.string.friend_unfriend), tint = SoundColors.Danger, labelColor = SoundColors.Danger, onClick = {
+                        menu = false
+                        unfriending = true
+                    })
                 }
             }
-        }
-        if (isFriend && asFriend != null) {
-            item(key = "stats") { StatsBlock(asFriend) }
-            item(key = "gap") { Spacer(Modifier.height(Dimens.SectionGap)) }
-            if (songs.isEmpty()) {
-                item(key = "empty") {
+            if (unfriending && profile != null) {
+                ConfirmDialog(
+                    title = stringResource(R.string.friend_unfriend_title, profile.name),
+                    body = stringResource(R.string.friend_unfriend_body),
+                    confirm = stringResource(R.string.friend_unfriend_confirm),
+                    onConfirm = {
+                        unfriending = false
+                        scope.launch { hub.unfriend(id) }
+                    },
+                    onDismiss = { unfriending = false },
+                )
+            }
+            if (sending && asFriend != null) SendSongSheet(asFriend, onDismiss = { sending = false })
+        },
+    )
+}
+
+/** What a person's page draws (apart from the screen's state, so the tests can draw it). */
+@Composable
+internal fun FriendPage(
+    person: Profile?,
+    isFriend: Boolean,
+    songs: List<SharedSong>,
+    relation: String?,
+    inJam: Boolean,
+    snackbar: com.villamediana.sound.ui.detail.DetailSnackbar,
+    onSend: () -> Unit,
+    onJam: () -> Unit,
+    onMenu: () -> Unit,
+    onAdd: () -> Unit,
+    onPlaySwapped: (SharedSong) -> Unit,
+    sheets: @Composable () -> Unit = {},
+) {
+    val since = person?.let {
+        val friendsSince = it.friendsSince
+        if (isFriend && friendsSince != null) stringResource(R.string.friend_since, monthYear(friendsSince))
+        else stringResource(R.string.social_since, monthYear(it.since))
+    }
+    PersonPage(
+        person = person,
+        since = since,
+        top = if (isFriend) person?.top.orEmpty() else emptyList(),
+        topTitle = stringResource(R.string.profile_top),
+        playTitle = stringResource(R.string.friend_top_of, person?.name.orEmpty()),
+        snackbar = snackbar,
+        avatar = { size -> CardAvatar(person, size) },
+        showHours = isFriend,
+        buttons = {
+            if (isFriend) {
+                PersonButton(stringResource(R.string.friend_send), onClick = onSend, icon = Icons.AutoMirrored.Rounded.Send, filled = true, modifier = Modifier.weight(1f))
+                PersonButton(
+                    stringResource(if (inJam) R.string.friend_invite_jam else R.string.friend_jam),
+                    onClick = onJam,
+                    icon = Icons.Rounded.GraphicEq,
+                    modifier = Modifier.weight(1f),
+                )
+            } else if (person != null) {
+                when (relation) {
+                    "incoming" -> PersonButton(stringResource(R.string.social_accept), onClick = onAdd, filled = true, modifier = Modifier.weight(1f))
+                    "outgoing" -> PersonButton(stringResource(R.string.social_requested), onClick = {}, enabled = false, modifier = Modifier.weight(1f))
+                    else -> PersonButton(stringResource(R.string.social_add), onClick = onAdd, filled = true, icon = Icons.Rounded.PersonAdd, modifier = Modifier.weight(1f))
+                }
+            }
+        },
+        topActions = {
+            if (isFriend) HeaderIconButton(Icons.Rounded.MoreVert, stringResource(R.string.more_options), onClick = onMenu)
+        },
+        sheets = sheets,
+        more = {
+            if (isFriend) {
+                item(key = "swapped-title", contentType = "section") {
+                    Column(Modifier.padding(top = Dimens.SectionGap)) { SectionHeader(stringResource(R.string.friend_swapped)) }
+                }
+                if (songs.isEmpty()) {
+                    item(key = "swapped-empty", contentType = "empty") {
+                        Column(
+                            Modifier.fillMaxWidth().padding(horizontal = Dimens.Gutter, vertical = 18.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Text(
+                                stringResource(R.string.friend_empty),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = SoundColors.TextMuted,
+                                textAlign = TextAlign.Center,
+                            )
+                            Spacer(Modifier.height(14.dp))
+                            PillButton(stringResource(R.string.friend_send), onClick = onSend, icon = Icons.AutoMirrored.Rounded.Send, filled = true)
+                        }
+                    }
+                }
+                items(songs, key = { "s-" + it.id }, contentType = { "bubble" }) { s -> SongBubble(s, onPlay = { onPlaySwapped(s) }) }
+            } else if (person != null) {
+                item(key = "not-friend", contentType = "empty") {
                     Text(
-                        stringResource(R.string.friend_empty),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = SoundColors.TextFaint,
+                        stringResource(R.string.friend_not_friend),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = SoundColors.TextMuted,
                         textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth().padding(24.dp),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = Dimens.Gutter, vertical = 28.dp),
                     )
                 }
             }
-            items(songs, key = { it.id }) { s -> SongBubble(s, onPlay = { playShared(s.toRef(), res.getString(R.string.playback_source_radio, s.title)) }) }
-        }
-    }
-
-    if (menu) {
-        SoundSheet(onDismissRequest = { menu = false }) {
-            SheetAction(Icons.Rounded.PersonRemove, stringResource(R.string.friend_unfriend), tint = SoundColors.Danger, labelColor = SoundColors.Danger, onClick = {
-                menu = false
-                unfriending = true
-            })
-        }
-    }
-    if (unfriending && profile != null) {
-        ConfirmDialog(
-            title = stringResource(R.string.friend_unfriend_title, profile.name),
-            body = stringResource(R.string.friend_unfriend_body),
-            confirm = stringResource(R.string.friend_unfriend_confirm),
-            onConfirm = {
-                unfriending = false
-                scope.launch { hub.unfriend(id) }
-            },
-            onDismiss = { unfriending = false },
-        )
-    }
-    if (sending && asFriend != null) SendSongSheet(asFriend, onDismiss = { sending = false })
+        },
+    )
 }
 
 private fun SharedSong.toRef() = SongRef(videoId, title, artist, album, durationMs, cover, url)

@@ -20,7 +20,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -53,26 +55,34 @@ object SocialRequests {
     fun consume(): String? = pending.also { pending = null }
 }
 
-/** A round photo, or the initials on the name's own color when there is none. */
+/**
+ * A round photo, or the initials on the person's own color (lit from the top-left, like the covers)
+ * when there is none.
+ */
 @Composable
 fun ProfileAvatar(profile: Profile?, size: Dp, modifier: Modifier = Modifier, ring: Color? = null) {
     val hub = SoundApplication.graph.social
     val url = remember(profile?.avatar) { hub.api.absolute(profile?.avatar) }
     val seed = profile?.username ?: ""
+    val fill = remember(seed, profile == null) {
+        if (profile == null) Brush.linearGradient(listOf(SoundColors.Surface3, SoundColors.Surface3))
+        else seedColor(seed).let { c -> Brush.linearGradient(listOf(lerp(c, Color.White, 0.22f), lerp(c, Color.Black, 0.16f))) }
+    }
     Box(
         modifier
             .size(size)
             .then(if (ring != null) Modifier.border(2.dp, ring, CircleShape) else Modifier)
             .clip(CircleShape)
-            .background(if (profile == null) SoundColors.Surface3 else seedColor(seed)),
+            .background(fill),
         contentAlignment = Alignment.Center,
     ) {
         if (profile != null) {
             Text(
                 initials(profile.name),
                 color = Color.White,
-                fontSize = (size.value * 0.38f).sp,
-                fontWeight = FontWeight.SemiBold,
+                fontSize = (size.value * 0.36f).sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = (size.value * -0.004f).sp,
                 maxLines = 1,
             )
         }

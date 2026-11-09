@@ -16,8 +16,9 @@ Instalação do servidor: [DEPLOY.md](DEPLOY.md).
    música passa sem ele).
 4. **Textos** (nome, título, artista, álbum): caracteres invisíveis, de controle e de direção do
    texto (U+202E etc.) são removidos; quebra de linha vira espaço; acento empilhado é cortado em 4.
-   Nome que fica vazio depois disso → `400 invalid_name`. `@nome` que contém `freesong`, `admin`,
-   `suporte`, `support`, `soporte`, `moderador` ou `moderator` → `400 username_reserved`.
+   Nome que fica vazio depois disso → `400 invalid_name`.
+   **O `@nome` não muda** (1.2.0): é o identificador da pessoa, sorteado quando a conta nasce.
+   `PATCH /v1/me` com outro `username` → `400 username_fixed` (o mesmo, de volta, passa).
 5. **Aparelhos**: até 10 tokens por perfil; o 11º (recuperação) derruba o mais antigo, que passa a
    receber `401`. Novo `DELETE /v1/me/sessions` ("sair dos outros aparelhos").
 6. **WebSocket**: no máximo 5 conexões por pessoa (a mais antiga é fechada com **4002**); token
@@ -78,7 +79,7 @@ Instalação do servidor: [DEPLOY.md](DEPLOY.md).
 | `POST /v1/accounts` | `{}` | `201 {token, recoveryCode, me}` | `429 slow_down` |
 | `POST /v1/accounts/recover` | `{code}` | `{token, me}` | `404 unknown_code`, `429` |
 | `GET /v1/me` | | `{me}` | |
-| `PATCH /v1/me` | `{name?, username?}` | `{me}` | `invalid_name`, `username_invalid`, `username_reserved`, `409 username_taken` |
+| `PATCH /v1/me` | `{name}` | `{me}` | `invalid_name`, `400 username_fixed` (o `@nome` não muda) |
 | `PUT /v1/me/avatar` | JPEG cru | `{me}` | `400 not_jpeg`, `413 too_large` |
 | `DELETE /v1/me/avatar` | | `{me}` | |
 | `PUT /v1/me/stats` | `{listenedMs, top: [música]}` | `{me}` | `400 invalid_stats` |

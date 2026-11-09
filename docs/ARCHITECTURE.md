@@ -360,3 +360,20 @@ ouvindo; atualizar fechava o app duas vezes.
 - Testes: `smart/RadioMixTest` (variedade: tirar o acaso derruba), `QueueContinuationTest` (seeds),
   `UpdatesTest` (automático 14+, 12–13, onde o Android perguntaria, falha quieta, botão com
   automático esperando).
+
+## Perfil e amigos com cara própria; @ fixo (1.17.0, 2026-11-09)
+
+Pedido do Miguel: o @nome é um id único criado sozinho, não se edita (só o nome de exibição); e as
+telas de perfil/amigos estavam feias. Primeiro ficaram iguais à página de artista — ele não quis
+("era para ser diferente"). Ficou assim (`ui/social/PersonPage.kt`):
+- **Cartão da pessoa** (`PersonCard`): a cor dela (`seedColor(username)`, `personFill`) com ondas
+  sonoras saindo do canto (`waves`), foto com anel branco, nome, @, horas em destaque e "desde".
+  Em Amigos, o seu é o `MiniPersonCard`.
+- Botões grandes embaixo (`PersonButton`): amigo "Mandar música" / "Jam"; você "Editar nome" /
+  "Trocar foto"; desconhecido "Adicionar". ⋮ no topo.
+- "Mais ouvidas": capas grandes com a posição por cima (`RankedCover`), "Tocar" no título.
+  Amigo: "Músicas trocadas" em balões. Você: código de recuperação como ticket (`RecoveryCard`).
+- `ProfilePage`/`FriendPage` recebem só dados (as telas guardam o estado): `SocialUiTest` desenha e
+  gera prints com `SOUND_SHOTS=1`.
+- **@ fixo**: o app não oferece mais trocar; o relay 1.2.0 responde `400 username_fixed` a outro
+  `username` no `PATCH /v1/me` (o mesmo de volta passa).

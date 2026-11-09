@@ -13,7 +13,6 @@
     <string name="social_open">Amigos y perfil</string>
     <string name="social_tab_friends">Amigos</string>
     <string name="social_tab_people">Personas</string>
-    <string name="social_edit">Editar</string>
     <string name="social_requests">Solicitudes</string>
     <string name="social_accept">Aceptar</string>
     <string name="social_decline">Rechazar</string>
@@ -35,18 +34,13 @@
     <string name="social_start_jam">Iniciar jam</string>
     <string name="profile_title">Tu perfil</string>
     <string name="profile_name">Nombre</string>
-    <string name="profile_username">Nombre de usuario</string>
     <string name="profile_save">Guardar</string>
     <string name="profile_saved">Perfil guardado</string>
-    <string name="profile_error_taken">Ese @ ya es de otra persona.</string>
-    <string name="profile_error_invalid">De 3 a 20 letras, números, punto o _, empezando con letra.</string>
-    <string name="profile_error_reserved">Ese @ no está disponible.</string>
     <string name="profile_error_name">El nombre debe tener de 1 a 40 caracteres.</string>
     <string name="profile_error_network">Sin conexión. Inténtalo de nuevo.</string>
     <string name="profile_error_photo">No se pudo usar esa foto.</string>
     <string name="profile_photo_change">Cambiar foto</string>
     <string name="profile_photo_remove">Quitar foto</string>
-    <string name="profile_stats_hint">Horas y más escuchadas: solo tus amigos lo ven.</string>
     <string name="profile_hours">%1$s h escuchadas</string>
     <string name="profile_top">Más escuchadas</string>
     <string name="profile_recovery_title">Código de recuperación</string>
@@ -99,4 +93,13 @@
     <string name="jam_held">Pausada solo aquí. Toca play para volver.</string>
     <string name="jam_failed">No se pudo ahora. Inténtalo de nuevo.</string>
     <string name="jam_invites_title">Invitaciones a jam</string>
+    <string name="profile_edit_name">Tu nombre</string>
+    <string name="profile_username_fixed">@%1$s es tu identificador en FreeSong y no cambia.</string>
+    <string name="friend_since">Amigos desde %1$s</string>
+    <string name="friend_top_of">Lo más escuchado de %1$s</string>
+    <string name="friend_swapped">Canciones compartidas</string>
+    <string name="profile_top_private">Solo tus amigos lo ven</string>
+    <string name="person_hours_value">%1$s h</string>
+    <string name="person_hours_label">escuchadas</string>
+    <string name="profile_edit_name_action">Editar nombre</string>
 </resources>
