@@ -167,6 +167,12 @@ class SocialHub(
                 if (fresh && (!_foreground.value || openFriend != event.from.id)) event.delivery.track?.let { SocialNotifier.song(context, event.from, it, _foreground.value) }
             }
             is RelayEvent.JamInvited -> if (!_foreground.value) SocialNotifier.jam(context, event.invite.from)
+            // The profile was deleted on another phone, or this one was signed out from another:
+            // the account check forgets it here (and the jam stops), a passing glitch keeps it.
+            RelayEvent.SignedOut -> {
+                account.refresh()
+                if (!account.ready) jam.forget()
+            }
             else -> Unit
         }
     }

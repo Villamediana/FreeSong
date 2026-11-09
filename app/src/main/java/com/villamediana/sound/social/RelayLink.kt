@@ -34,6 +34,8 @@ sealed interface RelayEvent {
     /** The jam changed (someone played, joined, left…); [rejected] when this phone's change lost the race. */
     data class JamChanged(val jam: Jam, val rejected: String?) : RelayEvent
     data class JamEnded(val jamId: String) : RelayEvent
+    /** The relay turned this phone away (profile deleted, signed out from another phone): check the account. */
+    data object SignedOut : RelayEvent
 }
 
 /**
@@ -58,6 +60,14 @@ class RelayLink(
     @Volatile private var socket: WebSocket? = null
     @Volatile private var wanted = false
     private var loop: Job? = null
+
+    private companion object {
+        /** The relay's close codes for a token it no longer takes (4001 profile deleted, 4003 signed out elsewhere). */
+        val SIGNED_OUT_CODES = setOf(4001, 4003)
+        /** Closed because the same profile opened too many lines (other phones): no hurry to come back. */
+        const val TOO_MANY_LINES = 4002
+        const val MAX_PAUSE_MS = 30_000L
+    }
 
     /** Relay clock minus this phone's clock, from the best (shortest) ping. */
     @Volatile var clockOffsetMs: Long = 0L
@@ -107,6 +117,15 @@ class RelayLink(
 
                 override fun onMessage(webSocket: WebSocket, text: String) = handle(webSocket, text)
 
+                // The relay closed the line: answer the close (or OkHttp leaves it half open) and see why.
+                override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                    _connected.value = false
+                    if (code in SIGNED_OUT_CODES) _events.tryEmit(RelayEvent.SignedOut)
+                    if (code == TOO_MANY_LINES) pause = MAX_PAUSE_MS
+                    webSocket.close(1000, null)
+                    closed.complete(Unit)
+                }
+
                 override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                     _connected.value = false
                     closed.complete(Unit)
@@ -114,6 +133,7 @@ class RelayLink(
 
                 override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                     _connected.value = false
+                    if (response?.code == 401) _events.tryEmit(RelayEvent.SignedOut)
                     closed.complete(Unit)
                 }
             })
@@ -126,7 +146,7 @@ class RelayLink(
             socket = null
             if (!wanted) break
             delay(pause)
-            pause = (pause * 2).coerceAtMost(30_000L)
+            pause = (pause * 2).coerceAtMost(MAX_PAUSE_MS)
         }
     }
 

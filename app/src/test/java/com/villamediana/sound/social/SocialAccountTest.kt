@@ -100,6 +100,23 @@ class SocialAccountTest {
     }
 
     @Test
+    fun theRelayTakesThePhotoAsThisPhoneMakesIt() = runBlocking {
+        val base = LocalRelay.base()
+        val phone = account(base)
+        phone.ensure(force = true)!!
+        val src = Bitmap.createBitmap(900, 700, Bitmap.Config.ARGB_8888)
+        for (y in 0 until 700 step 7) for (x in 0 until 900) src.setPixel(x, y, Color.rgb(x % 256, y % 256, 120))
+        val jpeg = SocialAccount.centerSquareJpeg(src, 512, 85)
+        val api = RelayApi(LocalRelay.http, base) { phone.currentToken() }
+        val p = api.setAvatar(jpeg)
+        // What the friends download: the same 512 px picture.
+        val bytes = LocalRelay.http.newCall(okhttp3.Request.Builder().url(api.absolute(p.avatar)!!).build()).execute().use { it.body!!.bytes() }
+        val back = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+        assertEquals(512, back.width)
+        assertEquals(512, back.height)
+    }
+
+    @Test
     fun aPhotoBecomesItsMiddleSquareUntrimmed() {
         // A dark portrait with black rows top and bottom (a cover would lose them; a face keeps them).
         val src = Bitmap.createBitmap(600, 1000, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.BLACK) }
