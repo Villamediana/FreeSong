@@ -14,6 +14,18 @@
     <!-- Instalar as próprias atualizações (APK das releases do GitHub, mesma assinatura) -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
+    <!-- O instalador do Android (a tela "Atualizar" → "Abrir" das atualizações) -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.INSTALL_PACKAGE" />
+            <data android:mimeType="application/vnd.android.package-archive" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="application/vnd.android.package-archive" />
+        </intent>
+    </queries>
+
     <application
         android:name=".SoundApplication"
         android:allowBackup="true"

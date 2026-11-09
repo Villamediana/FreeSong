@@ -57,6 +57,35 @@ class SessionInstallerTest {
     }
 
     @Test
+    fun theButtonsUpdateIsAndroidsOwnInstallerScreen() {
+        val dir = File(context.cacheDir, "update").apply { mkdirs() }
+        val apk = File(dir, "FreeSong-9.9.9.apk").apply { writeBytes(ByteArray(64)) }
+        val installer = SessionInstaller(context)
+        // No installer on the phone answers: none (the APK then goes to Android another way).
+        assertNull(installer.installScreen(apk))
+        @Suppress("DEPRECATION")
+        val ask = Intent(Intent.ACTION_INSTALL_PACKAGE).setDataAndType(
+            androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.files", apk),
+            "application/vnd.android.package-archive",
+        )
+        shadowOf(context.packageManager).addResolveInfoForIntent(
+            ask,
+            android.content.pm.ResolveInfo().apply {
+                activityInfo = android.content.pm.ActivityInfo().apply { packageName = "com.android.packageinstaller"; name = "InstallStart" }
+            },
+        )
+        val screen = installer.installScreen(apk)!!
+        @Suppress("DEPRECATION")
+        assertEquals(Intent.ACTION_INSTALL_PACKAGE, screen.action)
+        assertEquals("content", screen.data!!.scheme)
+        assertTrue(screen.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0)
+        // FreeSong stays the one that updates FreeSong.
+        assertEquals(context.packageName, screen.getStringExtra(Intent.EXTRA_INSTALLER_PACKAGE_NAME))
+        // Nothing asks Android for a result back: its last screen offers "Abrir".
+        assertFalse(screen.getBooleanExtra(Intent.EXTRA_RETURN_RESULT, false))
+    }
+
+    @Test
     fun theManifestAsksToInstallAndListensForTheReplacedApp() {
         val info = context.packageManager.getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS)
         assertTrue("android.permission.REQUEST_INSTALL_PACKAGES" in info.requestedPermissions.orEmpty())

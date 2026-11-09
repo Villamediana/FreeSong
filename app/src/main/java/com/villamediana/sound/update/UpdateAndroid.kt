@@ -133,6 +133,18 @@ internal class SessionInstaller(private val context: Context) : ApkInstaller {
         return id
     }
 
+    override fun installScreen(apk: File): Intent? {
+        val uri = runCatching { androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.files", apk) }.getOrNull() ?: return null
+        fun asked(action: String) = Intent(action)
+            .setDataAndType(uri, APK_TYPE)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            // FreeSong stays the one that updates FreeSong (so the next ones can still install by themselves).
+            .putExtra(Intent.EXTRA_INSTALLER_PACKAGE_NAME, context.packageName)
+        @Suppress("DEPRECATION")
+        return listOf(asked(Intent.ACTION_INSTALL_PACKAGE), asked(Intent.ACTION_VIEW))
+            .firstOrNull { it.resolveActivity(context.packageManager) != null }
+    }
+
     private fun statusSender(id: Int): android.content.IntentSender {
         val status = Intent(context, UpdateStatusReceiver::class.java).setAction(UpdateStatusReceiver.ACTION)
         // Mutable: Android writes the status into it. Explicit, so nobody else can fill it.
@@ -143,6 +155,7 @@ internal class SessionInstaller(private val context: Context) : ApkInstaller {
     private companion object {
         /** How long Android waits for the app to be out of use before giving up (it's tried again later). */
         const val IDLE_WAIT_MS = 3L * 24 * 3_600_000L
+        const val APK_TYPE = "application/vnd.android.package-archive"
     }
 }
 
@@ -173,20 +186,15 @@ class UpdateStatusReceiver : BroadcastReceiver() {
 }
 
 /**
- * The new version, right after Android replaced the app. "FreeSong atualizado · toque pra abrir"
- * either way (it goes away once the app is on screen). Installed by itself while the app was not in
- * use: just that (the app never pops up over something else). From the button ("Atualizar agora",
- * Android closed the app to install it): it opens again by itself where Android lets it (Android 10+
- * usually holds back an app opening itself from the background).
+ * The new version, right after Android replaced the app: "FreeSong atualizado · toque pra abrir"
+ * (it goes away once the app is on screen). From the button, Android's installer itself offers
+ * "Abrir"; installed by itself while the app was not in use, the app never pops up over anything.
  */
 class UpdatedReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
         val updated = SoundApplication.graph.updates.afterUpdate() ?: return
         UpdateNotifier.updated(context, updated.version)
-        if (!updated.automatic) runCatching {
-            context.startActivity(Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        }
     }
 }
 
