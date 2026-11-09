@@ -36,8 +36,8 @@ class RecommendTest {
         // Never: a song already heard to the end, the seed itself.
         assertFalse("known" in ids)
         assertFalse("seed1" in ids)
-        // Skipped twice: further down, not gone (maybe it just wasn't the moment).
-        assertTrue(ids.indexOf("bad") > ids.indexOf("onlyA"))
+        // Skipped twice: still suggested (a skip is the moment, not the taste).
+        assertTrue("bad" in ids)
         // A known artist's song that is new to the listener is fine.
         assertTrue("caet2" in ids)
     }
@@ -56,7 +56,7 @@ class RecommendTest {
     @Test
     fun aShelfLeansToTheListenersArtistsAndLeavesTheSkippedOut() {
         val profile = TasteProfile.build(
-            (1..6).map { listen("fav$it", "Favorite") } + (1..4).map { listen("n$it", "Never", completed = false, skipped = true) },
+            (1..6).map { listen("fav$it", "Favorite") } + (1..6).map { listen("n$it", "Never", completed = false, skipped = true) },
             emptyList(),
             now,
         )

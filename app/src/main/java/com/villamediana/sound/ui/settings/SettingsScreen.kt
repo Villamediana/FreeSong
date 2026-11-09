@@ -45,6 +45,8 @@ import androidx.compose.material.icons.rounded.Lyrics
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Palette
+import androidx.compose.material.icons.rounded.LocationOn
+import androidx.compose.material.icons.rounded.Place
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Wifi
@@ -123,6 +125,15 @@ fun SettingsScreen() {
     val freeBytes by vm.freeBytes.collectAsStateWithLifecycle()
     val equalizerOn by vm.equalizerOn.collectAsStateWithLifecycle()
     val nav = navigator()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    // "Lembrar lugares": the location is asked for when it is turned on (approximate is enough).
+    fun granted(p: String) = androidx.core.content.ContextCompat.checkSelfPermission(context, p) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    val hasLocation = granted(android.Manifest.permission.ACCESS_COARSE_LOCATION) || granted(android.Manifest.permission.ACCESS_FINE_LOCATION)
+    val hasAlways = android.os.Build.VERSION.SDK_INT < 29 || granted(android.Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+    val askLocation = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()) { result ->
+        if (result.values.any { it }) vm.setLearnPlaces(true)
+    }
+    val askAlways = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { }
     var qualityOpen by rememberSaveable { mutableStateOf(false) }
     var spaceOpen by rememberSaveable { mutableStateOf(false) }
     val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
@@ -158,14 +169,29 @@ fun SettingsScreen() {
                 )
                 Hairline()
                 SwitchRow(Icons.Rounded.Movie, Chip.Pink, stringResource(R.string.settings_player_video), stringResource(R.string.settings_player_video_sub), s.playerVideo, vm::setPlayerVideo)
-                Hairline()
-                // The DNA: how you listen, the places (turned on there) and the mix for now.
-                NavRow(
-                    icon = Icons.Rounded.AutoAwesome, chip = Chip.Amber,
-                    title = stringResource(R.string.dna_title),
-                    value = stringResource(if (s.learnPlaces) R.string.settings_dna_places_on else R.string.settings_dna_value),
-                    onClick = nav::openDna,
-                )
+            }
+        }
+
+        item(key = "dna") {
+            Section(stringResource(R.string.settings_group_dna)) {
+                val on = s.learnPlaces && hasLocation
+                SwitchRow(Icons.Rounded.Place, Chip.Teal, stringResource(R.string.dna_places_toggle), stringResource(R.string.dna_places_hint), on) { want ->
+                    when {
+                        !want -> vm.setLearnPlaces(false)
+                        hasLocation -> vm.setLearnPlaces(true)
+                        else -> askLocation.launch(arrayOf(android.Manifest.permission.ACCESS_COARSE_LOCATION, android.Manifest.permission.ACCESS_FINE_LOCATION))
+                    }
+                }
+                // With the screen off Android needs "Permitir o tempo todo" (music plays in the pocket).
+                if (on && !hasAlways) {
+                    Hairline()
+                    NavRow(
+                        icon = Icons.Rounded.LocationOn, chip = Chip.Blue,
+                        title = stringResource(R.string.dna_places_pocket_action),
+                        value = stringResource(R.string.dna_places_pocket_short),
+                        onClick = { if (android.os.Build.VERSION.SDK_INT >= 29) askAlways.launch(android.Manifest.permission.ACCESS_BACKGROUND_LOCATION) },
+                    )
+                }
             }
         }
 

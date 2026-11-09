@@ -77,6 +77,17 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     fun setQuality(q: AudioQuality) = launch { store.setAudioQuality(q) }
     fun setWifiOnly(v: Boolean) = launch { store.setWifiOnly(v) }
     fun setSmartDownloads(v: Boolean) = launch { store.setSmartDownloads(v) }
+
+    /** "Lembrar lugares": on (the location was allowed by the screen), or off and every place forgotten. */
+    fun setLearnPlaces(v: Boolean) = launch {
+        store.setLearnPlaces(v)
+        if (v) {
+            runCatching { graph.places.now() }
+        } else {
+            graph.places.forget()
+            graph.forYou.invalidate()
+        }
+    }
     fun setPlayerVideo(v: Boolean) = launch { store.setPlayerVideo(v) }
     fun setParallel(n: Int) = launch { store.setParallelDownloads(n) }
     fun setFetchLyrics(v: Boolean) = launch { store.setFetchLyrics(v) }

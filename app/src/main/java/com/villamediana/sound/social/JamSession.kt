@@ -82,6 +82,11 @@ class JamSession(
     private var wasGoing = false
     private var failedVideo: String? = null
     private var extendingAt = -1
+    /** When this phone last proposed a change (its own command, not yet played out here). */
+    private var proposedAt = 0L
+    /** The song index each side was on at the last look: what moved since, and who moved it. */
+    private var seenLocalIndex = -1
+    private var seenJamIndex = -1
 
     // ------------------------------------------------------------------ joining and leaving
 
@@ -176,6 +181,9 @@ class JamSession(
         lastStep = JamStep.None
         lastStepAt = 0
         extendingAt = -1
+        proposedAt = 0
+        seenLocalIndex = -1
+        seenJamIndex = -1
         setGate(this)
         follow?.cancel()
         follow = scope.launch(main) {
@@ -227,7 +235,16 @@ class JamSession(
         val st = playback.value
         val local = local()
         val now = relay.serverNow()
-        val settled = System.currentTimeMillis() - lastStepAt > settleMs
+        val wall = System.currentTimeMillis()
+        // Settled: no step of ours playing out here, no change of ours on its way.
+        val settled = wall - lastStepAt > settleMs && wall - proposedAt > settleMs
+        // Who moved: this phone's player on its own (the song ended, the earphones' "next"), or the
+        // jam (a command here or from a friend). Only the first one is news for the jam; the second
+        // is for this phone to follow — taking it for a move here pulled the jam back to the old song.
+        val localMoved = seenLocalIndex >= 0 && local.index != seenLocalIndex
+        val jamMoved = seenJamIndex >= 0 && jam.state.index != seenJamIndex
+        seenLocalIndex = local.index
+        seenJamIndex = jam.state.index
 
         // The jam's song doesn't load here: this phone waits (quiet) for the next one instead of retrying forever.
         val current = jam.state.current?.videoId
@@ -239,7 +256,7 @@ class JamSession(
             if (jam.state.playing && wasGoing && !local.going && JamSync.sameQueue(jam.state, local) && failedVideo == null) _held.value = true
             if (_held.value && local.going) _held.value = false
             // The song ended (or the earphones' "next") on this phone: the jam moves on with it.
-            JamSync.moved(jam.state, local)?.let { moved ->
+            if (localMoved && !jamMoved) JamSync.moved(jam.state, local)?.let { moved ->
                 if (st.error == null) {
                     wasGoing = local.going
                     propose(moved)
@@ -274,9 +291,15 @@ class JamSession(
         }
     }
 
-    /** The one who created the jam keeps it from running out: the radio of the last song, at the end. */
+    /**
+     * The jam never runs out: the one who created it adds the radio of the last songs when one is
+     * left; anyone in it does when the last one is playing (the creator's phone may be away).
+     */
     private fun maybeExtend(jam: Jam) {
-        if (jam.hostId != me() || !JamSync.nearEnd(jam.state) || extendingAt == jam.state.queue.size) return
+        // Someone else waits a while into the last song: the creator's phone usually did it already.
+        val onLast = jam.state.queue.isNotEmpty() && jam.state.index >= jam.state.queue.size - 1 &&
+            jam.state.positionAt(relay.serverNow()) > GUEST_EXTEND_AFTER_MS
+        if ((jam.hostId != me() && !onLast) || !JamSync.nearEnd(jam.state) || extendingAt == jam.state.queue.size) return
         val last = jam.state.queue.lastOrNull()?.videoId ?: return
         extendingAt = jam.state.queue.size
         scope.launch(main) {
@@ -294,6 +317,7 @@ class JamSession(
         val base = jam.state
         val next = if (proposed.queue != base.queue) fitted(proposed) else proposed
         val withQueue = next.queue != base.queue
+        proposedAt = System.currentTimeMillis()
         val optimistic = next.copy(rev = base.rev, updatedAt = relay.serverNow(), by = me())
         _jam.value = jam.copy(state = optimistic)
         scope.launch(Dispatchers.IO) {
@@ -335,7 +359,22 @@ class JamSession(
     }
 
     override fun pause(): Boolean = withJam { s, now -> if (!s.playing) null else JamSync.setPlaying(s, false, now) }
-    override fun next(): Boolean = withJam { s, _ -> JamSync.next(s) }
+    override fun next(): Boolean {
+        val jam = _jam.value ?: return false
+        JamSync.next(jam.state)?.let {
+            propose(it)
+            return true
+        }
+        // On the last song: more songs come in first (like the jam's own "never ends"), then it moves on.
+        val last = jam.state.queue.lastOrNull()?.videoId ?: return true
+        scope.launch(main) {
+            val more = withContext(Dispatchers.IO) { runCatching { related(last) }.getOrDefault(emptyList()) }
+            val now = _jam.value ?: return@launch
+            val grown = if (now.state.queue.lastOrNull()?.videoId == last) JamSync.extend(now.state, more) ?: now.state else now.state
+            JamSync.next(grown)?.let { propose(it) }
+        }
+        return true
+    }
     override fun previous(): Boolean = withJam { s, now -> JamSync.previous(s, now) }
     override fun seekTo(positionMs: Long): Boolean = withJam { s, _ -> JamSync.seek(s, positionMs) }
     override fun skipTo(queueIndex: Int): Boolean = withJam { s, _ -> JamSync.skipTo(s, queueIndex) }
@@ -397,6 +436,8 @@ class JamSession(
     companion object {
         /** After a step of ours, the player's changes are ours too for this long. */
         const val SETTLE_MS = 2_500L
+        /** How far into the jam's last song a phone that didn't create it adds more songs. */
+        const val GUEST_EXTEND_AFTER_MS = 20_000L
         /** The same kind of step again only after this long (the player may still be on its way). */
         const val RETRY_MS = 1_500L
         const val TICK_MS = 1_000L

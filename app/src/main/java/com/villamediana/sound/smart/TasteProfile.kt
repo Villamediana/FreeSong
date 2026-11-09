@@ -44,8 +44,6 @@ class TasteProfile private constructor(
     /** Songs (video ids) already heard for a while or hearted: not "new" any more. */
     val known: Set<String>,
     private val byArtist: Map<String, ArtistTaste>,
-    /** For a moment's profile: songs skipped in it, 0..1 (1 = no doubt; absent = 1). */
-    private val songFactors: Map<String, Double> = emptyMap(),
 ) {
     /** A song of an artist, as the profile remembers it. */
     data class SongTaste(val videoId: String?, val title: String, val score: Double, val genre: String?)
@@ -78,14 +76,10 @@ class TasteProfile private constructor(
     /** Never suggested: a song skipped again and again, or an artist skipped almost always. */
     fun avoids(videoId: String, artistName: String): Boolean = videoId in avoidSongs || artistKey(artistName) in avoidArtists
 
-    /** How much a song is wanted back, 0..1, from how it is skipped (in the moment, for a moment's profile). */
-    fun songFactor(videoId: String): Double = songFactors[videoId] ?: 1.0
-
     /**
      * This taste for [m], with the [dna]: the artists and genres of this part of the day, of
      * weekdays or the weekend, of this place and of these friends move up (the others down a
-     * little); songs skipped in this moment count less, and the ones skipped here again and again
-     * are left out (they stay fine in other moments).
+     * little). Skips don't enter it (Miguel: a song skipped may just not be the vibe).
      */
     fun inMoment(dna: MusicDna, m: DnaMoment): TasteProfile {
         if (dna.isEmpty || isEmpty) return this
@@ -93,7 +87,7 @@ class TasteProfile private constructor(
             .sortedWith(compareByDescending<ArtistTaste> { it.affinity }.thenBy { it.key })
         val moved = genres.map { g -> g.copy(score = g.score * dna.genreLift(g.id, m)) }
             .sortedWith(compareByDescending<GenreTaste> { it.score }.thenBy { it.id })
-        return TasteProfile(lifted, moved, avoidSongs + dna.avoidNow(m), avoidArtists, known, lifted.associateBy { it.key }, dna.songFactors(m))
+        return TasteProfile(lifted, moved, avoidSongs, avoidArtists, known, lifted.associateBy { it.key })
     }
 
     /**
@@ -134,11 +128,10 @@ class TasteProfile private constructor(
         const val PICKED_SHARE = 0.35
         /** A downloaded song, in hearts. */
         const val SAVED_WEIGHT = 0.6
-        /** Skips that leave a song out for good (when it is barely ever heard through). */
+        /** Skips that leave a song never heard through out for good. */
         const val AVOID_SKIPS = 4
-        /** Pseudo-hears in a song's skip rate, and how far the rate pushes it down. */
-        private const val SKIP_PRIOR = 1.5
-        private const val SKIP_WEIGHT = 0.6
+        /** Skips (with no song of theirs ever heard through) that leave an artist out for good. */
+        const val AVOID_ARTIST_SKIPS = 6
 
         private class Acc(val videoId: String?, val title: String, var genre: String?) {
             var long = 0.0
@@ -177,8 +170,10 @@ class TasteProfile private constructor(
             for (l in listens) {
                 val s = acc(l.videoId, l.title, l.artist, l.genre) ?: continue
                 val age = (now - l.at).coerceAtLeast(0)
+                // A skip teaches nothing against the song (maybe it just wasn't the moment): it is
+                // counted, only for the rare "out for good" (never heard through, skipped again and again).
                 val value = when {
-                    l.skipped -> -0.8
+                    l.skipped -> 0.0
                     l.completed -> 1.0
                     l.listenedMs >= 60_000 || (l.durationMs > 0 && l.listenedMs * 2 >= l.durationMs) -> 0.6
                     else -> 0.25
@@ -227,20 +222,13 @@ class TasteProfile private constructor(
             val maxLong = artists.values.maxOfOrNull { it.long }?.takeIf { it > 0 } ?: 1.0
             val maxShort = artists.values.maxOfOrNull { it.short }?.takeIf { it > 0 } ?: 1.0
 
-            val avoidArtists = artists.filter { (_, x) -> !x.hearted && x.skips >= 4 && x.skips >= 0.75 * x.plays }.keys
-            // Left out for good only when skipped again and again and hardly ever heard through: a
-            // song skipped once or twice may just not have been for that moment (the DNA weighs that).
+            // Out for good only what was never heard through and skipped again and again (a skip
+            // alone only takes a song out of the moment: the radio's session leaves it out for hours).
+            val avoidArtists = artists.filter { (_, x) -> !x.hearted && x.evidence == 0 && x.skips >= AVOID_ARTIST_SKIPS && x.skips >= x.plays }.keys
             val avoidSongs = songs.values.mapNotNull { (_, s) ->
-                s.videoId?.takeIf { !s.hearted && s.skips >= AVOID_SKIPS && s.skips >= 3 * s.completes }
+                s.videoId?.takeIf { !s.hearted && s.completes == 0 && s.skips >= AVOID_SKIPS }
             }.toSet()
             val known = songs.values.mapNotNull { (_, s) -> s.videoId?.takeIf { s.hearted || s.completes > 0 || (s.heard && s.long > 0.3) } }.toSet()
-            // Skipped more than heard: suggested less (a skip or two only nudges; a heart protects it).
-            val factors = songs.values.mapNotNull { (_, s) ->
-                val id = s.videoId ?: return@mapNotNull null
-                if (s.hearted || s.skips == 0) return@mapNotNull null
-                val rate = s.skips / (s.skips + s.completes + (if (s.heard) 1 else 0) + SKIP_PRIOR)
-                id to (1.0 - SKIP_WEIGHT * rate)
-            }.toMap()
 
             val tastes = artists.mapNotNull { (key, x) ->
                 if (key in avoidArtists) return@mapNotNull null
@@ -273,7 +261,7 @@ class TasteProfile private constructor(
             val genres = genreScore.map { (id, score) -> GenreTaste(id, score, id in picked) }
                 .sortedWith(compareByDescending<GenreTaste> { it.score }.thenBy { it.id })
 
-            return TasteProfile(tastes, genres, avoidSongs, avoidArtists, known, tastes.associateBy { it.key }, factors)
+            return TasteProfile(tastes, genres, avoidSongs, avoidArtists, known, tastes.associateBy { it.key })
         }
 
         private fun decay(ageMs: Long, halfLifeMs: Long): Double = 0.5.pow(ageMs.toDouble() / halfLifeMs)

@@ -965,8 +965,10 @@ private class MenuPlace(private val mine: Boolean, private val gap: Int) : Popup
 }
 
 /**
- * Long press on a message: the six reactions in a pill (yours lit; the same again takes it back)
- * and, under them, answer it — and correct it, when it is a text of yours.
+ * Long press on a message: one box over it (or under it, at the top of the list) — the six
+ * reactions in a row (yours lit; the same again takes it back) and, right under them in the same
+ * box, answer it and correct it (a text of yours). Drawn at its full size from the first frame, so
+ * it never lands on the message.
  */
 @Composable
 private fun MessageMenu(
@@ -981,42 +983,45 @@ private fun MessageMenu(
 ) {
     val gap = with(LocalDensity.current) { 8.dp.roundToPx() }
     Popup(popupPositionProvider = remember(mine, gap) { MenuPlace(mine, gap) }, onDismissRequest = onDismiss, properties = PopupProperties(focusable = true)) {
-        var shown by remember { mutableStateOf(false) }
-        LaunchedEffect(Unit) { shown = true }
-        AnimatedVisibility(shown, enter = fadeIn() + scaleIn(initialScale = 0.8f), exit = fadeOut() + scaleOut()) {
-            Column(horizontalAlignment = if (mine) Alignment.End else Alignment.Start, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Row(
-                    Modifier
-                        .clip(CircleShape)
-                        .background(SoundColors.Surface2)
-                        .border(1.dp, SoundColors.Surface3, CircleShape)
-                        .padding(horizontal = 6.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
-                    ChatReactions.forEach { e ->
-                        val on = e == selected
-                        val grow by animateFloatAsState(if (on) 1.12f else 1f, label = "react")
-                        Box(
-                            Modifier
-                                .size(44.dp)
-                                .clip(CircleShape)
-                                .background(if (on) SoundColors.AccentSoft else Color.Transparent)
-                                .clickable { onReact(e) },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(e, fontSize = 24.sp, modifier = Modifier.scale(grow))
-                        }
+        val appear = remember { androidx.compose.animation.core.Animatable(0f) }
+        LaunchedEffect(Unit) { appear.animateTo(1f, androidx.compose.animation.core.tween(160)) }
+        val shape = RoundedCornerShape(22.dp)
+        Column(
+            Modifier
+                .graphicsLayer {
+                    alpha = appear.value
+                    val s = 0.9f + 0.1f * appear.value
+                    scaleX = s
+                    scaleY = s
+                    transformOrigin = androidx.compose.ui.graphics.TransformOrigin(if (mine) 1f else 0f, 1f)
+                }
+                .width(androidx.compose.foundation.layout.IntrinsicSize.Max)
+                .clip(shape)
+                .background(SoundColors.Surface2)
+                .border(1.dp, SoundColors.Surface3, shape),
+        ) {
+            Row(Modifier.padding(horizontal = 4.dp, vertical = 4.dp)) {
+                ChatReactions.forEach { e ->
+                    val on = e == selected
+                    Box(
+                        Modifier
+                            .size(46.dp)
+                            .clip(CircleShape)
+                            .background(if (on) SoundColors.AccentSoft else Color.Transparent)
+                            .clickable { onReact(e) },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(e, fontSize = 24.sp, modifier = Modifier.scale(if (on) 1.12f else 1f))
                     }
                 }
-                if (canAnswer) {
-                    Row(
-                        Modifier
-                            .clip(RoundedCornerShape(18.dp))
-                            .background(SoundColors.Surface2)
-                            .border(1.dp, SoundColors.Surface3, RoundedCornerShape(18.dp)),
-                    ) {
-                        MenuItem(Icons.AutoMirrored.Rounded.Reply, stringResource(R.string.chat_reply), onReply)
-                        if (canEdit) MenuItem(Icons.Rounded.Edit, stringResource(R.string.chat_edit), onEdit)
+            }
+            if (canAnswer) {
+                Box(Modifier.fillMaxWidth().height(1.dp).background(SoundColors.Surface3))
+                Row(Modifier.fillMaxWidth()) {
+                    MenuItem(Icons.AutoMirrored.Rounded.Reply, stringResource(R.string.chat_reply), onReply, Modifier.weight(1f))
+                    if (canEdit) {
+                        Box(Modifier.width(1.dp).height(46.dp).background(SoundColors.Surface3))
+                        MenuItem(Icons.Rounded.Edit, stringResource(R.string.chat_edit), onEdit, Modifier.weight(1f))
                     }
                 }
             }
@@ -1025,14 +1030,15 @@ private fun MessageMenu(
 }
 
 @Composable
-private fun MenuItem(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
+private fun MenuItem(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Row(
-        Modifier.clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 11.dp),
+        modifier.clickable(onClick = onClick).height(46.dp).padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
     ) {
         Icon(icon, null, tint = SoundColors.Text, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(8.dp))
-        Text(label, style = MaterialTheme.typography.labelLarge, color = SoundColors.Text)
+        Text(label, style = MaterialTheme.typography.labelLarge, color = SoundColors.Text, maxLines = 1)
     }
 }
 

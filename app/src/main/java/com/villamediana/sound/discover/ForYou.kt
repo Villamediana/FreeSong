@@ -161,9 +161,9 @@ class ForYou(
             val seeds = p.seeds(DISCOVERY_SEEDS).mapNotNull { it.videoId }
             Recommend.fromRadios(radios(seeds), p, inLibrary + seeds, DISCOVERIES)
         }
-        // Skipped since: further down the row (out of it only when skipped again and again).
-        return list.filter { it.videoId !in inLibrary && !p.avoids(it.videoId, it.artist) }
-            .sortedByDescending { p.songFactor(it.videoId) }
+        // Skipped just now: out of the row for now (the session), back later — a skip is the moment.
+        val session = runCatching { SongRadio.sessionOf(library, clock()) }.getOrDefault(com.villamediana.sound.smart.Session())
+        return list.filter { it.videoId !in inLibrary && !p.avoids(it.videoId, it.artist) && it.videoId !in session.skipped }
     }
 
     /**
