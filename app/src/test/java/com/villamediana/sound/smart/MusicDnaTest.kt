@@ -5,6 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.ZoneOffset
 
@@ -23,8 +24,8 @@ class MusicDnaTest {
     private fun skipped(artist: String, song: Int, at: Long) =
         Listen("${artist.take(4)}$song".padEnd(11, 'x'), "$artist $song", artist, null, at, 6_000, 200_000, completed = false, skipped = true)
 
-    private val night = DnaMoment(DayPart.EVENING, weekend = false)
-    private val morning = DnaMoment(DayPart.MORNING, weekend = false)
+    private val night = DnaMoment(22, DayOfWeek.WEDNESDAY)
+    private val morning = DnaMoment(8, DayOfWeek.WEDNESDAY)
 
     /** Gaitas in the evenings, eighties in the mornings, Djavan any time. */
     private fun life(): List<Listen> = (1..20).flatMap { d ->
@@ -127,7 +128,7 @@ class MusicDnaTest {
             )
         }
         val dna = MusicDna.build(listens, emptySet(), now, zone)
-        val afternoon = DnaMoment(DayPart.AFTERNOON, weekend = false)
+        val afternoon = DnaMoment(13, DayOfWeek.WEDNESDAY)
         assertTrue(dna.lift("gaiteros", afternoon.copy(place = home)) > dna.lift("gaiteros", afternoon.copy(place = gym)))
         assertTrue(dna.lift("metal", afternoon.copy(place = gym)) > dna.lift("metal", afternoon.copy(place = home)))
         assertTrue(dna.lift("samba", afternoon.copy(people = setOf("uana"))) > 1.5)
@@ -164,8 +165,87 @@ class MusicDnaTest {
         val m = DnaMoment.at(saturdayNight, zone, place = 3L, people = setOf("ub", "ua"))
         assertEquals(DayPart.EVENING, m.part)
         assertTrue(m.weekend)
-        assertEquals("EVENING:we:3:ua,ub", m.key)
+        assertEquals(22, m.hour)
+        assertEquals(DayOfWeek.SATURDAY, m.weekday)
+        // The mix of the moment is made for three hours at a time.
+        assertEquals("7:we:3:ua,ub", m.key)
+        assertEquals(m.key, m.copy(hour = 21).key)
+        assertNotEquals(m.key, m.copy(hour = 20).key)
         assertEquals(DayPart.NIGHT_LATE, DnaMoment.at(LocalDate.of(2026, 11, 11).atTime(3, 0).toInstant(zone).toEpochMilli(), zone).part)
+    }
+
+    @Test
+    fun aNightBelongsToTheDayItStartedIn() {
+        // Saturday 2 a.m. is still Friday night; at 6 it is Saturday.
+        val late = DnaMoment.at(LocalDate.of(2026, 11, 14).atTime(2, 0).toInstant(zone).toEpochMilli(), zone)
+        assertEquals(DayOfWeek.FRIDAY, late.weekday)
+        assertFalse(late.weekend)
+        assertEquals(DayPart.NIGHT_LATE, late.part)
+        assertEquals(DayOfWeek.SATURDAY, DnaMoment.at(LocalDate.of(2026, 11, 14).atTime(6, 0).toInstant(zone).toEpochMilli(), zone).weekday)
+        // Monday 1 a.m. is Sunday night: the weekend.
+        assertTrue(DnaMoment.at(LocalDate.of(2026, 11, 16).atTime(1, 0).toInstant(zone).toEpochMilli(), zone).weekend)
+    }
+
+    @Test
+    fun theClockIsSmoothWithNoWallBetweenAfternoonAndEvening() {
+        // Jazz at the end of the afternoon (17 h), rock late (23 h), pop in the morning.
+        val listens = (1..25).flatMap { d ->
+            listOf(heard("Jazz", d % 5, at(d, 17)), heard("Rock", d % 5, at(d, 23)), heard("Pop", d % 5, at(d, 9)))
+        }
+        val dna = MusicDna.build(listens, emptySet(), now, zone)
+        fun jazz(hour: Int) = dna.lift("jazz", DnaMoment(hour, DayOfWeek.WEDNESDAY))
+        // An hour later is "the evening" by the clock's parts — and still jazz time.
+        assertTrue(jazz(18) > 1.5)
+        assertEquals(jazz(17), jazz(18), 0.25)
+        // It fades with the hours instead of falling at 18 h.
+        assertTrue(jazz(18) > jazz(20))
+        assertTrue(jazz(20) > jazz(23))
+        assertTrue(jazz(23) < 0.8)
+        // Around midnight the clock goes on: 1 a.m. is beside 23 h.
+        assertTrue(dna.lift("rock", DnaMoment(1, DayOfWeek.WEDNESDAY)) > 1.4)
+    }
+
+    @Test
+    fun eachDayOfTheWeekHasItsOwnSound() {
+        // Forró on Friday nights, rock on every other night.
+        val listens = (1..56).flatMap { d ->
+            val friday = today.minusDays(d.toLong()).dayOfWeek == DayOfWeek.FRIDAY
+            (0..2).map { heard(if (friday) "Forro" else "Rock", (d + it) % 6, at(d, 21)) }
+        }
+        val dna = MusicDna.build(listens, emptySet(), now, zone)
+        val friday = DnaMoment(21, DayOfWeek.FRIDAY)
+        val monday = DnaMoment(21, DayOfWeek.MONDAY)
+        assertTrue(dna.lift("forro", friday) > 1.6)
+        assertTrue(dna.lift("forro", friday) > dna.lift("forro", monday) * 1.5)
+        assertTrue(dna.lift("rock", monday) > dna.lift("rock", friday))
+        // Friday night goes on after midnight.
+        assertTrue(dna.lift("forro", DnaMoment(0, DayOfWeek.FRIDAY)) > dna.lift("forro", DnaMoment(0, DayOfWeek.MONDAY)))
+    }
+
+    @Test
+    fun aPlaceHasItsRitmoItsSongsAndItsSkips() {
+        val home = 1L
+        val gym = 2L
+        val genre = { a: String, _: String? -> if (a == "metal") "rock" else "mpb" }
+        val listens = (1..15).flatMap { d ->
+            listOf(
+                heard("Djavan", d % 5, at(d, 13), place = home),
+                heard("Metal", d % 5, at(d, 13), place = gym),
+                // One song of Djavan's heard at home, skipped at the gym.
+                heard("Djavan", 9, at(d, 14), place = home),
+            )
+        } + (1..3).map { skipped("Djavan", 9, at(it, 14)).copy(place = gym) }
+        val dna = MusicDna.build(listens, emptySet(), now, zone, genreOf = genre)
+        val atHome = DnaMoment(13, DayOfWeek.WEDNESDAY, place = home)
+        val atGym = atHome.copy(place = gym)
+        // The ritmo.
+        assertTrue(dna.genreLift("rock", atGym) > 1.3)
+        assertTrue(dna.genreLift("rock", atGym) > dna.genreLift("rock", atHome) * 1.5)
+        // The songs.
+        assertTrue(dna.songsFor(atGym, 4).all { it.artist == "Metal" })
+        assertTrue(dna.songsFor(atHome, 4).all { it.artist == "Djavan" })
+        // The skips: what was skipped at the gym says less about home.
+        assertTrue(dna.songFactor("Djav9xxxxxx", atGym) < dna.songFactor("Djav9xxxxxx", atHome) - 0.05)
     }
 
     @Test
