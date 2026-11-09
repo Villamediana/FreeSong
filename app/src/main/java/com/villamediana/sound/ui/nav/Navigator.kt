@@ -102,7 +102,6 @@ class Navigator(
     fun openProfile() = go(ProfileRoute)
     fun openFriend(id: String) = go(FriendRoute(id))
     fun openChat(id: String) = go(ChatRoute(id))
-    fun openDna() = go(DnaRoute)
     fun openVideo(videoId: String, title: String?) = go(VideoRoute(videoId, title))
 
     /** Bottom-bar tab switch: single top, state saved/restored per tab. */

@@ -44,14 +44,13 @@ data class DnaMoment(
 /**
  * The listener's musical DNA, learned from everything they did (pure): which artists and genres
  * belong to which part of the day, to weekdays or the weekend, to the places they listen at and to
- * the friends they listen with; and how often each song is skipped, here and now and overall.
+ * the friends they listen with.
  *
  * - [lift]: how much more (or less) an artist fits a moment than usual (1 = as usual). Learned
  *   gently: a few listens move it a little, many move it more; a moment with little listening
  *   barely moves anything.
- * - [songFactor]: a song skipped again and again is suggested less, and less in the moment it is
- *   skipped in (skipped at night, still fine in the morning). One skip only nudges it; a song heard
- *   through comes back up. Hearts protect a song.
+ * Skips teach the DNA nothing (Miguel: a song skipped may just not be the vibe): the radio's
+ * session keeps a skipped song out for a few hours, and that's all.
  */
 class MusicDna private constructor(
     private val artistParts: Map<String, DoubleArray>,
@@ -71,17 +70,13 @@ class MusicDna private constructor(
     /** For the DNA page. */
     val summary: DnaSummary,
 ) {
-    /** A song's listening: decayed hears and skips, overall and per part of the day. */
+    /** A song's listening (decayed), overall and per part of the day, and with whom. */
     class SongStats(
         val videoId: String,
         val title: String,
         val artist: String,
         val hearted: Boolean,
     ) {
-        var heard = 0.0
-        var skips = 0.0
-        val heardIn = DoubleArray(4)
-        val skipsIn = DoubleArray(4)
         /** Listening together with each person (decayed). */
         val together = HashMap<String, Double>()
         var weight = 0.0
@@ -124,45 +119,17 @@ class MusicDna private constructor(
     }
 
     /**
-     * 0..1: how much a song is wanted back, from its skips (1 = no doubt). Overall skips weigh a
-     * little; the skips in this part of the day weigh more. A heart keeps it at 1.
-     */
-    fun songFactor(videoId: String, m: DnaMoment): Double {
-        val s = songs[videoId] ?: return 1.0
-        if (s.hearted) return 1.0
-        val overall = s.skips / (s.skips + s.heard + SKIP_PRIOR)
-        val here = s.skipsIn[m.part.ordinal] / (s.skipsIn[m.part.ordinal] + s.heardIn[m.part.ordinal] + SKIP_PRIOR)
-        return ((1.0 - OVERALL_SKIP * overall) * (1.0 - MOMENT_SKIP * here)).coerceIn(0.0, 1.0)
-    }
-
-    /**
-     * The songs that clearly don't fit [m]: skipped in this part of the day again and again and
-     * hardly ever heard through in it. Left out of what plays now — they stay in other moments.
-     */
-    fun avoidNow(m: DnaMoment): Set<String> {
-        val p = m.part.ordinal
-        return songs.values.filter { s ->
-            !s.hearted && s.skipsIn[p] >= AVOID_SKIPS && s.skipsIn[p] / (s.skipsIn[p] + s.heardIn[p] + SKIP_PRIOR) >= AVOID_RATE
-        }.mapTo(HashSet()) { it.videoId }
-    }
-
-    /** Every song's factor below 1 in [m] (for a profile of the moment). */
-    fun songFactors(m: DnaMoment): Map<String, Double> =
-        songs.keys.mapNotNull { id -> songFactor(id, m).takeIf { it < 0.999 }?.let { id to it } }.toMap()
-
-    /**
      * Your songs that fit [m] best: heard a lot in this part of the day (and with these people,
-     * at this place), the ones that fit the moment's artists, without the ones you skip here.
+     * at this place), the ones that fit the moment's artists.
      */
     fun songsFor(m: DnaMoment, count: Int): List<SongStats> {
         val part = m.part.ordinal
         return songs.values
-            .filter { it.weight > 0 && songFactor(it.videoId, m) >= 0.5 }
+            .filter { it.weight > 0 }
             .map { s ->
                 val here = s.weightIn[part] / (s.weight + 1.0)
                 val people = if (m.people.isEmpty()) 0.0 else m.people.sumOf { s.together[it] ?: 0.0 }
-                val score = (s.weight.pow(0.5) * (0.4 + 1.6 * here) + 1.5 * people) *
-                    lift(artistKey(s.artist), m) * songFactor(s.videoId, m)
+                val score = (s.weight.pow(0.5) * (0.4 + 1.6 * here) + 1.5 * people) * lift(artistKey(s.artist), m)
                 s to score
             }
             .sortedByDescending { it.second }
@@ -196,17 +163,9 @@ class MusicDna private constructor(
         const val PEOPLE_WEIGHT = 1.0
         /** A place or a friend counts once there is this much listening with it. */
         const val MIN_CONTEXT = 3.0
-        /** Pseudo-hears: one skip alone doesn't say much. */
-        const val SKIP_PRIOR = 1.5
-        const val OVERALL_SKIP = 0.5
-        const val MOMENT_SKIP = 0.6
-        /** Skipped this often in a part of the day (and barely heard there): out of it. */
-        const val AVOID_SKIPS = 3.0
-        const val AVOID_RATE = 0.65
-
         /**
          * Builds the DNA from [listens] (each with its time, and where and with whom when known),
-         * [hearts] (video ids: never pushed down) and [genreOf] (an artist key → home genre id).
+         * [hearts] (video ids) and [genreOf] (an artist key → home genre id).
          */
         fun build(
             listens: List<Listen>,
@@ -243,21 +202,14 @@ class MusicDna private constructor(
                 val id = l.videoId?.takeIf { it.isNotBlank() }
                 val s = id?.let { songs.getOrPut(it) { SongStats(it, l.title, l.artist, it in hearts) } }
                 s?.lastAt = maxOf(s?.lastAt ?: 0L, l.at)
-                if (l.skipped) {
-                    s?.let {
-                        it.skips += fade
-                        it.skipsIn[part] += fade
-                    }
-                    continue
-                }
+                // A skip says nothing about the taste (it may just not have been the moment).
+                if (l.skipped) continue
                 val value = when {
                     l.completed -> 1.0
                     l.listenedMs >= 60_000 || (l.durationMs > 0 && l.listenedMs * 2 >= l.durationMs) -> 0.6
                     else -> 0.25
                 } * fade
                 s?.let {
-                    it.heard += fade
-                    it.heardIn[part] += fade
                     it.weight += value
                     it.weightIn[part] += value
                     for (p in l.people) it.together.merge(p, value, Double::plus)

@@ -157,12 +157,7 @@ class ForYouTest {
         stream("samba-2", "Samba", times = 3)
         val first = forYou.discoveries()
         val victim = first.first()
-        stream(victim.videoId, victim.artist, times = 2, skipped = true, hoursAgo = 0)
-        forYou.invalidate()
-        // Skipped twice: it goes down the row (it may just not have been the moment)…
-        val after = forYou.discoveries()
-        assertTrue(after.indexOfFirst { it.videoId == victim.videoId } > 0)
-        // …and again and again: out of it.
+        // Skipped just now: out of the row for now…
         stream(victim.videoId, victim.artist, times = 2, skipped = true, hoursAgo = 0)
         forYou.invalidate()
         assertFalse(forYou.discoveries().any { it.videoId == victim.videoId })

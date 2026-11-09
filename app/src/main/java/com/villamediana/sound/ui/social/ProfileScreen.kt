@@ -52,6 +52,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.villamediana.sound.R
+import com.villamediana.sound.ui.dna.dnaSections
 import com.villamediana.sound.SoundApplication
 import com.villamediana.sound.social.Profile
 import com.villamediana.sound.social.RelayException
@@ -75,7 +76,12 @@ import kotlinx.coroutines.launch
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen() {
-    val dnaNav = com.villamediana.sound.ui.nav.navigator()
+    // Your DNA (only on your page): worked out while it is open.
+    val dnaVm: com.villamediana.sound.ui.dna.DnaViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+    val dnaSummary by dnaVm.summary.collectAsStateWithLifecycle()
+    val dnaPlaces by dnaVm.places.collectAsStateWithLifecycle()
+    val socialFriends by SoundApplication.graph.social.friends.collectAsStateWithLifecycle()
+    val dnaPeople = remember(socialFriends) { socialFriends.friends.associateBy { it.id } }
     val hub = SoundApplication.graph.social
     val nav = navigator()
     val me by hub.account.me.collectAsStateWithLifecycle()
@@ -122,7 +128,9 @@ fun ProfileScreen() {
         },
         onNewCode = { scope.launch { hub.newRecoveryCode() } },
         onUseCode = { recovering = true },
-        onOpenDna = { dnaNav.openDna() },
+        dna = dnaSummary,
+        dnaPlaces = dnaPlaces,
+        dnaPeople = dnaPeople,
         sheets = {
             framing?.let { photo ->
                 PhotoCropDialog(
@@ -191,7 +199,9 @@ internal fun ProfilePage(
     onCopy: () -> Unit,
     onNewCode: () -> Unit,
     onUseCode: () -> Unit,
-    onOpenDna: () -> Unit = {},
+    dna: com.villamediana.sound.smart.DnaSummary? = null,
+    dnaPlaces: Boolean = false,
+    dnaPeople: Map<String, Profile> = emptyMap(),
     sheets: @Composable () -> Unit = {},
 ) {
     PersonPage(
@@ -204,6 +214,8 @@ internal fun ProfilePage(
         snackbar = snackbar,
         numbers = numbers,
         numbersEmpty = stringResource(R.string.profile_stats_empty),
+        // Your DNA (day, week, places, friends) takes the place of "Seu ritmo".
+        rhythm = false,
         avatar = { size -> CardAvatar(me, size, onCamera = onPhoto, busy = photoBusy) },
         buttons = {
             PersonButton(stringResource(R.string.profile_edit_name_action), onClick = onEdit, icon = Icons.Rounded.Edit, modifier = Modifier.weight(1f))
@@ -213,7 +225,7 @@ internal fun ProfilePage(
         },
         sheets = sheets,
         more = {
-            item(key = "dna", contentType = "card") { DnaEntry(onOpenDna) }
+            dnaSections(dna, dnaPlaces, dnaPeople)
             item(key = "recovery", contentType = "card") { RecoveryCard(code, onCopy = onCopy, onNew = onNewCode, onUseCode = onUseCode) }
         },
     )
@@ -330,28 +342,4 @@ private fun RecoverDialog(onDismiss: () -> Unit, onRecovered: () -> Unit) {
             TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel), color = SoundColors.TextMuted, style = MaterialTheme.typography.labelLarge) }
         },
     )
-}
-
-/** The door to "Seu DNA musical" on your page. */
-@Composable
-private fun DnaEntry(onOpen: () -> Unit) {
-    Row(
-        Modifier
-            .padding(horizontal = Dimens.Gutter)
-            .padding(top = Dimens.SectionGap)
-            .fillMaxWidth()
-            .clip(androidx.compose.foundation.shape.RoundedCornerShape(24.dp))
-            .background(SoundColors.Surface1)
-            .clickable(onClick = onOpen)
-            .padding(horizontal = 20.dp, vertical = 18.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(androidx.compose.material.icons.Icons.Rounded.AutoAwesome, null, tint = SoundColors.Accent, modifier = Modifier.size(26.dp))
-        Spacer(Modifier.width(14.dp))
-        Column(Modifier.weight(1f)) {
-            Text(stringResource(R.string.dna_title), style = MaterialTheme.typography.titleMedium, color = SoundColors.Text)
-            Text(stringResource(R.string.dna_entry_hint), style = MaterialTheme.typography.bodySmall, color = SoundColors.TextMuted)
-        }
-        Icon(androidx.compose.material.icons.Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = SoundColors.TextMuted)
-    }
 }

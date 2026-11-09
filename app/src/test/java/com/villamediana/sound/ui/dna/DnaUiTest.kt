@@ -5,20 +5,14 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
-import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import com.villamediana.sound.data.ThemeMode
-import com.villamediana.sound.data.db.Track
 import com.villamediana.sound.smart.DayPart
 import com.villamediana.sound.smart.DnaSummary
-import com.villamediana.sound.smart.MadeForYou
-import com.villamediana.sound.smart.Mix
 import com.villamediana.sound.social.Profile
 import com.villamediana.sound.ui.theme.SoundTheme
-import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -27,7 +21,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.io.File
 
-/** "Seu DNA musical" as it looks (SOUND_SHOTS=1 writes PNGs to app/build/sound-shots/). */
+/** Your DNA on your page, as it looks (SOUND_SHOTS=1 writes PNGs to app/build/sound-shots/). */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], qualifiers = "w400dp-h900dp-xxhdpi")
@@ -51,49 +45,39 @@ class DnaUiTest {
         people = listOf(DnaSummary.Person("uana", 90, listOf("Paramore"), listOf("The Only Exception" to "Paramore"))),
     )
     private val ana = Profile("uana", "ana", "Ana Lima", relation = "friends", friendsSince = 1)
-    private val moment = Mix(
-        MadeForYou.MOMENT_ID, "Pra sua noite", "Gaiteros de Pillopo, Paramore e mais", Mix.Kind.MOMENT,
-        listOf(Track(id = 1, title = "Oceano", artist = "Djavan", filePath = "/x.m4a")), emptyList(), null,
-    )
 
     @Test
-    fun theDnaPageTellsHowYouListen() {
-        var played = 0
-        var places: Boolean? = null
+    fun yourPageTellsHowYouListen() {
         compose.setContent {
             Host(dark = true) {
-                DnaPage(
-                    summary = summary, moment = moment, learnPlaces = true, placesInPocket = false,
-                    people = mapOf("uana" to ana),
-                    onPlayMoment = { played++ }, onPlaces = { places = it }, onPocket = {},
-                )
+                androidx.compose.foundation.lazy.LazyColumn {
+                    dnaSections(summary, places = true, people = mapOf("uana" to ana))
+                }
             }
         }
-        compose.onNodeWithText("Seu DNA musical").assertExists()
+        compose.onNodeWithText("Seu dia").assertExists()
         compose.onNodeWithText("Você é da noite").assertExists()
-        compose.onNodeWithText("Pra sua noite").assertExists()
-        shot("dna")
-        compose.onNodeWithContentDescription("dna-play").performClick()
-        assertEquals(1, played)
+        compose.onNodeWithText("Gaiteros de Pillopo · Paramore").assertExists()
+        shot("dna-profile")
         val list = compose.onAllNodes(androidx.compose.ui.test.hasScrollAction())[0]
         list.performScrollToNode(hasText("Lugar 1"))
-        compose.onNodeWithText("Permitir com a tela apagada").assertExists()
-        compose.onNodeWithContentDescription("dna-places").performClick()
-        assertEquals(false, places)
         list.performScrollToNode(hasText("Ana Lima"))
-        shot("dna-places-people")
+        shot("dna-profile-places-people")
     }
 
     @Test
-    fun beforeThereIsAnything() {
+    fun placesShowOnlyWithLembrarLugaresOnAndNothingBeforeThereIsListening() {
         compose.setContent {
             Host(dark = false) {
-                DnaPage(summary = null, moment = null, learnPlaces = false, placesInPocket = true, people = emptyMap(), onPlayMoment = {}, onPlaces = {}, onPocket = {})
+                androidx.compose.foundation.lazy.LazyColumn {
+                    dnaSections(summary, places = false, people = emptyMap())
+                    dnaSections(null, places = true, people = emptyMap())
+                }
             }
         }
-        compose.onNodeWithText("Aprendendo como você ouve").assertExists()
-        compose.onNodeWithText("Lembrar lugares").assertExists()
-        shot("dna-empty")
+        compose.onNodeWithText("Sua semana").assertExists()
+        compose.onNodeWithText("Seus lugares").assertDoesNotExist()
+        compose.onNodeWithText("Com quem você ouve").assertDoesNotExist()
     }
 
     @androidx.compose.runtime.Composable

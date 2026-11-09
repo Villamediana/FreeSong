@@ -295,4 +295,58 @@ class JamSessionTest {
         session.onEvent(RelayEvent.JamEnded("j5"))
         waitFor { session.invites.value.isEmpty() }
     }
+
+    @Test
+    fun nextWhenTheJamIsSettledMovesOnAndNeverPullsBack() {
+        runBlocking { session.join(JamInvite(Jam("j9", "host"), Profile("host", "h", "Host"))) }
+        waitFor { playback.value.isPlaying && playback.value.queueIndex == 1 }
+        Thread.sleep(400) // settled: nothing of ours playing out
+        assertTrue(gate!!.next())
+        waitFor { playback.value.queueIndex == 2 }
+        Thread.sleep(600)
+        // Only "the next song" went to the relay; nothing took the jam back to the song before.
+        assertTrue(relay.sent.isNotEmpty())
+        assertTrue(relay.sent.all { it.state.index == 2 })
+        assertEquals(2, playback.value.queueIndex)
+        assertEquals(2, session.jam.value!!.state.index)
+    }
+
+    @Test
+    fun aSongPickedInTheQueueStays() {
+        runBlocking { session.join(JamInvite(Jam("j9", "host"), Profile("host", "h", "Host"))) }
+        waitFor { playback.value.isPlaying && playback.value.queueIndex == 1 }
+        Thread.sleep(400)
+        assertTrue(gate!!.skipTo(0))
+        waitFor { playback.value.queueIndex == 0 }
+        Thread.sleep(600)
+        assertTrue(relay.sent.all { it.state.index == 0 })
+        assertEquals(0, playback.value.queueIndex)
+    }
+
+    @Test
+    fun aFriendsNextIsFollowedHereNotFoughtBack() {
+        runBlocking { session.join(JamInvite(Jam("j9", "host"), Profile("host", "h", "Host"))) }
+        waitFor { playback.value.isPlaying && playback.value.queueIndex == 1 }
+        Thread.sleep(400)
+        // A friend pressed "next": the relay tells everyone.
+        session.onEvent(RelayEvent.JamChanged(Jam("j9", "host", state = JamState(q, 2, 0, true, serverNow, rev = 6)), null))
+        waitFor { playback.value.queueIndex == 2 }
+        Thread.sleep(600)
+        assertTrue(relay.sent.isEmpty())
+        assertEquals(2, playback.value.queueIndex)
+    }
+
+    @Test
+    fun nextOnTheLastSongBringsMoreAndMovesOn() {
+        runBlocking { session.join(JamInvite(Jam("j9", "host"), Profile("host", "h", "Host"))) }
+        waitFor { playback.value.isPlaying && playback.value.queueIndex == 1 }
+        Thread.sleep(400)
+        assertTrue(gate!!.skipTo(2))
+        waitFor { playback.value.queueIndex == 2 }
+        Thread.sleep(400)
+        assertTrue(gate!!.next())
+        waitFor { relay.sent.any { it.state.queue.size == 5 && it.state.index == 3 } }
+        waitFor { playback.value.queueIndex == 3 }
+        assertEquals(song(7).videoId, playback.value.current?.videoId)
+    }
 }

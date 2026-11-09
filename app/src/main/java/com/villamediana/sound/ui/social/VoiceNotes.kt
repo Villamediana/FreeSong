@@ -21,12 +21,16 @@ import kotlinx.coroutines.launch
 import java.io.File
 
 /**
- * Records a voice message: AAC in MP4, mono, 16 kHz at 24 kbps (five minutes ≈ 0,9 MB), reading the
- * loudness every [TICK_MS] for the waves. One recording at a time.
+ * Records a voice message in MP4, mono: HE-AAC at 32 kHz and 36 kbps (clear voice; five minutes ≈
+ * 1,35 MB, inside the relay's limit), or plain AAC on a phone without HE-AAC; reading the loudness
+ * every [TICK_MS] for the waves. One recording at a time.
+ *
+ * The music keeps playing (Miguel: never pause it) and stays out of the message: the microphone is
+ * the phone's call microphone ([MediaRecorder.AudioSource.VOICE_COMMUNICATION]), with the phone's own
+ * echo canceller taking out what comes from its speaker — like a call. A phone that refuses it
+ * records from the plain microphone.
  */
 class VoiceRecorder(private val context: Context) {
-    private val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-    private var focus: AudioFocusRequest? = null
     private var recorder: MediaRecorder? = null
     private var file: File? = null
     private var startedAt = 0L
@@ -45,20 +49,12 @@ class VoiceRecorder(private val context: Context) {
     fun start(scope: CoroutineScope, onLimit: () -> Unit): Boolean {
         cancel()
         val out = File(context.cacheDir, "voice-rec-${System.nanoTime()}.m4a")
-        val r = if (Build.VERSION.SDK_INT >= 31) MediaRecorder(context) else @Suppress("DEPRECATION") MediaRecorder()
+        val r = SOURCES.firstNotNullOfOrNull { source -> QUALITIES.firstNotNullOfOrNull { q -> prepared(out, source, q, onLimit) } }
+        if (r == null) {
+            out.delete()
+            return false
+        }
         return try {
-            r.setAudioSource(MediaRecorder.AudioSource.MIC)
-            r.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-            r.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-            r.setAudioChannels(1)
-            r.setAudioSamplingRate(16_000)
-            r.setAudioEncodingBitRate(24_000)
-            r.setMaxDuration(MAX_MS.toInt())
-            r.setOutputFile(out.absolutePath)
-            r.setOnInfoListener { _, what, _ -> if (what == MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED) onLimit() }
-            // The music steps aside while you speak (it would be in the message) and comes back after.
-            takeFocus()
-            r.prepare()
             r.start()
             recorder = r
             file = out
@@ -78,23 +74,32 @@ class VoiceRecorder(private val context: Context) {
         } catch (e: Exception) {
             runCatching { r.release() }
             out.delete()
-            giveFocus()
             false
         }
     }
 
-    private fun takeFocus() {
-        val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
-            .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
-            .build()
-        focus = req
-        audio.requestAudioFocus(req)
+    /** A recorder ready from [source] with [q], or null when this phone can't record that way. */
+    private fun prepared(out: File, source: Int, q: Quality, onLimit: () -> Unit): MediaRecorder? {
+        val r = if (Build.VERSION.SDK_INT >= 31) MediaRecorder(context) else @Suppress("DEPRECATION") MediaRecorder()
+        return try {
+            r.setAudioSource(source)
+            r.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+            r.setAudioEncoder(q.encoder)
+            r.setAudioChannels(1)
+            r.setAudioSamplingRate(q.rate)
+            r.setAudioEncodingBitRate(q.bitrate)
+            r.setMaxDuration(MAX_MS.toInt())
+            r.setOutputFile(out.absolutePath)
+            r.setOnInfoListener { _, what, _ -> if (what == MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED) onLimit() }
+            r.prepare()
+            r
+        } catch (e: Exception) {
+            runCatching { r.release() }
+            null
+        }
     }
 
-    private fun giveFocus() {
-        focus?.let { audio.abandonAudioFocusRequest(it) }
-        focus = null
-    }
+
 
     /** Stops and hands the recording over: the file, its length and its waves; null if it was too short or failed. */
     fun finish(): Recorded? {
@@ -106,8 +111,6 @@ class VoiceRecorder(private val context: Context) {
         file = null
         val ok = runCatching { r.stop() }.isSuccess
         runCatching { r.release() }
-        // The music comes back only once the microphone is closed.
-        giveFocus()
         if (!ok || out == null || ms < MIN_MS || !out.isFile || out.length() < 64) {
             out?.delete()
             return null
@@ -122,7 +125,6 @@ class VoiceRecorder(private val context: Context) {
         recorder = null
         runCatching { r.stop() }
         runCatching { r.release() }
-        giveFocus()
         file?.delete()
         file = null
     }
@@ -135,7 +137,16 @@ class VoiceRecorder(private val context: Context) {
 
     data class Recorded(val file: File, val ms: Long, val wave: String)
 
+    private data class Quality(val encoder: Int, val rate: Int, val bitrate: Int)
+
     companion object {
+        /** The call microphone (echo cancelled: the phone's own sound stays out), then the plain one. */
+        private val SOURCES = listOf(MediaRecorder.AudioSource.VOICE_COMMUNICATION, MediaRecorder.AudioSource.MIC)
+        /** Best first: HE-AAC (clear voice at a low rate), then plain AAC for phones without it. */
+        private val QUALITIES = listOf(
+            Quality(MediaRecorder.AudioEncoder.HE_AAC, 32_000, 36_000),
+            Quality(MediaRecorder.AudioEncoder.AAC, 24_000, 36_000),
+        )
         const val MAX_MS = 5 * 60_000L
         /** Shorter than this was a tap, not a message. */
         const val MIN_MS = 700L

@@ -46,6 +46,7 @@ class TasteProfileTest {
             skipped("Maybe", 1, 3.0), skipped("Maybe", 1, 2.0), heard("Maybe", 2, 1.0), // twice: maybe just not the moment
             heard("Meh", 2, 2.0),
             skipped("Nope", 1, 4.0), skipped("Nope", 2, 3.0), skipped("Nope", 3, 2.0), skipped("Nope", 4, 1.0),
+            skipped("Nope", 5, 1.0), skipped("Nope", 6, 0.5), // never one of theirs heard through
             skipped("Loved", 1, 2.0), skipped("Loved", 1, 1.0),
         )
         val hearts = listOf(Heart(vid("Loved", 1), "Loved song 1", "Loved", null, now - day))

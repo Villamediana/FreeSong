@@ -1,9 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="dna_title">Seu DNA musical</string>
-    <string name="dna_entry_hint">Como você ouve: o dia, a semana, os lugares e os amigos</string>
-    <string name="dna_learning">Aprendendo como você ouve</string>
-    <string name="dna_empty">Ouça um pouco mais: o DNA aprende sozinho com o que você toca, pula e repete.</string>
     <string name="dna_now">Pra agora</string>
     <string name="dna_day">Seu dia</string>
     <string name="dna_week">Sua semana</string>
@@ -12,12 +8,9 @@
     <string name="dna_places">Seus lugares</string>
     <string name="dna_places_toggle">Lembrar lugares</string>
     <string name="dna_places_hint">Aprende onde você ouve o quê. Fica só neste celular, sem GPS.</string>
-    <string name="dna_places_pocket">Com a tela apagada, o Android só deixa se você permitir a localização o tempo todo.</string>
     <string name="dna_places_pocket_action">Permitir com a tela apagada</string>
-    <string name="dna_places_learning">Aprendendo os lugares onde você ouve…</string>
     <string name="dna_place_n">Lugar %1$d</string>
     <string name="dna_people">Com quem você ouve</string>
-    <string name="dna_people_none">Faça uma jam com amigos e o DNA aprende o que vocês curtem juntos.</string>
     <string name="dna_part_late">Madrugada</string>
     <string name="dna_part_morning">Manhã</string>
     <string name="dna_part_afternoon">Tarde</string>
@@ -28,6 +21,6 @@
     <string name="dna_mix_evening">Pra sua noite</string>
     <string name="dna_mix_with">Pra ouvir com %1$s</string>
     <string name="dna_mix_subtitle_plain">Do seu jeito de agora</string>
-    <string name="settings_dna_value">O dia, a semana e com quem você ouve</string>
-    <string name="settings_dna_places_on">Com lugares</string>
+    <string name="settings_group_dna">DNA musical</string>
+    <string name="dna_places_pocket_short">Pra aprender com a tela apagada</string>
 </resources>

@@ -59,23 +59,13 @@ class MusicDnaTest {
     }
 
     @Test
-    fun aSkipIsANudgeSkipsInAMomentLeaveItThereOnly() {
-        val listens = life() +
-            skipped("Djavan", 9, at(1, 21)) +
-            // A song skipped every night, heard every morning.
-            (1..5).map { skipped("Eighties", 7, at(it, 22)) } +
-            (1..5).map { heard("Eighties", 7, at(it, 8)) }
-        val dna = MusicDna.build(listens, emptySet(), now, zone)
-        val once = dna.songFactor("Djav9xxxxxx", night)
-        assertTrue(once in 0.4..0.95)
-        assertTrue("Djav9xxxxxx" !in dna.avoidNow(night))
-        val nightly = "Eigh7xxxxxx"
-        assertTrue(nightly in dna.avoidNow(night))
-        assertFalse(nightly in dna.avoidNow(morning))
-        assertTrue(dna.songFactor(nightly, morning) > dna.songFactor(nightly, night))
-        // A heart keeps it.
-        val loved = MusicDna.build(listens, setOf(nightly), now, zone)
-        assertEquals(1.0, loved.songFactor(nightly, night), 0.0)
+    fun aSkipTeachesTheDnaNothing() {
+        // Miguel: a song skipped may be loved, just not for now — the DNA doesn't learn against it.
+        val skips = (1..6).map { skipped("Gaiteros", 1, at(it, 22)) }
+        val plain = MusicDna.build(life(), emptySet(), now, zone)
+        val skipped = MusicDna.build(life() + skips, emptySet(), now, zone)
+        assertEquals(plain.lift("gaiteros", night), skipped.lift("gaiteros", night), 0.0)
+        assertEquals(plain.songsFor(night, 6).map { it.videoId }, skipped.songsFor(night, 6).map { it.videoId })
     }
 
     @Test

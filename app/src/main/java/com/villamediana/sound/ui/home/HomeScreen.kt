@@ -275,6 +275,22 @@ private fun HomeFeed(
           }
         }
 
+        // "Pra agora": the DNA's mix for this moment, right above your songs.
+        val moment = state.mixes.firstOrNull { it.id == com.villamediana.sound.smart.MadeForYou.MOMENT_ID }
+        if (moment != null) {
+            val idx = order++
+            item(key = "moment", contentType = "moment") {
+                val active = playback.hasMedia && playback.isFromMix(moment.id)
+                MomentCard(
+                    mix = moment,
+                    playing = active && (playback.isPlaying || playback.isBuffering),
+                    onOpen = { nav.openMix(moment.id) },
+                    onPlay = { if (active) vm.togglePlayPause() else vm.playMix(moment.id) },
+                    modifier = Modifier.animateItem().staggerIn(idx, intro).padding(bottom = 12.dp),
+                )
+            }
+        }
+
         val heroIdx = order++
         item(key = "hero", contentType = "hero") {
             val smartActive = playback.hasMedia && playback.isSmartLibrary()
@@ -298,11 +314,12 @@ private fun HomeFeed(
             }
         }
 
-        if (state.mixes.isNotEmpty()) {
+        val dayMixes = state.mixes.filter { it.id != com.villamediana.sound.smart.MadeForYou.MOMENT_ID }
+        if (dayMixes.isNotEmpty()) {
             val idx = order++
             item(key = "mixes", contentType = "carousel") {
                 Carousel(stringResource(R.string.home_made_for_you), Modifier.animateItem().staggerIn(idx, intro)) {
-                    items(state.mixes, key = { it.id }) { mix ->
+                    items(dayMixes, key = { it.id }) { mix ->
                         val active = playback.hasMedia && playback.isFromMix(mix.id)
                         MixCard(
                             mix = mix,
@@ -334,6 +351,42 @@ private fun Carousel(title: String, modifier: Modifier = Modifier, content: Lazy
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             content = content,
         )
+    }
+}
+
+/**
+ * "Pra agora": the mix the DNA makes for this moment (the part of the day, the week, the place, the
+ * friends along) — its cover, what it is for, its artists; a tap opens it, play plays it.
+ */
+@Composable
+private fun MomentCard(mix: com.villamediana.sound.smart.Mix, playing: Boolean, onOpen: () -> Unit, onPlay: () -> Unit, modifier: Modifier = Modifier) {
+    Box(modifier.fillMaxWidth().padding(horizontal = Dimens.Gutter)) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(20.dp))
+                .background(SoundColors.Surface1)
+                .pressable(onOpen, pressed = 0.98f)
+                .padding(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            com.villamediana.sound.ui.components.Cover(mix.covers.firstOrNull(), Modifier.size(64.dp), seed = mix.title, shape = RoundedCornerShape(14.dp))
+            Spacer(Modifier.size(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(stringResource(R.string.dna_now).uppercase(), style = MaterialTheme.typography.labelSmall, color = SoundColors.Accent, maxLines = 1)
+                Text(mix.title, style = MaterialTheme.typography.titleLarge, color = SoundColors.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(mix.subtitle, style = MaterialTheme.typography.bodySmall, color = SoundColors.TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Spacer(Modifier.size(12.dp))
+            PlayPauseButton(
+                playing = playing,
+                onClick = onPlay,
+                size = 48.dp,
+                container = SoundColors.Accent,
+                content = SoundColors.OnAccent,
+                contentDescription = stringResource(if (playing) R.string.pause else R.string.play),
+            )
+        }
     }
 }
 
