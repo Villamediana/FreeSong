@@ -38,12 +38,17 @@ internal object QueueContinuation {
     const val RETRY_MS = 20_000L
     const val RETRIES = 3
 
-    /** Video ids to start radios from: the list's last songs (play order) that YouTube knows, the latest first. */
-    fun seeds(queue: List<Track>, count: Int = SEEDS): List<String> =
-        queue.takeLast(TAIL).asReversed()
+    /**
+     * Video ids to start radios from: the list's last songs (play order) that YouTube knows, the
+     * latest first — the ones [skipped] just now left out (what is being heard leads, not what was
+     * passed over), unless every one was skipped.
+     */
+    fun seeds(queue: List<Track>, count: Int = SEEDS, skipped: Set<String> = emptySet()): List<String> {
+        val tail = queue.takeLast(TAIL).asReversed()
             .mapNotNull { it.videoId?.takeIf(String::isNotBlank) }
             .distinct()
-            .take(count)
+        return tail.filter { it !in skipped }.ifEmpty { tail }.take(count)
+    }
 
     /** How much of what's added comes from your library: as much as the list's end was yours, never all of it. */
     fun ownShare(queue: List<Track>): Double {

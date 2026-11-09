@@ -323,3 +323,30 @@ que a pessoa gosta e está gostando.
 - Os "Feitos pra você" e a continuação automática da fila também deixam de fora o que é pulado.
 - Testes: `smart/TasteProfileTest`, `RecommendTest` (inclui `GenreMatch`), `discover/ForYouTest`
   (banco de verdade + YouTube falso; inclui a estabilidade na janela), `ArtistGenresTest`.
+
+## Rádios variadas e atualização sem fechar na cara (1.16.0, 2026-11-09)
+
+Pedidos do Miguel: a rádio de uma música vinha sempre igual; a fila devia seguir o que está se
+ouvindo; atualizar fechava o app duas vezes.
+
+- **`smart/RadioMix` + `discover/SongRadio`** (`graph.songRadio`): toda rádio e a continuação da
+  fila. A rádio do YouTube Music de cada semente (fixa por natureza — era a causa da repetição) +
+  a de 1–2 músicas sorteadas dela (`widenFrom`), ranqueadas por concordância, proximidade da
+  semente, gosto (`TasteProfile`) e um pouco de acaso (`CHANCE`): a mesma música nunca abre a mesma
+  rádio duas vezes, mas o começo segue perto dela. `Session` (últimas 3 h): música ouvida agora não
+  repete, pulada agora não volta, artista pulado 2× fica de fora por enquanto.
+- Continuação (`PlaybackService.maybeExtend`): sementes = últimas da fila **não puladas agora**
+  (`QueueContinuation.seeds(skipped)`); a busca, músicas de amigos e o reconhecimento começam a rádio
+  por ela. "Iniciar rádio" (folha da música) e "Recomendadas" do gênero (`ForYou.like`) também.
+- **Atualização automática**: o Android fecha o app pra trocar a versão — inevitável com ele em uso.
+  Então, onde o Android deixa atualizar sem perguntar (12+, FreeSong instalado pelo próprio
+  FreeSong — `SessionInstaller.canInstallQuietly`): achou versão → `UpdateAutoWorker` baixa no
+  Wi-Fi em silêncio → Android 14+: `commitSessionAfterInstallConstraintsAreMet` (app fora da tela e
+  sem música — o próprio sistema espera); 12–13: `UpdateIdleWorker` instala 2 min depois de o app
+  sair da tela se não houver música. Depois: só o aviso "atualizado" (não abre o app por cima de
+  nada). Falha/tempo esgotado do automático: quieto, tenta de novo depois.
+- "Atualizar agora" continua: avisa "o FreeSong fecha por um instante" (1,2 s) antes de instalar e
+  tenta reabrir depois (`Updated.automatic = false`).
+- Testes: `smart/RadioMixTest` (variedade: tirar o acaso derruba), `QueueContinuationTest` (seeds),
+  `UpdatesTest` (automático 14+, 12–13, onde o Android perguntaria, falha quieta, botão com
+  automático esperando).

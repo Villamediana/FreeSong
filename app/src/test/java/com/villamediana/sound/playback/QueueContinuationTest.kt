@@ -20,6 +20,9 @@ class QueueContinuationTest {
         val queue = listOf(mine(1, "a"), mine(2, "b"), mine(3), online("c"), mine(4, "b"), mine(5, "d"))
         assertEquals(listOf("d", "b", "c"), QueueContinuation.seeds(queue))
         assertEquals(emptyList<String>(), QueueContinuation.seeds(listOf(mine(1), mine(2))))
+        // What was just skipped doesn't lead what comes next (unless everything was skipped).
+        assertEquals(listOf("b", "c", "a"), QueueContinuation.seeds(queue, skipped = setOf("d")))
+        assertEquals(listOf("d", "b", "c"), QueueContinuation.seeds(queue, skipped = setOf("a", "b", "c", "d")))
     }
 
     @Test fun aListOfYourSongsStaysMostlyYoursARadioStaysARadio() {

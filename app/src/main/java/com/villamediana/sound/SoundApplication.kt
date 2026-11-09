@@ -34,6 +34,8 @@ class SoundApplication : Application(), SingletonImageLoader.Factory {
         runCatching { com.villamediana.sound.social.SocialWorker.schedule(this) }
         // New versions from GitHub: a check a day in the background (release builds only).
         if (graph.updates.enabled) runCatching { com.villamediana.sound.update.UpdateCheckWorker.schedule(this) }
+        // Android 12–13: a version ready installs itself once the app leaves the screen (14+ waits by itself).
+        runCatching { com.villamediana.sound.update.UpdateIdleWorker.watch(this, graph.updates) }
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader =

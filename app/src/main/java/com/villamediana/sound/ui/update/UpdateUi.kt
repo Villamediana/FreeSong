@@ -107,11 +107,13 @@ fun UpdateHost(updates: Updates = SoundApplication.graph.updates) {
 
     val open by updates.sheet.collectAsStateWithLifecycle()
     val state by updates.state.collectAsStateWithLifecycle()
+    val auto by updates.autoReady.collectAsStateWithLifecycle()
     val release = state.release
     if (open && release != null) {
         UpdateSheet(
             state = state,
             release = release,
+            autoReady = auto == release.version,
             onUpdate = updates::update,
             onAllow = {
                 val settings = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}"))
@@ -127,12 +129,13 @@ fun UpdateHost(updates: Updates = SoundApplication.graph.updates) {
 private fun UpdateSheet(
     state: UpdateState,
     release: AppRelease,
+    autoReady: Boolean,
     onUpdate: () -> Unit,
     onAllow: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     SoundSheet(onDismissRequest = onDismiss) {
-        UpdateSheetBody(state, release, onUpdate, onAllow, onDismiss)
+        UpdateSheetBody(state, release, onUpdate, onAllow, onDismiss, autoReady)
     }
 }
 
@@ -144,6 +147,8 @@ internal fun UpdateSheetBody(
     onUpdate: () -> Unit,
     onAllow: () -> Unit,
     onDismiss: () -> Unit,
+    /** Downloaded and waiting to install by itself when the app is not in use. */
+    autoReady: Boolean = false,
 ) {
     Column(Modifier.fillMaxWidth()) {
         Row(
@@ -182,7 +187,9 @@ internal fun UpdateSheetBody(
         val note: String? = when (state) {
             is UpdateState.NeedsPermission -> stringResource(R.string.update_permission_body)
             is UpdateState.Failed -> failureText(state.reason)
-            else -> null
+            // Android closes the app to put the new one in: said before, so it isn't taken for a crash.
+            is UpdateState.Installing -> stringResource(R.string.update_installing_note)
+            else -> if (autoReady) stringResource(R.string.update_auto_note) else null
         }
         AnimatedContent(
             targetState = note,

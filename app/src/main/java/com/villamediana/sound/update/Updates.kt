@@ -4,6 +4,7 @@ import android.content.Intent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -49,6 +50,18 @@ interface ApkInstaller {
     fun inspect(apk: File): ApkInfo?
     /** Hands the APK to Android; the answer arrives later through [Updates.onInstallStatus]. */
     fun install(apk: File)
+
+    /**
+     * Whether Android lets FreeSong update itself without asking: Android 12+, the install
+     * permission given, and the FreeSong on the phone installed by FreeSong itself.
+     */
+    fun canInstallQuietly(): Boolean = false
+
+    /**
+     * Hands the APK to Android to install by itself once the app is not in use (not on screen, no
+     * music): Android 14+. False when this Android can't wait for that itself.
+     */
+    fun installWhenIdle(apk: File): Boolean = false
 }
 
 /** What is kept between launches (filesDir/update.json). */
@@ -71,7 +84,14 @@ internal data class UpdateMemory(
     val wants: String? = null,
     /** How many times [wants] carried on by itself at an opening (a cap, so it can never loop). */
     val resumed: Int = 0,
+    /** The version downloaded to install by itself while the app is not in use. */
+    val auto: String? = null,
+    /** How [installing] went to Android: "now" (the button) or "auto" (by itself, the app not in use). */
+    val mode: String? = null,
 )
+
+/** The version the new process is, right after Android replaced the app, and how it got there. */
+data class Updated(val version: String, val automatic: Boolean)
 
 internal class UpdateMemoryFile(private val file: File) {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = false }
@@ -112,6 +132,10 @@ class Updates internal constructor(
     /** Off in debug builds: their package (".debug") is not the one the releases update. */
     val enabled: Boolean,
     private val clock: () -> Long = System::currentTimeMillis,
+    /** A newer version was found: the automatic update gets ready (a worker, on Wi-Fi). */
+    private val onFound: (AppRelease) -> Unit = {},
+    /** The pause before handing the APK to Android after a tap, so "o app fecha por um instante" can be read. */
+    private val noticeMs: Long = INSTALL_NOTICE_MS,
 ) {
     private val _state = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val state: StateFlow<UpdateState> = _state
@@ -119,6 +143,13 @@ class Updates internal constructor(
     private val _sheet = MutableStateFlow(false)
     /** Whether the update sheet is open. */
     val sheet: StateFlow<Boolean> = _sheet
+
+    /** Updates install by themselves on this phone (Android 12+, FreeSong installed by FreeSong). */
+    val installsBySelf: Boolean get() = enabled && runCatching { installer.canInstallQuietly() }.getOrDefault(false)
+
+    private val _auto = MutableStateFlow<String?>(null)
+    /** The version downloaded and waiting to install by itself when the app is not in use. */
+    val autoReady: StateFlow<String?> = _auto
 
     private val _confirm = MutableStateFlow<Intent?>(null)
     /** Android's "Atualizar este app?" screen, waiting for the app to be on screen to open it. */
@@ -137,6 +168,7 @@ class Updates internal constructor(
             return
         }
         _state.compareAndSet(UpdateState.Idle, UpdateState.Available(release))
+        if (saved.auto == release.version && ready(release) != null) _auto.value = release.version
     }
 
     /** A quiet check when the last one is older than [CHECK_EVERY_MS] (app on screen). */
@@ -191,6 +223,7 @@ class Updates internal constructor(
                 else -> UpdateState.Available(release)
             }
             if (manual || release.version != saved.dismissed) _sheet.value = true
+            onFound(release)
             _state.value
         }
     }
@@ -247,12 +280,68 @@ class Updates internal constructor(
                 return@launch
             }
             _state.value = UpdateState.Installing(release)
-            memory.change { it.copy(installing = release.version) }
+            memory.change { it.copy(installing = release.version, mode = MODE_NOW) }
+            // "O FreeSong fecha por um instante": read before Android closes the app to install.
+            if (fresh) delay(noticeMs)
             try {
                 withContext(Dispatchers.IO) { installer.install(apk) }
             } catch (e: Exception) {
                 fail(release, if (e is IOException) UpdateFailure.STORAGE else UpdateFailure.INSTALL, e.message)
             }
+        }
+    }
+
+    /**
+     * The automatic update, run by a worker on Wi-Fi: the newer version is downloaded quietly
+     * (nothing on screen changes) and handed to Android to install once the app is not in use
+     * ([ApkInstaller.installWhenIdle], Android 14+), or kept for [onIdle] (Android 12–13). Only where
+     * Android lets FreeSong update itself without asking. True when the version is ready.
+     */
+    suspend fun prepareAuto(): Boolean {
+        if (!enabled || !installer.canInstallQuietly()) return false
+        restored?.join()
+        if (_state.value.release == null) check(manual = false)
+        val s = _state.value
+        val release = s.release ?: return false
+        if (s is UpdateState.Downloading || s is UpdateState.Installing || work?.isActive == true) return false
+        val saved = withContext(Dispatchers.IO) { memory.read() }
+        if (saved.installing == release.version) return true // already with Android
+        val apk = try {
+            withContext(Dispatchers.IO) { ready(release) ?: download(release, quiet = true) }
+        } catch (e: UpdateException) {
+            return false
+        }
+        val info = withContext(Dispatchers.IO) { runCatching { installer.inspect(apk) }.getOrNull() }
+        if (info == null || info.packageName != current.packageName || info.versionCode <= current.versionCode) {
+            apk.delete()
+            return false
+        }
+        withContext(Dispatchers.IO) { memory.change { it.copy(auto = release.version) } }
+        _auto.value = release.version
+        val handed = withContext(Dispatchers.IO) { runCatching { installer.installWhenIdle(apk) }.getOrDefault(false) }
+        if (handed) withContext(Dispatchers.IO) { memory.change { it.copy(installing = release.version, mode = MODE_AUTO) } }
+        return true
+    }
+
+    /**
+     * The app is not in use (in the background, no music): a version ready to install by itself
+     * goes in now — for the Androids that can't wait for that themselves (12–13). True when handed.
+     */
+    suspend fun onIdle(): Boolean {
+        if (!enabled || !installer.canInstallQuietly()) return false
+        restored?.join()
+        val release = _state.value.release ?: return false
+        if (work?.isActive == true) return false
+        val saved = withContext(Dispatchers.IO) { memory.read() }
+        if (saved.auto != release.version || saved.installing == release.version) return false
+        val apk = withContext(Dispatchers.IO) { ready(release) } ?: return false
+        withContext(Dispatchers.IO) { memory.change { it.copy(installing = release.version, mode = MODE_AUTO) } }
+        return try {
+            withContext(Dispatchers.IO) { installer.install(apk) }
+            true
+        } catch (e: Exception) {
+            withContext(Dispatchers.IO) { memory.change { it.copy(installing = null, mode = null) } }
+            false
         }
     }
 
@@ -294,6 +383,13 @@ class Updates internal constructor(
     /** Android's answer to the install. */
     fun onInstallStatus(result: InstallResult, message: String?, confirmation: Intent?) {
         val release = _state.value.release
+        // An automatic install that didn't go (timed out, Android wants a "yes" after all): quietly
+        // back to waiting — no "Instalar?" popping up, no failure on the sheet. The button still works.
+        if (memory.read().mode == MODE_AUTO && result != InstallResult.SUCCESS) {
+            memory.change { it.copy(installing = null, mode = null, auto = null) }
+            _auto.value = null
+            return
+        }
         when (result) {
             InstallResult.NEEDS_CONFIRMATION -> _confirm.value = confirmation
             // The new version replaces this process; nothing left to do here.
@@ -321,15 +417,19 @@ class Updates internal constructor(
     }
 
     /**
-     * Called by the new version right after Android replaced the app: the version it now is, when
-     * the update came from here (the "atualizado" notification); null otherwise. Clears the APK.
+     * Called by the new version right after Android replaced the app: the version it now is and
+     * whether it came by itself (the app not in use) or from the button, when the update came from
+     * here; null otherwise. Clears the APK.
      */
-    fun afterUpdate(): String? {
+    fun afterUpdate(): Updated? {
         val saved = memory.read()
         val mine = saved.installing != null && Versions.compare(saved.installing, currentVersion) == 0
-        if (saved.installing != null || saved.wants != null) memory.change { it.copy(installing = null, wants = null, resumed = 0) }
+        if (saved.installing != null || saved.wants != null || saved.auto != null) {
+            memory.change { it.copy(installing = null, wants = null, resumed = 0, auto = null, mode = null) }
+        }
+        _auto.value = null
         clearApks()
-        return if (mine) currentVersion else null
+        return if (mine) Updated(currentVersion, automatic = saved.mode == MODE_AUTO) else null
     }
 
     /**
@@ -360,14 +460,15 @@ class Updates internal constructor(
         return file.takeIf { intact }
     }
 
-    private suspend fun download(release: AppRelease): File {
+    /** [quiet]: the automatic update's download, which doesn't show on the sheet. */
+    private suspend fun download(release: AppRelease, quiet: Boolean = false): File {
         apkDir.mkdirs()
         apkDir.listFiles()?.forEach { it.delete() }
         val target = apkFile(release)
         var shown = -1
         downloader.download(release, target) { fraction ->
             val pct = (fraction * 100).toInt()
-            if (pct != shown) {
+            if (!quiet && pct != shown) {
                 shown = pct
                 _state.value = UpdateState.Downloading(release, fraction)
             }
@@ -383,6 +484,9 @@ class Updates internal constructor(
         const val CHECK_EVERY_MS = 6L * 3_600_000
         /** Openings an update carries on by itself after one tap (then it waits for the button). */
         const val MAX_RESUMES = 3
+        const val INSTALL_NOTICE_MS = 1_200L
+        internal const val MODE_NOW = "now"
+        internal const val MODE_AUTO = "auto"
 
         internal fun sha256(file: File): String {
             val md = MessageDigest.getInstance("SHA-256")

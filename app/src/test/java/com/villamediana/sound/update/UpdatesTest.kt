@@ -7,6 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import okhttp3.Request
@@ -39,8 +40,13 @@ class UpdatesTest {
 
     private class FakeInstaller : ApkInstaller {
         var allowed = true
+        /** Android 12+ and FreeSong installed by FreeSong: no question asked. */
+        var quiet = false
+        /** Android 14+: Android waits for the app to be out of use by itself. */
+        var waitsBySelf = false
         var info: (File) -> ApkInfo? = { ApkInfo("com.villamediana.sound", 59) }
         val installed = mutableListOf<ByteArray>()
+        val whenIdle = mutableListOf<ByteArray>()
         var throwOnInstall: Exception? = null
         override fun canInstall() = allowed
         override fun inspect(apk: File) = info(apk)
@@ -48,7 +54,15 @@ class UpdatesTest {
             throwOnInstall?.let { throw it }
             synchronized(installed) { installed += apk.readBytes() }
         }
+        override fun canInstallQuietly() = allowed && quiet
+        override fun installWhenIdle(apk: File): Boolean {
+            if (!waitsBySelf) return false
+            synchronized(whenIdle) { whenIdle += apk.readBytes() }
+            return true
+        }
     }
+
+    private val found = mutableListOf<String>()
 
     @Before
     fun setUp() {
@@ -81,6 +95,8 @@ class UpdatesTest {
         currentVersion = version,
         enabled = enabled,
         clock = { now },
+        onFound = { synchronized(found) { found += it.version } },
+        noticeMs = 0,
     )
 
     private fun apiCalls() = github.count { it.url.toString() == ReleaseFeed.LATEST_URL }
@@ -443,13 +459,102 @@ class UpdatesTest {
         u.update()
         u.awaitState { it is UpdateState.Installing }
         runBlocking { withTimeout(5_000) { while (installer.installed.isEmpty()) kotlinx.coroutines.delay(10) } }
-        // Android replaced the app: the new process is 1.13.0.
+        // Android replaced the app: the new process is 1.13.0 (from the button: it may open again).
         val after = updates(version = "1.13.0", code = 59)
-        assertEquals("1.13.0", after.afterUpdate())
+        assertEquals(Updated("1.13.0", automatic = false), after.afterUpdate())
         assertNull(memory.read().installing)
         assertTrue(apkDir.listFiles().orEmpty().isEmpty())
         // Installed some other way (adb, the file manager): no "atualizado" notification.
         assertNull(after.afterUpdate())
+    }
+
+    private fun statesDuring(u: Updates, block: suspend () -> Unit): List<UpdateState> {
+        val seen = java.util.concurrent.CopyOnWriteArrayList<UpdateState>()
+        val job = scope.launch { u.state.collect { seen += it } }
+        runBlocking { block() }
+        Thread.sleep(100)
+        job.cancel()
+        return seen
+    }
+
+    @Test
+    fun aNewVersionGetsReadyByItselfAndAndroidInstallsItWhenTheAppIsNotInUse() {
+        installer.quiet = true
+        installer.waitsBySelf = true // Android 14+
+        val u = updates()
+        runBlocking { u.check(manual = false) }
+        assertEquals(listOf("1.13.0"), found) // the worker (Wi-Fi) is called
+        val seen = statesDuring(u) { assertTrue(u.prepareAuto()) }
+        // Quietly: nothing on the sheet moved, nothing installed in the person's face.
+        assertTrue(seen.none { it is UpdateState.Downloading || it is UpdateState.Installing })
+        assertTrue(installer.installed.isEmpty())
+        assertTrue(installer.whenIdle.single().contentEquals(apkBytes))
+        assertEquals("1.13.0", u.autoReady.value)
+        assertEquals("1.13.0", memory.read().installing)
+        // Done while the app was not in use: the new version knows (only a notice, it doesn't pop up).
+        assertEquals(Updated("1.13.0", automatic = true), updates(version = "1.13.0", code = 59).afterUpdate())
+    }
+
+    @Test
+    fun onAndroid12And13ItGoesInWhenTheAppLeavesTheScreen() {
+        installer.quiet = true
+        val u = updates()
+        runBlocking {
+            assertTrue(u.prepareAuto()) // checks by itself too
+            assertTrue(installer.whenIdle.isEmpty())
+            assertEquals("1.13.0", u.autoReady.value)
+            assertTrue(installer.installed.isEmpty())
+            // The app went to the background, no music.
+            assertTrue(u.onIdle())
+            assertTrue(installer.installed.single().contentEquals(apkBytes))
+            assertFalse(u.onIdle()) // once
+        }
+        assertEquals(1, apkCalls())
+    }
+
+    @Test
+    fun whereAndroidWouldAskNothingIsDownloadedByItself() {
+        installer.quiet = false // Android 11, or the FreeSong on the phone came from a file manager
+        val u = updates()
+        runBlocking {
+            assertFalse(u.prepareAuto())
+            assertFalse(u.onIdle())
+        }
+        assertEquals(0, apkCalls())
+        assertNull(u.autoReady.value)
+    }
+
+    @Test
+    fun anAutomaticInstallThatDoesntGoStaysQuiet() {
+        installer.quiet = true
+        installer.waitsBySelf = true
+        val u = updates()
+        runBlocking { u.prepareAuto() }
+        // Timed out, or Android wants a "yes" after all: no failure on the sheet, no "Instalar?" popping up.
+        u.onInstallStatus(InstallResult.NEEDS_CONFIRMATION, null, android.content.Intent("x"))
+        assertNull(u.confirm.value)
+        assertTrue(u.state.value is UpdateState.Available)
+        assertNull(u.autoReady.value)
+        assertNull(memory.read().installing)
+        // Ready again next time.
+        runBlocking { assertTrue(u.prepareAuto()) }
+        assertEquals(2, installer.whenIdle.size)
+        u.onInstallStatus(InstallResult.FAILED, "timeout", null)
+        assertTrue(u.state.value is UpdateState.Available)
+    }
+
+    @Test
+    fun theButtonInstallsNowEvenWithAnAutomaticOneWaiting() {
+        installer.quiet = true
+        installer.waitsBySelf = true
+        val u = updates()
+        runBlocking { u.prepareAuto() }
+        u.update()
+        u.awaitState { it is UpdateState.Installing }
+        runBlocking { withTimeout(5_000) { while (installer.installed.isEmpty()) kotlinx.coroutines.delay(10) } }
+        // No second download; and the new version knows it came from the button.
+        assertEquals(1, apkCalls())
+        assertEquals(Updated("1.13.0", automatic = false), updates(version = "1.13.0", code = 59).afterUpdate())
     }
 
     @Test

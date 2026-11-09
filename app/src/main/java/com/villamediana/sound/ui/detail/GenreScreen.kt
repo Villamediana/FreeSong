@@ -53,7 +53,7 @@ internal class GenreViewModel(name: String) : ViewModel() {
             val rnd = Random(graph.discover.drawSeed("genre:" + name.trim().lowercase()))
             val seeds = mine.shuffled(rnd).take(SEEDS).mapNotNull { it.videoId }
             val inLibrary = graph.library.allTracks().mapNotNullTo(HashSet()) { it.videoId } + graph.library.likedVideoIds.first()
-            recommended.value = runCatching { graph.discover.recommend(seeds, inLibrary, RECOMMENDED) }.getOrDefault(emptyList())
+            recommended.value = runCatching { graph.forYou.like(seeds, inLibrary, RECOMMENDED) }.getOrDefault(emptyList())
         }
     }
 

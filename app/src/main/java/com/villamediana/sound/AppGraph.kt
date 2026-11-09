@@ -161,6 +161,15 @@ class AppGraph(context: Context) {
         )
     }
 
+    /** Songs like the ones being heard: every radio and the queue's "a seguir". */
+    val songRadio: com.villamediana.sound.discover.SongRadio by lazy {
+        com.villamediana.sound.discover.SongRadio(
+            related = { id, size -> discover.related(id, size) },
+            profile = { forYou.profile() },
+            session = { com.villamediana.sound.discover.SongRadio.sessionOf(library) },
+        )
+    }
+
     /** "Feitos pra você": the day's genre mixes (your songs + new ones alike). */
     val madeForYou: com.villamediana.sound.smart.MadeForYouStore by lazy {
         com.villamediana.sound.smart.MadeForYouStore(
