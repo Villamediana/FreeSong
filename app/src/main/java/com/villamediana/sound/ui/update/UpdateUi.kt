@@ -65,6 +65,7 @@ import com.villamediana.sound.update.AppRelease
 import com.villamediana.sound.update.InstallResult
 import com.villamediana.sound.update.ReleaseNotes
 import com.villamediana.sound.update.UpdateFailure
+import com.villamediana.sound.update.UpdateNotifier
 import com.villamediana.sound.update.UpdateState
 import com.villamediana.sound.update.Updates
 import com.villamediana.sound.ui.theme.Motion
@@ -85,6 +86,7 @@ fun UpdateHost(updates: Updates = SoundApplication.graph.updates) {
     // Android's "Atualizar?" opened only now.
     LaunchedEffect(lifecycle, updates) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            UpdateNotifier.clearUpdated(context)
             updates.checkIfDue()
             updates.onResume()
             updates.confirm.collect { intent ->

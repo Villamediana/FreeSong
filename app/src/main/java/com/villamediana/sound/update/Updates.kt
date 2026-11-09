@@ -64,10 +64,13 @@ internal data class UpdateMemory(
     /** The version handed to Android: when the app comes back as it, the update went through. */
     val installing: String? = null,
     /**
-     * The version the user tapped "Atualizar" on, waiting for the install permission. Android may
-     * restart the app when that permission is given; the update carries on from here when it does.
+     * The version the user tapped "Atualizar" on, until Android answers the install. Android may
+     * close the app on the way (it restarts it when the install permission is given); the update
+     * carries on by itself when the app opens again, without another tap.
      */
     val wants: String? = null,
+    /** How many times [wants] carried on by itself at an opening (a cap, so it can never loop). */
+    val resumed: Int = 0,
 )
 
 internal class UpdateMemoryFile(private val file: File) {
@@ -134,11 +137,6 @@ class Updates internal constructor(
             return
         }
         _state.compareAndSet(UpdateState.Idle, UpdateState.Available(release))
-        // Back after Android restarted the app for the install permission: the same update, carried on.
-        if (saved.wants == release.version) {
-            _sheet.value = true
-            update()
-        }
     }
 
     /** A quiet check when the last one is older than [CHECK_EVERY_MS] (app on screen). */
@@ -220,27 +218,32 @@ class Updates internal constructor(
         scope.launch(Dispatchers.IO) { memory.change { it.copy(dismissed = release.version, wants = null) } }
     }
 
-    /** The button: permission (once), download (or the one already here), install. */
-    fun update() {
+    /**
+     * The button: permission (once), download (or the one already here), install, in one go. [fresh]
+     * is a tap (the carry-on count starts over); false when the app carries on by itself.
+     */
+    fun update(fresh: Boolean = true) {
         val release = _state.value.release ?: return
         if (work?.isActive == true) return
         work = scope.launch {
+            // Kept until Android answers the install: if the app is closed on the way, it carries on.
+            withContext(Dispatchers.IO) {
+                memory.change { it.copy(wants = release.version, resumed = if (fresh) 0 else it.resumed) }
+            }
             if (!installer.canInstall()) {
-                withContext(Dispatchers.IO) { memory.change { it.copy(wants = release.version) } }
                 _state.value = UpdateState.NeedsPermission(release)
                 return@launch
             }
-            withContext(Dispatchers.IO) { if (memory.read().wants != null) memory.change { it.copy(wants = null) } }
             val apk = try {
                 withContext(Dispatchers.IO) { ready(release) ?: download(release) }
             } catch (e: UpdateException) {
-                _state.value = UpdateState.Failed(release, e.reason, e.message)
+                fail(release, e.reason, e.message)
                 return@launch
             }
             val info = withContext(Dispatchers.IO) { runCatching { installer.inspect(apk) }.getOrNull() }
             if (info == null || info.packageName != current.packageName || info.versionCode <= current.versionCode) {
                 apk.delete()
-                _state.value = UpdateState.Failed(release, UpdateFailure.PACKAGE, info?.let { "${it.packageName} ${it.versionCode}" })
+                fail(release, UpdateFailure.PACKAGE, info?.let { "${it.packageName} ${it.versionCode}" })
                 return@launch
             }
             _state.value = UpdateState.Installing(release)
@@ -248,16 +251,44 @@ class Updates internal constructor(
             try {
                 withContext(Dispatchers.IO) { installer.install(apk) }
             } catch (e: Exception) {
-                memory.change { it.copy(installing = null) }
-                _state.value = UpdateState.Failed(release, if (e is IOException) UpdateFailure.STORAGE else UpdateFailure.INSTALL, e.message)
+                fail(release, if (e is IOException) UpdateFailure.STORAGE else UpdateFailure.INSTALL, e.message)
             }
         }
     }
 
-    /** Back on screen (from the system settings): with the permission given, the update carries on. */
+    /** A failure the sheet shows; nothing carries on by itself after it (the button tries again). */
+    private fun fail(release: AppRelease, reason: UpdateFailure, detail: String?) {
+        memory.change { it.copy(installing = null, wants = null) }
+        _state.value = UpdateState.Failed(release, reason, detail)
+    }
+
+    /**
+     * The app on screen. Back from the system settings with the permission given, the update
+     * carries on; and when Android closed the app mid-way (it restarts it for the install
+     * permission, or closed it during the download or the "Instalar?" screen), the same update
+     * carries on by itself, a few times at most. Only on screen: an install never starts while
+     * the app runs in the background (it would cut the music).
+     */
     fun onResume() {
-        val s = _state.value
-        if (s is UpdateState.NeedsPermission && installer.canInstall()) update()
+        if (!enabled) return
+        scope.launch {
+            restored?.join()
+            val s = _state.value
+            val release = s.release ?: return@launch
+            if (work?.isActive == true) return@launch
+            when (s) {
+                is UpdateState.NeedsPermission -> if (installer.canInstall()) update()
+                is UpdateState.Available -> {
+                    val saved = withContext(Dispatchers.IO) { memory.read() }
+                    if (saved.wants == release.version && saved.resumed < MAX_RESUMES) {
+                        withContext(Dispatchers.IO) { memory.change { it.copy(resumed = it.resumed + 1) } }
+                        _sheet.value = true
+                        update(fresh = false)
+                    }
+                }
+                else -> Unit
+            }
+        }
     }
 
     /** Android's answer to the install. */
@@ -267,12 +298,13 @@ class Updates internal constructor(
             InstallResult.NEEDS_CONFIRMATION -> _confirm.value = confirmation
             // The new version replaces this process; nothing left to do here.
             InstallResult.SUCCESS -> Unit
+            // "Cancelar" on Android's screen: the person said no; nothing carries on by itself.
             InstallResult.CANCELLED -> {
-                memory.change { it.copy(installing = null) }
+                memory.change { it.copy(installing = null, wants = null) }
                 if (release != null) _state.value = UpdateState.Available(release)
             }
             else -> {
-                memory.change { it.copy(installing = null) }
+                memory.change { it.copy(installing = null, wants = null) }
                 val reason = when (result) {
                     InstallResult.CONFLICT -> UpdateFailure.CONFLICT
                     InstallResult.STORAGE -> UpdateFailure.STORAGE
@@ -295,7 +327,7 @@ class Updates internal constructor(
     fun afterUpdate(): String? {
         val saved = memory.read()
         val mine = saved.installing != null && Versions.compare(saved.installing, currentVersion) == 0
-        if (saved.installing != null) memory.change { it.copy(installing = null) }
+        if (saved.installing != null || saved.wants != null) memory.change { it.copy(installing = null, wants = null, resumed = 0) }
         clearApks()
         return if (mine) currentVersion else null
     }
@@ -349,6 +381,8 @@ class Updates internal constructor(
 
     companion object {
         const val CHECK_EVERY_MS = 6L * 3_600_000
+        /** Openings an update carries on by itself after one tap (then it waits for the button). */
+        const val MAX_RESUMES = 3
 
         internal fun sha256(file: File): String {
             val md = MessageDigest.getInstance("SHA-256")

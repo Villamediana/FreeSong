@@ -219,18 +219,88 @@ class UpdatesTest {
         u.update()
         u.awaitState { it is UpdateState.NeedsPermission }
         assertEquals("1.13.0", memory.read().wants)
-        // Permission given in the system settings; Android killed the process; the app comes back.
+        // Permission given in the system settings; Android killed the process; the app comes back on screen.
         installer.allowed = true
         val back = updates()
+        back.onResume()
         back.awaitState { it is UpdateState.Installing }
         assertTrue(back.sheet.value)
-        assertNull(memory.read().wants)
+        // Kept until Android answers the install (closed again on the way, it carries on again).
+        assertEquals("1.13.0", memory.read().wants)
         // Without the permission it comes back to the same step, sheet open.
         installer.allowed = false
-        memory.change { it.copy(wants = "1.13.0", installing = null) }
+        memory.change { it.copy(wants = "1.13.0", installing = null, resumed = 0) }
         val again = updates()
+        again.onResume()
         again.awaitState { it is UpdateState.NeedsPermission }
         assertTrue(again.sheet.value)
+    }
+
+    private fun awaitInstalls(n: Int) = runBlocking { withTimeout(5_000) { while (installer.installed.size < n) kotlinx.coroutines.delay(10) } }
+
+    @Test
+    fun closedMidWayTheUpdateCarriesOnWhenTheAppIsBackOnScreen() {
+        val u = updates()
+        runBlocking { u.check(manual = false) }
+        u.update()
+        u.awaitState { it is UpdateState.Installing }
+        awaitInstalls(1)
+        // Android closed the app before the "Instalar?" screen was answered. The process comes back
+        // in the background (music, a notification): nothing is installed from there.
+        val background = updates()
+        background.awaitState { it is UpdateState.Available }
+        Thread.sleep(200)
+        assertEquals(1, installer.installed.size)
+        // On screen: straight to Android's screen again, no tap, no second download.
+        background.onResume()
+        background.awaitState { it is UpdateState.Installing }
+        awaitInstalls(2)
+        assertTrue(background.sheet.value)
+        assertEquals(1, apkCalls())
+    }
+
+    @Test
+    fun itCarriesOnByItselfAFewTimesAtMostAndNeverAfterANo() {
+        val u = updates()
+        runBlocking { u.check(manual = false) }
+        u.update()
+        awaitInstalls(1)
+        // Closed again and again on the way: it carries on MAX_RESUMES times, then waits for the button.
+        repeat(Updates.MAX_RESUMES) { i ->
+            val back = updates()
+            back.onResume()
+            awaitInstalls(i + 2)
+        }
+        val tired = updates()
+        tired.onResume()
+        Thread.sleep(300)
+        assertEquals(Updates.MAX_RESUMES + 1, installer.installed.size)
+        assertTrue(tired.state.value is UpdateState.Available)
+        // A tap starts over; "Cancelar" on Android's screen is a no: the next opening leaves it be.
+        tired.update()
+        awaitInstalls(Updates.MAX_RESUMES + 2)
+        tired.onInstallStatus(InstallResult.CANCELLED, null, null)
+        assertNull(memory.read().wants)
+        val after = updates()
+        after.onResume()
+        Thread.sleep(300)
+        assertEquals(Updates.MAX_RESUMES + 2, installer.installed.size)
+    }
+
+    @Test
+    fun aFailureDoesNotCarryOnByItself() {
+        apk = ByteArray(10)
+        val u = updates()
+        runBlocking { u.check(manual = false) }
+        u.update()
+        u.awaitState { it is UpdateState.Failed }
+        assertNull(memory.read().wants)
+        val back = updates()
+        back.onResume()
+        Thread.sleep(300)
+        // No second download by itself: the button says "Tentar de novo".
+        assertEquals(1, apkCalls())
+        assertTrue(back.state.value is UpdateState.Available)
     }
 
     @Test
