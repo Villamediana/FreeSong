@@ -122,12 +122,20 @@ class UpdateStatusReceiver : BroadcastReceiver() {
     }
 }
 
-/** The new version, right after Android replaced the app: "FreeSong atualizado" when the update came from the app. */
+/**
+ * The new version, right after Android replaced the app (Android closes the app to install it).
+ * When the update came from the app: it opens again by itself where Android lets it (Android 10+
+ * usually holds back an app opening itself from the background), and "FreeSong atualizado · toque
+ * pra abrir" is there either way (it goes away once the app is on screen).
+ */
 class UpdatedReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
         val version = SoundApplication.graph.updates.afterUpdate() ?: return
         UpdateNotifier.updated(context, version)
+        runCatching {
+            context.startActivity(Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
     }
 }
 
@@ -169,6 +177,11 @@ object UpdateNotifier {
             context.getString(R.string.update_notif_available_text, release.version),
             openSheet = true,
         )
+    }
+
+    /** The app is on screen: "atualizado · toque pra abrir" has done its job. */
+    fun clearUpdated(context: Context) {
+        NotificationManagerCompat.from(context).cancel(Notifications.ID_UPDATED)
     }
 
     fun updated(context: Context, version: String) {
