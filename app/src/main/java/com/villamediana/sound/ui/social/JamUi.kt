@@ -38,6 +38,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
@@ -375,4 +378,46 @@ fun RoundAction(icon: androidx.compose.ui.graphics.vector.ImageVector, label: St
     ) {
         Icon(icon, label, tint = if (filled) SoundColors.OnAccent else SoundColors.TextMuted, modifier = Modifier.size(20.dp))
     }
+}
+
+/**
+ * In a jam, anywhere in the app: a pill over the mini player with the faces and how many are in
+ * it; a tap opens the jam. It steps aside while the player is open (the player has its own badge).
+ */
+@Composable
+fun JamPill(shown: Boolean, modifier: Modifier = Modifier) {
+    val hub = SoundApplication.graph.social
+    val jam by hub.jam.jam.collectAsStateWithLifecycle()
+    var open by rememberSaveable { mutableStateOf(false) }
+    val current = jam
+    androidx.compose.animation.AnimatedVisibility(
+        visible = shown && current != null,
+        enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.scaleIn(initialScale = 0.85f),
+        exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.scaleOut(targetScale = 0.85f),
+        modifier = modifier,
+    ) {
+        val j = current ?: return@AnimatedVisibility
+        Row(
+            Modifier
+                .shadow(10.dp, CircleShape, clip = false)
+                .clip(CircleShape)
+                .background(SoundColors.Accent)
+                .clickable { open = true }
+                .padding(start = 12.dp, end = 6.dp, top = 5.dp, bottom = 5.dp)
+                .semantics { contentDescription = "jam-pill" },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Rounded.GraphicEq, null, tint = SoundColors.OnAccent, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(
+                stringResource(R.string.jam_count, j.members.size),
+                style = MaterialTheme.typography.labelLarge,
+                color = SoundColors.OnAccent,
+                maxLines = 1,
+            )
+            Spacer(Modifier.width(8.dp))
+            AvatarStack(j.members, 24.dp, max = 3)
+        }
+    }
+    if (open) JamSheet(onDismiss = { open = false })
 }

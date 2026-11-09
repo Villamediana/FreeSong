@@ -35,6 +35,10 @@ sealed interface RelayEvent {
     /** The jam changed (someone played, joined, left…); [rejected] when this phone's change lost the race. */
     data class JamChanged(val jam: Jam, val rejected: String?) : RelayEvent
     data class JamEnded(val jamId: String) : RelayEvent
+    /** A friend started ([on]) or stopped writing to you. */
+    data class Typing(val from: String, val on: Boolean) : RelayEvent
+    /** Someone's name or photo changed (a friend, someone in your jam, or you on another phone). */
+    data class ProfileChanged(val user: Profile) : RelayEvent
     /** The relay turned this phone away (profile deleted, signed out from another phone): check the account. */
     data object SignedOut : RelayEvent
 }
@@ -194,6 +198,8 @@ class RelayLink(
                     ),
                 )
                 "jam.ended" -> _events.tryEmit(RelayEvent.JamEnded(o["jamId"]!!.jsonPrimitive.content))
+                "typing" -> _events.tryEmit(RelayEvent.Typing(o["from"]!!.jsonPrimitive.content, o["on"]?.jsonPrimitive?.content != "false"))
+                "profile" -> _events.tryEmit(RelayEvent.ProfileChanged(RelayJson.decodeFromJsonElement(Profile.serializer(), o["user"]!!)))
             }
         }
     }

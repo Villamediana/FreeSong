@@ -49,13 +49,28 @@ object SocialNotifier {
      */
     fun message(context: Context, from: Profile, d: Delivery, quiet: Boolean = false) {
         val song = d.track
+        val voice = d.voice
         val (title, text) = when {
             d.kind == "text" && d.text != null -> from.name to d.text
+            d.kind == "voice" && voice != null -> from.name to context.getString(R.string.social_notif_voice, clock(voice.ms))
             song != null -> context.getString(R.string.social_notif_song_title, from.name) to
                 listOf(song.title, song.artist).filter { it.isNotBlank() }.joinToString(" · ")
             else -> return
         }
-        post(context, Notifications.ID_SOCIAL_SONG + (from.id.hashCode() and 0xffff), title, text, "chat:${from.id}", quiet = quiet)
+        post(context, chatId(from.id), title, text, "chat:${from.id}", quiet = quiet)
+    }
+
+    /** The conversation with [friendId] was opened: its notification goes. */
+    fun clearChat(context: Context, friendId: String) {
+        NotificationManagerCompat.from(context).cancel(chatId(friendId))
+    }
+
+    private fun chatId(friendId: String) = Notifications.ID_SOCIAL_SONG + (friendId.hashCode() and 0xffff)
+
+    /** "0:12" */
+    fun clock(ms: Long): String {
+        val s = (ms + 500) / 1000
+        return "%d:%02d".format(s / 60, s % 60)
     }
 
     fun jam(context: Context, from: Profile) = post(
@@ -94,8 +109,9 @@ object SocialNotifier {
 }
 
 /**
- * With the app closed: once an hour (with internet) it fetches the songs friends sent and the
- * friend requests, and tells about the new ones.
+ * With the app closed and nothing playing: every 15 minutes (the shortest Android allows without a
+ * push service; with internet) it fetches what friends sent and the friend requests, and tells
+ * about the new ones. While the app is open or music plays, the live line brings them at once.
  */
 class SocialWorker(appContext: Context, params: WorkerParameters) : CoroutineWorker(appContext, params) {
     override suspend fun doWork(): Result {
@@ -105,8 +121,12 @@ class SocialWorker(appContext: Context, params: WorkerParameters) : CoroutineWor
         for ((from, d) in hub.drainMailbox()) {
             if (!onScreen && from != null) SocialNotifier.message(applicationContext, from, d)
         }
-        // The vault too: what this profile's other phones did (hearts, playlists, songs) comes in.
-        runCatching { hub.vault.sync() }
+        // The vault too, once an hour: what this profile's other phones did (hearts, playlists, songs) comes in.
+        val stamp = File(applicationContext.filesDir, "social-vault-checked")
+        if (System.currentTimeMillis() - stamp.lastModified() >= VAULT_EVERY_MS) {
+            runCatching { hub.vault.sync() }
+            runCatching { stamp.writeText(""); stamp.setLastModified(System.currentTimeMillis()) }
+        }
         val page = hub.refreshFriends() ?: return Result.success()
         val seenFile = File(applicationContext.filesDir, "social-requests-notified.txt")
         val seen = runCatching { seenFile.readLines().toSet() }.getOrDefault(emptySet())
@@ -118,12 +138,14 @@ class SocialWorker(appContext: Context, params: WorkerParameters) : CoroutineWor
 
     companion object {
         private const val NAME = "social-check"
+        private const val VAULT_EVERY_MS = 3_600_000L
 
         fun schedule(context: Context) {
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
                 NAME,
-                ExistingPeriodicWorkPolicy.KEEP,
-                PeriodicWorkRequestBuilder<SocialWorker>(1, TimeUnit.HOURS)
+                // UPDATE: phones that had the hourly check move to every 15 minutes.
+                ExistingPeriodicWorkPolicy.UPDATE,
+                PeriodicWorkRequestBuilder<SocialWorker>(15, TimeUnit.MINUTES)
                     .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
                     .build(),
             )

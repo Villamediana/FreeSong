@@ -226,6 +226,7 @@ class PlaybackService : MediaLibraryService() {
     }
 
     override fun onDestroy() {
+        PlaybackPulse.playing.value = false
         saveNow()
         finishListen()
         crossfader.release()
@@ -865,6 +866,7 @@ class PlaybackService : MediaLibraryService() {
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
+            PlaybackPulse.playing.value = isPlaying
             // Replaying after the end (or after an error) starts a new listen of the same song.
             if (isPlaying && listen.currentTrackId == null) startListen(player.currentMediaItem)
             listen.setPlaying(isPlaying)

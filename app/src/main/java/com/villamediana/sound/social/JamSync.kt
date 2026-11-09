@@ -79,13 +79,18 @@ object JamSync {
     fun skipTo(jam: JamState, index: Int): JamState? =
         if (index in jam.queue.indices) jam.copy(index = index, positionMs = 0, playing = true) else null
 
-    /** A new list played from [start] (a song tapped anywhere, a playlist, a radio…). */
+    /**
+     * A new list played from [start] (a song tapped anywhere, a playlist, a radio…). The tapped song
+     * is always the one that plays, however far down a long list it is (the queue is cut around it).
+     */
     fun play(songs: List<SongRef>, start: Int): JamState? {
-        val list = songs.distinctBy { it.videoId }.take(MAX_QUEUE)
+        val list = songs.distinctBy { it.videoId }
         if (list.isEmpty()) return null
         val asked = songs.getOrNull(start)?.videoId
         val index = list.indexOfFirst { it.videoId == asked }.coerceAtLeast(0)
-        return JamState(queue = list, index = index, positionMs = 0, playing = true)
+        val from = (index - MAX_QUEUE / 4).coerceAtLeast(0)
+        val window = list.subList(from, minOf(list.size, from + MAX_QUEUE)).toList()
+        return JamState(queue = window, index = index - from, positionMs = 0, playing = true)
     }
 
     /** "Tocar a seguir" ([next]) or "Adicionar à fila". */
@@ -138,4 +143,40 @@ object JamSync {
     }
 
     const val MAX_QUEUE = 200
+
+    /**
+     * Bytes of songs one change to the relay may carry: its messages stop at 64 KB, and a longer
+     * one closed the line without changing anything (a song tapped in a long list didn't play).
+     */
+    const val QUEUE_BUDGET = 40_000
+
+    /**
+     * A queue the relay takes: at most [MAX_QUEUE] songs and [budget] bytes, the song at [index]
+     * always in, then the songs after it, then the ones before it (nearest first). The new queue and
+     * where that song is in it.
+     */
+    fun fit(queue: List<SongRef>, index: Int, sizeOf: (SongRef) -> Int, budget: Int = QUEUE_BUDGET): Pair<List<SongRef>, Int> {
+        if (queue.isEmpty()) return queue to 0
+        val at = index.coerceIn(0, queue.lastIndex)
+        var left = budget - sizeOf(queue[at])
+        var count = 1
+        var end = at + 1
+        while (end < queue.size && count < MAX_QUEUE) {
+            val size = sizeOf(queue[end])
+            if (size > left) break
+            left -= size
+            count++
+            end++
+        }
+        var start = at
+        while (start > 0 && count < MAX_QUEUE) {
+            val size = sizeOf(queue[start - 1])
+            if (size > left) break
+            left -= size
+            count++
+            start--
+        }
+        if (start == 0 && end == queue.size) return queue to at
+        return queue.subList(start, end).toList() to (at - start)
+    }
 }

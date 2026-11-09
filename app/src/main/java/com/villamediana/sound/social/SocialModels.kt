@@ -72,6 +72,12 @@ data class SongRef(
     val cover: String? = null,
     val url: String? = null,
 ) {
+    /** Without what the other phones work out by themselves (the video's own picture and link): smaller on the wire. */
+    fun compact(): SongRef = copy(
+        cover = cover?.takeUnless { it == thumbnailOf(videoId) },
+        url = url?.takeUnless { it == YouTubeLinks.watchUrl(videoId, music = true) },
+    )
+
     fun toRemote(): RemoteTrack = RemoteTrack(
         videoId = videoId,
         url = url?.takeIf { it.startsWith("https://") } ?: YouTubeLinks.watchUrl(videoId, music = true),
@@ -130,11 +136,15 @@ data class FriendsPage(
 @Serializable
 data class UsersPage(val users: List<Profile> = emptyList(), val next: Int? = null)
 
-/** A song a friend sent while it was on its way (the relay forgets it once this phone confirms). */
+/** Something a friend sent while it was on its way (the relay forgets it once this phone confirms). */
 @Serializable
 data class Delivery(
     val id: Long,
-    /** "share" (a song: [track]), "text" ([text]) or "reaction" ([emoji] on the message [ref]; "" takes it back). */
+    /**
+     * "share" (a song: [track]), "text" ([text]), "voice" ([voice]; its audio is fetched before the
+     * ack), "edit" (the new [text] of the message [ref]) or "reaction" ([emoji] on the message [ref];
+     * "" takes it back).
+     */
     val kind: String,
     val from: String,
     val at: Long,
@@ -142,7 +152,14 @@ data class Delivery(
     val text: String? = null,
     val ref: Long? = null,
     val emoji: String? = null,
+    val voice: VoiceInfo? = null,
+    /** The message this one answers (its delivery id, the same on both phones). */
+    val replyTo: Long? = null,
 )
+
+/** A voice message as it travels: how long, its waves (one level 0–f per bar) and its size. */
+@Serializable
+data class VoiceInfo(val ms: Long, val wave: String, val bytes: Long = 0)
 
 @Serializable
 data class Mailbox(val deliveries: List<Delivery> = emptyList(), val from: List<Profile> = emptyList(), val requests: Int = 0)

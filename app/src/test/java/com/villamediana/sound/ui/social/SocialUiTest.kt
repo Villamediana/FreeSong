@@ -26,6 +26,9 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.unit.dp
 import com.villamediana.sound.data.ThemeMode
 import com.villamediana.sound.data.db.SharedSong
@@ -102,16 +105,24 @@ class SocialUiTest {
                     FilterPill("Pessoas", selected = false, onClick = {})
                 }
                 RequestRow(FriendRequest(1, day, carla), onAccept = {}, onDecline = {}, onOpen = {})
-                FriendRow(FriendLine(ana, shared(3, "uana", SharedSong.IN, "Garota de Ipanema", "Tom Jobim", seen = false), 1), onOpen = { opened = "ana" })
-                FriendRow(FriendLine(bruno, shared(2, "ubru", SharedSong.OUT, "Vapor Barato", "O Rappa"), 0), onOpen = {})
+                FriendRow(FriendLine(ana, shared(3, "uana", SharedSong.IN, "Garota de Ipanema", "Tom Jobim", seen = false), 1), onChat = { opened = "ana" }, onProfile = { opened = "ana-page" })
+                FriendRow(FriendLine(bruno, shared(2, "ubru", SharedSong.OUT, "Vapor Barato", "O Rappa"), 0, typing = true), onChat = {}, onProfile = {})
             }
         }
         compose.onNodeWithText("@miguel").assertExists()
         compose.onNodeWithText("Garota de Ipanema · Tom Jobim").assertExists()
-        compose.onNodeWithText("Você: Vapor Barato").assertExists()
+        // Bruno is writing now: that shows instead of the last message.
+        compose.onNodeWithText("escrevendo…").assertExists()
         compose.onNodeWithText("3 na jam").assertExists()
+        // The unread count sits on the conversation's button.
+        compose.onNodeWithText("1").assertExists()
         shot("social-friends")
+        // The line opens the conversation; the person button, the page.
         compose.onNodeWithText("Ana Lima").performClick()
+        assertEquals("ana", opened)
+        compose.onNodeWithContentDescription("Perfil de Ana Lima").performClick()
+        assertEquals("ana-page", opened)
+        compose.onNodeWithContentDescription("Conversa com Ana Lima").performClick()
         assertEquals("ana", opened)
     }
 
@@ -205,7 +216,7 @@ class SocialUiTest {
                     isFriend = true,
                     unread = 2,
                     relation = "friends",
-                    inJam = false,
+                    jam = PersonJam.NONE,
                     snackbar = com.villamediana.sound.ui.detail.rememberDetailSnackbar(),
                     onChat = { chats++ }, onJam = {}, onMenu = {}, onAdd = {},
                 )
@@ -308,7 +319,7 @@ class SocialUiTest {
         compose.setContent {
             PageHost(dark = false) {
                 FriendPage(
-                    person = carla, isFriend = false, unread = 0, relation = null, inJam = false,
+                    person = carla, isFriend = false, unread = 0, relation = null, jam = PersonJam.NONE,
                     snackbar = com.villamediana.sound.ui.detail.rememberDetailSnackbar(),
                     onChat = {}, onJam = {}, onMenu = {}, onAdd = {},
                 )
@@ -419,7 +430,7 @@ class SocialUiTest {
         compose.setContent {
             PageHost {
                 FriendPage(
-                    person = friend, isFriend = true, relation = "friends", unread = 0, inJam = false,
+                    person = friend, isFriend = true, relation = "friends", unread = 0, jam = PersonJam.NONE,
                     snackbar = com.villamediana.sound.ui.detail.rememberDetailSnackbar(),
                     onChat = {}, onJam = {}, onMenu = {}, onAdd = {},
                 )
@@ -432,5 +443,74 @@ class SocialUiTest {
         compose.onNodeWithText("Rubel").assertExists()
         list.performScrollToNode(androidx.compose.ui.test.hasText("Ana é da manhã"))
         compose.onNodeWithText("Ritmo de Ana").assertExists()
+    }
+
+    @Test
+    fun aConversationAnswersCorrectsAndSpeaks() {
+        val day = java.time.LocalDate.now().atTime(10, 0).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val messages = listOf(
+            text(1, SharedSong.IN, "Ouviu o disco novo?", day),
+            text(2, SharedSong.OUT, "Ouvi! Que disco", day + 60_000).copy(replyTo = 1, editedAt = day + 90_000),
+            SharedSong(
+                id = 3, friendId = "uana", direction = SharedSong.IN, deliveryId = 3, videoId = "", title = "", artist = "", at = day + 120_000,
+                seen = true, kind = SharedSong.VOICE, voiceMs = 12_000, voiceWave = "0369cfc963" + "0369cfc963", replyTo = 1,
+            ),
+        )
+        var cancelled = 0
+        var replied: SharedSong? = null
+        var edited: SharedSong? = null
+        compose.setContent {
+            PageHost {
+                ChatPage(
+                    friend = ana, messages = messages, pending = emptyList(), draft = "", onDraft = {},
+                    snackbar = com.villamediana.sound.ui.detail.rememberDetailSnackbar(),
+                    onSend = {}, onPickSong = {}, onPlay = {}, onReact = { _, _ -> }, onOpenFriend = {},
+                    typing = true,
+                    replyTo = messages[0],
+                    onReply = { replied = it },
+                    onEdit = { edited = it },
+                    onCancelCompose = { cancelled++ },
+                )
+            }
+        }
+        // Ana writing: in the header and as dots at the foot of the conversation.
+        compose.onNodeWithText("escrevendo…").assertExists()
+        // The answer carries the message it answers; the corrected text says so.
+        assertEquals(4, compose.onAllNodesWithText("Ouviu o disco novo?").fetchSemanticsNodes().size)
+        compose.onNodeWithText("editada", substring = true).assertExists()
+        // The voice message: its length; the quotes say who said what they answer.
+        compose.onNodeWithText("0:12").assertExists()
+        assertEquals(2, compose.onAllNodesWithText("Ana").fetchSemanticsNodes().size)
+        // Answering Ana now: the bar over the box, with a way out.
+        compose.onNodeWithText("Respondendo Ana").assertExists()
+        shot("social-chat-reply")
+        compose.onNodeWithContentDescription("compose-cancel").performClick()
+        assertEquals(1, cancelled)
+        // Hold your own text: answer it, or correct it.
+        compose.onNodeWithText("Ouvi! Que disco").performTouchInput { longClick() }
+        compose.waitForIdle()
+        compose.onNodeWithText("Editar").performClick()
+        assertEquals(2L, edited?.id)
+        // Drag a message to the right: it is answered.
+        compose.onNodeWithText("0:12").performTouchInput { swipeRight(startX = centerX - 200f, endX = centerX + 120f) }
+        compose.waitForIdle()
+        assertEquals(3L, replied?.id)
+    }
+
+    @Test
+    fun aFriendInYourJamSaysSo() {
+        var opened = 0
+        compose.setContent {
+            PageHost(dark = false) {
+                FriendPage(
+                    person = ana, isFriend = true, unread = 0, relation = "friends", jam = PersonJam.TOGETHER,
+                    snackbar = com.villamediana.sound.ui.detail.rememberDetailSnackbar(),
+                    onChat = {}, onJam = {}, onOpenJam = { opened++ }, onMenu = {}, onAdd = {},
+                )
+            }
+        }
+        compose.onNodeWithText("Chamar pra jam").assertDoesNotExist()
+        compose.onNodeWithText("Na jam").performClick()
+        assertEquals(1, opened)
     }
 }

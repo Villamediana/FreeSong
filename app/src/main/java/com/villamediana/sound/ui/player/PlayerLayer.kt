@@ -245,6 +245,8 @@ internal fun PlayerHost(
     var actionsFor by remember { mutableStateOf<Track?>(null) }
 
     LaunchedEffect(expand) { snapshotFlow { expand.target }.collect { savedExpanded = it == 1f } }
+    LaunchedEffect(expand) { snapshotFlow { expand.progress > 0.01f || expand.target > 0f }.collect { Chrome.playerRising = it } }
+    DisposableEffect(Unit) { onDispose { Chrome.playerRising = false } }
 
     val hasMediaNow by rememberUpdatedState(state.hasMedia)
     DisposableEffect(navigator, expand) {

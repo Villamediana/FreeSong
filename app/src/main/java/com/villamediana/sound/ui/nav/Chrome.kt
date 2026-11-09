@@ -12,6 +12,9 @@ object Chrome {
      */
     var hideMiniPlayer: Boolean by mutableStateOf(false)
 
+    /** The player is open or opening (things floating over the pages step aside). */
+    var playerRising: Boolean by mutableStateOf(false)
+
     /** Uptime of the last tap on a song to play it: the player opens expanded once it has the song. */
     var openPlayerAt: Long by mutableStateOf(0L)
         private set

@@ -172,11 +172,13 @@ class PhoneVault(
                 )
             }.sortedBy { it.key },
             imported = library.importedList().map { VImported(it.url, it.name, it.owner, it.coverUrl, it.tracksJson, it.trackCount, it.importedAt) }.sortedBy { it.url },
-            shared = shared.all().map {
+            // Voice messages stay on the phone that has their audio (it doesn't fit the vault).
+            shared = shared.all().filterNot { it.isVoice }.map {
                 VShared(
                     it.friendId, it.direction, it.deliveryId, VSong(it.videoId, it.title, it.artist, it.album, it.durationMs, it.cover, it.url), it.at, it.seen,
                     kind = it.kind, text = it.text,
                     myReaction = it.myReaction, myReactionAt = it.myReactionAt, theirReaction = it.theirReaction, theirReactionAt = it.theirReactionAt,
+                    replyTo = it.replyTo, editedAt = it.editedAt,
                 )
             }.sortedWith(compareBy<VShared> { it.at }.thenBy { it.key }),
             genres = VGenres(chosen, sortedIds, genreAt),
@@ -225,6 +227,7 @@ class PhoneVault(
         // Conversations with friends: messages, what was seen, the reactions.
         val mineShared = local.shared.associateBy { it.key }
         for (s in merged.shared) {
+            if (s.kind == SharedSong.VOICE) continue
             val mine = mineShared[s.key]
             if (mine == null) {
                 shared.insert(
@@ -234,10 +237,12 @@ class PhoneVault(
                         cover = s.song.cover, url = s.song.url, at = s.at, seen = s.seen,
                         kind = s.kind, text = s.text,
                         myReaction = s.myReaction, myReactionAt = s.myReactionAt, theirReaction = s.theirReaction, theirReactionAt = s.theirReactionAt,
+                        replyTo = s.replyTo, editedAt = s.editedAt,
                     ),
                 )
                 continue
             }
+            if (s.editedAt > mine.editedAt && s.text != null) shared.editText(s.friendId, s.direction, s.deliveryId, s.text, s.editedAt)
             if (s.seen && !mine.seen) shared.markSeenOne(s.direction, s.deliveryId)
             if (s.myReactionAt > mine.myReactionAt) shared.setMyReaction(s.friendId, s.deliveryId, s.myReaction, s.myReactionAt)
             if (s.theirReactionAt > mine.theirReactionAt) shared.setTheirReaction(s.friendId, s.deliveryId, s.theirReaction, s.theirReactionAt)

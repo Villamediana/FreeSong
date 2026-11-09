@@ -1,7 +1,15 @@
-# FreeSong relay: API (v1.5.0)
+# FreeSong relay: API (v1.6.0)
 
 Contrato entre o app e o servidor. Endereço: `https://freesong.simplyonegoal.com`.
 Instalação do servidor: [DEPLOY.md](DEPLOY.md).
+
+## Novidades da 1.6.0
+
+**Conversa mais completa**: responder (`replyTo` em texto, música e voz), editar texto
+(`POST /v1/messages/edit` → entrega `kind: "edit"`), mensagem de voz (`POST /v1/voice` + `GET
+/v1/voice/:id`, entrega `kind: "voice"`) e "escrevendo…" (`typing` no WebSocket, nos dois sentidos).
+Nome ou foto trocados chegam na hora pelo evento `profile`. Ver [Conversa](#conversa) e
+[WebSocket](#websocket-wssfreesongsimplyonegoalcomv1ws).
 
 ## Novidades da 1.5.0
 
@@ -136,8 +144,11 @@ viram amigos.
 
 | Método e rota | Corpo | Resposta | Erros |
 |---|---|---|---|
-| `POST /v1/shares` | `{to, track}` | `201 {share: {id, at}}` | `404 unknown_user`, `403 not_friends`, `400 invalid_track`, `429 inbox_full`, `429 slow_down` |
-| `POST /v1/messages` | `{to, text}` | `201 {message: {id, at}}` | os mesmos + `400 invalid_text` |
+| `POST /v1/shares` | `{to, track, replyTo?}` | `201 {share: {id, at}}` | `404 unknown_user`, `403 not_friends`, `400 invalid_track`, `429 inbox_full`, `429 slow_down` |
+| `POST /v1/messages` | `{to, text, replyTo?}` | `201 {message: {id, at}}` | os mesmos + `400 invalid_text`, `400 invalid_reply` |
+| `POST /v1/messages/edit` | `{to, ref, text}` | `201 {edit: {id, at}}` | os mesmos + `400 invalid_edit`, `400 invalid_text` |
+| `POST /v1/voice?to=&ms=&wave=&replyTo=` | o áudio (AAC em MP4, até 1,5 MB) | `201 {voice: {id, at}}` | os mesmos + `400 invalid_voice`, `413 too_large` |
+| `GET /v1/voice/:id` | | o áudio (`audio/mp4`) | `404 unknown_voice` |
 | `POST /v1/reactions` | `{to, ref, emoji}` | `201 {reaction: {id, at}}` | os mesmos + `400 invalid_reaction` |
 | `GET /v1/mailbox` | | `{deliveries, from, requests}` | |
 | `POST /v1/mailbox/ack` | `{ids: [número]}` | `{removed}` | |
@@ -148,6 +159,12 @@ busca na caixa. Entrega = `{id, kind, from, at, ...}`:
 - `kind: "share"` + `track` — uma música.
 - `kind: "text"` + `text` — até 2000 caracteres; quebras de linha ficam (no máximo uma linha em branco
   seguida, até 40 linhas); invisíveis e controles saem. Texto que fica vazio → `400 invalid_text`.
+- `kind: "edit"` + `ref, text` — o texto novo da mensagem `ref` (o celular só aplica se `ref` é uma
+  mensagem de texto que veio de quem editou).
+- `kind: "voice"` + `voice: {ms, wave, bytes}` — mensagem de voz: duração, ondinhas (um nível `0`–`f`
+  por barra, até 64) e tamanho. **Baixe o áudio em `GET /v1/voice/:id` antes do ack**: depois do ack
+  (ou 14 dias) ele não existe mais. Até 5 min; 48 MB de áudio esperando por pessoa (`429 inbox_full`).
+- `replyTo` (opcional em `text`, `share` e `voice`) — o `id` da entrega respondida.
 - `kind: "reaction"` + `ref, emoji` — `ref` é o `id` da entrega reagida (o mesmo número nos dois
   celulares: quem manda recebe o `id` na resposta, quem recebe na entrega); `emoji` é um de
   `❤️ 😂 😮 😢 🔥 👍`, ou `""` pra tirar a reação. Uma reação por pessoa por mensagem (a nova troca a antiga).
@@ -199,6 +216,8 @@ Do servidor pro app:
 | `jam.invite` | `jam, from` | convite pra jam |
 | `jam` | `jam, rejected?` | a jam mudou (ou sua mudança foi recusada: `stale`/`invalid`) |
 | `jam.ended` | `jamId` | a jam acabou (ou você não está nela) |
+| `typing` | `from, on` | um amigo começou (`on: true`) ou parou de escrever pra você |
+| `profile` | `user` | nome ou foto de um amigo (perfil completo), de alguém da sua jam (público) ou seu (outro celular) mudou |
 
 Do app pro servidor (até 64 KB por mensagem; toda mensagem conta no limite de 600/min):
 
@@ -207,6 +226,7 @@ Do app pro servidor (até 64 KB por mensagem; toda mensagem conta no limite de 6
 | `ping` | `c` (número ou texto até 64) |
 | `ack` | `ids: [número]` (até 500) |
 | `jam.state` | `jamId, baseRev, queue?, index?, positionMs?, playing?` |
+| `typing` | `to, on?` — "escrevendo…" (`on: false` = parou); só vai pra amigo com o app aberto, 40/min por par, nada guardado |
 
 ### Códigos de fechamento
 
@@ -229,5 +249,5 @@ Do app pro servidor (até 64 KB por mensagem; toda mensagem conta no limite de 6
 | WebSockets abertos | 5 por pessoa, 2000 no servidor |
 | Aparelhos (tokens) | 10 por perfil |
 | Pedidos de amizade | 100 em aberto; 60 novos/h; 3/dia pro mesmo perfil |
-| Conversa | músicas 120/h, textos 600/h e reações 600/h por pessoa; 500 entregas esperando na caixa de cada um |
+| Conversa | músicas 120/h, textos e edições 600/h, reações 600/h e áudios 120/h por pessoa; 500 entregas esperando na caixa de cada um (e 48 MB de áudio) |
 | Jam | 30 pessoas; fila de 200; 120 mudanças/min por jam; 20 convites/h por par |

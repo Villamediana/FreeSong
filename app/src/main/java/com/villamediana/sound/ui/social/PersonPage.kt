@@ -37,6 +37,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -360,7 +361,7 @@ internal fun PersonButton(
             .clip(CircleShape)
             .background(if (filled) SoundColors.Accent else SoundColors.Surface1)
             .clickable(interactionSource = interaction, indication = null, enabled = enabled, onClick = onClick)
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
     ) {
@@ -368,15 +369,28 @@ internal fun PersonButton(
             Icon(icon, null, tint = fg, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(8.dp))
         }
-        Text(text, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold), color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        // The whole label, smaller if it must ("Chamar pra jam" next to "Conversar · 3").
+        val style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = fg)
+        androidx.compose.foundation.text.BasicText(
+            text,
+            style = style,
+            maxLines = 1,
+            autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 11.sp, maxFontSize = style.fontSize),
+        )
     }
 }
 
 /** The photo inside the card; on your own page, a little camera on its edge to change it. */
 @Composable
 internal fun CardAvatar(person: Profile?, size: Dp, onCamera: (() -> Unit)? = null, busy: Boolean = false) {
+    val url = remember(person?.avatar) { SoundApplication.graph.social.api.absolute(person?.avatar) }
+    var viewing by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     Box(Modifier.size(size)) {
-        ProfileAvatar(person, size)
+        // A tap on the photo shows it big.
+        ProfileAvatar(person, size, Modifier.clip(CircleShape).clickable(enabled = url != null) { viewing = true })
+        if (viewing && url != null) {
+            com.villamediana.sound.ui.components.PhotoViewer(url) { viewing = false }
+        }
         if (busy) {
             Box(Modifier.size(size).clip(CircleShape).background(Color.Black.copy(alpha = 0.4f)), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(Modifier.size(24.dp), color = Color.White, strokeWidth = 2.dp)

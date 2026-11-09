@@ -511,15 +511,22 @@ private fun RemoteHeader(
                 .windowInsetsPadding(WindowInsets.statusBars)
                 .padding(top = 60.dp, start = Dimens.Gutter, end = Dimens.Gutter, bottom = 10.dp),
         ) {
+            // An artist's photo opens big on a tap.
+            var viewing by remember { mutableStateOf(false) }
             Cover(
                 thumbnail,
                 Modifier
                     .align(Alignment.CenterHorizontally)
                     .size(coverSize)
-                    .shadow(22.dp, coverShape, clip = false),
+                    .shadow(22.dp, coverShape, clip = false)
+                    .clip(coverShape)
+                    .clickable(enabled = kind == CollectionKind.ARTIST && thumbnail != null) { viewing = true },
                 seed = title,
                 shape = coverShape,
             )
+            if (viewing && thumbnail != null) {
+                com.villamediana.sound.ui.components.PhotoViewer(com.villamediana.sound.online.Thumbnails.upgrade(thumbnail, 1200)) { viewing = false }
+            }
             Spacer(Modifier.height(26.dp))
             Text(
                 listOfNotNull(collectionOverline(kind), year?.toString()).joinToString(" · "),

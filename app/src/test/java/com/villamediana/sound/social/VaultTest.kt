@@ -107,4 +107,17 @@ class VaultTest {
         val once = VaultMerge.merge(null, d, VaultData(), 10)
         assertEquals(once, VaultMerge.merge(once, once, once, 10))
     }
+
+    @Test
+    fun theNewestCorrectionOfATextWinsAndAnAnswerKeepsWhatItAnswers() {
+        val base = VShared("uf", "out", 9, VSong("", ""), 5, seen = true, kind = "text", text = "bora?", replyTo = 4)
+        val here = base.copy(text = "bora ouvir?", editedAt = 100)
+        val there = base.copy(text = "bora ouvir agora?", editedAt = 200, replyTo = null)
+        val merged = VaultMerge.merge(null, VaultData(shared = listOf(here)), VaultData(shared = listOf(there)), now = 1_000).shared.single()
+        assertEquals("bora ouvir agora?", merged.text)
+        assertEquals(200L, merged.editedAt)
+        assertEquals(4L, merged.replyTo)
+        // The other way round, the same.
+        assertEquals(merged, VaultMerge.merge(null, VaultData(shared = listOf(there)), VaultData(shared = listOf(here)), now = 1_000).shared.single().copy(replyTo = 4))
+    }
 }
