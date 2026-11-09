@@ -61,6 +61,11 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handle(intent: Intent?) {
+        // "Nova versão do FreeSong" notification: the update sheet.
+        if (intent?.getBooleanExtra(com.villamediana.sound.update.UpdateNotifier.EXTRA_OPEN, false) == true) {
+            SoundApplication.graph.updates.openSheet()
+            return
+        }
         when (val request = ExternalRequest.of(intent)) {
             is ExternalRequest.OpenLink -> incoming.value = Inbound.Link(request.text)
             is ExternalRequest.PlayFromSearch -> playFromSearch(request.query)

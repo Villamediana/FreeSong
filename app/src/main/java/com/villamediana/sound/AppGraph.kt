@@ -228,6 +228,9 @@ class AppGraph(context: Context) {
         com.villamediana.sound.online.SongCovers({ youTube }, appContext.filesDir.resolve("covers.json"), scope)
     }
 
+    /** The app updating itself from the GitHub releases (Ajustes › Sobre, the update sheet). */
+    val updates: com.villamediana.sound.update.Updates by lazy { com.villamediana.sound.update.createUpdates(appContext, http, scope) }
+
     /** The silent clip looping behind the cover of the full player. */
     val canvas: com.villamediana.sound.playback.video.VideoCanvas by lazy { com.villamediana.sound.playback.video.VideoCanvas(appContext, scope) }
 }

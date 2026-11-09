@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="channel_updates">Actualizaciones</string>
+    <string name="update_title">Nueva versión</string>
+    <string name="update_subtitle">%1$s · %2$s</string>
+    <string name="update_action">Actualizar</string>
+    <string name="update_later">Ahora no</string>
+    <string name="update_downloading">Descargando · %1$s</string>
+    <string name="update_installing">Instalando…</string>
+    <string name="update_permission_body">Permite que FreeSong instale sus propias actualizaciones.</string>
+    <string name="update_permission_action">Permitir</string>
+    <string name="update_retry">Reintentar</string>
+    <string name="update_error_network">Se cayó la conexión durante la descarga.</string>
+    <string name="update_error_integrity">El archivo llegó incompleto.</string>
+    <string name="update_error_storage">Falta espacio en el teléfono.</string>
+    <string name="update_error_package">Este archivo no es una versión nueva de FreeSong.</string>
+    <string name="update_error_conflict">El FreeSong instalado se firmó con otra clave. Desinstálalo e instala la versión nueva.</string>
+    <string name="update_error_install">Android no terminó la instalación.</string>
+    <string name="update_notif_available_title">Nueva versión de FreeSong</string>
+    <string name="update_notif_available_text">La versión %1$s está lista para instalar.</string>
+    <string name="update_notif_done_title">FreeSong actualizado</string>
+    <string name="update_notif_done_text">Versión %1$s. Toca para abrir.</string>
+    <string name="settings_update_check">Buscar actualización</string>
+    <string name="settings_update_checking">Buscando…</string>
+    <string name="settings_update_latest">Tienes la versión más reciente</string>
+    <string name="settings_update_failed">No se pudo verificar ahora</string>
+    <string name="settings_update_available">Actualizar a %1$s</string>
+    <string name="settings_update_going">Actualizando a %1$s</string>
+</resources>

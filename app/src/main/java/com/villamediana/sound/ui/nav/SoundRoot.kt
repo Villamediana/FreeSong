@@ -224,6 +224,9 @@ fun SoundRoot(incoming: MutableStateFlow<Inbound?>) {
                     modifier = Modifier.fillMaxSize(),
                 )
             }
+
+            // A new version on GitHub: the quiet check, the sheet and Android's install screens.
+            com.villamediana.sound.ui.update.UpdateHost()
         }
     }
 }

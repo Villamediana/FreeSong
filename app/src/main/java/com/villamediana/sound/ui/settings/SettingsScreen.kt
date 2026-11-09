@@ -200,7 +200,14 @@ fun SettingsScreen() {
         item(key = "about") {
             Column {
                 GroupLabel(stringResource(R.string.home_settings_group_about))
-                Group { About() }
+                Group {
+                    About()
+                    // New versions come from the GitHub releases (release builds only).
+                    if (com.villamediana.sound.SoundApplication.graph.updates.enabled) {
+                        Hairline()
+                        com.villamediana.sound.ui.update.UpdateRow()
+                    }
+                }
             }
         }
     }
