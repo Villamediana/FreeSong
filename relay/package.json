@@ -1,0 +1,19 @@
+{
+  "name": "freesong-relay",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Servidor do FreeSong: perfis, amigos, músicas compartilhadas e jam em tempo real.",
+  "type": "module",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node --no-warnings=ExperimentalWarning src/server.js",
+    "test": "node --no-warnings=ExperimentalWarning --test test/*.test.js",
+    "smoke": "node --no-warnings=ExperimentalWarning scripts/smoke.js"
+  },
+  "dependencies": {
+    "ws": "8.18.3"
+  }
+}
