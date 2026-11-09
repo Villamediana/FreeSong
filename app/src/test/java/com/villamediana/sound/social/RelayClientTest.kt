@@ -106,8 +106,13 @@ class RelayClientTest {
     fun accountRenamePhotoAndRecovery() {
         val a = Phone().register()
         assertTrue(a.me.username.matches(Regex("[a-z]+_\\d{3,4}")))
-        val renamed = a.api.rename(name = "Ana Teste", username = "ana.teste${System.nanoTime() % 10000}")
+        val renamed = a.api.rename(name = "Ana Teste")
         assertEquals("Ana Teste", renamed.name)
+        // The @ is who you are on FreeSong: it never changes.
+        assertEquals(a.me.username, renamed.username)
+        val fixed = runCatching { a.api.rename(username = "ana.teste") }.exceptionOrNull() as RelayException
+        assertEquals(400, fixed.status)
+        assertEquals("username_fixed", fixed.code)
         // A real JPEG (the relay checks the image's structure since 1.1.0; a fake one is turned down).
         val jpeg = java.io.ByteArrayOutputStream().also { out ->
             val img = java.awt.image.BufferedImage(64, 64, java.awt.image.BufferedImage.TYPE_INT_RGB)
@@ -119,10 +124,6 @@ class RelayClientTest {
         val withPhoto = a.api.setAvatar(jpeg)
         assertNotNull(withPhoto.avatar)
         assertEquals("$base${withPhoto.avatar}", a.api.absolute(withPhoto.avatar))
-        val b = Phone().register()
-        val taken = runCatching { b.api.rename(username = renamed.username) }.exceptionOrNull() as RelayException
-        assertEquals(409, taken.status)
-        assertEquals("username_taken", taken.code)
         // Another phone, the code: the same profile.
         val recovered = Phone().api.recover(a.code)
         assertEquals(a.me.id, recovered.me.id)

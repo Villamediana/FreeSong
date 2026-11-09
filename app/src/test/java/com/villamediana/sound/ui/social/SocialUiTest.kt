@@ -16,7 +16,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
@@ -47,6 +51,8 @@ import java.io.File
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], qualifiers = "w400dp-h900dp-xxhdpi")
 class SocialUiTest {
+    @org.junit.Before
+    fun blockPlaybackBinding() = com.villamediana.sound.testing.blockMediaSessionBinding()
     @get:Rule val compose = createComposeRule()
     private val shots = System.getenv("SOUND_SHOTS") == "1"
 
@@ -140,20 +146,106 @@ class SocialUiTest {
         shot("social-states")
     }
 
+    /** The pages need the navigator (back button) like the app's detail pages. */
+    @Composable
+    private fun PageHost(dark: Boolean = true, content: @Composable () -> Unit) {
+        val controller = androidx.navigation.compose.rememberNavController()
+        val navigator = androidx.compose.runtime.remember(controller) { com.villamediana.sound.ui.nav.Navigator(controller) }
+        SoundTheme(mode = if (dark) ThemeMode.DARK else ThemeMode.LIGHT) {
+            androidx.compose.runtime.CompositionLocalProvider(
+                com.villamediana.sound.ui.nav.LocalNavigator provides navigator,
+                com.villamediana.sound.ui.theme.LocalBottomInset provides 24.dp,
+            ) { content() }
+        }
+    }
+
+    private val top5 = listOf(
+        song(1, "Oceano", "Djavan"), song(2, "Trem-Bala", "Ana Vilela"), song(3, "Ainda Bem", "Marisa Monte"),
+        song(4, "Velha Infância", "Tribalistas"), song(5, "Sozinho", "Caetano Veloso"),
+    )
+
     @Test
-    fun aFriendsSongsAndTheJamInvite() {
+    fun yourPageIsLikeAnArtistsAndTheAtIsNotEditable() {
+        var edit = 0
+        compose.setContent {
+            PageHost {
+                ProfilePage(
+                    me = me.copy(top = top5),
+                    code = "7K2Q-M9XD-4TFA-H3RB",
+                    photoBusy = false,
+                    snackbar = com.villamediana.sound.ui.detail.rememberDetailSnackbar(),
+                    onPhoto = {}, onEdit = { edit++ }, onMenu = {}, onCopy = {}, onNewCode = {}, onDelete = {},
+                )
+            }
+        }
+        compose.onAllNodesWithText("Miguel").onFirst().assertExists()
+        compose.onNodeWithText("@miguel", substring = true).assertExists()
+        compose.onNodeWithText("120 h").assertExists()
+        compose.onNodeWithText("Oceano").assertExists()
+        // The @ is shown, never a field to change it.
+        assertEquals(0, compose.onAllNodesWithText("Nome de usuário").fetchSemanticsNodes().size)
+        shot("social-profile")
+        compose.onNodeWithText("Editar nome").performClick()
+        assertEquals(1, edit)
+        compose.onAllNodes(androidx.compose.ui.test.hasScrollAction()).onFirst().performScrollToNode(androidx.compose.ui.test.hasText("7K2Q-M9XD-4TFA-H3RB"))
+        shot("social-profile-code")
+    }
+
+    @Test
+    fun aFriendsPageWithTheirTopAndTheSongsSwapped() {
+        var sent = 0
+        compose.setContent {
+            PageHost {
+                FriendPage(
+                    person = ana.copy(top = top5),
+                    isFriend = true,
+                    songs = listOf(
+                        shared(1, "uana", SharedSong.IN, "Garota de Ipanema", "Tom Jobim"),
+                        shared(2, "uana", SharedSong.OUT, "Vapor Barato", "O Rappa"),
+                    ),
+                    relation = "friends",
+                    inJam = false,
+                    snackbar = com.villamediana.sound.ui.detail.rememberDetailSnackbar(),
+                    onSend = { sent++ }, onJam = {}, onMenu = {}, onAdd = {}, onPlaySwapped = {},
+                )
+            }
+        }
+        compose.onAllNodesWithText("Ana Lima").onFirst().assertExists()
+        compose.onNodeWithText("Amigos desde", substring = true).assertExists()
+        compose.onNodeWithText("52 h").assertExists()
+        shot("social-friend")
+        compose.onNodeWithText("Mandar música").performClick()
+        assertEquals(1, sent)
+        compose.onAllNodes(androidx.compose.ui.test.hasScrollAction()).onFirst().performScrollToNode(androidx.compose.ui.test.hasText("Vapor Barato"))
+        compose.onNodeWithText("Músicas trocadas").assertExists()
+        shot("social-friend-swapped")
+    }
+
+    @Test
+    fun someoneNotYetAFriend() {
+        compose.setContent {
+            PageHost(dark = false) {
+                FriendPage(
+                    person = carla, isFriend = false, songs = emptyList(), relation = null, inJam = false,
+                    snackbar = com.villamediana.sound.ui.detail.rememberDetailSnackbar(),
+                    onSend = {}, onJam = {}, onMenu = {}, onAdd = {}, onPlaySwapped = {},
+                )
+            }
+        }
+        compose.onNodeWithText("Adicionar").assertExists()
+        compose.onNodeWithText("Vocês ainda não são amigos.").assertExists()
+        shot("social-stranger")
+    }
+
+    @Test
+    fun aJamInvite() {
         compose.setContent {
             Page {
-                StatsBlock(ana.copy(top = listOf(song(1, "Oceano", "Djavan"), song(2, "Trem-Bala", "Ana Vilela"), song(3, "Ainda Bem", "Marisa Monte"))))
-                Spacer(Modifier.height(20.dp))
                 SongBubble(shared(1, "uana", SharedSong.IN, "Garota de Ipanema", "Tom Jobim"), onPlay = {})
-                SongBubble(shared(2, "uana", SharedSong.OUT, "Vapor Barato", "O Rappa"), onPlay = {})
                 Spacer(Modifier.height(12.dp))
                 InviteLine(JamInvite(Jam("j", "uana"), ana), onJoin = {}, onDecline = {})
             }
         }
-        compose.onNodeWithText("52 h ouvidas").assertExists()
         compose.onNodeWithText("Ana Lima te chamou pra uma jam").assertExists()
-        shot("social-friend-songs")
     }
 }

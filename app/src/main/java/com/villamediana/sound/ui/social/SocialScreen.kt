@@ -30,6 +30,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.GraphicEq
@@ -52,6 +53,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
@@ -308,7 +310,7 @@ private fun Label(text: String) {
     )
 }
 
-/** Your photo, name and @ (tap to edit); or the state of the profile while there is none. */
+/** Your card at the top (the same as your page's, small; tap for your page), or the state of the profile while there is none. */
 @Composable
 internal fun MeHeader(status: AccountStatus, me: Profile?, onEdit: () -> Unit, onCreate: () -> Unit, onRetry: () -> Unit) {
     AnimatedContent(
@@ -317,21 +319,7 @@ internal fun MeHeader(status: AccountStatus, me: Profile?, onEdit: () -> Unit, o
         label = "me",
     ) { (s, has) ->
         when {
-            s == AccountStatus.READY && has && me != null -> Row(
-                Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onEdit)
-                    .padding(horizontal = Dimens.Gutter, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                ProfileAvatar(me, 64.dp)
-                Spacer(Modifier.width(16.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(me.name, style = MaterialTheme.typography.titleLarge, color = SoundColors.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text("@${me.username}", style = MaterialTheme.typography.bodyMedium, color = SoundColors.TextMuted, maxLines = 1)
-                }
-                PillButton(stringResource(R.string.social_edit), onClick = onEdit)
-            }
+            s == AccountStatus.READY && has && me != null -> MiniPersonCard(me, onClick = onEdit)
             s == AccountStatus.OPTED_OUT -> StatusLine(stringResource(R.string.social_opted_out), stringResource(R.string.social_create_profile), onCreate, Icons.Rounded.Groups)
             s == AccountStatus.LOADING || (s == AccountStatus.READY && !has) -> StatusLine(stringResource(R.string.social_creating), null, null, null, busy = true)
             else -> StatusLine(stringResource(R.string.social_offline), stringResource(R.string.social_retry), onRetry, Icons.Rounded.WifiOff)
@@ -389,9 +377,9 @@ internal fun FriendRow(line: FriendLine, onOpen: () -> Unit) {
             }
         }
         Spacer(Modifier.width(14.dp))
+        val last = line.last
         Column(Modifier.weight(1f)) {
             Text(f.name, style = MaterialTheme.typography.titleMedium, color = SoundColors.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            val last = line.last
             val sub = when {
                 last == null -> "@${f.username}"
                 last.direction == SharedSong.OUT -> stringResource(R.string.social_you_sent, last.title)
@@ -404,6 +392,11 @@ internal fun FriendRow(line: FriendLine, onOpen: () -> Unit) {
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+        }
+        // The last song swapped, as a little cover: the list reads like music, not like contacts.
+        if (last != null) {
+            Spacer(Modifier.width(12.dp))
+            com.villamediana.sound.ui.components.Cover(last.cover, Modifier.size(48.dp), seed = last.title, shape = RoundedCornerShape(12.dp))
         }
     }
 }

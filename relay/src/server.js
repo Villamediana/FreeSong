@@ -16,9 +16,9 @@ import { WebSocketServer } from 'ws';
 import { Store, sha256 } from './db.js';
 import { Jams, cleanState, cleanTrack, MAX_MEMBERS } from './jams.js';
 import { cleanJpeg } from './jpeg.js';
-import { cleanDisplayName, normalizeUsername, randomIdentity, usernameProblem } from './names.js';
+import { cleanDisplayName, normalizeUsername, randomIdentity } from './names.js';
 
-export const VERSION = '1.1.0';
+export const VERSION = '1.2.0';
 const JSON_LIMIT = 64 * 1024;
 const AVATAR_LIMIT = 600 * 1024;
 /** Entrega que o celular do amigo não buscou nesse tempo é apagada. */
@@ -315,14 +315,8 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
       change.name = cleanDisplayName(b.name);
       if (!change.name) throw new HttpError(400, 'invalid_name');
     }
-    if (b.username !== undefined) {
-      const username = normalizeUsername(b.username);
-      const problem = usernameProblem(username);
-      if (problem) throw new HttpError(400, `username_${problem}`);
-      const owner = store.userByName(username);
-      if (owner && owner.id !== me.id) throw new HttpError(409, 'username_taken');
-      change.username = username;
-    }
+    // O @nome é o identificador da pessoa: nasce com a conta e não muda (só o nome de exibição muda).
+    if (b.username !== undefined && normalizeUsername(b.username) !== me.username) throw new HttpError(400, 'username_fixed');
     try {
       store.rename(me.id, change);
     } catch (e) {

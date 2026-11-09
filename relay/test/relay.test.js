@@ -130,21 +130,24 @@ test('o código de recuperação devolve o mesmo perfil num celular novo', async
   assert.equal((await api('POST', '/v1/accounts/recover', { body: { code: fresh.json.recoveryCode } })).json.me.id, p.id);
 });
 
-test('nome e @nome editáveis; @nome único e com regras', async () => {
+test('o nome muda; o @nome é o identificador e não muda', async () => {
   const a = await person();
   const b = await person();
-  let r = await api('PATCH', '/v1/me', { token: a.token, body: { name: '  Miguel   V.  ', username: '@Miguel.V' } });
+  let r = await api('PATCH', '/v1/me', { token: a.token, body: { name: '  Miguel   V.  ' } });
   assert.equal(r.status, 200);
   assert.equal(r.json.me.name, 'Miguel V.');
-  assert.equal(r.json.me.username, 'miguel.v');
-  r = await api('PATCH', '/v1/me', { token: b.token, body: { username: 'MIGUEL.V' } });
-  assert.equal(r.status, 409);
-  assert.equal(r.json.error, 'username_taken');
-  for (const [bad, code] of [['ab', 'username_invalid'], ['1abc', 'username_invalid'], ['a..b', 'username_invalid'], ['abc.', 'username_invalid'], ['tem espaço', 'username_invalid'], ['admin', 'username_reserved']]) {
-    r = await api('PATCH', '/v1/me', { token: b.token, body: { username: bad } });
-    assert.equal(r.status, 400, bad);
-    assert.equal(r.json.error, code, bad);
+  assert.equal(r.json.me.username, a.me.username);
+  // Trocar o @nome: recusado (qualquer um, livre ou não), e nada muda.
+  for (const wanted of ['miguel.v', 'MIGUEL.V', 'ab', 'admin', b.me.username]) {
+    r = await api('PATCH', '/v1/me', { token: a.token, body: { name: 'Outro', username: wanted } });
+    assert.equal(r.status, 400, wanted);
+    assert.equal(r.json.error, 'username_fixed', wanted);
   }
+  assert.equal((await api('GET', '/v1/me', { token: a.token })).json.me.name, 'Miguel V.');
+  // Mandar o mesmo @nome de volta (um app que sempre manda os dois campos) não é troca.
+  r = await api('PATCH', '/v1/me', { token: a.token, body: { name: 'Miguel', username: '@' + a.me.username.toUpperCase() } });
+  assert.equal(r.status, 200);
+  assert.equal(r.json.me.username, a.me.username);
   r = await api('PATCH', '/v1/me', { token: b.token, body: { name: '   ' } });
   assert.equal(r.json.error, 'invalid_name');
   r = await api('PATCH', '/v1/me', { token: b.token, body: { name: 'x'.repeat(41) } });
@@ -700,8 +703,6 @@ test('nomes e músicas sem invisíveis nem inversão de texto; capa e link só d
   assert.equal(r.json.me.name, 'Anagnp.exe');
   r = await api('PATCH', '/v1/me', { token: a.token, body: { name: `${ZWSP}${String.fromCodePoint(0x3164)}` } });
   assert.equal(r.json.error, 'invalid_name');
-  assert.equal((await api('PATCH', '/v1/me', { token: a.token, body: { username: 'freesong_oficial' } })).json.error, 'username_reserved');
-  assert.equal((await api('PATCH', '/v1/me', { token: a.token, body: { username: 'banda_oficial' } })).status, 200);
   const wb = await online(b);
   const sent = { videoId: 'dQw4w9WgXcQ', title: `Oi${RLO}${LSEP}tchau`, artist: 'X', cover: 'https://rastreador.example/pixel.jpg', url: 'https://music.youtube.com/watch?v=dQw4w9WgXcQ' };
   assert.equal((await api('POST', '/v1/shares', { token: a.token, body: { to: b.id, track: sent } })).status, 201);

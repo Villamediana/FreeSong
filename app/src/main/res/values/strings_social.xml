@@ -13,7 +13,6 @@
     <string name="social_open">Amigos e perfil</string>
     <string name="social_tab_friends">Amigos</string>
     <string name="social_tab_people">Pessoas</string>
-    <string name="social_edit">Editar</string>
     <string name="social_requests">Pedidos</string>
     <string name="social_accept">Aceitar</string>
     <string name="social_decline">Recusar</string>
@@ -35,18 +34,13 @@
     <string name="social_start_jam">Começar jam</string>
     <string name="profile_title">Seu perfil</string>
     <string name="profile_name">Nome</string>
-    <string name="profile_username">Nome de usuário</string>
     <string name="profile_save">Salvar</string>
     <string name="profile_saved">Perfil salvo</string>
-    <string name="profile_error_taken">Esse @ já é de outra pessoa.</string>
-    <string name="profile_error_invalid">De 3 a 20 letras, números, ponto ou _, começando com letra.</string>
-    <string name="profile_error_reserved">Esse @ não está disponível.</string>
     <string name="profile_error_name">O nome precisa ter de 1 a 40 caracteres.</string>
     <string name="profile_error_network">Sem conexão. Tente de novo.</string>
     <string name="profile_error_photo">Não deu pra usar essa foto.</string>
     <string name="profile_photo_change">Trocar foto</string>
     <string name="profile_photo_remove">Tirar foto</string>
-    <string name="profile_stats_hint">Horas e mais ouvidas: só seus amigos veem.</string>
     <string name="profile_hours">%1$s h ouvidas</string>
     <string name="profile_top">Mais ouvidas</string>
     <string name="profile_recovery_title">Código de recuperação</string>
@@ -99,4 +93,13 @@
     <string name="jam_held">Pausada só aqui. Toque play pra voltar.</string>
     <string name="jam_failed">Não deu agora. Tente de novo.</string>
     <string name="jam_invites_title">Chamados pra jam</string>
+    <string name="profile_edit_name">Seu nome</string>
+    <string name="profile_username_fixed">@%1$s é seu identificador no FreeSong e não muda.</string>
+    <string name="friend_since">Amigos desde %1$s</string>
+    <string name="friend_top_of">Mais ouvidas de %1$s</string>
+    <string name="friend_swapped">Músicas trocadas</string>
+    <string name="profile_top_private">Só seus amigos veem</string>
+    <string name="person_hours_value">%1$s h</string>
+    <string name="person_hours_label">ouvidas</string>
+    <string name="profile_edit_name_action">Editar nome</string>
 </resources>
