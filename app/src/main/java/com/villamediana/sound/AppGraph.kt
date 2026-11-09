@@ -145,11 +145,28 @@ class AppGraph(context: Context) {
         com.villamediana.sound.discover.DiscoverRepository(youTube, appContext.filesDir.resolve("discover.json"))
     }
 
+    /** The genre of the artists streamed (iTunes catalog, once per artist). */
+    val artistGenres: com.villamediana.sound.discover.ArtistGenres by lazy {
+        com.villamediana.sound.discover.ArtistGenres(http, appContext.filesDir.resolve("artist-genres.json"))
+    }
+
+    /** What the listener likes (everything heard, skipped, hearted) and the Home's suggestions made from it. */
+    val forYou: com.villamediana.sound.discover.ForYou by lazy {
+        com.villamediana.sound.discover.ForYou(
+            library = library,
+            discover = discover,
+            artistGenres = artistGenres,
+            picked = { settings.settings.first().favoriteGenres },
+            scope = scope,
+        )
+    }
+
     /** "Feitos pra você": the day's genre mixes (your songs + new ones alike). */
     val madeForYou: com.villamediana.sound.smart.MadeForYouStore by lazy {
         com.villamediana.sound.smart.MadeForYouStore(
             library = library,
             discover = discover,
+            profile = { forYou.profile() },
             labels = {
                 val res = appContext.resources
                 com.villamediana.sound.smart.MadeForYou.Labels(

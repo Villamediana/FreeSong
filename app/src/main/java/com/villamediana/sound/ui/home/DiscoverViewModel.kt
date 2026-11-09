@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.villamediana.sound.SoundApplication
 import com.villamediana.sound.discover.DiscoverMixes
+import com.villamediana.sound.discover.ForYou
 import com.villamediana.sound.discover.GenreCatalog
 import com.villamediana.sound.discover.GenreDef
 import com.villamediana.sound.online.RemoteCollection
@@ -16,9 +17,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -38,9 +37,10 @@ data class DiscoverUiState(
     val selection: Set<String> = emptySet(),
     /** Song covers per genre for the picker cards. */
     val covers: Map<String, List<String>> = emptyMap(),
-    /** "Porque você ouviu <title>". */
-    val becauseTitle: String? = null,
-    val because: List<RemoteTrack> = emptyList(),
+    /** "Descobertas pra você": the day's new songs in the listener's style. */
+    val discoveries: List<RemoteTrack> = emptyList(),
+    /** "Porque você curte <artista>" rows (fixed for the 6-hour slot). */
+    val because: List<ForYou.BecauseRow> = emptyList(),
     val playlists: List<RemoteCollection> = emptyList(),
     val shelves: List<Shelf> = emptyList(),
     val loading: Boolean = false,
@@ -48,20 +48,18 @@ data class DiscoverUiState(
     val refreshing: Boolean = false,
 ) {
     val showPicker: Boolean get() = ready && (!chosen || editing)
-    val hasContent: Boolean get() = because.isNotEmpty() || shelves.isNotEmpty()
+    val hasContent: Boolean get() = discoveries.isNotEmpty() || because.isNotEmpty() || shelves.isNotEmpty()
 }
 
-@OptIn(kotlinx.coroutines.FlowPreview::class)
 class DiscoverViewModel(app: Application) : AndroidViewModel(app) {
     private val graph = SoundApplication.graph
     private val repo = graph.discover
+    private val forYou = graph.forYou
 
     private val _state = MutableStateFlow(DiscoverUiState())
     val state: StateFlow<DiscoverUiState> = _state
 
     private var loadJob: Job? = null
-    /** The song "Porque você ouviu…" was made from. */
-    private var becauseFor: String? = null
 
     init {
         viewModelScope.launch {
@@ -70,14 +68,6 @@ class DiscoverViewModel(app: Application) : AndroidViewModel(app) {
                 _state.update { s -> s.copy(ready = true, chosen = chosen, favorites = ordered, selection = if (s.editing) s.selection else favs) }
                 load(force = false)
             }
-        }
-        // "Porque você ouviu…" follows what is being heard (a song kept for a few seconds, not every skip).
-        viewModelScope.launch {
-            graph.player.state.map { it.current?.videoId?.takeIf(String::isNotBlank) }
-                .distinctUntilChanged()
-                .filterNotNull()
-                .debounce(BECAUSE_AFTER_MS)
-                .collect { if (_state.value.favorites.isNotEmpty() && loadJob?.isActive != true) loadBecause() }
         }
         viewModelScope.launch {
             // Cached covers first (instant), then the stale ones from the network.
@@ -96,59 +86,42 @@ class DiscoverViewModel(app: Application) : AndroidViewModel(app) {
         load(force = false)
     }
 
-    /** Pull to refresh: searches again and draws new shelves and playlists. */
+    /** Pull to refresh: searches again, reads the taste again and draws new shelves and playlists. */
     fun refresh() {
         repo.reshuffle()
         load(force = true, pulled = true)
     }
 
+    /**
+     * Everything on the Home made from the listener's taste: the day's discoveries, "Porque você
+     * curte…" (fixed for the slot), and shelves of the genres they listen to and picked. Each section
+     * lands on its own as soon as it is ready; a failed one keeps what was showing.
+     */
     private fun load(force: Boolean, pulled: Boolean = false) {
-        val genres = _state.value.favorites.mapNotNull(GenreCatalog::byId)
         loadJob?.cancel()
-        if (genres.isEmpty()) {
-            _state.update { it.copy(because = emptyList(), becauseTitle = null, playlists = emptyList(), shelves = emptyList(), loading = false, refreshing = false) }
-            return
-        }
         loadJob = viewModelScope.launch {
             _state.update { it.copy(loading = true, refreshing = pulled) }
-            // Each section lands on its own as soon as it is ready.
+            if (force) forYou.invalidate()
+            val favorites = _state.value.favorites
+            val genres = runCatching { forYou.genres(favorites) }.getOrElse { favorites.mapNotNull(GenreCatalog::byId) }
             coroutineScope {
-            launch {
-                val list = genres.map { g -> async { Shelf(g, runCatching { repo.shelf(g, force) }.getOrDefault(emptyList())) } }.awaitAll()
-                    .filter { it.tracks.isNotEmpty() }
-                _state.update { it.copy(shelves = list) }
-            }
-            launch {
-                val lists = genres.map { g -> async { runCatching { repo.playlists(g, 3, force) }.getOrDefault(emptyList()) } }.awaitAll()
-                _state.update { it.copy(playlists = DiscoverMixes.blendCollections(lists, 9)) }
-            }
-            launch { loadBecause() }
+                launch {
+                    runCatching { forYou.discoveries() }.onSuccess { list -> _state.update { it.copy(discoveries = list) } }
+                }
+                launch {
+                    runCatching { forYou.because() }.onSuccess { rows -> _state.update { it.copy(because = rows) } }
+                }
+                launch {
+                    val list = genres.map { g -> async { Shelf(g, runCatching { forYou.shelf(g, force) }.getOrDefault(emptyList())) } }.awaitAll()
+                        .filter { it.tracks.isNotEmpty() }
+                    _state.update { it.copy(shelves = list) }
+                }
+                launch {
+                    val lists = genres.take(PLAYLIST_GENRES).map { g -> async { runCatching { repo.playlists(g, 3, force) }.getOrDefault(emptyList()) } }.awaitAll()
+                    _state.update { it.copy(playlists = DiscoverMixes.blendCollections(lists, 9)) }
+                }
             }
             _state.update { it.copy(loading = false, refreshing = false) }
-        }
-    }
-
-    /** Radio of the last song heard: the one playing, else the last one listened (yours or streamed). */
-    private suspend fun loadBecause() {
-        val (videoId, title) = lastHeard() ?: return
-        if (videoId == becauseFor && _state.value.because.isNotEmpty()) return
-        val list = runCatching { repo.related(videoId) }.getOrDefault(emptyList())
-        if (list.isEmpty()) return // keep what shows; asked again next time
-        becauseFor = videoId
-        _state.update { it.copy(becauseTitle = title, because = list) }
-    }
-
-    private suspend fun lastHeard(): Pair<String, String>? {
-        graph.player.state.value.current?.let { t -> t.videoId?.takeIf(String::isNotBlank)?.let { return it to t.title } }
-        val mine = runCatching { graph.library.allTracks() }.getOrDefault(emptyList())
-            .filter { !it.videoId.isNullOrBlank() && it.lastPlayedAt != null }
-            .maxByOrNull { it.lastPlayedAt!! }
-        val streamed = runCatching { graph.library.onlinePlaysListSince(System.currentTimeMillis() - HEARD_WITHIN_MS) }
-            .getOrDefault(emptyList()).firstOrNull()
-        return when {
-            streamed != null && (mine == null || streamed.playedAt > mine.lastPlayedAt!!) -> streamed.videoId to streamed.title
-            mine != null -> mine.videoId!! to mine.title
-            else -> null
         }
     }
 
@@ -168,13 +141,13 @@ class DiscoverViewModel(app: Application) : AndroidViewModel(app) {
     fun edit() = _state.update { it.copy(editing = true, selection = it.favorites.toSet()) }
 
     private companion object {
-        const val BECAUSE_AFTER_MS = 8_000L
-        const val HEARD_WITHIN_MS = 30L * 24 * 3_600_000L
+        /** Playlists come from the genres listened most. */
+        const val PLAYLIST_GENRES = 3
     }
 
     /**
-     * Home lists play as smart queues: a genre shelf, then the radio of where it ends;
-     * "Porque você ouviu…" is a radio already.
+     * Home lists play as smart queues: a genre shelf, then the radio of where it ends; the
+     * discoveries and "Porque você curte…" are radios already.
      */
     fun play(tracks: List<RemoteTrack>, index: Int, title: String, id: String) {
         val type = if (id.startsWith("genre:")) PlaySource.Type.GENRE else PlaySource.Type.RADIO

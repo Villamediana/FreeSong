@@ -177,7 +177,7 @@ private fun GenreCard(genre: GenreDef, covers: List<String>, selected: Boolean, 
     }
 }
 
-/** Everything live on the Home: "porque você ouviu", playlists, genre shelves. */
+/** Everything live on the Home: the day's discoveries, "porque você curte", playlists, genre shelves. */
 internal fun LazyListScope.discoverSections(
     state: DiscoverUiState,
     playback: PlaybackState,
@@ -186,10 +186,19 @@ internal fun LazyListScope.discoverSections(
     onEdit: () -> Unit,
     onSongMenu: (RemoteTrack) -> Unit,
 ) {
-    if (state.because.isNotEmpty() && state.becauseTitle != null) {
-        item(key = "d-because", contentType = "row") {
-            val title = stringResource(R.string.discover_because, state.becauseTitle)
-            SongRow(title, state.because, playback, onSongMenu) { i -> onPlay(state.because, i, title, "because"); Chrome.openPlayer() }
+    if (state.discoveries.isNotEmpty()) {
+        item(key = "d-discoveries", contentType = "row") {
+            val title = stringResource(R.string.discover_discoveries)
+            SongRow(title, state.discoveries, playback, onSongMenu, subtitle = stringResource(R.string.discover_discoveries_subtitle)) { i ->
+                onPlay(state.discoveries, i, title, "discoveries")
+                Chrome.openPlayer()
+            }
+        }
+    }
+    state.because.forEach { row ->
+        item(key = "d-because:" + row.artistKey, contentType = "row") {
+            val title = stringResource(R.string.discover_because_artist, row.artist)
+            SongRow(title, row.tracks, playback, onSongMenu) { i -> onPlay(row.tracks, i, title, "because:" + row.artistKey); Chrome.openPlayer() }
         }
     }
     if (state.playlists.isNotEmpty()) {
@@ -215,19 +224,26 @@ internal fun LazyListScope.discoverSections(
 }
 
 @Composable
-private fun DiscoverRow(title: String, content: LazyListScope.() -> Unit) {
+private fun DiscoverRow(title: String, subtitle: String? = null, content: LazyListScope.() -> Unit) {
     Column(Modifier.fillMaxWidth().padding(top = 18.dp)) {
         // A light line between the Home's sections.
         com.villamediana.sound.ui.components.SectionRule()
         Spacer(Modifier.height(16.dp))
-        SectionHeader(title)
+        SectionHeader(title, subtitle = subtitle)
         LazyRow(modifier = Modifier.keepHorizontalDrags(), contentPadding = PaddingValues(horizontal = Dimens.Gutter), horizontalArrangement = Arrangement.spacedBy(14.dp), content = content)
     }
 }
 
 @Composable
-private fun SongRow(title: String, tracks: List<RemoteTrack>, playback: PlaybackState, onMenu: (RemoteTrack) -> Unit, onPlay: (Int) -> Unit) {
-    DiscoverRow(title) {
+private fun SongRow(
+    title: String,
+    tracks: List<RemoteTrack>,
+    playback: PlaybackState,
+    onMenu: (RemoteTrack) -> Unit,
+    subtitle: String? = null,
+    onPlay: (Int) -> Unit,
+) {
+    DiscoverRow(title, subtitle) {
         itemsIndexed(tracks, key = { _, t -> t.videoId }) { i, t -> SongCard(t, playback, onClick = { onPlay(i) }, onLongClick = { onMenu(t) }) }
     }
 }

@@ -592,9 +592,12 @@ class PlaybackService : MediaLibraryService() {
         extendJob = scope.launch {
             val local = tracksFor(items.mapNotNull(MediaItems::trackId).distinct()).associateBy { it.id }
             val list = items.mapNotNull { item -> MediaItems.trackId(item)?.let(local::get) ?: MediaItems.onlineTrack(item) }
+            // What the listener keeps skipping doesn't come back on its own.
+            val profile = runCatching { graph.forYou.profile() }.getOrNull()
             val radios = QueueContinuation.seeds(list)
                 .map { id -> async { graph.youTube.related(id, QueueContinuation.PER_SEED) } }
                 .awaitAll()
+                .map { r -> if (profile == null) r else r.filterNot { profile.avoids(it.videoId, it.artist) } }
             val lib = libraryTracks()
             val taste = taste()
             val byVideo = localByVideoId(radios.flatten().map { it.videoId })
