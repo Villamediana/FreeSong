@@ -218,6 +218,7 @@ internal fun greetingText(): String = stringResource(
 internal fun HeaderActions(downloads: DownloadSummary, nav: Navigator) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         DownloadsIndicator(downloads, onClick = { nav.openDownloads() })
+        com.villamediana.sound.ui.social.SocialButton(onClick = { nav.openSocial() })
         IconButton(onClick = { nav.openSettings() }) {
             Icon(Icons.Outlined.Settings, stringResource(R.string.home_settings), tint = SoundColors.Text, modifier = Modifier.size(24.dp))
         }

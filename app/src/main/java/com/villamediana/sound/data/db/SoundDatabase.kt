@@ -7,10 +7,10 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 
 @Database(
-    entities = [Track::class, Playlist::class, PlaylistTrack::class, AlbumPin::class, PlayEvent::class, DownloadTask::class, LikedOnline::class, ImportedPlaylist::class, OnlinePlay::class, PlaylistOnline::class],
-    version = 5,
+    entities = [Track::class, Playlist::class, PlaylistTrack::class, AlbumPin::class, PlayEvent::class, DownloadTask::class, LikedOnline::class, ImportedPlaylist::class, OnlinePlay::class, PlaylistOnline::class, SharedSong::class],
+    version = 6,
     exportSchema = true,
-    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4), AutoMigration(from = 4, to = 5)],
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4), AutoMigration(from = 4, to = 5), AutoMigration(from = 5, to = 6)],
 )
 abstract class SoundDatabase : RoomDatabase() {
     abstract fun tracks(): TrackDao
@@ -22,6 +22,7 @@ abstract class SoundDatabase : RoomDatabase() {
     abstract fun importedPlaylists(): ImportedPlaylistDao
     abstract fun onlinePlays(): OnlinePlayDao
     abstract fun playlistOnline(): PlaylistOnlineDao
+    abstract fun sharedSongs(): SharedSongDao
 
     companion object {
         fun build(context: Context): SoundDatabase =

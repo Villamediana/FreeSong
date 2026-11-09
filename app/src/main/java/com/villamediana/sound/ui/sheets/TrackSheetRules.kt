@@ -7,7 +7,7 @@ import com.villamediana.sound.data.shareUrl
 /** One line of the song sheet. */
 enum class TrackSheetAction {
     LIKE, DOWNLOAD, PLAY_NEXT, ENQUEUE, ADD_TO_PLAYLIST, RADIO, GO_ALBUM, GO_ARTIST,
-    VIDEO, SHARE, SEND_FILE, EQUALIZER, SLEEP_TIMER, EDIT, REMOVE_FROM_PLAYLIST, DELETE,
+    VIDEO, SHARE, SEND_TO_FRIEND, SEND_FILE, EQUALIZER, SLEEP_TIMER, EDIT, REMOVE_FROM_PLAYLIST, DELETE,
 }
 
 /** Which lines the song sheet shows, in order. */
@@ -23,8 +23,16 @@ object TrackSheetRules {
      * @param fromPlayer kept for callers (the menu is the same in the player)
      */
     @Suppress("UNUSED_PARAMETER")
-    fun actionsFor(track: Track, fileExists: Boolean, inPlaylist: Boolean, fromPlayer: Boolean): List<TrackSheetAction> = buildList {
+    fun actionsFor(
+        track: Track,
+        fileExists: Boolean,
+        inPlaylist: Boolean,
+        fromPlayer: Boolean,
+        /** There are friends to send it to (FreeSong social); the song needs its YouTube id. */
+        hasFriends: Boolean = false,
+    ): List<TrackSheetAction> = buildList {
         val canShare = track.shareUrl != null
+        val toFriend = hasFriends && !track.videoId.isNullOrBlank()
         add(TrackSheetAction.PLAY_NEXT)
         add(TrackSheetAction.ENQUEUE)
         if (track.isOnline) {
@@ -35,6 +43,7 @@ object TrackSheetRules {
             if (!track.album.isNullOrBlank()) add(TrackSheetAction.GO_ALBUM)
             add(TrackSheetAction.GO_ARTIST)
             if (canShare) add(TrackSheetAction.SHARE)
+            if (toFriend) add(TrackSheetAction.SEND_TO_FRIEND)
             add(TrackSheetAction.SLEEP_TIMER)
             if (inPlaylist) add(TrackSheetAction.REMOVE_FROM_PLAYLIST)
             return@buildList
@@ -44,6 +53,7 @@ object TrackSheetRules {
         if (track.albumKey != null) add(TrackSheetAction.GO_ALBUM)
         add(TrackSheetAction.GO_ARTIST)
         if (canShare) add(TrackSheetAction.SHARE)
+        if (toFriend) add(TrackSheetAction.SEND_TO_FRIEND)
         add(TrackSheetAction.SLEEP_TIMER)
         if (inPlaylist) add(TrackSheetAction.REMOVE_FROM_PLAYLIST)
         add(TrackSheetAction.DELETE)

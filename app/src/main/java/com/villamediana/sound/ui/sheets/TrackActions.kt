@@ -33,6 +33,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
+import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.AttachFile
@@ -114,7 +115,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import kotlin.math.roundToInt
 
-private enum class TrackSheetStage { Actions, AddToPlaylist, Edit, ConfirmDelete }
+private enum class TrackSheetStage { Actions, AddToPlaylist, Edit, ConfirmDelete, SendToFriend }
 
 /**
  * Bottom sheet with everything you can do with a song: like, play next, add to queue, add to
@@ -170,7 +171,8 @@ fun TrackActionsSheet(
         }
     }.collectAsStateWithLifecycle(initialValue = ItemDownload.None)
     val fileExists = remember(t.filePath, t.isOnline) { !t.isOnline && runCatching { File(t.filePath).isFile }.getOrDefault(false) }
-    val actions = TrackSheetRules.actionsFor(t, fileExists, inPlaylist = playlistContext != null, fromPlayer = showEqualizer)
+    val socialFriends by graph.social.friends.collectAsStateWithLifecycle()
+    val actions = TrackSheetRules.actionsFor(t, fileExists, inPlaylist = playlistContext != null, fromPlayer = showEqualizer, hasFriends = socialFriends.friends.isNotEmpty())
     // A streamed song is liked by its video id (Curtidas keeps it without a library row).
     val likedIds by graph.library.likedVideoIds.collectAsState(initial = emptySet())
     val isLiked = if (t.isOnline) t.videoId in likedIds else t.liked
@@ -306,6 +308,9 @@ fun TrackActionsSheet(
                         TrackSheetAction.SHARE -> SheetAction(Icons.Rounded.Share, stringResource(R.string.sheet_share), onClick = {
                             closeThen { onDismiss(); Share.trackLink(context, t) }
                         })
+                        TrackSheetAction.SEND_TO_FRIEND -> SheetAction(Icons.AutoMirrored.Rounded.Send, stringResource(R.string.sheet_send_friend), onClick = {
+                            stage = TrackSheetStage.SendToFriend
+                        })
                         TrackSheetAction.SEND_FILE -> SheetAction(Icons.Rounded.AttachFile, stringResource(R.string.sheet_send_file), onClick = {
                             closeThen { onDismiss(); Share.trackFile(context, t) }
                         })
@@ -338,6 +343,24 @@ fun TrackActionsSheet(
 
         // A streamed song goes in as itself (it plays online; nothing is downloaded).
         TrackSheetStage.AddToPlaylist -> AddToPlaylistSheet(tracks = listOf(t), onDismiss = onDismiss)
+
+        TrackSheetStage.SendToFriend -> com.villamediana.sound.ui.social.FriendPickerSheet(
+            title = stringResource(R.string.send_pick_friend),
+            confirm = stringResource(R.string.sheet_send_friend),
+            single = true,
+            onPick = { ids ->
+                val friend = socialFriends.friends.firstOrNull { it.id == ids.firstOrNull() }
+                val song = com.villamediana.sound.social.SongRef.of(t)
+                if (friend != null && song != null) {
+                    graph.scope.launch {
+                        graph.social.songs.send(friend.id, song)
+                            .onSuccess { feedback.show(res.getString(R.string.send_sent, friend.name)) }
+                            .onFailure { feedback.show(res.getString(R.string.send_failed)) }
+                    }
+                }
+            },
+            onDismiss = onDismiss,
+        )
 
         TrackSheetStage.Edit -> EditTrackDialog(
             track = t,

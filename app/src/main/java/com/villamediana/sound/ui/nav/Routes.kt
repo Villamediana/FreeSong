@@ -29,6 +29,11 @@ import kotlinx.serialization.Serializable
 @Serializable data object ThemeRoute
 @Serializable data class RecapRoute(val year: Int)
 
+/** FreeSong social: friends and people, your profile, a friend's page (the songs you swapped). */
+@Serializable data object SocialRoute
+@Serializable data object ProfileRoute
+@Serializable data class FriendRoute(val id: String)
+
 /** Pages that take the whole screen: no mini player over them, the player layer is hidden. */
 fun isFullPage(route: Any): Boolean = route is VideoRoute || route == SettingsRoute || route == EqualizerRoute || route == ThemeRoute
 

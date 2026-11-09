@@ -66,6 +66,11 @@ class MainActivity : ComponentActivity() {
             SoundApplication.graph.updates.openSheet()
             return
         }
+        // Social notifications: the friends page, a friend, or the jam invite.
+        intent?.getStringExtra(com.villamediana.sound.social.SocialNotifier.EXTRA_OPEN)?.let { open ->
+            com.villamediana.sound.ui.social.SocialRequests.open(open)
+            return
+        }
         when (val request = ExternalRequest.of(intent)) {
             is ExternalRequest.OpenLink -> incoming.value = Inbound.Link(request.text)
             is ExternalRequest.PlayFromSearch -> playFromSearch(request.query)

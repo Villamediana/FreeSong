@@ -29,9 +29,10 @@ object PlayRequests {
 
     /** A radio started from the song playing goes on from where the song is (no start over). */
     fun continuesCurrent(current: Track?, asked: Track, source: PlaySource?): Boolean =
-        source?.type == PlaySource.Type.RADIO && sameSong(current, asked)
+        (source?.type == PlaySource.Type.RADIO || source?.type == PlaySource.Type.JAM) && sameSong(current, asked)
 
-    private val ORDERED = setOf(PlaySource.Type.RADIO, PlaySource.Type.MIX, PlaySource.Type.GENRE)
+    /** Their order is the point (a jam's is everyone's): never shuffled locally. */
+    private val ORDERED = setOf(PlaySource.Type.RADIO, PlaySource.Type.MIX, PlaySource.Type.GENRE, PlaySource.Type.JAM)
 
     /** Same kind and same list: by id when both have one, else by title. */
     fun sameSource(a: PlaySource?, b: PlaySource?): Boolean {
