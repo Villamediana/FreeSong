@@ -62,6 +62,8 @@ class MediaPlayerConnection(
     private val library: LibraryRepository,
     @Suppress("unused") settings: SettingsStore,
     scope: CoroutineScope,
+    /** How well each song of the library fits right now (track id → factor), from the DNA. */
+    private val momentFit: suspend () -> Map<Long, Double> = { emptyMap() },
 ) : PlayerConnection, ResumablePlayer, FollowingPlayer {
     private val app: Context = context.applicationContext
     private val main = CoroutineScope(scope.coroutineContext + Dispatchers.Main.immediate)
@@ -372,7 +374,8 @@ class MediaPlayerConnection(
     override fun playSmart(seed: SmartSeed) {
         main.launch {
             val all = known.values.toList().ifEmpty { withContext(Dispatchers.IO) { library.allTracks() } }
-            val taste = withContext(Dispatchers.IO) { library.loadTaste() }
+            val fit = runCatching { momentFit() }.getOrDefault(emptyMap())
+            val taste = withContext(Dispatchers.IO) { library.loadTaste(fit = fit) }
             val plan = withContext(Dispatchers.Default) {
                 SmartPlans.plan(seed, all, taste, strings, System.currentTimeMillis())
             } ?: return@launch

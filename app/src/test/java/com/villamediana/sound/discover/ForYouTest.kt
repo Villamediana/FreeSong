@@ -94,6 +94,29 @@ class ForYouTest {
     }
 
     @Test
+    fun theLibrarysSongsOfThisHourFitNowAndTheOnesOfAnotherHourFitLess() = runBlocking {
+        fun own(n: Int, artist: String) = com.villamediana.sound.data.db.Track(
+            title = "Own $n", artist = artist, videoId = "own$n", filePath = "/music/$n.m4a", durationMs = 200_000,
+        )
+        // Nothing heard yet: the moment has nothing to say about the library.
+        val nowBand = library.insertTrack(own(1, "Now Band"))
+        val thenBand = library.insertTrack(own(2, "Then Band"))
+        val stranger = library.insertTrack(own(3, "Stranger"))
+        assertTrue(forYou.libraryFit().isEmpty())
+        // Two weeks of one band at this hour and another half a day away.
+        for (day in 1..14) {
+            library.recordOnlinePlay(remote("n${day % 5}", "Now Band"), 200_000, 200_000, "test", now - day * 24 * 3_600_000L)
+            library.recordOnlinePlay(remote("t${day % 5}", "Then Band"), 200_000, 200_000, "test", now - day * 24 * 3_600_000L - 12 * 3_600_000L)
+        }
+        forYou.invalidate()
+        val fit = forYou.libraryFit()
+        assertTrue(fit.getValue(nowBand) > 1.3)
+        assertTrue(fit.getValue(thenBand) < 0.8)
+        // Never heard: as always (not even listed).
+        assertFalse(stranger in fit)
+    }
+
+    @Test
     fun whatSongsSoundLikeIsKeptOnThePhoneAndReachesTheDna() = runBlocking {
         fun sound(e: Float, seconds: Float = 120f) = SoundPrint(-30f + 20f * e, 500f + 3_000f * e, 5f + 40f * e, 0.1f + 0.7f * e, 70f + 90f * e, seconds)
         // Soft songs at this hour of the day, hard ones half a day away, for a week.

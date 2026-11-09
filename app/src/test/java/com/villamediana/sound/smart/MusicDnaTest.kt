@@ -52,6 +52,23 @@ class MusicDnaTest {
     }
 
     @Test
+    fun aSongOfTheLibraryFitsItsMomentAndASkipHereTakesItDownOnlyHere() {
+        val gaita = "Gait1".padEnd(11, 'x')
+        val skips = (1..4).map { skipped("Gaiteros", 1, at(it, 22)) }
+        val dna = MusicDna.build(life() + skips, emptySet(), now, zone)
+        // The evening's band: up in the evening, down in the morning; a song without an id goes by its artist.
+        assertTrue(dna.fit(null, "gaiteros", night) > 1.3)
+        assertTrue(dna.fit(null, "gaiteros", morning) < 0.7)
+        assertEquals(dna.lift("gaiteros", night), dna.fit("", "gaiteros", night), 1e-9)
+        // The one skipped in the evenings fits them less than its band; in the morning the skips say little.
+        assertTrue(dna.fit(gaita, "gaiteros", night) < dna.fit(null, "gaiteros", night) - 0.2)
+        assertTrue(dna.fit(gaita, "gaiteros", morning) > 0.85 * dna.fit(null, "gaiteros", morning))
+        // Nothing known: as always. And never past the bounds.
+        assertEquals(1.0, dna.fit("nothing", "unknown", night), 0.0)
+        assertTrue(dna.fit(gaita, "gaiteros", night) in MusicDna.FIT_MIN..MusicDna.FIT_MAX)
+    }
+
+    @Test
     fun aFewListensMoveLittleManyMoveMore() {
         val few = MusicDna.build(listOf(heard("A", 1, at(1, 21)), heard("B", 1, at(1, 9))), emptySet(), now, zone)
         val many = MusicDna.build((1..30).flatMap { listOf(heard("A", it % 5, at(it, 21)), heard("B", it % 5, at(it, 9))) }, emptySet(), now, zone)

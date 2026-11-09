@@ -36,4 +36,9 @@ data class Taste(
     /** Track ids played in the last few hours (avoid repeating them). */
     val justPlayed: Set<Long> = emptySet(),
     val now: Long = System.currentTimeMillis(),
+    /**
+     * How well each track fits this moment (the hour, the day, the place, who is along), from the
+     * DNA: 1 = as always (the absent ones); above, it is this moment's; below, it isn't.
+     */
+    val fit: Map<Long, Double> = emptyMap(),
 )

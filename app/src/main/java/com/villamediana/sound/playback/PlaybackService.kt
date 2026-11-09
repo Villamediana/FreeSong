@@ -356,7 +356,9 @@ class PlaybackService : MediaLibraryService() {
     private suspend fun taste(): Taste {
         val now = System.currentTimeMillis()
         tasteCache?.takeIf { now - tasteAt < TASTE_TTL_MS }?.let { return it }
-        return withContext(Dispatchers.IO) { library.loadTaste(now) }.also {
+        // What fits this moment (the hour, the day, the place, who is along) plays first.
+        val fit = runCatching { graph.forYou.libraryFit() }.getOrDefault(emptyMap())
+        return withContext(Dispatchers.IO) { library.loadTaste(now, fit) }.also {
             tasteCache = it
             tasteAt = now
         }

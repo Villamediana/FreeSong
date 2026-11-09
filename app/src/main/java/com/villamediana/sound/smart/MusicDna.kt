@@ -355,6 +355,15 @@ class MusicDna private constructor(
         return (if (hearted) maxOf(f, HEART_FLOOR) else f).coerceIn(0.0, 1.0)
     }
 
+    /**
+     * How well a song fits [m] against any other moment (1 = as always): its artist's hours, days,
+     * place and people, its sound, and its skips here. For the library's own order.
+     */
+    fun fit(videoId: String?, artistKey: String, m: DnaMoment): Double {
+        val id = videoId?.takeIf { it.isNotBlank() }
+        return (lift(artistKey, m) * soundLift(id, artistKey, m) * (id?.let { songFactor(it, m) } ?: 1.0)).coerceIn(FIT_MIN, FIT_MAX)
+    }
+
     /** Every song's factor below 1 in [m] (for a profile of the moment). */
     fun songFactors(m: DnaMoment): Map<String, Double> =
         songSkips.keys.mapNotNull { id -> songFactor(id, m).takeIf { it < 0.999 }?.let { id to it } }.toMap()
@@ -446,6 +455,9 @@ class MusicDna private constructor(
         const val SONGS_FOR_FLOOR = 0.45
 
         /** How far a sound's fit to the moment moves a song, and how far skips push a sound down in it. */
+        /** How far the moment can move a song of the library ([fit]). */
+        const val FIT_MIN = 0.2
+        const val FIT_MAX = 4.0
         const val SOUND_MIN = 0.5
         const val SOUND_MAX = 2.0
         const val SOUND_SKIP = 0.4

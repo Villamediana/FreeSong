@@ -14,6 +14,7 @@ import com.villamediana.sound.smart.Listen
 import com.villamediana.sound.smart.Recommend
 import com.villamediana.sound.smart.SmartMixes
 import com.villamediana.sound.smart.TasteProfile
+import com.villamediana.sound.smart.artistKey
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -24,6 +25,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlin.math.abs
 
 /**
  * The Home's suggestions, from what the listener actually likes ([TasteProfile]: everything heard
@@ -103,6 +105,26 @@ class ForYou(
             }
         }.getOrDefault(emptyList()).filter { it.videoId !in inLibrary && !p.avoids(it.videoId, it.artist) }
         return MomentPlan(m, own, fresh, names(m.people))
+    }
+
+    /**
+     * How well each song of the library fits right now (track id → factor, only the ones the
+     * moment moves): what the shuffle and "a seguir" of the library lean to. Empty while the DNA
+     * has nothing to say.
+     */
+    suspend fun libraryFit(): Map<Long, Double> {
+        val dna = dna()
+        if (dna.isEmpty) return emptyMap()
+        val m = moment()
+        val tracks = library.allTracks()
+        return withContext(Dispatchers.Default) {
+            val out = HashMap<Long, Double>()
+            for (t in tracks) {
+                val fit = dna.fit(t.videoId, artistKey(t.artist), m)
+                if (abs(fit - 1.0) > 0.03) out[t.id] = fit
+            }
+            out
+        }
     }
 
     /** The taste for right now ([TasteProfile.inMoment]): what radios and suggestions use. */
