@@ -27,5 +27,4 @@
     <string name="settings_update_available">Atualizar para %1$s</string>
     <string name="settings_update_going">Atualizando para %1$s</string>
     <string name="update_auto_note">Já baixada: ela se instala sozinha quando você não estiver usando o FreeSong.</string>
-    <string name="update_installing_note">O FreeSong fecha por um instante pra instalar.</string>
 </resources>

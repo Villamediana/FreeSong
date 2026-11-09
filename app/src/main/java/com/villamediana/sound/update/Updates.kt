@@ -4,7 +4,6 @@ import android.content.Intent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -62,6 +61,12 @@ interface ApkInstaller {
      * music): Android 14+. False when this Android can't wait for that itself.
      */
     fun installWhenIdle(apk: File): Boolean = false
+
+    /**
+     * Android's own installer for the APK: "Atualizar", its progress, then "Abrir" (the app closes
+     * behind it). Null where there is none (then the APK goes to Android without that screen).
+     */
+    fun installScreen(apk: File): Intent? = null
 }
 
 /** What is kept between launches (filesDir/update.json). */
@@ -134,8 +139,6 @@ class Updates internal constructor(
     private val clock: () -> Long = System::currentTimeMillis,
     /** A newer version was found: the automatic update gets ready (a worker, on Wi-Fi). */
     private val onFound: (AppRelease) -> Unit = {},
-    /** The pause before handing the APK to Android after a tap, so "o app fecha por um instante" can be read. */
-    private val noticeMs: Long = INSTALL_NOTICE_MS,
 ) {
     private val _state = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val state: StateFlow<UpdateState> = _state
@@ -157,6 +160,8 @@ class Updates internal constructor(
 
     private val checking = Mutex()
     private var work: Job? = null
+    /** Android's installer screen was opened for the button's update (it says nothing back when backed out of). */
+    @Volatile private var screenOpened = false
     private val restored: Job? = if (enabled) scope.launch(Dispatchers.IO) { restore() } else null
 
     /** What the last answer said, without the network: an update found before is still there. */
@@ -281,8 +286,13 @@ class Updates internal constructor(
             }
             _state.value = UpdateState.Installing(release)
             memory.change { it.copy(installing = release.version, mode = MODE_NOW) }
-            // "O FreeSong fecha por um instante": read before Android closes the app to install.
-            if (fresh) delay(noticeMs)
+            // Android's own installer: "Atualizar", then "Abrir" when it's done — the app closes behind it.
+            val screen = runCatching { installer.installScreen(apk) }.getOrNull()
+            if (screen != null) {
+                screenOpened = true
+                _confirm.value = screen
+                return@launch
+            }
             try {
                 withContext(Dispatchers.IO) { installer.install(apk) }
             } catch (e: Exception) {
@@ -366,6 +376,13 @@ class Updates internal constructor(
             val release = s.release ?: return@launch
             if (work?.isActive == true) return@launch
             when (s) {
+                // Back on screen, still the old version, Android's installer gone: the person backed
+                // out of it ("Cancelar", back). The button is there again; nothing carries on by itself.
+                is UpdateState.Installing -> if (screenOpened && _confirm.value == null) {
+                    screenOpened = false
+                    withContext(Dispatchers.IO) { memory.change { it.copy(installing = null, wants = null, mode = null) } }
+                    _state.value = UpdateState.Available(release)
+                }
                 is UpdateState.NeedsPermission -> if (installer.canInstall()) update()
                 is UpdateState.Available -> {
                     val saved = withContext(Dispatchers.IO) { memory.read() }
@@ -484,7 +501,6 @@ class Updates internal constructor(
         const val CHECK_EVERY_MS = 6L * 3_600_000
         /** Openings an update carries on by itself after one tap (then it waits for the button). */
         const val MAX_RESUMES = 3
-        const val INSTALL_NOTICE_MS = 1_200L
         internal const val MODE_NOW = "now"
         internal const val MODE_AUTO = "auto"
 

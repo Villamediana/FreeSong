@@ -345,8 +345,13 @@ ouvindo; atualizar fechava o app duas vezes.
   sem música — o próprio sistema espera); 12–13: `UpdateIdleWorker` instala 2 min depois de o app
   sair da tela se não houver música. Depois: só o aviso "atualizado" (não abre o app por cima de
   nada). Falha/tempo esgotado do automático: quieto, tenta de novo depois.
-- "Atualizar agora" continua: avisa "o FreeSong fecha por um instante" (1,2 s) antes de instalar e
-  tenta reabrir depois (`Updated.automatic = false`).
+- O botão "Atualizar" (1.16.1, pedido do Miguel: "aquele do Android que clica em atualizar e no fim
+  mostra abrir"): baixa e abre o **instalador do próprio Android** (`SessionInstaller.installScreen`,
+  `ACTION_INSTALL_PACKAGE` com o APK pelo FileProvider `${applicationId}.files`, `cache/update/`):
+  "Atualizar" → progresso → "Abrir". O app fecha por baixo dessa tela. `EXTRA_INSTALLER_PACKAGE_NAME`
+  = FreeSong, pra ele seguir como quem atualiza (as automáticas dependem disso). Sem resposta de
+  volta: voltar ao app ainda na versão velha = desistiu (`onResume` → Available, nada recomeça
+  sozinho). Sem instalador que responda, cai na sessão do PackageInstaller como antes.
 - Testes: `smart/RadioMixTest` (variedade: tirar o acaso derruba), `QueueContinuationTest` (seeds),
   `UpdatesTest` (automático 14+, 12–13, onde o Android perguntaria, falha quieta, botão com
   automático esperando).

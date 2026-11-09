@@ -2,4 +2,6 @@
 <paths>
     <external-files-path name="music" path="Music/" />
     <files-path name="music_internal" path="music/" />
+    <!-- A nova versão baixada, entregue ao instalador do Android -->
+    <cache-path name="update" path="update/" />
 </paths>

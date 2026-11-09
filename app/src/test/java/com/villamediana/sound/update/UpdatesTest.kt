@@ -48,6 +48,14 @@ class UpdatesTest {
         val installed = mutableListOf<ByteArray>()
         val whenIdle = mutableListOf<ByteArray>()
         var throwOnInstall: Exception? = null
+        /** Android's own installer screen is there (the app's button opens it). */
+        var screen = false
+        val screens = mutableListOf<File>()
+        override fun installScreen(apk: File): android.content.Intent? {
+            if (!screen) return null
+            synchronized(screens) { screens += apk }
+            return android.content.Intent("install")
+        }
         override fun canInstall() = allowed
         override fun inspect(apk: File) = info(apk)
         override fun install(apk: File) {
@@ -96,7 +104,6 @@ class UpdatesTest {
         enabled = enabled,
         clock = { now },
         onFound = { synchronized(found) { found += it.version } },
-        noticeMs = 0,
     )
 
     private fun apiCalls() = github.count { it.url.toString() == ReleaseFeed.LATEST_URL }
@@ -555,6 +562,35 @@ class UpdatesTest {
         // No second download; and the new version knows it came from the button.
         assertEquals(1, apkCalls())
         assertEquals(Updated("1.13.0", automatic = false), updates(version = "1.13.0", code = 59).afterUpdate())
+    }
+
+    @Test
+    fun theButtonOpensAndroidsOwnInstallerAndBackingOutOfItLeavesItBe() {
+        installer.screen = true
+        val u = updates()
+        runBlocking { u.check(manual = false) }
+        u.update()
+        u.awaitState { it is UpdateState.Installing }
+        runBlocking { withTimeout(5_000) { while (u.confirm.value == null) kotlinx.coroutines.delay(10) } }
+        // Android's screen ("Atualizar" → "Abrir"), not a session behind the person's back.
+        assertTrue(installer.installed.isEmpty())
+        assertEquals(1, installer.screens.size)
+        assertEquals("1.13.0", memory.read().installing)
+        // Opened; then back in the app, still the old version: they backed out ("Cancelar").
+        u.confirmShown()
+        u.onResume()
+        u.awaitState { it is UpdateState.Available }
+        assertNull(memory.read().wants)
+        assertNull(memory.read().installing)
+        // Nothing reopens it by itself.
+        u.onResume()
+        Thread.sleep(200)
+        assertNull(u.confirm.value)
+        assertEquals(1, installer.screens.size)
+        // The button again: straight to the screen, no second download.
+        u.update()
+        runBlocking { withTimeout(5_000) { while (installer.screens.size < 2) kotlinx.coroutines.delay(10) } }
+        assertEquals(1, apkCalls())
     }
 
     @Test

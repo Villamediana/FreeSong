@@ -187,8 +187,6 @@ internal fun UpdateSheetBody(
         val note: String? = when (state) {
             is UpdateState.NeedsPermission -> stringResource(R.string.update_permission_body)
             is UpdateState.Failed -> failureText(state.reason)
-            // Android closes the app to put the new one in: said before, so it isn't taken for a crash.
-            is UpdateState.Installing -> stringResource(R.string.update_installing_note)
             else -> if (autoReady) stringResource(R.string.update_auto_note) else null
         }
         AnimatedContent(
