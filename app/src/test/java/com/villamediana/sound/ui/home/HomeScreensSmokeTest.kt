@@ -284,7 +284,6 @@ class HomeScreensSmokeTest {
         compose.onNode(hasText("Econômica") and isSelectable()).performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithText("Econômica", substring = true).fetchSemanticsNodes().isNotEmpty() && compose.onAllNodes(hasText("Compatível") and isSelectable()).fetchSemanticsNodes().isEmpty() }
         compose.onAllNodes(hasScrollToKeyAction())[0].performScrollToKey("about")
-        waitForText("Limpar histórico")
         waitForText("músicas")
         shot("settings-bottom")
         // Everything kept to spare the internet, each with its size and "Limpar", in its sheet.

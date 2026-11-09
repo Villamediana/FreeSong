@@ -193,6 +193,14 @@ interface PlayEventDao {
 
     @Query("DELETE FROM play_events")
     suspend fun clear()
+
+    /** Listening time of the plays [prune] would remove. */
+    @Query("SELECT COALESCE(SUM(listenedMs), 0) FROM play_events WHERE playedAt < :before OR id NOT IN (SELECT id FROM play_events ORDER BY playedAt DESC, id DESC LIMIT :keep)")
+    suspend fun listenedToPrune(before: Long, keep: Int): Long
+
+    /** Drops plays older than [before] and all but the newest [keep]. */
+    @Query("DELETE FROM play_events WHERE playedAt < :before OR id NOT IN (SELECT id FROM play_events ORDER BY playedAt DESC, id DESC LIMIT :keep)")
+    suspend fun prune(before: Long, keep: Int): Int
 }
 
 @Dao
@@ -278,6 +286,14 @@ interface OnlinePlayDao {
 
     @Query("DELETE FROM online_plays")
     suspend fun clear()
+
+    /** Listening time of the plays [prune] would remove. */
+    @Query("SELECT COALESCE(SUM(listenedMs), 0) FROM online_plays WHERE playedAt < :before OR id NOT IN (SELECT id FROM online_plays ORDER BY playedAt DESC, id DESC LIMIT :keep)")
+    suspend fun listenedToPrune(before: Long, keep: Int): Long
+
+    /** Drops plays older than [before] and all but the newest [keep]. */
+    @Query("DELETE FROM online_plays WHERE playedAt < :before OR id NOT IN (SELECT id FROM online_plays ORDER BY playedAt DESC, id DESC LIMIT :keep)")
+    suspend fun prune(before: Long, keep: Int): Int
 }
 
 @Dao

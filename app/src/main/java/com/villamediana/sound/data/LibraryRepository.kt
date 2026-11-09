@@ -344,6 +344,19 @@ class LibraryRepository(
         onlinePlayDao.clear()
     }
 
+    /**
+     * Keeps the listening history from growing forever: [HISTORY_KEPT_MS] back (the mixes, the taste
+     * and January's look at the year before all read less than that) and at most [HISTORY_MAX_ROWS]
+     * of each kind. Returns the listening time removed (the profile's hours keep counting it).
+     */
+    suspend fun pruneHistory(now: Long = System.currentTimeMillis()): Long = db.withTransaction {
+        val before = now - HISTORY_KEPT_MS
+        val removed = eventDao.listenedToPrune(before, HISTORY_MAX_ROWS) + onlinePlayDao.listenedToPrune(before, HISTORY_MAX_ROWS)
+        eventDao.prune(before, HISTORY_MAX_ROWS)
+        onlinePlayDao.prune(before, HISTORY_MAX_ROWS)
+        removed
+    }
+
     // ---------------------------------------------------------------- playlists
 
     val playlists: Flow<List<PlaylistSummary>> = combine(
@@ -675,6 +688,11 @@ class LibraryRepository(
     }.flowOn(Dispatchers.Default)
 
     companion object {
+        /** How far back the listening is kept on the phone (the same as the profile's vault). */
+        const val HISTORY_KEPT_MS = com.villamediana.sound.social.VaultMerge.PLAYS_KEPT_MS
+        /** At most this many plays of each kind (library, streamed), the newest. */
+        const val HISTORY_MAX_ROWS = 50_000
+
         fun groupAlbums(all: List<Track>): List<AlbumSummary> =
             all.filter { it.hasAlbum }.groupBy { it.albumKey!!.normalized }.values.map { group ->
                 val first = group.minWith(compareBy<Track>({ it.trackNumber ?: Int.MAX_VALUE }, { it.addedAt }))

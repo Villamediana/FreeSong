@@ -25,6 +25,13 @@ class SoundApplication : Application(), SingletonImageLoader.Factory {
         instance = this
         Notifications.createChannels(this)
         graph.downloads.kick()
+        // The listening history keeps a bit over a year (no table growing forever); the hours keep counting.
+        graph.scope.launch {
+            runCatching {
+                val removed = graph.library.pruneHistory()
+                if (removed > 0) graph.settings.addListenedBefore(removed)
+            }
+        }
         // "Downloads inteligentes" follows its switch (scheduled on, cancelled off).
         graph.scope.launch {
             graph.settings.settings.map { it.smartDownloads }.distinctUntilChanged().collect { on ->

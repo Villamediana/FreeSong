@@ -62,6 +62,8 @@ data class Settings(
     val favoriteGenres: Set<String> = emptySet(),
     /** The genre picker was answered (or skipped): Home shows the suggestions from then on. */
     val genresChosen: Boolean = false,
+    /** Listening time of plays already pruned from the history ([com.villamediana.sound.data.LibraryRepository.pruneHistory]). */
+    val listenedBeforeMs: Long = 0L,
     val lastQueueJson: String? = null,
 )
 
@@ -88,6 +90,7 @@ class SettingsStore(private val context: Context) {
         val accent = stringPreferencesKey("accent")
         val genres = stringSetPreferencesKey("favorite_genres")
         val genresChosen = booleanPreferencesKey("genres_chosen")
+        val listenedBefore = androidx.datastore.preferences.core.longPreferencesKey("listened_before_ms")
     }
 
     val settings: Flow<Settings> = context.dataStore.data.map { p ->
@@ -112,6 +115,7 @@ class SettingsStore(private val context: Context) {
             accent = p[K.accent] ?: "purple",
             favoriteGenres = p[K.genres].orEmpty(),
             genresChosen = p[K.genresChosen] ?: false,
+            listenedBeforeMs = p[K.listenedBefore] ?: 0L,
             lastQueueJson = p[K.lastQueue],
         )
     }
@@ -129,6 +133,7 @@ class SettingsStore(private val context: Context) {
         it[K.genres] = ids
         it[K.genresChosen] = true
     }
+    suspend fun addListenedBefore(ms: Long) = context.dataStore.edit { it[K.listenedBefore] = (it[K.listenedBefore] ?: 0L) + ms }
     suspend fun setAccent(id: String) = context.dataStore.edit { it[K.accent] = id }
     suspend fun setTheme(v: ThemeMode) = context.dataStore.edit { it[K.theme] = v.name }
     suspend fun setPlayOnlineByDefault(v: Boolean) = context.dataStore.edit { it[K.playOnline] = v }

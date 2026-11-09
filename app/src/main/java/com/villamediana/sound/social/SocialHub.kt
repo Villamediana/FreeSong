@@ -80,6 +80,8 @@ class SocialHub(
     /** The genres picked on the Home (chosen?, ids), and setting them: they follow the profile too. */
     genres: suspend () -> Pair<Boolean, Set<String>> = { false to emptySet() },
     setGenres: suspend (Set<String>) -> Unit = {},
+    /** Listening time already pruned from the history: the profile's hours still count it. */
+    private val listenedBefore: suspend () -> Long = { 0L },
 ) {
     val baseUrl: String = BuildConfig.RELAY_URL
     val account = SocialAccount(context, scope) { token -> RelayApi(http, baseUrl, token) }
@@ -285,7 +287,7 @@ class SocialHub(
             Recaps.build(0, events, tracks, online, span = Long.MIN_VALUE until Long.MAX_VALUE)
         }
         val top = recap.topSongs.mapNotNull { s -> s.track?.let(SongRef::of) ?: s.remote?.let(SongRef::of) }
-        account.syncStats(recap.listenedMs, top)
+        account.syncStats(recap.listenedMs + listenedBefore(), top)
     }
 
     private fun friendsFile() = File(context.filesDir, "social-friends.json")

@@ -121,10 +121,8 @@ fun SettingsScreen() {
     val usedBytes by vm.usedBytes.collectAsStateWithLifecycle()
     val caches by vm.caches.collectAsStateWithLifecycle()
     val freeBytes by vm.freeBytes.collectAsStateWithLifecycle()
-    val cleared by vm.historyCleared.collectAsStateWithLifecycle()
     val equalizerOn by vm.equalizerOn.collectAsStateWithLifecycle()
     val nav = navigator()
-    var confirmClear by rememberSaveable { mutableStateOf(false) }
     var qualityOpen by rememberSaveable { mutableStateOf(false) }
     var spaceOpen by rememberSaveable { mutableStateOf(false) }
     val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
@@ -214,8 +212,6 @@ fun SettingsScreen() {
                     value = kept?.let { stringResource(R.string.settings_free_space_value, formatBytes(it)) } ?: "—",
                     onClick = { spaceOpen = true },
                 )
-                Hairline()
-                ClearHistoryRow(cleared, onClick = { confirmClear = true })
             }
         }
 
@@ -243,26 +239,6 @@ fun SettingsScreen() {
         SoundSheet(onDismissRequest = { spaceOpen = false }) {
             CacheRows(caches, onClear = vm::clearCache, onClearAll = vm::clearAllCaches)
         }
-    }
-    if (confirmClear) {
-        AlertDialog(
-            onDismissRequest = { confirmClear = false },
-            containerColor = SoundColors.Surface2,
-            shape = RoundedCornerShape(22.dp),
-            title = { Text(stringResource(R.string.home_settings_clear_title), style = MaterialTheme.typography.titleLarge, color = SoundColors.Text) },
-            text = { Text(stringResource(R.string.home_settings_clear_body), style = MaterialTheme.typography.bodyMedium, color = SoundColors.TextMuted) },
-            confirmButton = {
-                TextButton(onClick = {
-                    confirmClear = false
-                    vm.clearHistory()
-                }) { Text(stringResource(R.string.home_settings_clear_confirm), color = SoundColors.Danger, style = MaterialTheme.typography.labelLarge) }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmClear = false }) {
-                    Text(stringResource(R.string.cancel), color = SoundColors.TextMuted, style = MaterialTheme.typography.labelLarge)
-                }
-            },
-        )
     }
 }
 
@@ -551,22 +527,6 @@ private fun cacheIcon(kind: CacheKind): ImageVector = when (kind) {
     CacheKind.LYRICS -> Icons.Rounded.Lyrics
     CacheKind.HOME -> Icons.Rounded.Home
     CacheKind.CHORDS -> com.villamediana.sound.ui.chords.ChordsIcon
-}
-
-/** "Limpar histórico": red, with the line under it saying when it is done. */
-@Composable
-private fun ClearHistoryRow(cleared: Boolean, onClick: () -> Unit) {
-    RowShell(Icons.Rounded.History, SoundColors.Danger, Modifier.clickable(onClick = onClick)) {
-        Column(Modifier.weight(1f)) {
-            Text(stringResource(R.string.home_settings_clear_history), style = MaterialTheme.typography.titleMedium, color = SoundColors.Danger)
-            Spacer(Modifier.height(1.dp))
-            Text(
-                stringResource(if (cleared) R.string.home_settings_history_cleared else R.string.home_settings_clear_history_sub),
-                style = MaterialTheme.typography.bodySmall,
-                color = if (cleared) SoundColors.Success else SoundColors.TextMuted,
-            )
-        }
-    }
 }
 
 /** The mark, the name and the version. */
