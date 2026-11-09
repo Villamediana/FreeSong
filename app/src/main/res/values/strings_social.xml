@@ -103,4 +103,7 @@
     <string name="person_hours_label">ouvidas</string>
     <string name="profile_edit_name_action">Editar nome</string>
     <string name="profile_recovered">Tudo de volta: amigos, curtidas, playlists e o seu gosto.</string>
+    <string name="crop_title">Ajustar foto</string>
+    <string name="crop_hint">Arraste e use dois dedos (ou a barra) pra aproximar.</string>
+    <string name="crop_apply">Aplicar</string>
 </resources>

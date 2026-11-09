@@ -38,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
@@ -77,19 +78,19 @@ fun ProfileScreen() {
     val res = context.resources
 
     var photoBusy by remember { mutableStateOf(false) }
+    // The photo just picked, being framed ("Ajustar foto").
+    var framing by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     var editing by rememberSaveable { mutableStateOf(false) }
     var menu by rememberSaveable { mutableStateOf(false) }
     var recovering by rememberSaveable { mutableStateOf(false) }
     var deleting by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(Unit) { hub.account.refresh() }
 
+    // Picked → framed in the circle → applied.
     val gallery = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) scope.launch {
-            photoBusy = true
-            hub.account.setPhoto(uri).onFailure {
-                snackbar.feedback.show(res.getString(if (it is RelayException) R.string.profile_error_photo else R.string.profile_error_network))
-            }
-            photoBusy = false
+            val photo = hub.account.loadPhoto(uri)
+            if (photo == null) snackbar.feedback.show(res.getString(R.string.profile_error_photo)) else framing = photo
         }
     }
     val pickPhoto = { gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
@@ -108,23 +109,34 @@ fun ProfileScreen() {
             snackbar.feedback.show(res.getString(R.string.profile_copied))
         },
         onNewCode = { scope.launch { hub.newRecoveryCode() } },
-        onDelete = { deleting = true },
+        onUseCode = { recovering = true },
         sheets = {
+            framing?.let { photo ->
+                PhotoCropDialog(
+                    photo = remember(photo) { photo.asImageBitmap() },
+                    onCancel = { framing = null },
+                    onApply = { cut ->
+                        framing = null
+                        scope.launch {
+                            photoBusy = true
+                            hub.account.setPhoto(photo, android.graphics.Rect(cut.left.toInt(), cut.top.toInt(), cut.right.toInt(), cut.bottom.toInt())).onFailure {
+                                snackbar.feedback.show(res.getString(if (it is RelayException) R.string.profile_error_photo else R.string.profile_error_network))
+                            }
+                            photoBusy = false
+                        }
+                    },
+                )
+            }
             if (editing && p != null) EditNameSheet(p, onDismiss = { editing = false }, onSaved = { snackbar.feedback.show(res.getString(R.string.profile_saved)) })
             if (menu) {
+                // Only what isn't on the page already: the photo changes from its camera, the code from its card.
                 SoundSheet(onDismissRequest = { menu = false }) {
-                    SheetAction(Icons.Rounded.PhotoCamera, stringResource(R.string.profile_photo_change), onClick = { menu = false; pickPhoto() })
                     if (p?.avatar != null) {
                         SheetAction(Icons.Rounded.HideImage, stringResource(R.string.profile_photo_remove), onClick = {
                             menu = false
                             scope.launch { hub.account.removePhoto() }
                         })
                     }
-                    SheetAction(Icons.Rounded.Key, stringResource(R.string.profile_new_code), onClick = {
-                        menu = false
-                        scope.launch { hub.newRecoveryCode() }
-                    })
-                    SheetAction(Icons.Rounded.SwapHoriz, stringResource(R.string.profile_use_code), onClick = { menu = false; recovering = true })
                     SheetAction(Icons.Rounded.DeleteOutline, stringResource(R.string.profile_delete), tint = SoundColors.Danger, labelColor = SoundColors.Danger, onClick = {
                         menu = false
                         deleting = true
@@ -164,7 +176,7 @@ internal fun ProfilePage(
     onMenu: () -> Unit,
     onCopy: () -> Unit,
     onNewCode: () -> Unit,
-    onDelete: () -> Unit,
+    onUseCode: () -> Unit,
     sheets: @Composable () -> Unit = {},
 ) {
     PersonPage(
@@ -178,24 +190,13 @@ internal fun ProfilePage(
         avatar = { size -> CardAvatar(me, size, onCamera = onPhoto, busy = photoBusy) },
         buttons = {
             PersonButton(stringResource(R.string.profile_edit_name_action), onClick = onEdit, icon = Icons.Rounded.Edit, modifier = Modifier.weight(1f))
-            PersonButton(stringResource(R.string.profile_photo_change), onClick = onPhoto, icon = Icons.Rounded.PhotoCamera, modifier = Modifier.weight(1f))
         },
         topActions = {
             HeaderIconButton(Icons.Rounded.MoreVert, stringResource(R.string.more_options), onClick = onMenu)
         },
         sheets = sheets,
         more = {
-            item(key = "recovery", contentType = "card") { RecoveryCard(code, onCopy = onCopy, onNew = onNewCode) }
-            item(key = "delete", contentType = "footer") {
-                Box(Modifier.fillMaxWidth().padding(top = 26.dp, bottom = 8.dp), contentAlignment = Alignment.Center) {
-                    Text(
-                        stringResource(R.string.profile_delete),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = SoundColors.Danger,
-                        modifier = Modifier.clip(CircleShape).clickable(onClick = onDelete).padding(horizontal = 18.dp, vertical = 12.dp),
-                    )
-                }
-            }
+            item(key = "recovery", contentType = "card") { RecoveryCard(code, onCopy = onCopy, onNew = onNewCode, onUseCode = onUseCode) }
         },
     )
 }

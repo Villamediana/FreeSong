@@ -150,8 +150,12 @@ class SocialAccount(
     }
 
     /** A photo from the gallery: square, 512 px, JPEG. */
-    suspend fun setPhoto(uri: Uri): Result<Profile> = runCatching {
-        val jpeg = withContext(Dispatchers.IO) { avatarJpeg(uri) } ?: throw IOException("not an image")
+    /** The picked photo, upright and about [EDIT_PX] on its shorter side, to frame it. Null when it isn't an image. */
+    suspend fun loadPhoto(uri: Uri): Bitmap? = withContext(Dispatchers.IO) { decode(uri, EDIT_PX) }
+
+    /** The square [cut] of [photo] (in its pixels), at 512 px, becomes the profile photo. */
+    suspend fun setPhoto(photo: Bitmap, cut: android.graphics.Rect): Result<Profile> = runCatching {
+        val jpeg = withContext(Dispatchers.Default) { cutJpeg(photo, cut, AVATAR_PX, quality = 85) }
         val p = withContext(Dispatchers.IO) { api.setAvatar(jpeg) }
         keep(p)
         p
@@ -233,13 +237,13 @@ class SocialAccount(
         _status.value = if (optOut) AccountStatus.OPTED_OUT else AccountStatus.NONE
     }
 
-    /** The picked photo upright (EXIF, Android 9+), its center square at 512 px, JPEG. */
-    private fun avatarJpeg(uri: Uri): ByteArray? {
-        val bitmap = if (Build.VERSION.SDK_INT >= 28) {
+    /** The picked photo upright (EXIF, Android 9+), decoded at about [shortSide] px on its shorter side. */
+    private fun decode(uri: Uri, shortSide: Int): Bitmap? {
+        return if (Build.VERSION.SDK_INT >= 28) {
             runCatching {
                 ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, uri)) { decoder, info, _ ->
                     val shortest = minOf(info.size.width, info.size.height)
-                    if (shortest > AVATAR_PX * 2) decoder.setTargetSampleSize(shortest / (AVATAR_PX * 2))
+                    if (shortest > shortSide * 2) decoder.setTargetSampleSize(shortest / shortSide)
                     decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
                 }
             }.getOrNull()
@@ -248,14 +252,15 @@ class SocialAccount(
             val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
             resolver.openInputStream(uri)?.use { android.graphics.BitmapFactory.decodeStream(it, null, bounds) }
             var sample = 1
-            while (minOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= AVATAR_PX * 2) sample *= 2
+            while (minOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= shortSide) sample *= 2
             resolver.openInputStream(uri)?.use { android.graphics.BitmapFactory.decodeStream(it, null, android.graphics.BitmapFactory.Options().apply { inSampleSize = sample }) }
-        } ?: return null
-        return centerSquareJpeg(bitmap, AVATAR_PX, quality = 85)
+        }
     }
 
     companion object {
         const val AVATAR_PX = 512
+        /** The photo while it is framed: enough to zoom in without blur, not a whole camera photo in memory. */
+        const val EDIT_PX = 1400
 
         /** "7k2q m9xd 4tfa h3rb" → "7K2Q-M9XD-4TFA-H3RB" (shown as the relay gives it). */
         fun formatCode(raw: String): String {
@@ -264,6 +269,19 @@ class SocialAccount(
         }
 
         /** The middle square of [source], at most [size] px, as JPEG (no trimming: it's a face, not a cover). */
+        /** The square [cut] of [source] at [size] px, JPEG (the framing chosen in "Ajustar foto"). */
+        internal fun cutJpeg(source: Bitmap, cut: android.graphics.Rect, size: Int, quality: Int): ByteArray {
+            val side = minOf(cut.width(), cut.height(), source.width, source.height).coerceAtLeast(1)
+            val left = cut.left.coerceIn(0, source.width - side)
+            val top = cut.top.coerceIn(0, source.height - side)
+            val square = Bitmap.createBitmap(source, left, top, side, side)
+            val scaled = Bitmap.createScaledBitmap(square, size, size, true)
+            return java.io.ByteArrayOutputStream().use { out ->
+                scaled.compress(Bitmap.CompressFormat.JPEG, quality, out)
+                out.toByteArray()
+            }
+        }
+
         internal fun centerSquareJpeg(source: Bitmap, size: Int, quality: Int): ByteArray {
             val side = minOf(source.width, source.height)
             val square = Bitmap.createBitmap(source, (source.width - side) / 2, (source.height - side) / 2, side, side)

@@ -377,7 +377,7 @@ internal fun CardAvatar(person: Profile?, size: Dp, onCamera: (() -> Unit)? = nu
 
 /** The recovery code, set like a ticket: big and spaced, with "Copiar" and "Gerar outro" under it. */
 @Composable
-internal fun RecoveryCard(code: String?, onCopy: () -> Unit, onNew: () -> Unit) {
+internal fun RecoveryCard(code: String?, onCopy: () -> Unit, onNew: () -> Unit, onUseCode: (() -> Unit)? = null) {
     Column(Modifier.padding(top = Dimens.SectionGap)) {
         SectionHeader(stringResource(R.string.profile_recovery_title))
         Column(
@@ -409,6 +409,15 @@ internal fun RecoveryCard(code: String?, onCopy: () -> Unit, onNew: () -> Unit) 
                     Spacer(Modifier.width(10.dp))
                     PillButton(stringResource(R.string.profile_new_code), onClick = onNew)
                 }
+            }
+            if (onUseCode != null) {
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    stringResource(R.string.profile_use_code),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = SoundColors.TextMuted,
+                    modifier = Modifier.clip(CircleShape).clickable(onClick = onUseCode).padding(horizontal = 14.dp, vertical = 10.dp),
+                )
             }
         }
     }
