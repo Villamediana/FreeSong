@@ -145,7 +145,7 @@ class UpdateUiTest {
         val installer = object : ApkInstaller {
             override fun canInstall() = true
             override fun inspect(apk: File): ApkInfo? = null
-            override fun install(apk: File) = Unit
+            override fun install(apk: File, ask: Boolean) = Unit
         }
         return Updates(
             scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
@@ -187,7 +187,7 @@ class UpdateUiTest {
             installer = object : ApkInstaller {
                 override fun canInstall() = true
                 override fun inspect(apk: File): ApkInfo? = null
-                override fun install(apk: File) = Unit
+                override fun install(apk: File, ask: Boolean) = Unit
             },
             memory = UpdateMemoryFile(File(tmp.root, "off.json")),
             apkDir = File(tmp.root, "off"),

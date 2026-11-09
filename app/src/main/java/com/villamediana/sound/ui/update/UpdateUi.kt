@@ -96,7 +96,8 @@ fun UpdateHost(updates: Updates = SoundApplication.graph.updates) {
                     try {
                         context.startActivity(intent)
                     } catch (e: ActivityNotFoundException) {
-                        updates.onInstallStatus(InstallResult.FAILED, e.message, null)
+                        // No installer screen on this phone: Android's "Atualizar?" instead.
+                        updates.screenUnavailable(e.message)
                     } catch (e: SecurityException) {
                         updates.onInstallStatus(InstallResult.FAILED, e.message, null)
                     }
