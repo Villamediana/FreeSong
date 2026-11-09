@@ -53,6 +53,8 @@ object RadioMix {
     private const val TASTE = 0.8
     /** How much chance moves a song (the closest songs still lead; the rest changes from one start to the next). */
     private const val CHANCE = 1.0
+    /** How far a song skipped in this moment goes down. */
+    private const val SKIPPED = 1.6
 
     fun rank(
         direct: List<List<RemoteTrack>>,
@@ -86,7 +88,9 @@ object RadioMix {
             val agree = AGREE * ((radiosOf[t.videoId] ?: 1) - 1)
             val taste = profile?.affinityOf(t.artist)?.let { TASTE * it } ?: 0.0
             val tired = if ((session.skippedArtists[artistKey(t.artist)] ?: 0) >= 1) 0.6 else 0.0
-            t.videoId to score.getValue(t.videoId) + agree + taste - tired + rnd.nextDouble() * CHANCE
+            // Skipped in this moment (for a moment's profile): further down now, not out.
+            val skips = SKIPPED * (1.0 - (profile?.songFactor(t.videoId) ?: 1.0))
+            t.videoId to score.getValue(t.videoId) + agree + taste - tired - skips + rnd.nextDouble() * CHANCE
         }
         val ranked = found.values.sortedWith(compareByDescending<RemoteTrack> { total.getValue(it.videoId) }.thenBy { it.videoId })
 

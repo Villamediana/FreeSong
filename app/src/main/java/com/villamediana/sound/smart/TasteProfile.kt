@@ -44,6 +44,8 @@ class TasteProfile private constructor(
     /** Songs (video ids) already heard for a while or hearted: not "new" any more. */
     val known: Set<String>,
     private val byArtist: Map<String, ArtistTaste>,
+    /** For a moment's profile: how much each song skipped in it is wanted, 0..1 (absent = 1). */
+    private val songFactors: Map<String, Double> = emptyMap(),
 ) {
     /** A song of an artist, as the profile remembers it. */
     data class SongTaste(val videoId: String?, val title: String, val score: Double, val genre: String?)
@@ -76,10 +78,14 @@ class TasteProfile private constructor(
     /** Never suggested: a song skipped again and again, or an artist skipped almost always. */
     fun avoids(videoId: String, artistName: String): Boolean = videoId in avoidSongs || artistKey(artistName) in avoidArtists
 
+    /** How much a song is wanted in this moment, 0..1 (its skips here, for a moment's profile; else 1). */
+    fun songFactor(videoId: String): Double = songFactors[videoId] ?: 1.0
+
     /**
      * This taste for [m], with the [dna]: the artists and genres of this part of the day, of
      * weekdays or the weekend, of this place and of these friends move up (the others down a
-     * little). Skips don't enter it (Miguel: a song skipped may just not be the vibe).
+     * little), and what is skipped in this moment — songs, artists, genres — goes down in it (only
+     * in it: the taste of every other moment stays), out when skipped here again and again.
      */
     fun inMoment(dna: MusicDna, m: DnaMoment): TasteProfile {
         if (dna.isEmpty || isEmpty) return this
@@ -87,7 +93,7 @@ class TasteProfile private constructor(
             .sortedWith(compareByDescending<ArtistTaste> { it.affinity }.thenBy { it.key })
         val moved = genres.map { g -> g.copy(score = g.score * dna.genreLift(g.id, m)) }
             .sortedWith(compareByDescending<GenreTaste> { it.score }.thenBy { it.id })
-        return TasteProfile(lifted, moved, avoidSongs, avoidArtists, known, lifted.associateBy { it.key })
+        return TasteProfile(lifted, moved, avoidSongs + dna.avoidNow(m), avoidArtists, known, lifted.associateBy { it.key }, dna.songFactors(m))
     }
 
     /**
