@@ -292,3 +292,34 @@ global com foto/@/nome de todos, horas e top 5 só pra amigos; o servidor guarda
   (inclui migração 5→6), `RelayClientTest` (o relay Node de verdade numa porta livre; precisa de
   `relay/node_modules`), `ui/social/SocialUiTest` (prints com `SOUND_SHOTS=1`); servidor:
   `cd relay && npm test`.
+
+## Sugestões que aprendem (1.15.0, 2026-11-09)
+
+Pedido do Miguel: o Início "muda bastante conforme a pessoa escuta" e devia aprender o gênero e o
+que a pessoa gosta e está gostando.
+
+- **`smart/TasteProfile`** (puro): o gosto montado de tudo — escutas da biblioteca (`play_events`)
+  e de streaming (`online_plays`), pulos, corações (`tracks.liked` + `liked_online`), músicas
+  baixadas (sinal fraco) e os gêneros escolhidos. Duas memórias com decaimento: longa (meia-vida
+  45 dias, o gosto) e curta (5 dias, o momento), misturadas 70/30 — uma noite de outra coisa
+  empurra, não vira. Uma música repetida conta pro artista só até um teto. Pulada 2× sem nunca ir
+  até o fim = não volta (`avoidSongs`); artista pulado quase sempre = não volta (`avoidArtists`);
+  coração sempre ganha.
+- **Gênero**: a tag da biblioteca; pro que é só streaming, o gênero do artista no catálogo do
+  iTunes (`discover/ArtistGenres`, poucos por vez, guardado 60 dias em `artist-genres.json`).
+  `smart/GenreMatch` traduz qualquer nome ("Sertanejo Universitário", "Hip-Hop/Rap") pros gêneros do
+  Início.
+- **`smart/Recommend`** (puro): o que as rádios do YouTube concordam + o gosto (artista curtido sobe,
+  artista novo ganha um empurrão pequeno pra ter descoberta), nada pulado, nada já conhecido, no
+  máx. 2–3 por artista, nunca o mesmo artista seguido.
+- **`discover/ForYou`** (no grafo, `graph.forYou`) monta o Início:
+  - "Descobertas pra você": das rádios das músicas mais amadas, revezando entre os gêneros; uma vez
+    por dia (`discover.daily`), as puladas saem da linha.
+  - "Porque você curte <artista>": o favorito do momento + outro em rodízio; os artistas e as
+    músicas ficam fixos na janela de 6 h (`anchors`) — não muda a cada música tocada (era o
+    "Porque você ouviu", que seguia a música atual).
+  - Estantes de gênero: os gêneros escutados (e os escolhidos), na ordem do gosto; metade vem da
+    rádio das favoritas da pessoa naquele gênero, metade do pool do gênero na ordem dela.
+- Os "Feitos pra você" e a continuação automática da fila também deixam de fora o que é pulado.
+- Testes: `smart/TasteProfileTest`, `RecommendTest` (inclui `GenreMatch`), `discover/ForYouTest`
+  (banco de verdade + YouTube falso; inclui a estabilidade na janela), `ArtistGenresTest`.

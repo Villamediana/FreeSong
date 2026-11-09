@@ -244,6 +244,12 @@ class LibraryRepository(
 
     suspend fun onlinePlaysListSince(since: Long): List<OnlinePlay> = onlinePlayDao.since(since)
 
+    /** The library's listening sessions since [since] (newest first), for the taste profile. */
+    suspend fun playEventsListSince(since: Long): List<PlayEvent> = eventDao.since(since)
+
+    /** Streamed songs with a heart. */
+    suspend fun likedOnlineList(): List<LikedOnline> = likedOnlineDao.all()
+
     suspend fun clearHistory() = db.withTransaction {
         eventDao.clear()
         onlinePlayDao.clear()

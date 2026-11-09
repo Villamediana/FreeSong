@@ -121,7 +121,8 @@ fun HomeScreen() {
     val phase = when {
         !state.loaded || !discover.ready -> HomePhase.LOADING
         discover.showPicker && (state.empty || discover.editing) -> HomePhase.PICKER
-        state.empty && discover.favorites.isNotEmpty() -> HomePhase.DISCOVER
+        // Nothing downloaded: the live suggestions (from the picked genres, or from what was streamed).
+        state.empty && (discover.favorites.isNotEmpty() || discover.hasContent) -> HomePhase.DISCOVER
         state.empty -> HomePhase.EMPTY
         else -> HomePhase.FEED
     }

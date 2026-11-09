@@ -143,6 +143,9 @@ interface LikedOnlineDao {
     @Query("SELECT * FROM liked_online ORDER BY likedAt DESC")
     fun observeAll(): Flow<List<LikedOnline>>
 
+    @Query("SELECT * FROM liked_online ORDER BY likedAt DESC")
+    suspend fun all(): List<LikedOnline>
+
     @Query("SELECT * FROM liked_online WHERE videoId = :videoId")
     suspend fun get(videoId: String): LikedOnline?
 
@@ -178,6 +181,9 @@ interface PlayEventDao {
 
     @Query("SELECT * FROM play_events WHERE playedAt >= :since ORDER BY playedAt DESC")
     fun observeSince(since: Long): Flow<List<PlayEvent>>
+
+    @Query("SELECT * FROM play_events WHERE playedAt >= :since ORDER BY playedAt DESC")
+    suspend fun since(since: Long): List<PlayEvent>
 
     @Query("DELETE FROM play_events")
     suspend fun clear()

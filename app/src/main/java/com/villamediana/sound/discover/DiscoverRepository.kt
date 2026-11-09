@@ -214,6 +214,20 @@ class DiscoverRepository(
 
     suspend fun cachedShelf(genre: GenreDef): List<RemoteTrack> = cachedSongs(shelfKey(genre))
 
+    /**
+     * Everything the genre's shelf can draw from: this slot's songs (searched like [shelf]) and the
+     * pool of the earlier ones. The listener's order is put on it elsewhere ([ForYou.shelf]).
+     */
+    suspend fun shelfPool(genre: GenreDef, force: Boolean = false): List<RemoteTrack> {
+        val fresh = cachedOrFetch(shelfKey(genre), force, { it.songs.map { s -> s.toRemote() } }) {
+            val found = coroutineScope {
+                GenreCatalog.liveQueries(genre, slot()).map { q -> async { runCatching { gate.withPermit { searchSongs(q, SHELF_FETCH) } }.getOrDefault(emptyList()) } }.awaitAll()
+            }
+            Entry(slot(), songs = found.flatten().distinctBy { it.videoId })
+        }
+        return (fresh + poolSongs("pool:" + genre.id, fresh)).distinctBy { it.videoId }
+    }
+
     private fun shelfKey(genre: GenreDef) = "shelf:" + genre.id
 
     /** "Playlists pra você" of a genre: drawn from its pool like [shelf], with the wording rotating each slot. */

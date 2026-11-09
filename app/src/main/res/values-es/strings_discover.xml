@@ -27,7 +27,9 @@
     <string name="discover_edit">Editar</string>
     <string name="discover_offline">Sin conexión. Mostrando las últimas sugerencias.</string>
     <string name="discover_selected">Seleccionado</string>
-    <string name="discover_because">Porque escuchaste %1$s</string>
+    <string name="discover_because_artist">Porque te gusta %1$s</string>
+    <string name="discover_discoveries">Descubrimientos para ti</string>
+    <string name="discover_discoveries_subtitle">Canciones nuevas a tu estilo, cada día</string>
     <string name="discover_playlists">Playlists para ti</string>
     <string name="discover_edit_genres">Editar géneros</string>
     <string name="discover_pick_genres">Elegir géneros</string>

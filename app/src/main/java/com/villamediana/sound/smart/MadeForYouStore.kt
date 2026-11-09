@@ -24,6 +24,8 @@ class MadeForYouStore(
     private val labels: () -> MadeForYou.Labels,
     private val scope: CoroutineScope,
     private val clock: () -> Long = System::currentTimeMillis,
+    /** The listener's taste: the songs and artists they keep skipping stay out of the mixes. */
+    private val profile: (suspend () -> TasteProfile)? = null,
 ) {
     private val _mixes = MutableStateFlow<List<Mix>>(emptyList())
     val mixes: StateFlow<List<Mix>> = _mixes.asStateFlow()
@@ -68,6 +70,7 @@ class MadeForYouStore(
         // Your songs first (instant) when there is nothing on screen yet, then with the new ones.
         if (_mixes.value.isEmpty()) _mixes.value = plans.map { MadeForYou.assemble(it, emptyList(), l) }
         val inLibrary = tracks.mapNotNullTo(HashSet()) { it.videoId }
+        val taste = profile?.let { runCatching { it() }.getOrNull() }
         val made = coroutineScope {
             plans.map { plan ->
                 async {
@@ -77,7 +80,7 @@ class MadeForYouStore(
                             seed.videoId?.let { id -> runCatching { discover.related(id, RADIO_SIZE) }.getOrNull() }
                         }
                         MadeForYou.pickNew(radios, inLibrary)
-                    }.filter { it.videoId !in inLibrary }
+                    }.filter { it.videoId !in inLibrary && taste?.avoids(it.videoId, it.artist) != true }
                     plan to MadeForYou.assemble(plan, new, l)
                 }
             }.awaitAll()
