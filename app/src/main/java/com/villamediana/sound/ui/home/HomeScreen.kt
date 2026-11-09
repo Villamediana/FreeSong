@@ -126,7 +126,6 @@ fun HomeScreen() {
         else -> HomePhase.FEED
     }
     val playDiscover: (List<com.villamediana.sound.online.RemoteTrack>, Int, String, String) -> Unit = { tracks, i, title, id -> discoverVm.play(tracks, i, title, id) }
-    val openPlaylist: (com.villamediana.sound.online.RemoteCollection) -> Unit = { nav.openRemote(it) }
     // Holding a song of the Home: its actions (queue, playlist, like…), as a streamed song.
     val songMenu: (com.villamediana.sound.online.RemoteTrack) -> Unit = { songSheet = it.asTransientTrack() }
     // A mix card ("Porque você curte", "Seus gêneros"): the tap opens its list, the button plays it.
@@ -139,7 +138,7 @@ fun HomeScreen() {
         onDispose { Chrome.hideMiniPlayer = false }
     }
 
-    // Pull down to refresh: new searches and new draws of the shelves and playlists.
+    // Pull down to refresh: new searches and new draws of the mixes.
     val pull = androidx.compose.material3.pulltorefresh.rememberPullToRefreshState()
     val pullTop = if (LocalHomeEmbedded.current) 0.dp else WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     androidx.compose.material3.pulltorefresh.PullToRefreshBox(
@@ -173,7 +172,7 @@ fun HomeScreen() {
                     onContinue = discoverVm::confirm,
                     onSkip = discoverVm::skip,
                 )
-                HomePhase.DISCOVER -> DiscoverHome(discover, playback, downloads, nav, onPlay = playDiscover, onPlaylist = openPlaylist, onEdit = discoverVm::edit, onSongMenu = songMenu, onOpenMix = openMix, onPlayMix = playMix)
+                HomePhase.DISCOVER -> DiscoverHome(discover, playback, downloads, nav, onPlay = playDiscover, onEdit = discoverVm::edit, onSongMenu = songMenu, onOpenMix = openMix, onPlayMix = playMix)
                 HomePhase.FEED -> HomeFeed(
                     state = state,
                     playback = playback,
@@ -182,7 +181,7 @@ fun HomeScreen() {
                     nav = nav,
                     intro = intro,
                     recap = recap,
-                    extra = { discoverSections(discover, playback, playDiscover, openPlaylist, discoverVm::edit, songMenu, openMix, playMix) },
+                    extra = { discoverSections(discover, playback, playDiscover, discoverVm::edit, songMenu, openMix, playMix) },
                 )
             }
         }

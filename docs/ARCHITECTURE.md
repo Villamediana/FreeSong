@@ -444,7 +444,11 @@ Pedido do Miguel: o Início "não é pra bombardear", tem que ser útil pra desf
   o card abre a mesma lista na página de mix (`MixScreen`, ramo `HomeMixes.PREFIX`) e o botão toca
   (`DiscoverViewModel.playMix`). "Descobertas pra você" segue em músicas soltas.
 - Ordem: Suas músicas → Feitos pra você → Descobertas → Porque você curte → Seus gêneros →
-  Playlists → Escolher gêneros.
+  Escolher gêneros.
+- 1.20.2: "Playlists pra você" saiu (era busca de playlists do YouTube por gênero, sem aprender
+  nada; Miguel escolheu tirar) — e a busca delas em segundo plano também. Os cards de "Porque você
+  curte" e "Seus gêneros" pegam a cor da própria capa (`DiscoverViewModel.tinted`, a mesma da página
+  do mix), como os de "Feitos pra você".
 
 ## Páginas cheias sem engasgo (1.20.0)
 

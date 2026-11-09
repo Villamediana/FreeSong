@@ -181,13 +181,12 @@ private fun GenreCard(genre: GenreDef, covers: List<String>, selected: Boolean, 
 /**
  * Everything live on the Home, without crowding it: the day's discoveries (songs), then one row of
  * cards per idea — "Porque você curte" (a mix per loved artist), "Seus gêneros" (a mix per genre,
- * "Latino hoje") — and the playlists. A card opens its list; its button plays it.
+ * "Latino hoje"). A card opens its list; its button plays it. All of it from the listener's taste.
  */
 internal fun LazyListScope.discoverSections(
     state: DiscoverUiState,
     playback: PlaybackState,
     onPlay: (tracks: List<RemoteTrack>, index: Int, title: String, id: String) -> Unit,
-    onPlaylist: (RemoteCollection) -> Unit,
     onEdit: () -> Unit,
     onSongMenu: (RemoteTrack) -> Unit,
     onOpenMix: (Mix) -> Unit = {},
@@ -210,13 +209,6 @@ internal fun LazyListScope.discoverSections(
     if (state.genres.isNotEmpty()) {
         item(key = "d-genres", contentType = "mixes") {
             MixRow(stringResource(R.string.discover_genres_row), state.genres, playback, onOpenMix, onPlayMix)
-        }
-    }
-    if (state.playlists.isNotEmpty()) {
-        item(key = "d-playlists", contentType = "row") {
-            DiscoverRow(stringResource(R.string.discover_playlists)) {
-                items(state.playlists, key = { it.url }) { c -> PlaylistCard(c, onClick = { onPlaylist(c) }) }
-            }
         }
     }
     // No genres yet (songs came in before the picker was answered): the way to choose them.
@@ -300,17 +292,6 @@ private fun SongCard(t: RemoteTrack, playback: PlaybackState, onClick: () -> Uni
     }
 }
 
-@Composable
-private fun PlaylistCard(c: RemoteCollection, onClick: () -> Unit) {
-    val interaction = remember { MutableInteractionSource() }
-    Column(Modifier.width(Dimens.CardCover).pressScale(interaction, 0.97f).clickable(interactionSource = interaction, indication = null, onClick = onClick)) {
-        Cover(c.thumbnailUrl, Modifier.size(Dimens.CardCover), seed = c.title, shape = RoundedCornerShape(16.dp))
-        Spacer(Modifier.height(8.dp))
-        Text(c.title, style = MaterialTheme.typography.titleSmall, color = SoundColors.Text, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        c.author?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = SoundColors.TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis) }
-    }
-}
-
 /** Empty library, genres chosen: the Home is the live suggestions. */
 @Composable
 internal fun DiscoverHome(
@@ -319,7 +300,6 @@ internal fun DiscoverHome(
     downloads: DownloadSummary,
     nav: Navigator,
     onPlay: (List<RemoteTrack>, Int, String, String) -> Unit,
-    onPlaylist: (RemoteCollection) -> Unit,
     onEdit: () -> Unit,
     onSongMenu: (RemoteTrack) -> Unit,
     onOpenMix: (Mix) -> Unit = {},
@@ -345,7 +325,7 @@ internal fun DiscoverHome(
         if (!state.hasContent && state.loading) {
             item(key = "loading") { Box(Modifier.fillMaxWidth().height(240.dp)) }
         }
-        discoverSections(state, playback, onPlay, onPlaylist, onEdit, onSongMenu, onOpenMix, onPlayMix)
+        discoverSections(state, playback, onPlay, onEdit, onSongMenu, onOpenMix, onPlayMix)
     }
 }
 

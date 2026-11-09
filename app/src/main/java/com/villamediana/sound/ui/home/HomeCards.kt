@@ -5,6 +5,7 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -222,7 +223,8 @@ fun LiveBadge(playing: Boolean, modifier: Modifier = Modifier) {
 
 @Composable
 fun MixCard(mix: Mix, playing: Boolean, onOpen: () -> Unit, onPlay: () -> Unit, modifier: Modifier = Modifier, size: Dp = 156.dp) {
-    val tint = mix.tint?.let { Color(it) } ?: SoundColors.Accent
+    // The mix's own color (from its covers) glides in when it arrives after the card.
+    val tint by animateColorAsState(mix.tint?.let { Color(it) } ?: SoundColors.Accent, tween(420), label = "mixTint")
     Column(modifier.width(size).pressable(onOpen)) {
         Box(Modifier.size(size).clip(RoundedCornerShape(Dimens.CoverCorner))) {
             Crossfade(targetState = mix.covers, animationSpec = tween(320), label = "mixArt") { covers ->
