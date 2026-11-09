@@ -90,11 +90,12 @@ class RelayApi(
 
     fun deleteAvatar(): Profile = call("DELETE", "/v1/me/avatar", null, MeBox.serializer()).me
 
-    fun setStats(listenedMs: Long, top: List<SongRef>): Profile = call(
+    fun setStats(listenedMs: Long, top: List<SongRef>, numbers: Numbers? = null): Profile = call(
         "PUT", "/v1/me/stats",
         json(buildJsonObject {
             put("listenedMs", listenedMs)
             put("top", RelayJson.encodeToJsonElement(ListSerializer(SongRef.serializer()), top))
+            numbers?.let { put("numbers", RelayJson.encodeToJsonElement(Numbers.serializer(), it)) }
         }),
         MeBox.serializer(),
     ).me

@@ -148,21 +148,22 @@ class SearchScreensSmokeTest {
             now = ms
             harness.screenshot("search_entrance_${ms}ms")
         }
-        at(120)
+        // The entrance runs ~14% sooner since 1.21.0 (circle 560 ms): the moments follow it.
+        at(103)
         // The circle is still growing: nothing on the page yet.
-        assertEquals(0, inked(field, 120))
-        assertEquals(0, inked("soda stereo", 120))
-        at(620)
+        assertEquals(0, inked(field, 103))
+        assertEquals(0, inked("soda stereo", 103))
+        at(533)
         // Field in; the newest search coming in, the oldest still to come; no genres yet.
-        assert(inked(field, 620) > 0)
-        assert(inked("soda stereo", 620) > 0)
-        assertEquals(0, inked("charly", 620))
-        assertEquals(0, inked("Rock en español", 620))
-        at(1_000)
-        assert(inked("charly", 1_000) > 0)
-        at(1_250)
-        at(2_400)
-        assert(inked("Rock en español", 2_400) > 0)
+        assert(inked(field, 533) > 0)
+        assert(inked("soda stereo", 533) > 0)
+        assertEquals(0, inked("charly", 533))
+        assertEquals(0, inked("Rock en español", 533))
+        at(860)
+        assert(inked("charly", 860) > 0)
+        at(1_075)
+        at(2_064)
+        assert(inked("Rock en español", 2_064) > 0)
         rule.mainClock.autoAdvance = true
         warm.forEach { it.cancel() }
     }
@@ -308,6 +309,9 @@ class SearchScreensSmokeTest {
     }
 
     @Test
+    // The online pages read the app's graph (SoundApplication): run them in the real app, never
+    // relying on another test having started it first (they failed or passed by test order).
+    @Config(application = com.villamediana.sound.SoundApplication::class)
     fun remotePlaylistPage() {
         val url = "https://music.youtube.com/playlist?list=PL1"
         val tracks = listOf(remoteTrack("aaaaaaaaaaa", "Cuando Pase el Temblor"), remoteTrack("bbbbbbbbbbb", "Trátame Suavemente"), remoteTrack("ccccccccccc", "Prófugos"))
@@ -343,6 +347,9 @@ class SearchScreensSmokeTest {
     }
 
     @Test
+    // The online pages read the app's graph (SoundApplication): run them in the real app, never
+    // relying on another test having started it first (they failed or passed by test order).
+    @Config(application = com.villamediana.sound.SoundApplication::class)
     fun remoteAlbumPageHasNoDownloadAll() {
         val url = "https://music.youtube.com/browse/MPREb_signos"
         youTube.onCollection = { u, kind -> CollectionDetail(RemoteCollection(kind, u, "Signos", "Soda Stereo", itemCount = 2), listOf(remoteTrack("aaaaaaaaaaa", "Persiana Americana"), remoteTrack("bbbbbbbbbbb", "Signos"))) }
@@ -356,6 +363,9 @@ class SearchScreensSmokeTest {
     }
 
     @Test
+    // The online pages read the app's graph (SoundApplication): run them in the real app, never
+    // relying on another test having started it first (they failed or passed by test order).
+    @Config(application = com.villamediana.sound.SoundApplication::class)
     fun remoteArtistPage() {
         val url = "https://music.youtube.com/channel/UC1"
         youTube.onCollection = { u, kind ->

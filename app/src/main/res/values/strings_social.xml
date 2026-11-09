@@ -107,4 +107,14 @@
     <string name="crop_hint">Arraste pra enquadrar · dois dedos ou a barra pra aproximar</string>
     <string name="crop_apply">Aplicar</string>
     <string name="crop_preview">Assim seus amigos veem</string>
+    <string name="profile_stats_title">Seus números</string>
+    <string name="profile_stats_month">Mês</string>
+    <string name="profile_stats_year">Ano</string>
+    <string name="profile_stats_minutes">minutos</string>
+    <string name="profile_stats_rhythm">Seu ritmo</string>
+    <string name="profile_stats_peak">O som sobe mais às %1$dh</string>
+    <string name="profile_stats_artists">Seus artistas</string>
+    <string name="profile_stats_empty">Ouça umas músicas e seus números aparecem aqui.</string>
+    <string name="profile_stats_friends_see">Seus amigos também veem</string>
+    <string name="friend_stats_title">Números de %1$s</string>
 </resources>

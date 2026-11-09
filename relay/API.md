@@ -1,4 +1,4 @@
-# FreeSong relay: API (v1.1.0)
+# FreeSong relay: API (v1.4.0)
 
 Contrato entre o app e o servidor. Endereço: `https://freesong.simplyonegoal.com`.
 Instalação do servidor: [DEPLOY.md](DEPLOY.md).
@@ -82,12 +82,20 @@ Instalação do servidor: [DEPLOY.md](DEPLOY.md).
 | `PATCH /v1/me` | `{name}` | `{me}` | `invalid_name`, `400 username_fixed` (o `@nome` não muda) |
 | `PUT /v1/me/avatar` | JPEG cru | `{me}` | `400 not_jpeg`, `413 too_large` |
 | `DELETE /v1/me/avatar` | | `{me}` | |
-| `PUT /v1/me/stats` | `{listenedMs, top: [música]}` | `{me}` | `400 invalid_stats` |
+| `PUT /v1/me/stats` | `{listenedMs, top: [música], numbers?}` | `{me}` | `400 invalid_stats` |
 | `POST /v1/me/recovery` | | `{recoveryCode}` (o antigo deixa de valer) | |
 | `DELETE /v1/me/sessions` | | `{revoked}` (só este aparelho continua) | |
 | `GET /v1/me/vault` | | `{rev, key, data, updatedAt}` | `404 no_vault` |
 | `PUT /v1/me/vault` | `{baseRev, data, key?}` | `{rev}` | `409 stale {rev}`, `400 bad_vault`, `413 too_large`, `429 slow_down` |
 | `DELETE /v1/me` | | `{ok: true}` (o cofre vai junto) | |
+
+**Números do perfil** (1.4.0): `numbers` = `{month, year}`, cada um
+`{minutes, songs, artists, hour, weekdays: [7 minutos, segunda primeiro], top: [{name, minutes, cover?}] (até 5)}`.
+Só totais calculados no celular, nada de histórico. Cada campo é conferido e limitado (inteiros com
+teto, `hour` 0–23 ou `null`, `weekdays` com 7 valores ou zeros, capa só de ytimg/googleusercontent/ggpht);
+o que vier estranho vira vazio, nunca erro. Aparece em `me` e no perfil visto por **amigos** (como
+`listenedMs` e `top`); quem não é amigo não recebe. Sem `numbers` no corpo (apps antigos), os que
+estavam ficam.
 
 **Cofre** (1.3.0): o que o app sabe da pessoa (curtidas, histórico, playlists, músicas trocadas,
 gêneros), pra ela trocar de celular ou usar vários. `data` e `key` são base64 de bytes cifrados **no

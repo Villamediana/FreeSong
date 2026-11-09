@@ -177,15 +177,5 @@ internal object PlayerMath {
      * Two quads (x0,y0 … x3,y3, unit square) that are the play triangle at [t] = 0 (split in two
      * halves) and the pause bars at [t] = 1.
      */
-    fun playPauseQuads(t: Float): Pair<FloatArray, FloatArray> {
-        val k = t.coerceIn(0f, 1f)
-        fun mix(a: FloatArray, b: FloatArray) = FloatArray(a.size) { lerp(a[it], b[it], k) }
-        return mix(PLAY_LEFT, PAUSE_LEFT) to mix(PLAY_RIGHT, PAUSE_RIGHT)
-    }
-
-    // Play: triangle (0.34,0.2) (0.34,0.8) (0.82,0.5), cut vertically at x = 0.58.
-    private val PLAY_LEFT = floatArrayOf(0.34f, 0.20f, 0.58f, 0.35f, 0.58f, 0.65f, 0.34f, 0.80f)
-    private val PLAY_RIGHT = floatArrayOf(0.58f, 0.35f, 0.82f, 0.50f, 0.82f, 0.50f, 0.58f, 0.65f)
-    private val PAUSE_LEFT = floatArrayOf(0.27f, 0.22f, 0.43f, 0.22f, 0.43f, 0.78f, 0.27f, 0.78f)
-    private val PAUSE_RIGHT = floatArrayOf(0.57f, 0.22f, 0.73f, 0.22f, 0.73f, 0.78f, 0.57f, 0.78f)
+    fun playPauseQuads(t: Float): Pair<FloatArray, FloatArray> = com.villamediana.sound.ui.components.playPauseQuads(t)
 }

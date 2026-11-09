@@ -75,18 +75,8 @@ fun PagePlayButton(
             .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
-        AnimatedContent(
-            playing,
-            transitionSpec = { (fadeIn(tween(160)) + scaleIn(Motion.bouncy(), initialScale = 0.6f)) togetherWith fadeOut(tween(100)) },
-            label = "pagePlay",
-        ) { on ->
-            Icon(
-                if (on) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                null,
-                tint = if (enabled) sc.OnAccent else sc.TextFaint,
-                modifier = Modifier.size(size * 0.54f),
-            )
-        }
+        // The app's soft play/pause, morphing (the same as the player's).
+        PlayPauseGlyph(playing = playing, tint = if (enabled) sc.OnAccent else sc.TextFaint, modifier = Modifier.size(size * 0.54f))
     }
     }
 }

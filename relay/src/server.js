@@ -15,10 +15,11 @@ import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { Store, sha256 } from './db.js';
 import { Jams, cleanState, cleanTrack, MAX_MEMBERS } from './jams.js';
+import { cleanNumbers } from './numbers.js';
 import { cleanJpeg } from './jpeg.js';
 import { cleanDisplayName, normalizeUsername, randomIdentity } from './names.js';
 
-export const VERSION = '1.3.0';
+export const VERSION = '1.4.0';
 const JSON_LIMIT = 64 * 1024;
 const AVATAR_LIMIT = 600 * 1024;
 /** O cofre (cifrado no celular): corpo do PUT e bytes guardados. */
@@ -148,11 +149,12 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
     since: u.created_at,
   });
 
-  /** O que só amigos (e a própria pessoa) veem: horas escutadas e top 5. */
+  /** O que só amigos (e a própria pessoa) veem: horas escutadas, top 5 e os números do perfil. */
   const fullProfile = (u) => ({
     ...publicProfile(u),
     listenedMs: u.listened_ms,
     top: JSON.parse(u.top_json || '[]'),
+    numbers: JSON.parse(u.numbers_json || 'null'),
   });
 
   const profileFor = (viewer, u, relation) =>
@@ -386,14 +388,15 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
     return { me: fullProfile(store.user(me.id)) };
   });
 
-  // Horas escutadas e as 5 mais ouvidas (o app manda de tempos em tempos).
+  // Horas escutadas, as 5 mais ouvidas e os números do perfil (o app manda de tempos em tempos).
   route('PUT', /^\/v1\/me\/stats$/, async (req) => {
     const me = auth(req);
     const b = await json(req);
     const listenedMs = Number.isFinite(b.listenedMs) && b.listenedMs >= 0 ? Math.min(Math.round(b.listenedMs), 1e13) : null;
     if (listenedMs == null || !Array.isArray(b.top)) throw new HttpError(400, 'invalid_stats');
     const top = b.top.slice(0, 5).map(cleanTrack).filter(Boolean);
-    store.setStats(me.id, { listenedMs, top });
+    const numbers = b.numbers === undefined ? undefined : cleanNumbers(b.numbers);
+    store.setStats(me.id, { listenedMs, top, numbers });
     return { me: fullProfile(store.user(me.id)) };
   });
 

@@ -63,7 +63,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
+import com.villamediana.sound.ui.components.drawPlayPause
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.graphicsLayer
@@ -297,22 +297,6 @@ internal fun MorphPlayPauseIcon(playing: Boolean, onClick: () -> Unit, modifier:
         contentAlignment = Alignment.Center,
     ) {
         Canvas(Modifier.size(size * 0.56f)) { drawPlayPause(t.value, tint) }
-    }
-}
-
-private fun DrawScope.drawPlayPause(t: Float, color: Color) {
-    val (a, b) = PlayerMath.playPauseQuads(t)
-    val w = size.width
-    val h = size.height
-    for (q in arrayOf(a, b)) {
-        val path = Path().apply {
-            moveTo(q[0] * w, q[1] * h)
-            lineTo(q[2] * w, q[3] * h)
-            lineTo(q[4] * w, q[5] * h)
-            lineTo(q[6] * w, q[7] * h)
-            close()
-        }
-        drawPath(path, color)
     }
 }
 

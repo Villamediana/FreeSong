@@ -196,6 +196,8 @@ internal fun ProfilePage(
         },
         sheets = sheets,
         more = {
+            // Your numbers (worked out on the phone, only you see them), then the recovery code.
+            item(key = "stats", contentType = "stats") { ProfileStats() }
             item(key = "recovery", contentType = "card") { RecoveryCard(code, onCopy = onCopy, onNew = onNewCode, onUseCode = onUseCode) }
         },
     )

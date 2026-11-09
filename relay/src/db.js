@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS users (
   created_at    INTEGER NOT NULL,
   listened_ms   INTEGER NOT NULL DEFAULT 0,
   top_json      TEXT NOT NULL DEFAULT '[]',
+  numbers_json  TEXT NOT NULL DEFAULT 'null',
   recovery_hash TEXT NOT NULL UNIQUE
 );
 CREATE TABLE IF NOT EXISTS tokens (
@@ -110,6 +111,9 @@ export class Store {
     if (file !== ':memory:') mkdirSync(dirname(file), { recursive: true });
     this.db = new DatabaseSync(file);
     this.db.exec(SCHEMA);
+    // Bancos de antes da 1.4.0: a coluna dos números (o que os amigos veem no perfil) entra vazia.
+    const cols = this.db.prepare('PRAGMA table_info(users)').all().map((c) => c.name);
+    if (!cols.includes('numbers_json')) this.db.exec("ALTER TABLE users ADD COLUMN numbers_json TEXT NOT NULL DEFAULT 'null'");
     this.q = {};
   }
 
@@ -203,8 +207,10 @@ export class Store {
     else this.st('UPDATE users SET avatar_rev = -(abs(avatar_rev) + 1) WHERE id = ?').run(id);
   }
 
-  setStats(id, { listenedMs, top }) {
+  setStats(id, { listenedMs, top, numbers }) {
     this.st('UPDATE users SET listened_ms = ?, top_json = ? WHERE id = ?').run(listenedMs, JSON.stringify(top), id);
+    // Apps de antes da 1.4.0 não mandam números: os que estavam ficam.
+    if (numbers !== undefined) this.st('UPDATE users SET numbers_json = ? WHERE id = ?').run(JSON.stringify(numbers), id);
   }
 
   /** O cofre da pessoa ({rev, key, data, updated_at}) ou null. */

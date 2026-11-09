@@ -215,6 +215,10 @@ internal fun FriendPage(
         sheets = sheets,
         more = {
             if (isFriend) {
+                // Their numbers of the month and the year (as their phone last sent them).
+                person?.numbers?.let { numbers ->
+                    item(key = "stats", contentType = "stats") { FriendStats(numbers, person.name) }
+                }
                 item(key = "swapped-title", contentType = "section") {
                     Column(Modifier.padding(top = Dimens.SectionGap)) { SectionHeader(stringResource(R.string.friend_swapped)) }
                 }

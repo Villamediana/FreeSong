@@ -33,6 +33,8 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.villamediana.sound.ui.theme.SoundColors
@@ -66,11 +68,13 @@ fun PlayPauseButton(
             .clickable(interactionSource = interaction, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-            contentDescription,
+        // The app's soft play/pause, morphing (the same as the player's).
+        PlayPauseGlyph(
+            playing = playing,
             tint = content,
-            modifier = Modifier.size(size * 0.5f),
+            modifier = Modifier.size(size * 0.5f).then(
+                if (contentDescription != null) Modifier.semantics { this.contentDescription = contentDescription } else Modifier,
+            ),
         )
     }
 }

@@ -192,14 +192,18 @@ class SocialAccount(
         onDeleted()
     }
 
-    /** Hours listened and the five most heard, sent at most every [STATS_EVERY_MS] (or when they change). */
-    suspend fun syncStats(listenedMs: Long, top: List<SongRef>) {
+    /**
+     * Hours listened, the five most heard and the profile's numbers, sent at most every
+     * [STATS_EVERY_MS] (or when they change).
+     */
+    suspend fun syncStats(listenedMs: Long, top: List<SongRef>, numbers: Numbers? = null) {
         if (token == null) return
         val p = context.socialStore.data.first()
-        val signature = "$listenedMs|" + top.joinToString(",") { it.videoId }
+        val signature = "$listenedMs|" + top.joinToString(",") { it.videoId } +
+            "|" + (numbers?.let { RelayJson.encodeToString(Numbers.serializer(), it).hashCode() } ?: 0)
         val fresh = p[STATS_SIG] == signature && System.currentTimeMillis() - (p[STATS_AT] ?: 0L) < STATS_EVERY_MS
         if (fresh) return
-        runCatching { withContext(Dispatchers.IO) { api.setStats(listenedMs, top) } }.onSuccess { me ->
+        runCatching { withContext(Dispatchers.IO) { api.setStats(listenedMs, top, numbers) } }.onSuccess { me ->
             keep(me)
             context.socialStore.edit {
                 it[STATS_SIG] = signature
