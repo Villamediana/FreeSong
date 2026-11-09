@@ -59,7 +59,7 @@ import com.villamediana.sound.stats.StatsPeriod
 import com.villamediana.sound.social.NumPeriod
 import com.villamediana.sound.social.Numbers
 import com.villamediana.sound.social.NumbersOf
-import com.villamediana.sound.ui.components.Cover
+import com.villamediana.sound.ui.components.ArtistPhoto
 import com.villamediana.sound.ui.components.formatLongDuration
 import com.villamediana.sound.ui.components.keepHorizontalDrags
 import com.villamediana.sound.ui.nav.navigator
@@ -169,7 +169,7 @@ internal fun ProfileStatsContent(title: String, hint: String?, data: NumPeriod?,
                         Modifier.width(88.dp).clip(RoundedCornerShape(12.dp)).clickable { nav.openArtist(a.name) },
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        Cover(a.cover, Modifier.size(80.dp), seed = a.name, shape = CircleShape)
+                        ArtistPhoto(a.name, a.cover, Modifier.size(80.dp))
                         Spacer(Modifier.height(6.dp))
                         Text(a.name, style = MaterialTheme.typography.titleSmall, color = SoundColors.Text, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
                         Text(formatLongDuration(a.minutes * 60_000L), style = MaterialTheme.typography.bodySmall, color = SoundColors.TextMuted, maxLines = 1)
