@@ -189,6 +189,40 @@ class UpdateUiTest {
     }
 
     @Test
+    fun theRowGoesFromDownloadingToInstallingWithoutFalling() {
+        // The 1.19 → 1.20 crash: the row's progress, drawn after the download ended, cast the state
+        // (by then Installing) to Downloading. The row follows the whole way now.
+        val apk = ByteArray(300_000) { (it % 251).toByte() }
+        val github = UpdateFixtures.FakeGitHub { r ->
+            if (r.url.toString().contains("api.github.com")) UpdateFixtures.FakeGitHub.Answer(200, UpdateFixtures.releaseOf("1.13.0", apk).toByteArray(), "\"e\"")
+            else UpdateFixtures.FakeGitHub.Answer(200, apk)
+        }
+        val installed = java.util.concurrent.atomic.AtomicInteger()
+        val u = Updates(
+            scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+            source = ReleaseSource(github.client, "test"),
+            downloader = ApkDownloader(github.client, "test"),
+            installer = object : ApkInstaller {
+                override fun canInstall() = true
+                override fun inspect(apk: File): ApkInfo = ApkInfo("com.villamediana.sound", 59)
+                override fun install(apk: File, ask: Boolean) { installed.incrementAndGet() }
+            },
+            memory = UpdateMemoryFile(File(tmp.root, "row.json")),
+            apkDir = File(tmp.root, "row"),
+            current = ApkInfo("com.villamediana.sound", 58),
+            currentVersion = "1.12.4",
+            enabled = true,
+        )
+        runBlocking { u.check(manual = false) }
+        compose.setContent { Sheet { UpdateRow(u) } }
+        compose.onNodeWithText("Atualizar para 1.13.0").assertExists()
+        u.update()
+        compose.waitUntil(10_000) { u.state.value is UpdateState.Installing }
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("Instalando…").fetchSemanticsNodes().isNotEmpty() }
+        assertEquals(1, installed.get())
+    }
+
+    @Test
     fun theRowIsAbsentInDebugBuilds() {
         val off = Updates(
             scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),

@@ -338,6 +338,9 @@ private fun failureText(reason: UpdateFailure): String = stringResource(
 fun UpdateRow(updates: Updates = SoundApplication.graph.updates) {
     if (!updates.enabled) return
     val state by updates.state.collectAsStateWithLifecycle()
+    // Read once here: a lambda drawn later must never look at `state` again (by then it can be
+    // Installing — casting it to Downloading took the app down right as the download ended).
+    val downloading = state as? UpdateState.Downloading
     val release = state.release
     val title = when (state) {
         is UpdateState.Downloading, is UpdateState.Installing -> stringResource(R.string.settings_update_going, release!!.version)
@@ -347,7 +350,7 @@ fun UpdateRow(updates: Updates = SoundApplication.graph.updates) {
         UpdateState.Checking -> stringResource(R.string.settings_update_checking)
         UpdateState.UpToDate -> stringResource(R.string.settings_update_latest)
         UpdateState.CheckFailed -> stringResource(R.string.settings_update_failed)
-        is UpdateState.Downloading -> NumberFormat.getPercentInstance().format((state as UpdateState.Downloading).fraction.toDouble())
+        is UpdateState.Downloading -> NumberFormat.getPercentInstance().format((downloading?.fraction ?: 0f).toDouble())
         is UpdateState.Installing -> stringResource(R.string.update_installing)
         else -> null
     }
@@ -386,14 +389,16 @@ fun UpdateRow(updates: Updates = SoundApplication.graph.updates) {
             when {
                 state == UpdateState.Checking || state is UpdateState.Installing ->
                     CircularProgressIndicator(Modifier.size(18.dp), color = SoundColors.Accent, strokeWidth = 2.dp)
-                state is UpdateState.Downloading ->
+                downloading != null -> {
+                    val fraction = downloading.fraction
                     CircularProgressIndicator(
-                        progress = { (state as UpdateState.Downloading).fraction },
+                        progress = { fraction },
                         modifier = Modifier.size(18.dp),
                         color = SoundColors.Accent,
                         trackColor = SoundColors.Surface3,
                         strokeWidth = 2.dp,
                     )
+                }
                 release != null -> Box(Modifier.size(9.dp).clip(CircleShape).background(SoundColors.Accent))
             }
         }
