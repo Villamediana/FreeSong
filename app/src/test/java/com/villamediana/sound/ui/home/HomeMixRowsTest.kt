@@ -65,7 +65,7 @@ class HomeMixRowsTest {
             SoundTheme {
                 LazyColumn(Modifier.background(SoundColors.Ink)) {
                     discoverSections(
-                        state, PlaybackState(), onPlay = { _, _, _, _ -> }, onPlaylist = {}, onEdit = {}, onSongMenu = {},
+                        state, PlaybackState(), onPlay = { _, _, _, _ -> }, onEdit = {}, onSongMenu = {},
                         onOpenMix = { opened += it.id }, onPlayMix = { played += it.id },
                     )
                 }

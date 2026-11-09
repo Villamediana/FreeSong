@@ -4,7 +4,6 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.villamediana.sound.SoundApplication
-import com.villamediana.sound.discover.DiscoverMixes
 import com.villamediana.sound.discover.ForYou
 import com.villamediana.sound.discover.GenreCatalog
 import com.villamediana.sound.discover.GenreDef
@@ -41,7 +40,6 @@ data class DiscoverUiState(
     val discoveries: List<RemoteTrack> = emptyList(),
     /** "Porque você curte": one mix per loved artist, a single row of cards (fixed for the 6-hour slot). */
     val because: List<Mix> = emptyList(),
-    val playlists: List<RemoteCollection> = emptyList(),
     /** "Seus gêneros": one mix per genre listened to and picked ("Latino hoje"), a single row of cards. */
     val genres: List<Mix> = emptyList(),
     val loading: Boolean = false,
@@ -87,7 +85,7 @@ class DiscoverViewModel(app: Application) : AndroidViewModel(app) {
         load(force = false)
     }
 
-    /** Pull to refresh: searches again, reads the taste again and draws new shelves and playlists. */
+    /** Pull to refresh: searches again, reads the taste again and draws new mixes. */
     fun refresh() {
         repo.reshuffle()
         load(force = true, pulled = true)
@@ -114,6 +112,10 @@ class DiscoverViewModel(app: Application) : AndroidViewModel(app) {
                         val mixes = rows.map(::becauseMix)
                         graph.homeMixes.replace(HomeMixes.BECAUSE, mixes)
                         _state.update { it.copy(because = mixes) }
+                        // Each card in its own color (from its covers), like "Feitos pra você".
+                        val tinted = tinted(mixes)
+                        graph.homeMixes.replace(HomeMixes.BECAUSE, tinted)
+                        _state.update { it.copy(because = tinted) }
                     }
                 }
                 launch {
@@ -122,10 +124,9 @@ class DiscoverViewModel(app: Application) : AndroidViewModel(app) {
                         .map { (g, tracks) -> genreMix(g, tracks) }
                     graph.homeMixes.replace(HomeMixes.GENRE, mixes)
                     _state.update { it.copy(genres = mixes) }
-                }
-                launch {
-                    val lists = genres.take(PLAYLIST_GENRES).map { g -> async { runCatching { repo.playlists(g, 3, force) }.getOrDefault(emptyList()) } }.awaitAll()
-                    _state.update { it.copy(playlists = DiscoverMixes.blendCollections(lists, 9)) }
+                    val tinted = tinted(mixes)
+                    graph.homeMixes.replace(HomeMixes.GENRE, tinted)
+                    _state.update { it.copy(genres = tinted) }
                 }
             }
             _state.update { it.copy(loading = false, refreshing = false) }
@@ -148,6 +149,22 @@ class DiscoverViewModel(app: Application) : AndroidViewModel(app) {
     fun edit() = _state.update { it.copy(editing = true, selection = it.favorites.toSet()) }
 
     private fun res() = getApplication<Application>().resources
+
+    /**
+     * The mixes with their color: the first cover that gives one (the thumbnails are usually in
+     * Coil's cache already, the cards show them). A mix without one keeps the app's color.
+     */
+    private suspend fun tinted(mixes: List<Mix>): List<Mix> = coroutineScope {
+        mixes.map { mix ->
+            async {
+                if (mix.tint != null) return@async mix
+                val color = mix.covers.firstNotNullOfOrNull { url ->
+                    runCatching { com.villamediana.sound.ui.search.RemoteCoverColors.extract(getApplication(), url) }.getOrNull()
+                }
+                if (color != null) mix.copy(tint = color) else mix
+            }
+        }.awaitAll()
+    }
 
     /** "Latino hoje": the genre's mix of the day, with its main artists. */
     private fun genreMix(g: GenreDef, tracks: List<RemoteTrack>) = HomeMixes.build(
@@ -180,8 +197,6 @@ class DiscoverViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private companion object {
-        /** Playlists come from the genres listened most. */
-        const val PLAYLIST_GENRES = 3
         /** A genre with fewer songs than this has no card (not a mix yet). */
         const val MIN_MIX = 8
     }
