@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -82,6 +83,7 @@ import com.villamediana.sound.R
 import com.villamediana.sound.SoundApplication
 import com.villamediana.sound.data.AudioQuality
 import com.villamediana.sound.data.CacheKind
+import com.villamediana.sound.data.StorageUse
 import com.villamediana.sound.data.ThemeMode
 import com.villamediana.sound.data.model.LibraryStats
 import com.villamediana.sound.ui.components.SoundMark
@@ -120,9 +122,7 @@ fun SettingsScreen() {
     val vm: SettingsViewModel = viewModel()
     val settings by vm.settings.collectAsStateWithLifecycle()
     val stats by vm.stats.collectAsStateWithLifecycle()
-    val usedBytes by vm.usedBytes.collectAsStateWithLifecycle()
-    val caches by vm.caches.collectAsStateWithLifecycle()
-    val freeBytes by vm.freeBytes.collectAsStateWithLifecycle()
+    val storage by vm.storage.collectAsStateWithLifecycle()
     val equalizerOn by vm.equalizerOn.collectAsStateWithLifecycle()
     val nav = navigator()
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -237,9 +237,9 @@ fun SettingsScreen() {
 
         item(key = "storage") {
             Section(stringResource(R.string.home_settings_group_storage)) {
-                StorageBlock(usedBytes, freeBytes, stats)
+                StorageBlock(storage, stats)
                 Hairline(start = 16.dp)
-                val kept = caches?.values?.sum()
+                val kept = storage?.kept
                 NavRow(
                     icon = Icons.Rounded.CleaningServices, chip = Chip.Teal,
                     title = stringResource(R.string.settings_free_space),
@@ -271,7 +271,7 @@ fun SettingsScreen() {
     }
     if (spaceOpen) {
         SoundSheet(onDismissRequest = { spaceOpen = false }) {
-            CacheRows(caches, onClear = vm::clearCache, onClearAll = vm::clearAllCaches)
+            CacheRows(storage?.caches, onClear = vm::clearCache, onClearAll = vm::clearAllCaches)
         }
     }
 }
@@ -461,26 +461,37 @@ private fun RadioDot(selected: Boolean) {
 }
 
 /**
- * What the app keeps on the phone: the size set big, a bar of how much of the free space it takes,
- * and the library in four numbers.
+ * What the app keeps on the phone: the size set big, a bar split into its two parts (the
+ * downloaded songs and what is kept to spare the internet, which add up to the big number), the
+ * room left, and the library in four numbers.
  */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun StorageBlock(usedBytes: Long?, freeBytes: Long?, stats: LibraryStats?) {
+private fun StorageBlock(storage: StorageUse?, stats: LibraryStats?) {
     Column(Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 18.dp, bottom = 16.dp)) {
         Row(verticalAlignment = Alignment.Bottom) {
-            Text(usedBytes?.let { formatBytes(it) } ?: "—", style = MaterialTheme.typography.displaySmall, color = SoundColors.Text)
+            Text(storage?.let { formatBytes(it.used) } ?: "—", style = MaterialTheme.typography.displaySmall, color = SoundColors.Text)
             Spacer(Modifier.width(10.dp))
             Text(stringResource(R.string.home_settings_storage_used), style = MaterialTheme.typography.bodyMedium, color = SoundColors.TextMuted, modifier = Modifier.padding(bottom = 6.dp))
         }
-        val used = usedBytes ?: 0L
-        val free = freeBytes ?: 0L
-        if (free > 0) {
-            Spacer(Modifier.height(12.dp))
-            // The app's share of what is left on the phone (always a sliver at least, so it shows).
-            val share = (used.toFloat() / (used + free)).coerceIn(0.015f, 1f)
-            Box(Modifier.fillMaxWidth().height(10.dp).clip(CircleShape).background(SoundColors.Surface3)) {
-                Box(Modifier.fillMaxWidth(share).fillMaxHeight().clip(CircleShape).background(SoundColors.Accent))
+        Spacer(Modifier.height(12.dp))
+        val downloads = storage?.downloads ?: 0L
+        val kept = storage?.kept ?: 0L
+        val keptTint = SoundColors.Accent.copy(alpha = 0.42f)
+        Row(Modifier.fillMaxWidth().height(10.dp).clip(CircleShape).background(SoundColors.Surface3)) {
+            if (downloads + kept > 0L) {
+                // Each part keeps a sliver at least, so a small one still shows.
+                val total = (downloads + kept).toFloat()
+                if (downloads > 0L) Box(Modifier.weight((downloads / total).coerceAtLeast(0.02f)).fillMaxHeight().background(SoundColors.Accent))
+                if (kept > 0L) Box(Modifier.weight((kept / total).coerceAtLeast(0.02f)).fillMaxHeight().background(keptTint))
             }
+        }
+        Spacer(Modifier.height(10.dp))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            StoragePart(SoundColors.Accent, stringResource(R.string.settings_storage_downloads), storage?.downloads)
+            StoragePart(keptTint, stringResource(R.string.settings_storage_kept), storage?.kept)
+        }
+        storage?.free?.takeIf { it > 0L }?.let { free ->
             Spacer(Modifier.height(6.dp))
             Text(stringResource(R.string.home_settings_storage_free, formatBytes(free)), style = MaterialTheme.typography.bodySmall, color = SoundColors.TextFaint)
         }
@@ -492,6 +503,18 @@ private fun StorageBlock(usedBytes: Long?, freeBytes: Long?, stats: LibraryStats
             Stat(Icons.Rounded.Person, st.artistCount.toString(), pluralStringResource(R.plurals.home_settings_stat_artists, labelQuantity(st.artistCount)), Modifier.weight(1f))
             Stat(Icons.Rounded.Schedule, formatHours(st.durationMs), stringResource(R.string.home_settings_stat_hours), Modifier.weight(1f))
         }
+    }
+}
+
+/** One part of the bar: its color, its name and its size. */
+@Composable
+private fun StoragePart(color: Color, label: String, bytes: Long?) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(8.dp).clip(CircleShape).background(color))
+        Spacer(Modifier.width(6.dp))
+        Text(label, style = MaterialTheme.typography.bodySmall, color = SoundColors.TextMuted)
+        Spacer(Modifier.width(5.dp))
+        Text(bytes?.let { formatBytes(it) } ?: "—", style = MaterialTheme.typography.bodySmall, color = SoundColors.Text)
     }
 }
 

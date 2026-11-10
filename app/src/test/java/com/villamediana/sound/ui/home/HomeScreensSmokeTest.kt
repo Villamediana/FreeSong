@@ -55,6 +55,8 @@ import com.villamediana.sound.ui.theme.SoundColors
 import com.villamediana.sound.ui.theme.SoundTheme
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -315,6 +317,46 @@ class HomeScreensSmokeTest {
         compose.onNodeWithText("Liberar espaço").performClick()
         waitForText("Guardado pra economizar internet")
         listOf("Músicas ouvidas", "Vídeos de fundo", "Capas", "Letras e traduções", "Sugestões do Início", "Limpar tudo").forEach { waitForText(it) }
+    }
+
+    @Test
+    fun storageAddsUpAndClearingShowsAtOnce() {
+        seed()
+        val app = ApplicationProvider.getApplicationContext<SoundApplication>()
+        val graph = SoundApplication.graph
+        // A downloaded song and a song heard online, kept in the cache.
+        graph.storage.audioFile("keep1234567", "m4a").writeBytes(ByteArray(2 * 1024 * 1024))
+        val heard = 3 * 1024 * 1024
+        com.villamediana.sound.playback.stream.AudioCache.get(app).apply {
+            val key = "sound://stream/heard123456?q=BEST"
+            val hole = startReadWrite(key, 0, heard.toLong())
+            val file = startFile(key, 0, heard.toLong())
+            file.writeBytes(ByteArray(heard))
+            commitFile(file, heard.toLong())
+            releaseHoleSpan(hole)
+        }
+        val before = runBlocking { graph.caches.measure() }
+        val fmt: (Long) -> String = { com.villamediana.sound.ui.components.formatBytes(it) }
+        compose.setContent { Host { SettingsScreen() } }
+        compose.onAllNodes(hasScrollToKeyAction())[0].performScrollToKey("storage")
+        // The big number is the downloads plus what is kept, and both parts say their size.
+        waitForText(fmt(before.used))
+        waitForText(fmt(before.downloads))
+        compose.onAllNodes(hasScrollToKeyAction())[0].performScrollToKey("about")
+        shot("settings-storage")
+        compose.onNodeWithText("Liberar espaço").performClick()
+        waitForText("Guardado pra economizar internet")
+        waitForText(fmt(before.caches.getValue(com.villamediana.sound.data.CacheKind.SONGS)))
+        compose.onNodeWithText("Limpar tudo").performClick()
+        // Cleared: the sheet's rows and the big number behind it drop right away.
+        compose.waitUntil(10_000) { compose.onAllNodesWithText(fmt(before.used)).fetchSemanticsNodes().isEmpty() }
+        val after = runBlocking { graph.caches.measure() }
+        assertEquals(0L, after.kept)
+        assertEquals(before.downloads, after.used)
+        compose.onAllNodesWithText("0 B").fetchSemanticsNodes().let { assertTrue("rows at 0 B: ${it.size}", it.size >= com.villamediana.sound.data.CacheKind.entries.size) }
+        // Behind the sheet: the big number and "Músicas baixadas" are now the same size.
+        compose.waitUntil(10_000) { compose.onAllNodesWithText(fmt(after.used)).fetchSemanticsNodes().size >= 2 }
+        shot("settings-storage-cleared")
     }
 
     @Test
