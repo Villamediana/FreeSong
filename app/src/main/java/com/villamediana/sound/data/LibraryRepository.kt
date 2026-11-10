@@ -256,6 +256,11 @@ class LibraryRepository(
     /** Library listens since [since] (newest first). */
     fun playEventsSince(since: Long): Flow<List<PlayEvent>> = eventDao.observeSince(since)
 
+    /** When the newest listen (library or online) was recorded; changes once per song heard. */
+    val lastPlayedAt: Flow<Long> = combine(eventDao.observeLastPlayedAt(), onlinePlayDao.observeLastPlayedAt()) { a, b ->
+        maxOf(a ?: 0L, b ?: 0L)
+    }
+
     /** Online listens since [since] (newest first). */
     fun onlinePlaysSince(since: Long): Flow<List<OnlinePlay>> = onlinePlayDao.observeSince(since)
 

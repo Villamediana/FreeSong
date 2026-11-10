@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -186,6 +187,9 @@ class SharedSongs(
 /** A heart or a playlist changed: the vault syncs this long after the last change. */
 private const val VAULT_AFTER_MS = 15_000L
 
+/** A listen was recorded: the stats go to friends this long after the last one. */
+private const val STATS_AFTER_PLAY_MS = 20_000L
+
 /** "Escrevendo…" lasts this long after the friend's last sign of writing. */
 private const val TYPING_MS = 6_000L
 
@@ -325,6 +329,15 @@ class SocialHub(
                 .drop(1)
                 .debounce(VAULT_AFTER_MS)
                 .collect { if (account.ready) quietly { vault.sync() } }
+        }
+        // A song was heard (in the background too): the profile's numbers go out a moment later,
+        // not only when the app next comes to the screen.
+        scope.launch {
+            library.lastPlayedAt
+                .distinctUntilChanged()
+                .drop(1)
+                .debounce(STATS_AFTER_PLAY_MS)
+                .collect { if (account.ready) quietly { syncStats() } }
         }
     }
 
@@ -473,21 +486,23 @@ class SocialHub(
      * For friends to see: hours listened and the five most heard (all time), and the profile's
      * numbers of the month and of the year (totals only, worked out here).
      */
-    suspend fun syncStats() {
-        if (!account.ready) return
+    suspend fun syncStats() = statsLock.withLock {
+        if (!account.ready) return@withLock
         val (recap, numbers) = withContext(Dispatchers.Default) {
-            val events = library.playEventsSince(0).first()
+            val events = library.playEventsListSince(0)
             val tracks = library.tracks.first().associateBy { it.id }
             val online = library.onlinePlaysListSince(0)
             val now = System.currentTimeMillis()
-            val all = Recaps.build(0, events, tracks, online, span = Long.MIN_VALUE until Long.MAX_VALUE)
             fun period(p: com.villamediana.sound.stats.StatsPeriod) =
                 NumbersOf.period(com.villamediana.sound.stats.ListeningStatsMaker.build(p, events, tracks, online, now))
-            all to Numbers(month = period(com.villamediana.sound.stats.StatsPeriod.MONTH), year = period(com.villamediana.sound.stats.StatsPeriod.YEAR))
+            Recaps.allTime(events, tracks, online) to
+                Numbers(month = period(com.villamediana.sound.stats.StatsPeriod.MONTH), year = period(com.villamediana.sound.stats.StatsPeriod.YEAR))
         }
-        val top = recap.topSongs.mapNotNull { s -> s.track?.let(SongRef::of) ?: s.remote?.let(SongRef::of) }
-        account.syncStats(recap.listenedMs + listenedBefore(), top, numbers)
+        account.syncStats(recap.listenedMs + listenedBefore(), NumbersOf.top(recap), numbers)
     }
+
+    /** The foreground and a song just heard can ask at once: one goes out at a time. */
+    private val statsLock = kotlinx.coroutines.sync.Mutex()
 
     private fun friendsFile() = File(context.filesDir, "social-friends.json")
 
