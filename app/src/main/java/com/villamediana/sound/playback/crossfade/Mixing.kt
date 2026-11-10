@@ -34,7 +34,11 @@ data class Mix(
     /** dB the next song comes in below its own level, back to it by the end (≤ 0: it is louder). */
     val inMatchDb: Float,
 ) {
-    fun outgoing() = FadeShape(FadeShape.Role.OUT, fadeStartMs * 1_000, fadeMs * 1_000, outMatchDb)
+    /** The tail player's song: silent until the fade, where it takes over from the main player, then fading out. */
+    fun outgoing() = FadeShape(FadeShape.Role.OUT, fadeStartMs * 1_000, fadeMs * 1_000, outMatchDb, enterUs = fadeStartMs * 1_000)
+
+    /** The main player's song before it moves on: it hands over to the tail at the fade's start. */
+    fun leaving() = FadeShape(FadeShape.Role.LEAVE, fadeStartMs * 1_000, FadeShape.HANDOVER_US, 0f)
 
     fun incoming() = FadeShape(FadeShape.Role.IN, inStartMs * 1_000, fadeMs * 1_000, inMatchDb)
 
@@ -127,9 +131,21 @@ object Mixing {
  * What one song does along the fade, by its own position (µs): [Role.OUT] fades out from
  * [startUs], [Role.IN] fades in from it; both over [lengthUs]. Volume and bass are read per moment
  * of the audio itself ([FadeShaper]), so the fade follows the music to the sample.
+ *
+ * The song going out changes players at the fade's start: the main player ([Role.LEAVE]) goes
+ * quiet there in [HANDOVER_US] while the tail player, rolling on the same moment of the song but
+ * silent until then ([enterUs]), comes up in the same stretch. Both by position, so nothing of the
+ * song is lost or heard twice.
  */
-data class FadeShape(val role: Role, val startUs: Long, val lengthUs: Long, val matchDb: Float) {
-    enum class Role { OUT, IN }
+data class FadeShape(
+    val role: Role,
+    val startUs: Long,
+    val lengthUs: Long,
+    val matchDb: Float,
+    /** [Role.OUT] only: silent before this, taking over in [HANDOVER_US] (null: sounding from the start). */
+    val enterUs: Long? = null,
+) {
+    enum class Role { OUT, IN, LEAVE }
 
     /** 0 at the start of the fade, 1 at its end (beyond either side outside it). */
     fun progress(us: Long): Float = (us - startUs).toFloat() / lengthUs.coerceAtLeast(1)
@@ -144,7 +160,7 @@ data class FadeShape(val role: Role, val startUs: Long, val lengthUs: Long, val 
     fun gain(us: Long): Float {
         val t = progress(us)
         return when (role) {
-            Role.OUT -> when {
+            Role.OUT -> enterUs.let { if (it == null) 1f else handIn(us - it) } * when {
                 t <= 0f -> 1f
                 t >= 1f -> 0f
                 else -> cos(t * PI / 2).toFloat() * dbToGain(matchDb * smooth(t))
@@ -154,6 +170,7 @@ data class FadeShape(val role: Role, val startUs: Long, val lengthUs: Long, val 
                 t >= 1f -> 1f
                 else -> sin(t * PI / 2).toFloat() * dbToGain(matchDb * (1f - smooth(t)))
             }
+            Role.LEAVE -> handOut(us - startUs)
         }
     }
 
@@ -163,6 +180,7 @@ data class FadeShape(val role: Role, val startUs: Long, val lengthUs: Long, val 
      * it in the same stretch (equal power).
      */
     fun bassDb(us: Long): Float {
+        if (role == Role.LEAVE) return 0f
         val t = progress(us)
         val u = smooth(((t - BASS_FROM) / (BASS_TO - BASS_FROM)).coerceIn(0f, 1f))
         val level = when (role) {
@@ -181,6 +199,25 @@ data class FadeShape(val role: Role, val startUs: Long, val lengthUs: Long, val 
 
         private const val BASS_FROM = 0.25f
         private const val BASS_TO = 0.75f
+
+        /** How long the song going out takes to pass from the main player to the tail. */
+        const val HANDOVER_US = 40_000L
+
+        /**
+         * The tail's volume along the handover, [sinceUs] after its start ([handOut]: the main
+         * player's). Equal power: the two players are never exactly on the same sample (a few ms
+         * apart the highs no longer line up), so it never dips; on the very same sample it is a
+         * few dB over for those few ms, which the ear doesn't catch.
+         */
+        fun handIn(sinceUs: Long): Float {
+            val x = (sinceUs.toFloat() / HANDOVER_US).coerceIn(0f, 1f)
+            return if (x >= 1f) 1f else sin(x * PI / 2).toFloat()
+        }
+
+        fun handOut(sinceUs: Long): Float {
+            val x = (sinceUs.toFloat() / HANDOVER_US).coerceIn(0f, 1f)
+            return if (x >= 1f) 0f else cos(x * PI / 2).toFloat()
+        }
 
         fun smooth(x: Float): Float {
             val t = x.coerceIn(0f, 1f)

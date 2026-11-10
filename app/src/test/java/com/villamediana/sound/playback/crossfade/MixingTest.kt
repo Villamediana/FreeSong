@@ -113,7 +113,10 @@ class MixingTest {
             val ig = i.gain(i.startUs + (t * i.lengthUs).toLong())
             assertEquals("t=$t", 1f, og * og + ig * ig, 1e-3f)
         }
-        assertEquals(1f, o.gain(o.startUs - 1))
+        // Before the fade the main player has the song; the tail, rolling, is silent.
+        assertEquals(1f, mix.leaving().gain(o.startUs - 1))
+        assertEquals(0f, o.gain(o.startUs - 1))
+        assertEquals(0f, mix.leaving().gain(o.startUs + FadeShape.HANDOVER_US))
         assertEquals(0f, o.gain(o.startUs + o.lengthUs))
         assertEquals(0f, i.gain(i.startUs - 1))
         assertEquals(1f, i.gain(i.startUs + i.lengthUs))
