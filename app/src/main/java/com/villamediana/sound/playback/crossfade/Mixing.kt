@@ -44,6 +44,13 @@ data class Mix(
 
     /** The next song isn't the one measured any more (the queue changed): only the end of this one holds. */
     fun withoutIncoming() = copy(inStartMs = 0, inMatchDb = 0f, outMatchDb = 0f)
+
+    /**
+     * The same fade starting [byMs] later and ending where it did (the tail needs a moment more to
+     * be on the main player's moment); null when what's left would be shorter than [minFadeMs].
+     */
+    fun later(byMs: Long, minFadeMs: Long): Mix? =
+        if (fadeMs - byMs < minFadeMs) null else copy(fadeStartMs = fadeStartMs + byMs, fadeMs = fadeMs - byMs)
 }
 
 object Mixing {
@@ -199,6 +206,9 @@ data class FadeShape(
 
         private const val BASS_FROM = 0.25f
         private const val BASS_TO = 0.75f
+
+        /** The tail rolling before its fade is decided: silent, whatever the position. */
+        val SILENT = FadeShape(Role.OUT, Long.MAX_VALUE / 4, 1, 0f, enterUs = Long.MAX_VALUE / 4)
 
         /** How long the song going out takes to pass from the main player to the tail. */
         const val HANDOVER_US = 40_000L
