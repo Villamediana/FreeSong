@@ -83,8 +83,10 @@ class ForYou(
 
     /**
      * "Pra agora": your songs that fit this moment best ([MusicDna.songsFor]) and new ones from
-     * their radios in the taste of the moment (made once per moment and day). Null while the DNA
-     * has too little to say.
+     * their radios in the taste of the moment (made once per moment and day). Null while this
+     * moment is still being learned (fewer than [MOMENT_MIN] songs heard around this hour): no
+     * card rather than the songs of other hours; it shows up by itself once the moment is lived.
+     * The friends along name the mix only when there is music heard with them.
      */
     suspend fun momentPlan(names: (Set<String>) -> List<String> = { emptyList() }): MomentPlan? {
         val p = profile()
@@ -104,7 +106,7 @@ class ForYou(
                 Recommend.fromRadios(radios(seeds), p.inMoment(dna, m), inLibrary + songs.map { it.videoId }, MOMENT_NEW)
             }
         }.getOrDefault(emptyList()).filter { it.videoId !in inLibrary && !p.avoids(it.videoId, it.artist) }
-        return MomentPlan(m, own, fresh, names(m.people))
+        return MomentPlan(m, own, fresh, names(dna.known(m.people)))
     }
 
     /**

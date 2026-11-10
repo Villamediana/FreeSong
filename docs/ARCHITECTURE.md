@@ -550,6 +550,24 @@ some com o tempo; coração segura a música; ajuste fino só nas constantes do 
 Ficou de fora, de propósito: sugerir pelo que toca **perto de outros usuários**. Pra isso o
 servidor teria que saber onde cada celular está — e hoje ele não sabe nem guarda nada disso.
 
+## O mix do momento só fala do que conhece (1.28.5, 2026-11-10)
+
+Miguel: de manhã o "Pra sua manhã" veio igual ao "Pra sua noite" do dia anterior. Sem nada ouvido
+de manhã, `MusicDna.songsFor` caía nas músicas mais ouvidas no geral e o cartão saía com o nome de
+um momento que o DNA ainda não conhecia. Agora:
+
+- **Só entra música do próprio momento**: ouvida de verdade ao menos uma vez a até 2 h daquela
+  hora (`SongStats.heardAround`, `HEARD_AROUND`, `AROUND_HOURS`; meia-noite não separa) ou com quem
+  está junto na jam. Escuta de meses atrás vai apagando e deixa de contar.
+- **Sem músicas suficientes, sem cartão** (`ForYou.MOMENT_MIN`, 5): `momentPlan` devolve nulo e
+  "Feitos pra você" mostra só os mixes de gênero. O cartão aparece sozinho quando o momento for
+  vivido — cada parte do dia no seu tempo.
+- **O nome do mix segue a mesma regra**: só leva o nome do amigo ("Com Ana") quando existe música
+  ouvida com ele (`MusicDna.known`).
+
+O resto do DNA (rádios, sugestões, ordem da biblioteca) já ficava neutro num momento sem dados e
+não mudou.
+
 ## Números do perfil fiéis e ao vivo (1.27.0 + relay 1.6.1, 2026-11-10)
 
 Miguel: os números estavam inflados e "Mais ouvidas" não atualizava. O que mudou em `stats/Recap.kt`:
