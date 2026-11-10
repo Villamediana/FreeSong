@@ -151,24 +151,34 @@ JSON: usar `kotlinx.serialization` (o `org.json` do Android vira stub nos testes
     a partir do flush desse seek e cai em qualquer seek seguinte. O tail player tem o seu (`hold`,
     vale em todo flush). `release` = pausa/skip no meio: volta ao normal em 40 ms. `player.volume`
     fica em 1.
-  - **Passagem sem piscada** (1.28.1): a música que sai troca de player no início do fade. Antes o
-    principal pulava pra próxima na hora e o tail só soava ~50–200 ms depois (o AudioTrack dele
-    começando) — um buraco ouvido como "piscada". Agora o tail **rola mudo 6 s antes**
-    (`hold(mix.outgoing())` antes do prepare: `enterUs` = silêncio até o fade) e o `TailSync`
-    (puro) o mantém no mesmo instante do principal: compara `currentPosition` dos dois (mediana de
-    5), corrige com velocidade 0,5–1,5× por 800 ms (o tail está mudo, ninguém ouve) ou pulo se
-    passou de 600 ms; acerta até ±8 ms. No `Roll` o principal recebe `shaper.leave(mix.leaving())`
-    (`Role.LEAVE`): cala na posição do fade em 40 ms enquanto o tail sobe no mesmo trecho
-    (`HANDOVER_US`, potência igual — a poucos ms de distância os agudos já não somam em fase),
-    tudo pela posição no próprio áudio de cada um. Só depois (`START_AFTER_MS`, já mudo) o
-    principal faz o `seekTo(próxima)`. Pausa/seek/carregando no meio: `stopRoll` (o tail espera
-    onde está, o principal volta a soar) e rola de novo depois; tail sem tocar 250 ms antes do fade:
-    sem fade dessa vez.
-  - Plano (`CrossfadePlan.step`, puro): Measure ~45 s antes → Prepare 8 s antes do início do fade
-    medido (sem medida a tempo: fade simples) → Roll 6 s antes → Start logo depois da passagem.
-    Menos de 0,5 s antes do fade sem rolar: sem fade, a música só termina. Timer, crossfade
-    desligado ou fim da fila no meio: `Cancel`. A fila mudou depois da medida: só o lado de quem
-    sai vale (`Mix.withoutIncoming`).
+  - **Passagem sem piscada** (1.28.1; 1.28.2 pra 1ª vez): a música que sai troca de player no
+    início do fade. Antes o principal pulava pra próxima na hora e o tail só soava ~50–200 ms
+    depois (o AudioTrack dele começando) — um buraco ouvido como "piscada". Agora o tail **rola
+    mudo antes** e o `TailSync` (puro) o mantém no mesmo instante do principal: compara
+    `currentPosition` dos dois (mediana de 5, só quando as 5 concordam em 12 ms — a posição de um
+    player recém-iniciado ainda está assentando), corrige com velocidade 0,5–1,5× por 800 ms (o
+    tail está mudo, ninguém ouve) ou pulo se passou de 600 ms; acerta até ±8 ms e confere de novo a
+    cada 3 s. O fade é aplicado nos dois (`Apply`): o tail `hold(mix.outgoing())` (silêncio até o
+    fade, `enterUs`) e o principal `shaper.leave(mix.leaving())` (`Role.LEAVE`: cala na posição do
+    fade em 40 ms, potência igual, enquanto o tail sobe no mesmo trecho — tudo pela posição no
+    próprio áudio de cada um). Só depois (`START_AFTER_MS`, já mudo) o principal faz o
+    `seekTo(próxima)`.
+  - **1ª vez** (1.28.2): pular pra perto do fim de uma música nunca ouvida deixava a medida
+    chegar segundos depois, e o tail só começava com ela — sem tempo de acertar, a passagem saía
+    torta (na 2ª vez a medida vinha do cache e dava certo). Agora o tail **não espera a medida**:
+    pronto 10 s antes do fade mirado (o medido ou, antes dele, o mais cedo possível = fade simples −
+    20 s), mudo com `FadeShape.SILENT`, rola 6 s antes e já vai acertando; a medida, quando chega,
+    vira o `Apply`. **Veredito** (`CrossfadePlan.verdict`) 1,2 s antes do fade: em passo (≤20 ms)
+    vai; senão o fade começa 2 s depois terminando no mesmo ponto (`Mix.later`, mínimo 2,5 s) e o
+    `TailSync` mede de novo; sem tempo: até 40 ms vai, mais que isso sem fade dessa vez (a música só
+    termina, sem tranco). Aplicar/mudar o fade só com ≥1,2 s de folga (os players produzem o áudio
+    um pouco à frente do que se ouve).
+  - Pausa/seek/carregando no meio: `stopRoll` (o tail espera onde está, o principal volta a soar) e
+    rola de novo depois; tail sem tocar 250 ms antes do fade: sem fade dessa vez.
+  - Plano (`CrossfadePlan.step`, puro): Measure ~45 s antes → Prepare → Roll → Apply → Start.
+    Medida que não chega até 6 s antes do fade simples: fade simples. Medida que chega tarde demais
+    pro próprio fade: o simples, se ainda dá. Timer, crossfade desligado ou fim da fila: `Cancel`.
+    A fila mudou depois do `Apply`: só o lado de quem sai vale (`Mix.withoutIncoming`).
 
 ## Acordes (1.10.0, 2026-11-08; ouvido BTC desde 1.11.0; Cifra Club primeiro desde 1.12.0)
 
