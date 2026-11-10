@@ -186,6 +186,20 @@ class ForYouTest {
     }
 
     @Test
+    fun theNextDaysDiscoveriesAreOtherSongs() = runBlocking {
+        stream("samba-1", "Samba", times = 4)
+        stream("samba-2", "Samba", times = 3)
+        stream("rock-1", "RockBand", times = 2)
+        val first = forYou.discoveries().map { it.videoId }
+        // The same radios answer the next day: what was shown gives way to what wasn't.
+        now += 24 * 3_600_000L
+        forYou.invalidate()
+        val second = forYou.discoveries().map { it.videoId }
+        assertTrue(second.size >= 8)
+        assertTrue("new ${second.count { it !in first }} of ${second.size}", second.count { it !in first } >= second.size / 2)
+    }
+
+    @Test
     fun becauseYouLikeStaysThroughTheSlotEvenAsOtherSongsPlay() = runBlocking {
         stream("samba-1", "Samba", times = 5)
         stream("samba-2", "Samba", times = 4)

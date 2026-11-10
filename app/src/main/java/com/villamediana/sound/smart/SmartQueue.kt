@@ -23,7 +23,9 @@ object SmartQueue {
     /**
      * Radio from a seed track: the seed first (once), then what sounds alike in the library — same
      * artist, same album artist, featured artists, same genre or a related one, close in time —
-     * favouring what the listener likes, varied, never the same song twice.
+     * favouring what the listener likes, varied, never the same song twice. Only what is alike:
+     * a short radio rather than one filled with songs that have nothing to do with the seed (the
+     * queue goes on by itself when it ends).
      */
     fun radio(seed: Track, library: List<Track>, taste: Taste, limit: Int = 50, seedValue: Long = 0): List<Track> {
         if (limit <= 0) return emptyList()
@@ -32,7 +34,7 @@ object SmartQueue {
             .sortedBy { it.id }
             .distinctSongs(exclude = setOf(anchor.song))
         val rnd = Random(seedValue * 31 + seed.id)
-        val picked = pickSimilar(pool, { similarity(anchor, it) }, taste, limit - 1, rnd, previous = anchor)
+        val picked = pickSimilar(pool, { similarity(anchor, it) }, taste, limit - 1, rnd, previous = anchor, fill = false)
         return listOf(seed) + picked.map { it.track }
     }
 
@@ -63,9 +65,11 @@ object SmartQueue {
 
     /**
      * Songs to append when the queue ends and "autoplay similar" is on: what fits the last few songs
-     * (the latest weighs most), excluding everything already in the queue.
+     * (the latest weighs most), excluding everything already in the queue. With [fill] off, only
+     * the songs that have something to do with them (for a queue that also gets new songs from
+     * outside: yours come in when they fit, never just to make up the number).
      */
-    fun continuation(queue: List<Track>, library: List<Track>, taste: Taste, limit: Int = 20, seedValue: Long = 0): List<Track> {
+    fun continuation(queue: List<Track>, library: List<Track>, taste: Taste, limit: Int = 20, seedValue: Long = 0, fill: Boolean = true): List<Track> {
         if (limit <= 0 || library.isEmpty()) return emptyList()
         val inQueue = queue.mapTo(HashSet()) { it.id }
         val queueFeats = queue.feats()
@@ -80,7 +84,7 @@ object SmartQueue {
         val weights = TAIL_WEIGHTS.take(tail.size)
         val total = weights.sum()
         val score: (Feat) -> Double = { c -> tail.indices.sumOf { i -> weights[i] * similarity(tail[i], c) } / total }
-        return pickSimilar(pool, score, taste, limit, rnd, previous = queueFeats.last()).map { it.track }
+        return pickSimilar(pool, score, taste, limit, rnd, previous = queueFeats.last(), fill = fill).map { it.track }
     }
 
     private val TAIL_WEIGHTS = listOf(1.0, 0.7, 0.5, 0.35, 0.25)

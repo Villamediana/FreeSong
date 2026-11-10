@@ -82,9 +82,10 @@ internal object SmartPlans {
 
     /**
      * What to append when the queue reaches its last song: more of the library for the smart
-     * shuffle, more of the genre for a genre session, otherwise what fits the end of the queue.
+     * shuffle, more of the genre for a genre session, otherwise what fits the end of the queue —
+     * with [fill] off, only the songs that really have to do with it ([SmartQueue.continuation]).
      */
-    fun extension(source: PlaySource?, queue: List<Track>, library: List<Track>, taste: Taste, seedValue: Long): List<Track> {
+    fun extension(source: PlaySource?, queue: List<Track>, library: List<Track>, taste: Taste, seedValue: Long, fill: Boolean = true): List<Track> {
         val queued = queue.mapTo(HashSet()) { it.id }
         val primary = when (source?.type) {
             PlaySource.Type.SMART_SHUFFLE ->
@@ -96,6 +97,6 @@ internal object SmartPlans {
             }.orEmpty()
             else -> emptyList()
         }
-        return primary.ifEmpty { SmartQueue.continuation(queue, library, taste, EXTEND, seedValue) }
+        return primary.ifEmpty { SmartQueue.continuation(queue, library, taste, EXTEND, seedValue, fill) }
     }
 }

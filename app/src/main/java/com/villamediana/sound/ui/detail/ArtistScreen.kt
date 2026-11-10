@@ -41,6 +41,8 @@ import com.villamediana.sound.ui.components.PillButton
 import com.villamediana.sound.ui.components.songCount
 import com.villamediana.sound.ui.nav.ArtistRoute
 import com.villamediana.sound.ui.nav.LocalNavigator
+import com.villamediana.sound.ui.search.Connectivity
+import com.villamediana.sound.ui.sheets.startOnlineRadio
 import com.villamediana.sound.ui.theme.Dimens
 import com.villamediana.sound.ui.theme.SoundColors
 import kotlinx.coroutines.flow.StateFlow
@@ -75,6 +77,25 @@ private fun ArtistContent(detail: ArtistDetail) {
     val sheets = rememberCollectionSheets()
     var shuffleLocal by rememberSaveable { mutableStateOf(false) }
     var expanded by rememberSaveable { mutableStateOf(false) }
+
+    val context = LocalContext.current
+    // The artist's radio, from their top song: online, YouTube Music's (new songs alike, the same
+    // radio a song's menu starts); offline or for a song YouTube doesn't know, the one of the library.
+    val startRadio = {
+        detail.topTracks.firstOrNull()?.let { seed ->
+            val started = res.getString(R.string.detail_artist_radio_started, s.name)
+            val fromLibrary = {
+                player.playSmart(SmartSeed.Radio(seed))
+                snackbar.feedback.show(started)
+            }
+            if (seed.videoId != null && Connectivity.isOnline(context)) {
+                startOnlineRadio(seed, graph, snackbar.feedback, res, name = s.name, done = started, otherwise = fromLibrary)
+            } else {
+                fromLibrary()
+            }
+        }
+        Unit
+    }
 
     val source = Sources.artist(s.name)
     val status = playback.statusOf(source)
@@ -116,12 +137,7 @@ private fun ArtistContent(detail: ArtistDetail) {
             HeaderIconButton(
                 Icons.Rounded.Sensors,
                 stringResource(R.string.detail_radio_short),
-                onClick = {
-                    detail.topTracks.firstOrNull()?.let { seed ->
-                        player.playSmart(SmartSeed.Radio(seed))
-                        snackbar.feedback.show(res.getString(R.string.detail_artist_radio_started, s.name))
-                    }
-                },
+                onClick = startRadio,
             )
             HeaderIconButton(Icons.Rounded.MoreVert, stringResource(R.string.more_options), onClick = { sheets.menuOpen = true })
         },
@@ -134,12 +150,7 @@ private fun ArtistContent(detail: ArtistDetail) {
                     subtitle = countText,
                     art = { m -> ArtistArt(s.coverPath, s.name, m) },
                     items = listOf(
-                        MenuItem(Icons.Rounded.Sensors, res.getString(R.string.detail_artist_radio)) {
-                            detail.topTracks.firstOrNull()?.let {
-                                player.playSmart(SmartSeed.Radio(it))
-                                snackbar.feedback.show(res.getString(R.string.detail_artist_radio_started, s.name))
-                            }
-                        },
+                        MenuItem(Icons.Rounded.Sensors, res.getString(R.string.detail_artist_radio), onClick = startRadio),
                     ) + queueMenuItems(playOrder, res, snackbar.feedback) { sheets.addToPlaylist = it },
                     onDismiss = { sheets.menuOpen = false },
                 )

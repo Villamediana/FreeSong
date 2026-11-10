@@ -568,6 +568,62 @@ um momento que o DNA ainda não conhecia. Agora:
 O resto do DNA (rádios, sugestões, ordem da biblioteca) já ficava neutro num momento sem dados e
 não mudou.
 
+## Filas, rádios e mixes: perto do que toca, novo todo dia (1.29.0, 2026-11-10)
+
+Miguel: a rádio de uma música vinha cheia das curtidas dele, algumas nada a ver; os mixes ("Feitos
+pra você", o do momento, os de gênero) repetiam quase sempre as mesmas músicas e as curtidas pesavam
+demais. Quatro regras, as mesmas em toda lista que o app monta:
+
+- **A proximidade decide, o gosto só empurra.** Em `RadioMix.rank` e `Recommend.fromRadios` o gosto
+  **multiplica** o quanto a música está perto das sementes (`TASTE`/`TASTE_LIFT` 0,3; amigos 0,25) —
+  antes somava, e um artista favorito lá do fim da rádio passava na frente do que estava colado na
+  semente. Música que só veio da rádio de uma rádio, de artista que as rádios da semente não têm,
+  vale metade (`STRANGER`): é por aí que entrava outro estilo.
+- **Conhecidas têm teto.** `Picks.cut` (o corte final de toda lista: por artista, sem música
+  repetida, nunca o mesmo artista seguido): no máx. 1/3 de músicas que a pessoa já conhece
+  (`KNOWN_SHARE`) enquanto houver novas; as outras conhecidas esperam e só entram se faltar.
+- **Memória do que já foi mostrado.** `DiscoverRepository` guarda o dia em que cada música foi
+  sugerida (`Cache.shown`, `Picks.mark`; some em `SHOWN_DAYS` = 5 dias, um pouco por dia). Toda
+  lista recebe `seen` e o que apareceu vale menos (`Picks.fresh`, até −70%): as músicas revezam.
+  Lista que fica igual o dia todo (suas músicas dos mixes) usa `shown(today = false)` — refeita no
+  mesmo dia, não foge do que ela mesma mostrou de manhã.
+- **Sementes em rodízio + acaso com semente do dia.** As rádios não partem mais sempre das mesmas
+  favoritas: `TasteProfile.seeds(count, rnd)` (artistas sorteados pelo gosto, uma das 3 melhores de
+  cada), `MadeForYou.seedsOf` (5 das 12 melhores do gênero), "Porque você curte" (2 das 5 melhores do
+  artista), estantes (2 dos 6 artistas do gênero). O `Random` vem do dia/janela/sessão: estável
+  enquanto a lista deve ficar parada, outro na próxima.
+
+Onde cada coisa mudou:
+
+- **Rádio de uma música**: a semente nunca sai de vista (`QueueContinuation.anchor` → entra em
+  `seeds` logo depois da que toca agora, por mais longe que a fila vá). Rádio do YouTube não puxa
+  mais a biblioteca sozinha (`ownShare(queue, source)` = 0): as músicas da pessoa entram quando a
+  própria rádio as traz, dentro do teto. A rádio da biblioteca (`SmartQueue.radio`) só tem o que
+  tem a ver (`pickSimilar(fill = false)`) — rádio curta continua pela fila, não é completada com o
+  resto da biblioteca.
+- **Continuação da fila** (`maybeExtend`): as músicas da biblioteca só entram se combinam com o fim
+  da fila (`SmartPlans.extension(fill = radio.isEmpty())`); offline, sem nada novo, vale o mais
+  próximo que houver.
+- **Rádio do artista** (`ArtistScreen`): online é a do YouTube Music a partir da música mais ouvida
+  (`startOnlineRadio(name = artista, otherwise = a da biblioteca)`); offline, a da biblioteca.
+- **Feitos pra você** (`MadeForYou`): coração vale 1,0 (era 3,0) contra `2·ln(1+escutas recentes)`;
+  suas músicas por mix 14 (eram 20, o resto é novo); o que o mix de ontem teve desce (`SEEN`);
+  chaves `foryou-v3`.
+- **Mix do momento** (`ForYou.momentPlan`): as 12 saem de um sorteio entre as 30 do momento
+  (`Picks.draw`: as primeiras mais, as de ontem menos) — a regra de só mostrar o que o momento
+  conhece (1.28.5) não mudou. `moment-v2`.
+- **Descobertas, Porque você curte, estantes de gênero, Recomendadas**: `seen` + `rnd` em tudo;
+  estante com no máx. 1/3 de conhecidas. `discoveries-v2`, `because-v2`.
+- **Peso da curtida no gosto** (`TasteProfile`): `HEART_WEIGHT` 1,5, `HEART_NOW` 0,75,
+  `SAVED_WEIGHT` 0,3 — escutar conta mais que ter curtido um dia. As regras de pulo não mudaram.
+
+Sem tela nova, nada sai do aparelho, nada roda a mais (a memória é um mapa no cache que já era
+gravado). Ajuste fino = as constantes acima. Testes: `PicksTest`, `RadioMixTest` (teto de
+conhecidas, estranha atrás, gosto só empurra), `RecommendTest`, `QueueContinuationTest` (âncora,
+rádio sem biblioteca), `SmartQueueTest` (rádio só do que tem a ver, `fill = false`),
+`TasteProfileTest` (sementes em rodízio), `MadeForYouTest` (revezamento, coração não enche o mix),
+`DiscoverRepositoryTest` (memória de 5 dias), `ForYouTest` (descobertas do dia seguinte são outras).
+
 ## Números do perfil fiéis e ao vivo (1.27.0 + relay 1.6.1, 2026-11-10)
 
 Miguel: os números estavam inflados e "Mais ouvidas" não atualizava. O que mudou em `stats/Recap.kt`:

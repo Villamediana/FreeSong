@@ -11,12 +11,15 @@ import kotlin.random.Random
  * songs of that genre and new ones in the same style: the YouTube Music radios of several of its
  * songs are compared, and the songs (and artists) they agree on are the style's core — a radio that
  * goes off on its own counts less. Your songs closest to that core come first. Made once a day: the
- * next day brings new songs. Pure: the radios come in from outside.
+ * next day brings other songs — of yours and new — because what a mix showed in the last days
+ * counts less, the radios start from other songs of yours and a little chance moves the rest. A
+ * heart is one sign among the others (what you really listen to says more). Pure: the radios come
+ * in from outside.
  */
 object MadeForYou {
     const val MAX_MIXES = 3
-    /** Your songs in a mix. */
-    const val OWN = 20
+    /** Your songs in a mix: about one in four, the rest is new. */
+    const val OWN = 14
     /** New songs in a mix. */
     const val NEW = 40
     /** Songs whose radios bring the new ones. */
@@ -29,6 +32,16 @@ object MadeForYou {
     private const val POOL = 60
     /** How far up a song of yours moves when its artist is in the mix's style. */
     private const val FIT_LIFT = 12
+    /** What a heart adds to a song of yours (listening to it lately adds more). */
+    private const val LIKED = 1.0
+    /** How much chance moves your songs from one day to the next. */
+    private const val CHANCE = 2.5
+    /** How far down a song of yours goes for having been in a mix yesterday (less each day). */
+    private const val SEEN = 3.0
+    /** The radios start from [SEEDS] of this many of your best songs of the genre (one per artist), drawn each day. */
+    private const val SEED_POOL = 12
+    /** How much chance moves a new song (what the radios agree on still leads). */
+    private const val CHANCE_NEW = 0.5
 
     /** What a mix is made of before its new songs arrive. */
     data class Plan(
@@ -43,18 +56,23 @@ object MadeForYou {
 
     data class Labels(val title: (String) -> String, val untitled: String, val subtitle: (String) -> String)
 
-    /** The day's plans: the top genres (by songs and recent plays), your favourites first in each. */
-    fun plan(library: List<Track>, taste: Taste, day: Long): List<Plan> {
-        val songs = library.distinctBy { it.videoId ?: "t:${it.id}" }
+    /**
+     * The day's plans: the top genres (by songs and recent plays), in each the songs of yours
+     * you've been listening to first — the ones a mix had in the last days ([seen]: [shownKey] →
+     * 0..1) further down, so they take turns.
+     */
+    fun plan(library: List<Track>, taste: Taste, day: Long, seen: Map<String, Double> = emptyMap()): List<Plan> {
+        val songs = library.distinctBy(::shownKey)
         if (songs.isEmpty()) return emptyList()
         fun plays(t: Track) = taste.recentPlays[t.id] ?: 0
         fun score(t: Track, rnd: Random) =
-            (if (t.liked) 3.0 else 0.0) + 2.0 * ln(1.0 + plays(t)) + 0.5 * ln(1.0 + t.playCount) + rnd.nextDouble() * 1.5
+            (if (t.liked) LIKED else 0.0) + 2.0 * ln(1.0 + plays(t)) + 0.5 * ln(1.0 + t.playCount) +
+                rnd.nextDouble() * CHANCE - SEEN * (seen[shownKey(t)] ?: 0.0)
 
         fun build(key: String, genre: String?, list: List<Track>): Plan {
             val rnd = Random(key.hashCode().toLong() * 1_000_003L + day)
             val ranked = list.map { it to score(it, rnd) }.sortedByDescending { it.second }.map { it.first }
-            return Plan(PREFIX + key, genre, ranked.take(POOL), seedsOf(ranked))
+            return Plan(PREFIX + key, genre, ranked.take(POOL), seedsOf(ranked, rnd))
         }
 
         val byGenre = songs.filter { !it.genre.isNullOrBlank() }.groupBy { it.genre!!.trim().lowercase() }
@@ -70,10 +88,16 @@ object MadeForYou {
         return plans.ifEmpty { listOf(build("all", null, songs)) }
     }
 
-    /** The best songs to start radios from, one per artist first (more of the style), then the rest. */
-    private fun seedsOf(ranked: List<Track>): List<Track> {
+    /** How a song of yours is remembered as shown: by its YouTube id, or its own when it has none. */
+    fun shownKey(t: Track): String = t.videoId ?: "t:${t.id}"
+
+    /**
+     * The songs to start radios from: [SEEDS] drawn from the best [SEED_POOL] (one per artist:
+     * more of the style), then the rest — not the same five every day, so not the same radios.
+     */
+    private fun seedsOf(ranked: List<Track>, rnd: Random): List<Track> {
         val withId = ranked.filter { it.videoId != null }
-        val first = withId.distinctBy { artistKey(it.artist) }.take(SEEDS)
+        val first = withId.distinctBy { artistKey(it.artist) }.take(SEED_POOL).shuffled(rnd).take(SEEDS)
         return (first + withId.filterNot { it in first }).take(SEEDS)
     }
 
@@ -82,9 +106,16 @@ object MadeForYou {
      * earlier it comes, i.e. the closer to that radio's song), and an artist several radios agree
      * on gets more. A radio whose artists the others don't share (a song off the style) weighs
      * less. None you have, no song twice (another upload of it either), at most [PER_ARTIST] per
-     * artist, at most [count]; the best fits first.
+     * artist, at most [count]; the best fits first. What was suggested in the last days ([seen]:
+     * video id → 0..1) counts less, and a little chance ([rnd]) moves the rest.
      */
-    fun pickNew(radios: List<List<RemoteTrack>>, inLibrary: Set<String>, count: Int = NEW): List<RemoteTrack> {
+    fun pickNew(
+        radios: List<List<RemoteTrack>>,
+        inLibrary: Set<String>,
+        count: Int = NEW,
+        seen: Map<String, Double> = emptyMap(),
+        rnd: Random? = null,
+    ): List<RemoteTrack> {
         val lists = radios.map { r -> r.distinctBy { it.videoId } }.filter { it.isNotEmpty() }
         if (lists.isEmpty() || count <= 0) return emptyList()
         val artistsOf = lists.map { r -> r.mapTo(HashSet()) { artistKey(it.artist) } }
@@ -107,8 +138,11 @@ object MadeForYou {
             }
         }
         val firstSeen = found.keys.withIndex().associate { (i, id) -> id to i }
-        fun total(t: RemoteTrack) = score.getValue(t.videoId) + 0.4 * ((radiosWith[artistKey(t.artist)] ?: 1) - 1)
-        val ranked = found.values.sortedWith(compareByDescending<RemoteTrack> { total(it) }.thenBy { firstSeen.getValue(it.videoId) })
+        val total = found.values.associate { t ->
+            val close = score.getValue(t.videoId) + 0.4 * ((radiosWith[artistKey(t.artist)] ?: 1) - 1)
+            t.videoId to close * Picks.fresh(seen[t.videoId]) + (rnd?.nextDouble() ?: 0.0) * CHANCE_NEW
+        }
+        val ranked = found.values.sortedWith(compareByDescending<RemoteTrack> { total.getValue(it.videoId) }.thenBy { firstSeen.getValue(it.videoId) })
 
         val perArtist = HashMap<String, Int>()
         val songs = HashSet<String>()

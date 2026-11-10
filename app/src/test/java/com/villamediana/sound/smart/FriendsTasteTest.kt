@@ -63,7 +63,8 @@ class FriendsTasteTest {
         assertEquals(plain.artists, withFriends.artists)
         assertFalse(withFriends.isKnownArtist("Theirs"))
 
-        val radio = listOf(song("a", "Nobody 1"), song("b", "Nobody 2"), song("c", "Nobody 3"), song("t", "Theirs"), song("mine", "Mine")) +
+        // Side by side in the radio (how close a song is still decides: the taste is a share of it).
+        val radio = listOf(song("a", "Nobody 1"), song("b", "Nobody 2"), song("c", "Nobody 3"), song("mine", "Mine"), song("t", "Theirs")) +
             (1..10).map { song("z$it", "Filler $it") }
         val before = Recommend.fromRadios(listOf(radio), plain, emptySet(), 10).map { it.videoId }
         val after = Recommend.fromRadios(listOf(radio), withFriends, emptySet(), 10).map { it.videoId }
@@ -81,12 +82,12 @@ class FriendsTasteTest {
         assertEquals(0.5, alone.friendsLike("Theirs"), 1e-9)
         assertEquals(1.0, together.friendsLike("Theirs"), 1e-9)
 
-        val list = (1..20).map { song("f$it", "Filler $it") } + song("t", "Theirs")
-        fun top(profile: TasteProfile) = (0 until 40).count { i ->
+        val list = (1..10).map { song("f$it", "Filler $it") } + song("t", "Theirs") + (11..20).map { song("f$it", "Filler $it") }
+        fun top(profile: TasteProfile) = (0 until 200).count { i ->
             RadioMix.rank(listOf(list), emptyList(), profile, Session(), emptySet(), 21, Random(i)).take(8).any { it.videoId == "t" }
         }
         val plain = top(TasteProfile.build((1..4).map { heard("m$it", "Mine") }, emptyList(), now))
-        // Last in the radio: rarely near the top by itself, more with a friend who likes it, most with her along.
+        // Halfway down the radio: sometimes near the top by itself, more with a friend who likes it, most with her along.
         assertTrue("plain $plain alone ${top(alone)} together ${top(together)}", plain < top(alone) && top(alone) < top(together))
     }
 

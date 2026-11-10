@@ -14,12 +14,14 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlin.random.Random
 
 /**
  * The day's made-for-you mixes, shared by the Home cards, the mix page and the player (what the
  * card shows is what plays). Made once a day: your songs show at once, the new ones join as their
  * radios arrive (kept on disk for the day, so reopening the app keeps the same mix until midnight).
- * A library just starting out gets its mixes as its songs come in, not only the next day.
+ * A library just starting out gets its mixes as its songs come in, not only the next day. What a
+ * mix had is remembered for a few days: tomorrow's is made of other songs, yours and new.
  */
 class MadeForYouStore(
     private val library: LibraryRepository,
@@ -71,7 +73,8 @@ class MadeForYouStore(
 
     private suspend fun make(day: Long) {
         val tracks = library.allTracks()
-        val plans = MadeForYou.plan(tracks, library.loadTaste(), day)
+        // What the mixes of the days before had (not today's: made again today, a mix stays the same).
+        val plans = MadeForYou.plan(tracks, library.loadTaste(), day, discover.shown(today = false))
         val shape = day to plans.map { it.id to it.own.size }
         if (shape == built && complete) return
         val l = labels()
@@ -88,18 +91,20 @@ class MadeForYouStore(
         val made = coroutineScope {
             plans.map { plan ->
                 async {
-                    // "v2": the mixes got bigger and match the style (yesterday's list doesn't carry over).
-                    val new = discover.daily("foryou-v2:" + plan.id, day) {
+                    // "v3": other songs every day (what a list made before had doesn't carry over).
+                    val new = discover.daily("foryou-v3:" + plan.id, day) {
                         val radios = plan.seeds.mapNotNull { seed ->
                             seed.videoId?.let { id -> runCatching { discover.related(id, RADIO_SIZE) }.getOrNull() }
                         }
-                        MadeForYou.pickNew(radios, inLibrary)
+                        MadeForYou.pickNew(radios, inLibrary, seen = discover.shown(), rnd = Random(plan.id.hashCode() * 31L + day))
                     }.filter { it.videoId !in inLibrary && taste?.avoids(it.videoId, it.artist) != true }
                     plan to MadeForYou.assemble(plan, new, l)
                 }
             }.awaitAll()
         }
         _mixes.value = made.map { it.second }
+        // Your songs these mixes have: tomorrow's start from the others.
+        runCatching { discover.markShown(made.flatMap { (_, mix) -> mix.tracks.filter { it.id >= 0 }.map(MadeForYou::shownKey) }) }
         built = shape
         complete = made.all { (plan, mix) -> plan.seeds.isEmpty() || mix.tracks.any { it.id < 0 } }
     }

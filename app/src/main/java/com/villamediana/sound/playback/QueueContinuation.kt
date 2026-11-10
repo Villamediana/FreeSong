@@ -10,7 +10,8 @@ import com.villamediana.sound.smart.Taste
  * What keeps a queue going so it never runs out: songs like the last few of the list (YouTube
  * Music's radio of each of them, in turns, so the whole end of the list counts and not only the
  * last song) woven with your own songs that fit. A list of your songs keeps being mostly yours with
- * a new one every few; a list of online songs goes on like a radio. Pure: the radios come from outside.
+ * a new one every few; a list of online songs goes on like a radio; a radio of a song never loses
+ * that song from sight, however long it plays. Pure: the radios come from outside.
  */
 internal object QueueContinuation {
     /** More songs come when this many (or fewer) are left after the one playing. */
@@ -41,17 +42,33 @@ internal object QueueContinuation {
     /**
      * Video ids to start radios from: the list's last songs (play order) that YouTube knows, the
      * latest first — the ones [skipped] just now left out (what is being heard leads, not what was
-     * passed over), unless every one was skipped.
+     * passed over), unless every one was skipped. A radio's own song ([anchor]) is always one of
+     * them, right after the latest: the radio follows what is being heard without drifting away
+     * from the song it was started from.
      */
-    fun seeds(queue: List<Track>, count: Int = SEEDS, skipped: Set<String> = emptySet()): List<String> {
+    fun seeds(queue: List<Track>, count: Int = SEEDS, skipped: Set<String> = emptySet(), anchor: String? = null): List<String> {
         val tail = queue.takeLast(TAIL).asReversed()
             .mapNotNull { it.videoId?.takeIf(String::isNotBlank) }
             .distinct()
-        return tail.filter { it !in skipped }.ifEmpty { tail }.take(count)
+        val latest = tail.filter { it !in skipped }.ifEmpty { tail }.take(count)
+        if (anchor.isNullOrBlank() || anchor in latest) return latest
+        return latest.take(1) + anchor + latest.drop(1)
     }
 
-    /** How much of what's added comes from your library: as much as the list's end was yours, never all of it. */
-    fun ownShare(queue: List<Track>): Double {
+    /** The song a radio was started from (its YouTube id), while it is still in the [queue]; null for any other list. */
+    fun anchor(source: PlaySource?, queue: List<Track>): String? {
+        if (source?.type != PlaySource.Type.RADIO) return null
+        val id = source.id?.takeIf(String::isNotBlank) ?: return null
+        return queue.firstOrNull { it.videoId == id || it.id.toString() == id }?.videoId?.takeIf(String::isNotBlank)
+    }
+
+    /**
+     * How much of what's added comes from your library: as much as the list's end was yours, never
+     * all of it. None for a radio of songs from YouTube ([source]): it brings songs like its own —
+     * yours among them when its radio has them — not the library's.
+     */
+    fun ownShare(queue: List<Track>, source: PlaySource? = null): Double {
+        if (source?.type == PlaySource.Type.RADIO && source.id?.toLongOrNull() == null) return 0.0
         val tail = queue.takeLast(TAIL)
         if (tail.isEmpty()) return MAX_OWN_SHARE
         return tail.count { !it.isOnline }.toDouble() / tail.size * MAX_OWN_SHARE

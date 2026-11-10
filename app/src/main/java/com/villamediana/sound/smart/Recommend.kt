@@ -5,27 +5,37 @@ import kotlin.math.ln
 import kotlin.random.Random
 
 /**
- * Turns candidate songs into suggestions with the listener's [TasteProfile]: what the radios agree
- * on, nudged towards the artists they like, with room left for artists they don't know yet; never a
- * song or artist they keep skipping, never a song they already know (when asked for new ones). Pure.
+ * Turns candidate songs into suggestions with the listener's [TasteProfile]. What the radios agree
+ * on decides (how close a song is to the songs they started from); the taste only nudges it — a
+ * favourite artist counts a share more, never enough to bring in a song from far away — with room
+ * left for artists they don't know yet. What was suggested in the last days counts less, and a
+ * little chance moves the rest, so the lists are not the same day after day. Never a song or artist
+ * they keep skipping, never a song they already know (when asked for new ones). Pure.
  */
 object Recommend {
-    /** How far a liked artist moves a song up (on top of the radios' agreement). */
-    private const val TASTE_LIFT = 1.1
+    /** How much more a song by the favourite artist counts (a share of what the radios say). */
+    private const val TASTE_LIFT = 0.3
     /** A small push for artists the listener doesn't know yet: suggestions are also discoveries. */
-    private const val NEW_ARTIST_LIFT = 0.25
+    private const val NEW_ARTIST_LIFT = 0.1
     /** How far a song skipped in this moment goes down (for a moment's profile). */
     private const val SKIPPED = 1.6
     /** How far a song whose own sound fits this moment (more or less than its artist's) moves. */
     private const val SOUND = 0.6
-    /** How far an artist the friends like moves a song up (all of it when they are listening along). */
-    private const val FRIENDS = 0.5
+    /** The same for an artist the friends like (all of it when they are listening along). */
+    private const val FRIENDS = 0.25
+    /** How much chance moves a song (the radios' favourites still lead). */
+    private const val CHANCE = 0.5
+    /** At most this share of a list that may bring known songs is songs the listener already knows. */
+    const val KNOWN_SHARE = 1.0 / 3.0
 
     /**
      * The best [count] new songs from [radios] (each a radio of a song the listener loves): a song
      * scores for every radio it is in (more near the top), and an artist several radios agree on
-     * scores more; then the taste. [exclude]: video ids not to suggest (the library, the seeds).
-     * At most [perArtist] per artist; no song twice (another upload of it either).
+     * scores more; then the taste, as a share of that. [exclude]: video ids not to suggest (the
+     * library, the seeds). [seen]: what was suggested in the last days (video id → 0..1, 1 = today),
+     * which counts less now; [rnd]: a little chance (none without it). At most [perArtist] per
+     * artist; no song twice (another upload of it either). With [onlyNew] off, the songs they
+     * already know take at most [KNOWN_SHARE] of the list.
      */
     fun fromRadios(
         radios: List<List<RemoteTrack>>,
@@ -34,6 +44,8 @@ object Recommend {
         count: Int,
         perArtist: Int = 2,
         onlyNew: Boolean = true,
+        seen: Map<String, Double> = emptyMap(),
+        rnd: Random? = null,
     ): List<RemoteTrack> {
         val lists = radios.map { r -> r.distinctBy { it.videoId } }.filter { it.isNotEmpty() }
         if (lists.isEmpty() || count <= 0) return emptyList()
@@ -51,68 +63,50 @@ object Recommend {
             }
         }
         val firstSeen = found.keys.withIndex().associate { (i, id) -> id to i }
-        fun total(t: RemoteTrack): Double {
-            val agree = 0.4 * ((radiosWith[artistKey(t.artist)] ?: 1) - 1)
-            return score.getValue(t.videoId) + agree + lift(t, profile) + SOUND * ln(profile.soundFit(t.videoId)) -
-                SKIPPED * (1.0 - profile.songFactor(t.videoId))
+        // Drawn in a fixed order first, so the same rnd gives the same list.
+        val total = found.values.sortedBy { it.videoId }.associate { t ->
+            val close = score.getValue(t.videoId) + 0.4 * ((radiosWith[artistKey(t.artist)] ?: 1) - 1)
+            t.videoId to close * lift(t, profile) * Picks.fresh(seen[t.videoId]) + SOUND * ln(profile.soundFit(t.videoId)) -
+                SKIPPED * (1.0 - profile.songFactor(t.videoId)) + (rnd?.nextDouble() ?: 0.0) * CHANCE
         }
-        val ranked = found.values.sortedWith(compareByDescending<RemoteTrack> { total(it) }.thenBy { firstSeen.getValue(it.videoId) })
-        return capped(ranked, count, perArtist)
+        val ranked = found.values.sortedWith(compareByDescending<RemoteTrack> { total.getValue(it.videoId) }.thenBy { firstSeen.getValue(it.videoId) })
+        return Picks.cut(ranked, count, perArtist, known = { it.videoId in profile.known }, knownShare = if (onlyNew) 1.0 else KNOWN_SHARE)
     }
 
     /**
-     * A genre shelf's songs in the listener's order: their artists and the ones they haven't heard
-     * first, a little shuffled by [seed] (another draw each session), the skipped ones out.
+     * A genre shelf's songs in the listener's order: the ones they haven't heard and their artists
+     * a little ahead, shuffled by [seed] (another draw each session), the skipped ones out, the
+     * ones [seen] in the last days behind.
      */
-    fun order(pool: List<RemoteTrack>, profile: TasteProfile, seed: Long, count: Int, perArtist: Int = 2): List<RemoteTrack> {
+    fun order(
+        pool: List<RemoteTrack>,
+        profile: TasteProfile,
+        seed: Long,
+        count: Int,
+        perArtist: Int = 2,
+        seen: Map<String, Double> = emptyMap(),
+    ): List<RemoteTrack> {
         val usable = pool.distinctBy { it.videoId }.filter { fits(it, profile, emptySet(), onlyNew = false) }
         val weighted = weightedOrder(
             usable,
             id = { it.videoId.hashCode().toLong() },
             weight = { t ->
                 val known = t.videoId in profile.known
-                (1.0 + 3.0 * profile.affinityOf(t.artist) + FRIENDS * profile.friendsLike(t.artist)) * (if (known) 0.55 else 1.0) *
-                    profile.songFactor(t.videoId) * profile.soundFit(t.videoId)
+                (1.0 + 2.0 * profile.affinityOf(t.artist) + 0.5 * profile.friendsLike(t.artist)) * (if (known) 0.4 else 1.0) *
+                    profile.songFactor(t.videoId) * profile.soundFit(t.videoId) * Picks.fresh(seen[t.videoId])
             },
             rnd = Random(seed),
         )
-        return capped(weighted, count, perArtist)
+        return Picks.cut(weighted, count, perArtist, known = { it.videoId in profile.known }, knownShare = KNOWN_SHARE)
     }
 
     private fun fits(t: RemoteTrack, profile: TasteProfile, exclude: Set<String>, onlyNew: Boolean): Boolean =
         t.videoId !in exclude && !profile.avoids(t.videoId, t.artist) && !(onlyNew && t.videoId in profile.known)
 
+    /** What the taste multiplies a song's closeness by (1 = nothing known about its artist). */
     private fun lift(t: RemoteTrack, profile: TasteProfile): Double {
         val aff = profile.affinityOf(t.artist)
         val own = if (aff > 0) TASTE_LIFT * aff else if (!profile.isKnownArtist(t.artist)) NEW_ARTIST_LIFT else 0.0
-        return own + FRIENDS * profile.friendsLike(t.artist)
-    }
-
-    private fun capped(ranked: List<RemoteTrack>, count: Int, perArtist: Int): List<RemoteTrack> {
-        val perA = HashMap<String, Int>()
-        val songs = HashSet<String>()
-        val out = ArrayList<RemoteTrack>(count)
-        for (t in ranked) {
-            if (out.size >= count) break
-            val a = artistKey(t.artist)
-            if ((perA[a] ?: 0) >= perArtist) continue
-            // Another upload of the same song ("… (Official Video)", "… - Ao Vivo" of it) is the same song.
-            if (!songs.add(a + "|" + normalizeText(com.villamediana.sound.online.TitleCleaner.baseTitle(t.title)))) continue
-            perA.merge(a, 1, Int::plus)
-            out += t
-        }
-        return apart(out)
-    }
-
-    /** Same order, but never the same artist twice in a row when it can be helped. */
-    private fun apart(order: List<RemoteTrack>): List<RemoteTrack> {
-        val left = order.toMutableList()
-        val out = ArrayList<RemoteTrack>(order.size)
-        while (left.isNotEmpty()) {
-            val prev = out.lastOrNull()?.let { artistKey(it.artist) }
-            val at = left.indices.take(4).firstOrNull { artistKey(left[it].artist) != prev } ?: 0
-            out += left.removeAt(at)
-        }
-        return out
+        return 1.0 + own + FRIENDS * profile.friendsLike(t.artist)
     }
 }

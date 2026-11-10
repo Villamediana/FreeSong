@@ -66,6 +66,44 @@ class MadeForYouTest {
         assertTrue(picked.any { it.videoId == "o1" })
     }
 
+    @Test fun yourSongsTakeTurnsFromOneDayToTheNext() {
+        val lib = (1L..40L).map { track(it, "Rock") }
+        val first = MadeForYou.plan(lib, Taste(), day = 100)[0]
+        val shown = first.own.take(MadeForYou.OWN).associate { MadeForYou.shownKey(it) to 1.0 }
+        // What yesterday's mix had waits behind what it didn't.
+        val next = MadeForYou.plan(lib, Taste(), day = 101, seen = shown)[0]
+        assertTrue(next.own.take(MadeForYou.OWN).none { MadeForYou.shownKey(it) in shown })
+        assertEquals(40, next.own.size)
+        // The radios don't start from the same songs every day either.
+        val seeds = (100L..120L).map { d -> MadeForYou.plan(lib, Taste(), day = d)[0].seeds.map { it.id }.toSet() }
+        assertTrue(seeds.all { it.size == MadeForYou.SEEDS })
+        assertTrue(seeds.distinct().size >= 10)
+    }
+
+    @Test fun whatIsBeingHeardLeadsTheMixNotTheHearts() {
+        // Ten hearts never played lately, twenty songs without one heard these weeks.
+        val lib = (1L..10L).map { track(it, "Rock", liked = true) } + (11L..30L).map { track(it, "Rock") }
+        val taste = Taste(recentPlays = (11L..30L).associateWith { 3 })
+        val liked = (100L..119L).sumOf { d -> MadeForYou.plan(lib, taste, day = d)[0].own.take(MadeForYou.OWN).count { it.liked } }
+        // A heart still counts (some get in), it doesn't fill the mix.
+        assertTrue("liked $liked", liked in 1..(20 * MadeForYou.OWN / 4))
+    }
+
+    @Test fun theNewSongsOfTheLastDaysGiveWayAndChanceMovesTheRest() {
+        val radio = (1..20).map { rt("n$it", "Artist $it") }
+        val first = MadeForYou.pickNew(listOf(radio), inLibrary = emptySet(), count = 10)
+        assertEquals((1..10).map { "n$it" }, first.map { it.videoId })
+        // Shown today: the other half of the radio comes first.
+        val seen = first.associate { it.videoId to 1.0 }
+        val next = MadeForYou.pickNew(listOf(radio), inLibrary = emptySet(), count = 10, seen = seen)
+        assertEquals((11..20).map { "n$it" }.toSet(), next.map { it.videoId }.toSet())
+        // A little chance: other orders, with the radio's first song always in.
+        val draws = (1..30).map { d -> MadeForYou.pickNew(listOf(radio), emptySet(), count = 10, rnd = kotlin.random.Random(d)).map { it.videoId } }
+        assertTrue(draws.distinct().size >= 20)
+        assertTrue(draws.all { "n1" in it })
+        assertEquals(draws[0], MadeForYou.pickNew(listOf(radio), emptySet(), count = 10, rnd = kotlin.random.Random(1)).map { it.videoId })
+    }
+
     @Test fun yourSongsInTheMixStyleMoveUp() {
         val lib = (1L..30L).map { track(it, "Rock") }
         val plan = MadeForYou.plan(lib, Taste(), day = 5)[0]
