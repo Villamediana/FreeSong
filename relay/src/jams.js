@@ -5,13 +5,14 @@
 //   pelo convite do amigo); ninguém começa uma jam direto com quem não é amigo.
 // - Qualquer participante toca, pausa, pula, adianta ou mexe na fila: muda pra todo mundo.
 // - Quem criou encerra; qualquer um sai. Se quem criou sai, a jam acaba.
+// - Quem some sem sair (celular sem rede, app fechado à força) por IDLE_END_MS sai sozinho.
 // - Uma jam por pessoa: entrar numa nova sai da anterior.
 import { randomBytes } from 'node:crypto';
 import { cleanText } from './names.js';
 
 export const MAX_QUEUE = 200;
 export const MAX_MEMBERS = 30;
-/** Jam sem ninguém conectado por esse tempo acaba sozinha. */
+/** Jam sem ninguém conectado por esse tempo acaba sozinha; quem não criou e sumiu por esse tempo sai dela. */
 export const IDLE_END_MS = 15 * 60 * 1000;
 const MAX_TRACK_MS = 6 * 3600_000;
 
@@ -106,6 +107,7 @@ export class Jams {
       hostId,
       members: new Set(),
       invited: new Map(), // userId → quem convidou
+      seen: new Map(), // userId → última vez conectado
       createdAt: now,
       lastActive: now,
       state: { queue: [], index: 0, positionMs: 0, playing: false, updatedAt: now, rev: 0, by: hostId },
@@ -130,6 +132,7 @@ export class Jams {
     if (previous && previous !== jam) left = this.leave(previous, userId);
     jam.members.add(userId);
     jam.invited.delete(userId);
+    jam.seen.set(userId, this.clock());
     this.memberOf.set(userId, jam.id);
     jam.lastActive = this.clock();
     return left;
@@ -143,6 +146,7 @@ export class Jams {
   leave(jam, userId) {
     jam.members.delete(userId);
     jam.invited.delete(userId);
+    jam.seen.delete(userId);
     if (this.memberOf.get(userId) === jam.id) this.memberOf.delete(userId);
     const ended = userId === jam.hostId || jam.members.size === 0;
     if (ended) this.end(jam);
@@ -178,6 +182,22 @@ export class Jams {
     for (const jam of this.jams.values()) {
       if ([...jam.members].some(isOnline)) jam.lastActive = now;
       else if (now - jam.lastActive >= IDLE_END_MS) out.push(jam);
+    }
+    return out;
+  }
+
+  /**
+   * Quem está numa jam mas sumiu há [IDLE_END_MS] sem sair: [{jam, userId}]. Quem criou não entra
+   * (a jam é dele; se ninguém mais estiver conectado, [idle] acaba com ela).
+   */
+  gone(isOnline) {
+    const now = this.clock();
+    const out = [];
+    for (const jam of this.jams.values()) {
+      for (const m of jam.members) {
+        if (isOnline(m)) jam.seen.set(m, now);
+        else if (m !== jam.hostId && now - (jam.seen.get(m) ?? now) >= IDLE_END_MS) out.push({ jam, userId: m });
+      }
     }
     return out;
   }
