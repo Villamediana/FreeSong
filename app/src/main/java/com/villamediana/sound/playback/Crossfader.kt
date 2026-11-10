@@ -16,7 +16,6 @@ import com.villamediana.sound.playback.crossfade.Mixing
 import com.villamediana.sound.playback.crossfade.TailSync
 import kotlin.math.abs
 import kotlin.math.max
-import kotlin.math.min
 
 /** What the crossfade does at a given moment of a song (pure: tested on its own). */
 object CrossfadePlan {
@@ -32,6 +31,18 @@ object CrossfadePlan {
     /** The tail player is readied this long before the fade, so it is ready when its roll comes. */
     const val PREPARE_AHEAD_MS = 8_000L
 
+    /**
+     * A tail readied late (a seek near the end, a measure that took long) waits this far ahead of
+     * the song: the time it takes to be ready.
+     */
+    const val LATE_LEAD_MS = 1_000L
+
+    /** A roll this little short of [ROLL_AHEAD_MS] is a whole one all the same. */
+    const val ROLL_SLACK_MS = 500L
+
+    /** A fade that starts later for a late tail is never left shorter than this. */
+    const val MIN_FADE_MS = 2_000L
+
     /** Less than this before the fade, the tail can't be started in time: no fade, the song just ends. */
     const val MIN_ROLL_MS = 500L
 
@@ -41,8 +52,11 @@ object CrossfadePlan {
     /** The main player moves on once the handover is behind it (from there it is silent). */
     const val START_AFTER_MS = FadeShape.HANDOVER_US / 1_000 + 40
 
-    /** The tail player is ready for [mix], paused at [fromMs] of the song, or [rolling] already. */
-    data class Ready(val mix: Mix, val fromMs: Long, val rolling: Boolean)
+    /**
+     * The tail player is ready, paused at [fromMs] of the song, or [rolling] already. [base] is the
+     * fade as decided, [mix] as it goes: the same, or starting later when the tail came late ([fit]).
+     */
+    data class Ready(val base: Mix, val fromMs: Long, val rolling: Boolean, val mix: Mix = base)
 
     sealed interface Step {
         /** Nothing to do (off, no next song, too short, sleep timer, waiting…). */
@@ -51,11 +65,11 @@ object CrossfadePlan {
         /** Measure the end of this song and the start of the next ([Mixing.mix]). */
         data object Measure : Step
 
-        /** Ready the tail player before the fade, paused. */
-        data class Prepare(val mix: Mix) : Step
+        /** Ready the tail player before the fade, paused at [fromMs]; [mix] is [base] as it goes ([fit]). */
+        data class Prepare(val base: Mix, val fromMs: Long, val mix: Mix = base) : Step
 
-        /** Start the tail rolling (silent) and hand the song over to it at the fade. */
-        data object Roll : Step
+        /** Start the tail rolling (silent) and hand the song over to it at [mix]'s fade. */
+        data class Roll(val mix: Mix) : Step
 
         /**
          * The song is the tail's now: the main player moves on to the next song. On "repeat one"
@@ -91,29 +105,37 @@ object CrossfadePlan {
         // A song shorter than a few fades plays whole.
         if (durationMs < fade * 3) return if (ready?.rolling == true) Step.Cancel else Step.Idle
         if (ready != null) {
-            val handover = ready.mix.fadeStartMs
-            return when {
-                // Silent on the main player from the handover: moving on now is never heard.
-                ready.rolling -> if (positionMs >= handover + START_AFTER_MS) Step.Start(loop = repeatOne) else Step.Idle
-                positionMs >= ready.fromMs - ROLL_EARLY_MS && positionMs < handover - MIN_ROLL_MS -> Step.Roll
-                // Past its moment (a seek, a pause right at it): no fade, the song just ends.
-                else -> Step.Idle
-            }
+            // Silent on the main player from the handover: moving on now is never heard.
+            if (ready.rolling) return if (positionMs >= ready.mix.fadeStartMs + START_AFTER_MS) Step.Start(loop = repeatOne) else Step.Idle
+            if (positionMs < ready.fromMs - ROLL_EARLY_MS) return Step.Idle
+            val mix = fit(ready.base, positionMs)
+            // Past its moment (a seek, a pause right at the end): no fade, the song just ends.
+            return if (positionMs < mix.fadeStartMs - MIN_ROLL_MS) Step.Roll(mix) else Step.Idle
         }
         if (durationMs - positionMs <= 300) return Step.Idle
         val plain = Mixing.plain(fade, durationMs)
         if (!measuring) return if (positionMs >= plain.fadeStartMs - MEASURE_AHEAD_MS) Step.Measure else Step.Idle
-        // Still measuring at the last moment (a network that crawls): the fade goes as it is.
-        val mix = measured ?: if (positionMs >= plain.fadeStartMs - PREPARE_AHEAD_MS) plain else return Step.Idle
+        // Still measuring at the last moment for a whole roll (a network that crawls): the fade goes as it is.
+        val base = measured ?: if (positionMs >= plain.fadeStartMs - ROLL_AHEAD_MS - LATE_LEAD_MS) plain else return Step.Idle
+        if (positionMs < base.fadeStartMs - PREPARE_AHEAD_MS) return Step.Idle
+        val from = tailFromMs(base, positionMs)
+        val mix = fit(base, from)
         // Not readied in time (a seek to the very end): no fade, the song just ends.
-        return if (positionMs >= mix.fadeStartMs - PREPARE_AHEAD_MS && positionMs < mix.fadeStartMs - MIN_ROLL_MS) Step.Prepare(mix) else Step.Idle
+        return if (from < mix.fadeStartMs - MIN_ROLL_MS) Step.Prepare(base, from, mix) else Step.Idle
     }
 
     /** Where the tail waits: [ROLL_AHEAD_MS] before the fade, or a little ahead of a song already past that. */
-    fun tailFromMs(mix: Mix, positionMs: Long): Long {
-        val handover = mix.fadeStartMs
-        return max(handover - ROLL_AHEAD_MS, min(positionMs + 600, handover - MIN_ROLL_MS)).coerceAtLeast(0)
-    }
+    fun tailFromMs(base: Mix, positionMs: Long): Long =
+        max(base.fadeStartMs - ROLL_AHEAD_MS, positionMs + LATE_LEAD_MS).coerceAtLeast(0)
+
+    /**
+     * [base] for a tail that starts rolling at [rollAtMs] of the song. The tail always gets its
+     * whole roll, the time it takes to be on the main player's moment: one that starts late (a
+     * measure that took long, a seek or a pause near the end) has the fade start later instead,
+     * ending where it would (so shorter, down to [MIN_FADE_MS]) — never a handover out of step.
+     */
+    fun fit(base: Mix, rollAtMs: Long): Mix =
+        if (base.fadeStartMs >= rollAtMs + ROLL_AHEAD_MS - ROLL_SLACK_MS) base else base.notBefore(rollAtMs + ROLL_AHEAD_MS, MIN_FADE_MS)
 }
 
 /**
@@ -127,8 +149,10 @@ object CrossfadePlan {
  * The song passes from one player to the other without a gap: the tail starts some seconds before
  * the fade, silent, and is kept on the very moment the main player is at ([TailSync]); at the fade's
  * start the main player goes quiet and the tail comes up, both by the position in their own audio
- * ([FadeShape.Role.LEAVE]), and only then does the main player move on. A skip, seek or pause
- * before or during the fade ends it at once.
+ * ([FadeShape.Role.LEAVE]), and only then does the main player move on. The tail always rolls its
+ * whole time first: when it starts late (the measure of a song never heard came late, a seek or a
+ * pause near the end), the fade starts later and is shorter ([CrossfadePlan.fit]). A skip, seek or
+ * pause before or during the fade ends it at once.
  */
 @OptIn(UnstableApi::class)
 internal class Crossfader(
@@ -154,6 +178,8 @@ internal class Crossfader(
     private val handler = Handler(Looper.getMainLooper())
     private var tail: Tail? = null
     private var preparedFor: String? = null
+    /** The fade as decided, and as it goes ([CrossfadePlan.fit]). */
+    private var preparedBase: Mix? = null
     private var preparedMix: Mix? = null
     /** The next song the prepared mix measured (null: it measured none). */
     private var preparedNext: String? = null
@@ -208,10 +234,12 @@ internal class Crossfader(
             if (reason == Player.DISCONTINUITY_REASON_SEEK || reason == Player.DISCONTINUITY_REASON_SKIP) {
                 stopRoll()
                 endFade(interrupted = true)
-                // A seek inside the same song keeps the tail; it rolls again at its moment.
                 if (newPosition.mediaItemIndex != oldPosition.mediaItemIndex) {
                     dropTail()
                     forgetMeasure()
+                } else {
+                    // A seek inside the same song keeps the tail: it waits for where the song is now.
+                    preparedBase?.let { park(CrossfadePlan.tailFromMs(it, newPosition.positionMs)) }
                 }
             }
         }
@@ -263,15 +291,15 @@ internal class Crossfader(
             hasNext = player.hasNextMediaItem(),
             repeatOne = repeatOne,
             blocked = blocked(),
-            ready = prepared?.let { CrossfadePlan.Ready(it, tailFrom, rolling) },
+            ready = prepared?.let { CrossfadePlan.Ready(preparedBase ?: it, tailFrom, rolling, it) },
             measuring = measureKey != null,
             measured = measured,
         )
         when (step) {
             CrossfadePlan.Step.Idle -> Unit
             CrossfadePlan.Step.Measure -> if (next != null && key != null) startMeasure(current, duration, next, fade, key)
-            is CrossfadePlan.Step.Prepare -> prepare(current, step.mix, position)
-            CrossfadePlan.Step.Roll -> roll()
+            is CrossfadePlan.Step.Prepare -> prepare(current, step.base, step.mix, step.fromMs)
+            is CrossfadePlan.Step.Roll -> roll(step.mix)
             is CrossfadePlan.Step.Start -> begin(step.loop)
             CrossfadePlan.Step.Cancel -> {
                 stopRoll()
@@ -303,10 +331,9 @@ internal class Crossfader(
         measured = null
     }
 
-    private fun prepare(item: MediaItem, mix: Mix, positionMs: Long) {
+    private fun prepare(item: MediaItem, base: Mix, mix: Mix, from: Long) {
         dropTail()
         val t = runCatching { newTail() }.getOrNull() ?: return
-        val from = CrossfadePlan.tailFromMs(mix, positionMs)
         // Shaped before any of its audio is made: silent until the handover.
         t.shaper.hold(mix.outgoing())
         t.player.setAudioSessionId(player.audioSessionId)
@@ -317,15 +344,33 @@ internal class Crossfader(
         tail = t
         tailFrom = from
         preparedFor = item.mediaId
+        preparedBase = base
         preparedMix = mix
         // A plain mix (nothing measured) holds whatever comes next.
-        preparedNext = if (mix == measured) measureNext else null
+        preparedNext = if (base == measured) measureNext else null
     }
 
-    /** The tail starts, silent; the main player will go quiet at the handover, by its own audio. */
-    private fun roll() {
+    /**
+     * The tail waits at [fromMs], paused and silent, for a roll from there. Its seek lets go of
+     * the audio it had made ahead, shaped for a roll from somewhere else.
+     */
+    private fun park(fromMs: Long) {
         val t = tail ?: return
-        val mix = preparedMix ?: return
+        val mix = CrossfadePlan.fit(preparedBase ?: return, fromMs)
+        t.shaper.hold(mix.outgoing())
+        t.player.seekTo(fromMs)
+        tailFrom = fromMs
+        preparedMix = mix
+    }
+
+    /** The tail starts, silent; the main player will go quiet at [mix]'s handover, by its own audio. */
+    private fun roll(mix: Mix) {
+        val t = tail ?: return
+        // The fade as it goes for a roll from here (later than it was readied for, when it comes late).
+        if (mix != preparedMix) {
+            t.shaper.hold(mix.outgoing())
+            preparedMix = mix
+        }
         // Far from where the main player is (it came in late): near it, the rest is [TailSync]'s.
         val pos = player.currentPosition
         if (abs(t.player.currentPosition - pos) > TailSync.JUMP_OVER_MS) t.player.seekTo(pos + TailSync.JUMP_LEAD_MS)
@@ -367,7 +412,7 @@ internal class Crossfader(
         tail?.player?.let {
             it.pause()
             it.setPlaybackSpeed(1f)
-            tailFrom = it.currentPosition
+            park(it.currentPosition)
         }
     }
 
@@ -396,6 +441,7 @@ internal class Crossfader(
             ourSkip = false
         }
         preparedFor = null
+        preparedBase = null
         preparedMix = null
         preparedNext = null
         forgetMeasure()
@@ -425,6 +471,7 @@ internal class Crossfader(
         tail?.let { runCatching { it.player.stop(); it.player.release() } }
         tail = null
         preparedFor = null
+        preparedBase = null
         preparedMix = null
         preparedNext = null
     }

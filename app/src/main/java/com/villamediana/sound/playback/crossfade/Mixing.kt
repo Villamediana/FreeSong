@@ -42,6 +42,16 @@ data class Mix(
 
     fun incoming() = FadeShape(FadeShape.Role.IN, inStartMs * 1_000, fadeMs * 1_000, inMatchDb)
 
+    /**
+     * The same fade starting no earlier than [startMs] and ending where it did (so it is shorter),
+     * though never left shorter than [minFadeMs] (or than it already was).
+     */
+    fun notBefore(startMs: Long, minFadeMs: Long): Mix {
+        val end = fadeStartMs + fadeMs
+        val start = min(startMs, end - min(minFadeMs, fadeMs))
+        return if (start <= fadeStartMs) this else copy(fadeStartMs = start, fadeMs = end - start)
+    }
+
     /** The next song isn't the one measured any more (the queue changed): only the end of this one holds. */
     fun withoutIncoming() = copy(inStartMs = 0, inMatchDb = 0f, outMatchDb = 0f)
 }

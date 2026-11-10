@@ -5,7 +5,7 @@ import androidx.media3.common.MediaItem
 import com.villamediana.sound.playback.Crossfader
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.async
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -25,10 +25,10 @@ internal class CrossfadeMeasure(
 
     override fun start(current: MediaItem, durationMs: Long, next: MediaItem, fadeMs: Long, done: (Mix) -> Unit): () -> Unit {
         val job = scope.launch(Dispatchers.IO) {
-            val out = end(current, durationMs)
-            coroutineContext.ensureActive()
-            val inc = start(next)
-            val mix = Mixing.mix(fadeMs, durationMs, out, inc)
+            // Both at once: a measure asked for late (a seek near the end of a song never heard) comes sooner.
+            val out = async { end(current, durationMs) }
+            val inc = async { start(next) }
+            val mix = Mixing.mix(fadeMs, durationMs, out.await(), inc.await())
             withContext(Dispatchers.Main) { if (isActive) done(mix) }
         }
         return { job.cancel() }
