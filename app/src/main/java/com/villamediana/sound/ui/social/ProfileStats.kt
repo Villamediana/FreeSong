@@ -39,7 +39,9 @@ import com.villamediana.sound.R
 import com.villamediana.sound.SoundApplication
 import com.villamediana.sound.social.NumPeriod
 import com.villamediana.sound.social.NumbersOf
+import com.villamediana.sound.social.SongRef
 import com.villamediana.sound.stats.ListeningStatsMaker
+import com.villamediana.sound.stats.Recaps
 import com.villamediana.sound.stats.PartOfDay
 import com.villamediana.sound.stats.RecapStoryPlan
 import com.villamediana.sound.stats.StatsPeriod
@@ -61,14 +63,23 @@ import java.time.DayOfWeek
 import java.time.format.TextStyle
 import java.util.Locale
 
-/** Your numbers of this month, worked out on the phone (only while the profile is open). */
+/** Your page as it stands now: this month's numbers and the all-time "Mais ouvidas". */
+data class ProfileNow(val month: NumPeriod, val top: List<SongRef>)
+
+/**
+ * Your numbers, worked out on the phone from the whole history (only while the profile is open): a
+ * song heard shows here at once — the same reckoning friends get, without waiting for the relay.
+ */
 class ProfileStatsViewModel : ViewModel() {
     private val graph = SoundApplication.graph
-    private val from = ListeningStatsMaker.start(StatsPeriod.MONTH, System.currentTimeMillis())
 
-    val stats: StateFlow<NumPeriod?> =
-        combine(graph.library.playEventsSince(from), graph.library.tracks, graph.library.onlinePlaysSince(from)) { events, tracks, online ->
-            NumbersOf.period(ListeningStatsMaker.build(StatsPeriod.MONTH, events, tracks.associateBy { it.id }, online, System.currentTimeMillis()), forFriends = false)
+    val stats: StateFlow<ProfileNow?> =
+        combine(graph.library.playEventsSince(0), graph.library.tracks, graph.library.onlinePlaysSince(0)) { events, tracks, online ->
+            val byId = tracks.associateBy { it.id }
+            ProfileNow(
+                month = NumbersOf.period(ListeningStatsMaker.build(StatsPeriod.MONTH, events, byId, online, System.currentTimeMillis()), forFriends = false),
+                top = NumbersOf.top(Recaps.allTime(events, byId, online)),
+            )
         }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 }
 
@@ -128,10 +139,10 @@ internal fun PersonArtists(data: NumPeriod, firstName: String?) {
         ) {
             items(data.top, key = { it.name.lowercase() }) { a ->
                 Column(
-                    Modifier.width(96.dp).clip(RoundedCornerShape(14.dp)).clickable { nav.openArtist(a.name) },
+                    Modifier.width(96.dp).clip(RoundedCornerShape(14.dp)).clickable { nav.openArtist(a.name, exact = true) },
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    ArtistPhoto(a.name, a.cover, Modifier.size(96.dp))
+                    ArtistPhoto(a.name, a.cover, Modifier.size(96.dp), exact = true)
                     Spacer(Modifier.height(8.dp))
                     Text(a.name, style = MaterialTheme.typography.titleSmall, color = SoundColors.Text, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
                     Text(formatLongDuration(a.minutes * 60_000L), style = MaterialTheme.typography.bodySmall, color = SoundColors.TextMuted, maxLines = 1)

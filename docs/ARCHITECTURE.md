@@ -502,3 +502,25 @@ some com o tempo; coração segura a música; ajuste fino só nas constantes do 
 
 Ficou de fora, de propósito: sugerir pelo que toca **perto de outros usuários**. Pra isso o
 servidor teria que saber onde cada celular está — e hoje ele não sabe nem guarda nada disso.
+
+## Números do perfil fiéis e ao vivo (1.27.0 + relay 1.6.1, 2026-11-10)
+
+Miguel: os números estavam inflados e "Mais ouvidas" não atualizava. O que mudou em `stats/Recap.kt`:
+
+- **Músicas e artistas contam só o que foi ouvido de verdade**: uma música entra quando teve ao
+  menos uma escuta não pulada (`listenOutcome`: menos de 30 s ou de 1/3 é pulo). Antes, 2 s de uma
+  música ao passar pelo rádio já contavam música e artista. Os **minutos** seguem somando tudo que tocou.
+- **Artistas por tempo** (é o tempo que aparece embaixo de cada um); músicas por número de escutas
+  (é o que a retrospectiva mostra).
+- **Duplas não se partem nos números**: `creditedArtist` corta só em `,`, `feat.`, `ft.` e ` x `;
+  "Henrique & Juliano" deixou de virar "Henrique". `artistKey` junta grafias ("&" = "e" = "and" =
+  "y", sem acento, sem caixa) e o artista leva o nome da grafia mais ouvida. O resto do app segue com
+  `mainArtist` (crédito compartilhado abre o artista principal); os artistas do perfil abrem e
+  buscam a foto pelo nome exato (`openArtist(exact = true)`, `ArtistPhoto(exact = true)`).
+- **Ao vivo**: o seu perfil calcula "Mais ouvidas" e o mês no celular a partir do histórico
+  inteiro (`ProfileStatsViewModel`, `Recaps.allTime`); antes "Mais ouvidas" vinha do relay e só
+  mudava quando o app voltava pra tela. `SocialHub` manda os números 20 s depois de cada escuta
+  gravada (`LibraryRepository.lastPlayedAt`), em segundo plano também, um envio por vez (`statsLock`).
+  O relay 1.6.1 avisa os amigos com o app aberto (evento `profile`) quando os números mudam.
+- Lista de amigos: tocar na foto abre o perfil do amigo.
+

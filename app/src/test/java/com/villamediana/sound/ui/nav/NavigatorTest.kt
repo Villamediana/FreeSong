@@ -144,6 +144,14 @@ class NavigatorTest {
     }
 
     @Test
+    fun aDuoFromTheProfileNumbersOpensWhole() {
+        setUp()
+        nav { openArtist("Henrique & Juliano", exact = true) }
+        val route = controller.currentBackStackEntry!!.toRoute<RemoteCollectionRoute>()
+        assertEquals("Henrique & Juliano", route.title)
+    }
+
+    @Test
     fun offlineAnArtistOpensTheirSongsOnThePhone() {
         setUp()
         online = false

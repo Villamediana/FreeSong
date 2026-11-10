@@ -429,8 +429,8 @@ internal fun RequestRow(r: FriendRequest, onAccept: () -> Unit, onDecline: () ->
 }
 
 /**
- * A friend: photo, name and the last message (or "escrevendo…"). A tap opens the conversation; on
- * the side, their page and the conversation with how many messages wait.
+ * A friend: photo, name and the last message (or "escrevendo…"). A tap opens the conversation, a tap
+ * on the photo their page; on the side, their page and the conversation with how many messages wait.
  */
 @Composable
 internal fun FriendRow(line: FriendLine, onChat: () -> Unit, onProfile: () -> Unit) {
@@ -439,7 +439,7 @@ internal fun FriendRow(line: FriendLine, onChat: () -> Unit, onProfile: () -> Un
         Modifier.fillMaxWidth().clickable(onClick = onChat).height(76.dp).padding(start = Dimens.Gutter, end = Dimens.Gutter - 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        ProfileAvatar(f, 54.dp)
+        ProfileAvatar(f, 54.dp, Modifier.clip(CircleShape).clickable(onClickLabel = stringResource(R.string.social_open_profile, f.name), onClick = onProfile))
         Spacer(Modifier.width(14.dp))
         val last = line.last
         Column(Modifier.weight(1f)) {

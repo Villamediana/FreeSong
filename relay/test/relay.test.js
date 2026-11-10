@@ -443,6 +443,26 @@ test('nome ou foto mudou: amigos, quem está na jam e os outros celulares veem n
   for (const app of [appB, appC, appD, appA2]) app.close();
 });
 
+test('números novos: amigos com o app aberto veem na hora, os mesmos números não avisam', async () => {
+  const a = await person();
+  const b = await person();
+  const d = await person();
+  await friends(a, b);
+  const appB = await online(b);
+  const appD = await online(d);
+  const numbers = { month: { minutes: 42, songs: 3, artists: 2, weekdays: [0, 0, 0, 0, 0, 0, 42], top: [] } };
+  await api('PUT', '/v1/me/stats', { token: a.token, body: { listenedMs: 2_520_000, top: [track(1)], numbers } });
+  const seen = await appB.next((e) => e.t === 'profile');
+  assert.equal(seen.user.id, a.id);
+  assert.equal(seen.user.listenedMs, 2_520_000);
+  assert.equal(seen.user.top.length, 1);
+  await api('PUT', '/v1/me/stats', { token: a.token, body: { listenedMs: 2_520_000, top: [track(1)], numbers } });
+  await tick();
+  assert.equal(appB.events.filter((e) => e.t === 'profile').length, 0);
+  assert.equal(appD.events.filter((e) => e.t === 'profile').length, 0);
+  for (const app of [appB, appD]) app.close();
+});
+
 test('entrega não buscada some depois de 14 dias', async () => {
   const a = await person();
   const b = await person();

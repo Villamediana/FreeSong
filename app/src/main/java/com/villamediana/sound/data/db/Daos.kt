@@ -191,6 +191,9 @@ interface PlayEventDao {
     @Query("SELECT * FROM play_events WHERE playedAt >= :since ORDER BY playedAt DESC")
     suspend fun since(since: Long): List<PlayEvent>
 
+    @Query("SELECT MAX(playedAt) FROM play_events")
+    fun observeLastPlayedAt(): Flow<Long?>
+
     @Query("DELETE FROM play_events")
     suspend fun clear()
 
@@ -283,6 +286,9 @@ interface OnlinePlayDao {
 
     @Query("SELECT * FROM online_plays WHERE playedAt >= :since ORDER BY playedAt DESC")
     fun observeSince(since: Long): Flow<List<OnlinePlay>>
+
+    @Query("SELECT MAX(playedAt) FROM online_plays")
+    fun observeLastPlayedAt(): Flow<Long?>
 
     @Query("DELETE FROM online_plays")
     suspend fun clear()

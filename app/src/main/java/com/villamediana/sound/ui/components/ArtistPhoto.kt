@@ -29,10 +29,10 @@ class ArtistPhotos(private val discover: DiscoverRepository, private val scope: 
     private val asked = java.util.Collections.synchronizedSet(HashSet<String>())
 
     /** The picture known now, without waiting. */
-    fun peek(name: String): String? = key(name).let { k -> _found.value[k] ?: discover.peekArtist(k)?.thumbnailUrl }
+    fun peek(name: String, exact: Boolean = false): String? = key(name, exact).let { k -> _found.value[k] ?: discover.peekArtist(k)?.thumbnailUrl }
 
-    fun request(name: String) {
-        val k = key(name)
+    fun request(name: String, exact: Boolean = false) {
+        val k = key(name, exact)
         if (k.isEmpty() || _found.value.containsKey(k) || !asked.add(k)) return
         scope.launch {
             val photo = discover.artist(k)?.thumbnailUrl
@@ -40,23 +40,24 @@ class ArtistPhotos(private val discover: DiscoverRepository, private val scope: 
         }
     }
 
-    private fun key(name: String) = Recaps.mainArtist(name).trim()
+    /** [exact]: [name] is already one artist (a duo the numbers credit whole), not a credit to cut down. */
+    internal fun key(name: String, exact: Boolean = false) = if (exact) name.trim() else Recaps.mainArtist(name).trim()
 }
 
 /** The app's [ArtistPhotos] (none in tests and previews: the album cover). */
 val LocalArtistPhotos = staticCompositionLocalOf<ArtistPhotos?> { null }
 
-/** The artist's own picture in a circle; the album cover [fallback] until it is found. */
+/** The artist's own picture in a circle; the album cover [fallback] until it is found. [exact]: see [ArtistPhotos.key]. */
 @Composable
-fun ArtistPhoto(name: String, fallback: String?, modifier: Modifier = Modifier) {
+fun ArtistPhoto(name: String, fallback: String?, modifier: Modifier = Modifier, exact: Boolean = false) {
     val photos = LocalArtistPhotos.current
     val photo = if (photos == null) {
         null
     } else {
-        LaunchedEffect(name) { photos.request(name) }
-        val k = remember(name) { Recaps.mainArtist(name).trim() }
-        val found by remember(photos, k) { photos.found.map { it[k] }.distinctUntilChanged() }.collectAsState(initial = photos.peek(name))
-        found ?: photos.peek(name)
+        LaunchedEffect(name, exact) { photos.request(name, exact) }
+        val k = remember(name, exact) { photos.key(name, exact) }
+        val found by remember(photos, k) { photos.found.map { it[k] }.distinctUntilChanged() }.collectAsState(initial = photos.peek(name, exact))
+        found ?: photos.peek(name, exact)
     }
     Cover(photo ?: fallback, modifier, seed = name, shape = CircleShape)
 }

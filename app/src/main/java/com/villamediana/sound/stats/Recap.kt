@@ -75,20 +75,46 @@ object Recaps {
         return start until end
     }
 
-    /** "A, B & C feat. D" → "A": rankings go by the main artist. */
+    /** All the history at once: the profile's "Mais ouvidas" and hours (yours and what friends see). */
+    fun allTime(events: List<PlayEvent>, tracksById: Map<Long, Track>, online: List<OnlinePlay>, zone: ZoneId = ZoneId.systemDefault()): Recap =
+        build(0, events, tracksById, online, zone, span = Long.MIN_VALUE until Long.MAX_VALUE)
+
+    /** "A, B & C feat. D" → "A": the artist a tap opens (a shared credit opens the main artist). */
     fun mainArtist(artist: String): String =
         artist.split(",", " & ", " feat.", " feat ", " ft.", " x ", " e ", " y ").first().trim().ifEmpty { artist.trim() }
+
+    /**
+     * "A, B feat. C" → "A": the artist the numbers credit. "&", "e" and "y" stay — they name duos
+     * ("Henrique & Juliano", "Jesse y Joy"), whose time would otherwise go to "Henrique".
+     */
+    fun creditedArtist(artist: String): String =
+        artist.split(",", " feat.", " feat ", " ft.", " ft ", " x ").first().trim().ifEmpty { artist.trim() }
+
+    /** The same artist however the source writes it: "Henrique & Juliano" = "Henrique e Juliano" = "henrique and juliano". */
+    fun artistKey(name: String): String =
+        java.text.Normalizer.normalize(name.lowercase(), java.text.Normalizer.Form.NFD)
+            .replace(MARKS, "")
+            .replace(JOINS, " & ")
+            .replace(SPACES, " ")
+            .trim()
+
+    private val MARKS = Regex("\\p{Mn}+")
+    private val JOINS = Regex("\\s+(?:&|e|and|y|\\+)\\s+")
+    private val SPACES = Regex("\\s+")
 
     private class Acc(var title: String, var artist: String, var cover: String?, var track: Track?, var remote: RemoteTrack?) {
         var plays = 0
         var listened = 0L
     }
 
-    private class ArtistAcc(val name: String) {
+    private class ArtistAcc {
         var plays = 0
         var listened = 0L
         var cover: String? = null
         var coverPlays = -1
+        /** How each spelling was heard: the artist is named by the most heard one. */
+        val names = HashMap<String, Long>()
+        val name: String get() = names.maxByOrNull { it.value }!!.key
     }
 
     fun build(
@@ -172,11 +198,12 @@ object Recaps {
 
         val artists = HashMap<String, ArtistAcc>()
         for (a in songs.values) {
-            val name = mainArtist(a.artist)
+            val name = creditedArtist(a.artist)
             if (name.isEmpty()) continue
-            val acc = artists.getOrPut(name.lowercase()) { ArtistAcc(name) }
+            val acc = artists.getOrPut(artistKey(name)) { ArtistAcc() }
             acc.plays += a.plays
             acc.listened += a.listened
+            acc.names.merge(name, a.listened, Long::plus)
             // The artist's face: the cover of their most played song.
             if (a.cover != null && a.plays > acc.coverPlays) {
                 acc.cover = a.cover
@@ -189,9 +216,10 @@ object Recaps {
             .sortedWith(compareByDescending<Map.Entry<String, Acc>> { it.value.plays }.thenByDescending { it.value.listened })
             .take(TOP)
             .map { (key, a) -> RecapSong(key, a.title, a.artist, a.cover, a.plays, a.listened, a.track, a.remote) }
+        // Artists show their time, so time ranks them; songs show how many times, so plays rank them.
         val topArtists = artists.values
             .filter { it.plays > 0 }
-            .sortedWith(compareByDescending<ArtistAcc> { it.plays }.thenByDescending { it.listened })
+            .sortedWith(compareByDescending<ArtistAcc> { it.listened }.thenByDescending { it.plays })
             .take(TOP)
             .map { RecapArtist(it.name, it.cover, it.plays, it.listened) }
 
@@ -199,8 +227,9 @@ object Recaps {
             year = year,
             listenedMs = total,
             plays = plays,
-            songs = songs.values.count { it.listened > 0 },
-            artists = artists.size,
+            // Heard, not skipped past: a song (or an artist) counts once it was listened to for real.
+            songs = songs.values.count { it.plays > 0 },
+            artists = artists.values.count { it.plays > 0 },
             topSongs = ranked,
             topArtists = topArtists,
             topGenre = genres.maxByOrNull { it.value }?.key,

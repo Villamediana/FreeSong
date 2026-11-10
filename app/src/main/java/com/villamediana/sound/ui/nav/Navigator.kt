@@ -70,11 +70,12 @@ class Navigator(
 
     /**
      * The artist's profile (the online page with all their songs), from anywhere an artist is
-     * tapped. Offline, their songs on the phone.
+     * tapped. Offline, their songs on the phone. [exact]: [name] is already one artist (the
+     * profile's numbers credit duos whole) and isn't cut down to the main one.
      */
-    fun openArtist(name: String, picture: String? = null) {
+    fun openArtist(name: String, picture: String? = null, exact: Boolean = false) {
         if (!isOnline()) return openLocalArtist(name)
-        val main = Recaps.mainArtist(name)
+        val main = if (exact) name.trim() else Recaps.mainArtist(name)
         findArtist(main, picture ?: runCatching { SoundApplication.graph.discover.peekArtist(main)?.thumbnailUrl }.getOrNull())
     }
 
