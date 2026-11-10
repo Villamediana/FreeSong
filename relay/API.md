@@ -1,7 +1,17 @@
-# FreeSong relay: API (v1.6.0)
+# FreeSong relay: API (v1.6.2)
 
 Contrato entre o app e o servidor. Endereço: `https://freesong.simplyonegoal.com`.
 Instalação do servidor: [DEPLOY.md](DEPLOY.md).
+
+## Novidades da 1.6.2
+
+**Jam mais firme**: quem sai recebe `jam.ended` na hora (também nos outros celulares da pessoa); quem
+está numa jam sem criá-la e fica 15 min sem conectar sai sozinho (os outros recebem `jam` com a
+lista certa).
+
+## Novidades da 1.6.1
+
+Números novos (`PUT /v1/me/stats` com algo diferente) chegam aos amigos conectados pelo evento `profile`.
 
 ## Novidades da 1.6.0
 
@@ -215,7 +225,7 @@ Do servidor pro app:
 | `friend.removed` | `userId` | desfizeram a amizade (ou apagaram o perfil) |
 | `jam.invite` | `jam, from` | convite pra jam |
 | `jam` | `jam, rejected?` | a jam mudou (ou sua mudança foi recusada: `stale`/`invalid`) |
-| `jam.ended` | `jamId` | a jam acabou (ou você não está nela) |
+| `jam.ended` | `jamId` | a jam acabou, você saiu dela (por este ou outro celular, ou por sumir 15 min) ou não está nela |
 | `typing` | `from, on` | um amigo começou (`on: true`) ou parou de escrever pra você |
 | `profile` | `user` | nome ou foto de um amigo (perfil completo), de alguém da sua jam (público) ou seu (outro celular) mudou; também quando os números de um amigo mudam (`PUT /v1/me/stats` com algo novo, só para os amigos) |
 

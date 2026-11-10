@@ -579,6 +579,9 @@ test('jam: alguém sai e segue; quem criou sai ou encerra e acaba pra todos', as
   await api('POST', `/v1/jams/${jam.id}/leave`, { token: c.token });
   const left = await appB.next((e) => e.t === 'jam' && e.jam.members.length === 2);
   assert.ok(!left.jam.members.some((m) => m.id === c.id));
+  // Quem saiu também fica sabendo na hora (os outros celulares dele, e este se a resposta se perdeu).
+  await appC.next((e) => e.t === 'jam.ended' && e.jamId === jam.id);
+  assert.equal((await api('GET', '/v1/jams/current', { token: c.token })).json.jam, null);
   assert.equal((await api('DELETE', `/v1/jams/${jam.id}`, { token: b.token })).status, 403);
   await api('POST', `/v1/jams/${jam.id}/leave`, { token: a.token });
   await appB.next((e) => e.t === 'jam.ended' && e.jamId === jam.id);
@@ -609,6 +612,36 @@ test('jam: entrar numa nova sai da anterior; jam sem ninguém conectado acaba so
   assert.ok(!idleBefore.includes(j1.id));
   now += IDLE_END_MS;
   assert.ok(relay.jams.idle(() => false).some((j) => j.id === j1.id));
+});
+
+test('jam: quem some sem sair deixa a jam depois de 15 min; quem criou não', async () => {
+  const a = await person();
+  const b = await person();
+  const c = await person();
+  await friends(a, b);
+  await friends(a, c);
+  const appA = await online(a);
+  const appC = await online(c);
+  const jam = (await api('POST', '/v1/jams', { token: a.token, body: { invite: [b.id, c.id] } })).json.jam;
+  await api('POST', `/v1/jams/${jam.id}/join`, { token: b.token });
+  await api('POST', `/v1/jams/${jam.id}/join`, { token: c.token });
+  // b nunca conectou (celular sem rede): ainda está, até passar o tempo.
+  relay.sweepJams();
+  assert.equal(relay.jams.get(jam.id).members.has(b.id), true);
+  now += IDLE_END_MS;
+  relay.sweepJams();
+  assert.equal(relay.jams.get(jam.id).members.has(b.id), false);
+  const after = await appA.next((e) => e.t === 'jam' && !e.jam.members.some((m) => m.id === b.id));
+  assert.deepEqual(after.jam.members.map((m) => m.id).sort(), [a.id, c.id].sort());
+  assert.equal((await api('GET', '/v1/jams/current', { token: b.token })).json.jam, null);
+  // Quem criou sumiu, mas c segue conectado: a jam continua com os dois.
+  appA.close();
+  await tick();
+  now += IDLE_END_MS;
+  relay.sweepJams();
+  assert.ok(relay.jams.get(jam.id));
+  assert.equal(relay.jams.get(jam.id).members.has(a.id), true);
+  appC.close();
 });
 
 // -------------------------------------------------------------------- segurança e dados

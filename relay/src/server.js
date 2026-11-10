@@ -20,7 +20,7 @@ import { cleanNumbers } from './numbers.js';
 import { cleanJpeg } from './jpeg.js';
 import { cleanDisplayName, cleanMessage, normalizeUsername, randomIdentity } from './names.js';
 
-export const VERSION = '1.6.1';
+export const VERSION = '1.6.2';
 const JSON_LIMIT = 64 * 1024;
 const AVATAR_LIMIT = 600 * 1024;
 /** Mensagem de voz: AAC em MP4 (o app grava ~24 kbps, até 5 min ≈ 0,9 MB). */
@@ -228,7 +228,22 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
   /** Depois de alguém sair: a jam segue (atualiza quem ficou) ou acabou (avisa todos). */
   function afterLeave({ jam, ended }, leaver) {
     if (ended) jamEnded(jam, [leaver]);
-    else broadcastJam(jam);
+    else {
+      broadcastJam(jam);
+      // Quem saiu também fica sabendo: os outros celulares da pessoa, e este, se a resposta se perdeu.
+      emit(leaver, { t: 'jam.ended', jamId: jam.id });
+    }
+  }
+
+  /** Jams sem ninguém conectado acabam; quem sumiu sem sair deixa a jam (a lista fica certa pra quem ficou). */
+  function sweepJams() {
+    for (const jam of jams.idle(isOnline)) {
+      jams.end(jam);
+      jamEnded(jam);
+    }
+    for (const { jam, userId } of jams.gone(isOnline)) {
+      if (!jam.ended && jam.members.has(userId)) afterLeave(jams.leave(jam, userId), userId);
+    }
   }
 
   /**
@@ -980,10 +995,7 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
           ws.ping();
         }
       }
-      for (const jam of jams.idle(isOnline)) {
-        jams.end(jam);
-        jamEnded(jam);
-      }
+      sweepJams();
       store.expireDeliveries(clock() - DELIVERY_TTL_MS);
       for (const limiter of Object.values(limits)) limiter.sweep();
     } catch (e) {
@@ -1007,7 +1019,7 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
     });
   }
 
-  return { server, store, jams, close };
+  return { server, store, jams, sweepJams, close };
 }
 
 // node src/server.js

@@ -37,7 +37,17 @@ class JamSessionTest {
         var offline = false
         var left = 0
         var started: JamState? = null
-        override fun currentJam() = current
+        /** When set, a look at the relay waits here (to land after something else happened). */
+        var lookGate: java.util.concurrent.CountDownLatch? = null
+        @Volatile var looking = false
+        var looks = 0
+        override fun currentJam(): CurrentJam {
+            looks++
+            val answer = current
+            looking = true
+            lookGate?.await()
+            return answer
+        }
         override fun startJam(invite: List<String>, state: JamState?): Jam {
             started = state
             return Jam("j1", "me", members = listOf(Profile("me", "eu", "Eu")), state = (state ?: JamState()).copy(rev = 1, updatedAt = serverNow))
@@ -48,10 +58,12 @@ class JamSessionTest {
         override fun leaveJam(jamId: String) {
             left++
             if (offline) throw java.io.IOException("offline")
+            if (current.jam?.id == jamId) current = current.copy(jam = null)
         }
         override fun endJam(jamId: String) {
             left++
             if (offline) throw java.io.IOException("offline")
+            if (current.jam?.id == jamId) current = current.copy(jam = null)
         }
         /** The live line is down (changes go over HTTP), and the relay turns them down with [refusal]. */
         var lineDown = false
@@ -191,6 +203,53 @@ class JamSessionTest {
         assertNull(session.jam.value)
         assertNull(gate)
         assertEquals(1, relay.left)
+    }
+
+    @Test
+    fun aLeaveTheRelayDidNotGetIsSentAgainAndTheJamNeverComesBack() {
+        runBlocking { session.join(JamInvite(Jam("j9", "host"), Profile("host", "h", "Host"))) }
+        relay.offline = true
+        assertTrue(runBlocking { session.leave() }.isFailure)
+        // Back online, the relay still has this phone in the jam: the next look leaves it again first.
+        relay.current = CurrentJam(jam = Jam("j9", "host", state = JamState(q, 0, 0, true, serverNow, rev = 2)))
+        runBlocking { session.refresh() }
+        assertNull(session.jam.value)
+        assertNull(gate)
+        // Still offline: tried, and still out here.
+        assertEquals(2, relay.left)
+        relay.offline = false
+        runBlocking { session.refresh() }
+        assertEquals(3, relay.left)
+        assertNull(session.jam.value)
+        // Taken: the next look doesn't send it again.
+        runBlocking { session.refresh() }
+        assertEquals(3, relay.left)
+    }
+
+    @Test
+    fun aLookThatBeganBeforeLeavingDoesNotPutThisPhoneBackInTheJam() {
+        runBlocking { session.join(JamInvite(Jam("j9", "host"), Profile("host", "h", "Host"))) }
+        // The app came to the screen: a look at the relay is on its way, and it will say "in j9".
+        relay.current = CurrentJam(jam = Jam("j9", "host", state = JamState(q, 0, 0, true, serverNow, rev = 2)))
+        val gateLatch = java.util.concurrent.CountDownLatch(1)
+        relay.lookGate = gateLatch
+        val look = Thread { runBlocking { session.refresh() } }.apply { start() }
+        waitFor { relay.looking }
+        // The person leaves meanwhile (and the relay takes it).
+        assertTrue(runBlocking { session.leave() }.isSuccess)
+        gateLatch.countDown()
+        look.join(3_000)
+        Thread.sleep(100)
+        assertNull(session.jam.value)
+        assertNull(gate)
+    }
+
+    @Test
+    fun leavingFromASheetThatClosesStillLeaves() {
+        runBlocking { session.join(JamInvite(Jam("j9", "host"), Profile("host", "h", "Host"))) }
+        session.leaveNow()
+        waitFor { session.jam.value == null && relay.left == 1 }
+        assertNull(gate)
     }
 
     @Test

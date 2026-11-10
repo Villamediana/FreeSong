@@ -41,7 +41,6 @@ import com.villamediana.sound.social.NumPeriod
 import com.villamediana.sound.social.NumbersOf
 import com.villamediana.sound.social.SongRef
 import com.villamediana.sound.stats.ListeningStatsMaker
-import com.villamediana.sound.stats.Recaps
 import com.villamediana.sound.stats.PartOfDay
 import com.villamediana.sound.stats.RecapStoryPlan
 import com.villamediana.sound.stats.StatsPeriod
@@ -63,23 +62,22 @@ import java.time.DayOfWeek
 import java.time.format.TextStyle
 import java.util.Locale
 
-/** Your page as it stands now: this month's numbers and the all-time "Mais ouvidas". */
+/** Your page as it stands now: this month's numbers and "Mais ouvidas" (of the month too). */
 data class ProfileNow(val month: NumPeriod, val top: List<SongRef>)
 
 /**
- * Your numbers, worked out on the phone from the whole history (only while the profile is open): a
- * song heard shows here at once — the same reckoning friends get, without waiting for the relay.
+ * Your numbers of the month, worked out on the phone (only while the profile is open): a song heard
+ * shows here at once — the same reckoning friends get, without waiting for the relay.
  */
 class ProfileStatsViewModel : ViewModel() {
     private val graph = SoundApplication.graph
 
+    private fun monthStart() = ListeningStatsMaker.start(StatsPeriod.MONTH, System.currentTimeMillis())
+
     val stats: StateFlow<ProfileNow?> =
-        combine(graph.library.playEventsSince(0), graph.library.tracks, graph.library.onlinePlaysSince(0)) { events, tracks, online ->
-            val byId = tracks.associateBy { it.id }
-            ProfileNow(
-                month = NumbersOf.period(ListeningStatsMaker.build(StatsPeriod.MONTH, events, byId, online, System.currentTimeMillis()), forFriends = false),
-                top = NumbersOf.top(Recaps.allTime(events, byId, online)),
-            )
+        combine(graph.library.playEventsSince(monthStart()), graph.library.tracks, graph.library.onlinePlaysSince(monthStart())) { events, tracks, online ->
+            val month = ListeningStatsMaker.build(StatsPeriod.MONTH, events, tracks.associateBy { it.id }, online, System.currentTimeMillis())
+            ProfileNow(month = NumbersOf.period(month, forFriends = false), top = NumbersOf.top(month.recap))
         }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 }
 

@@ -111,8 +111,15 @@ object JamSync {
     fun move(jam: JamState, from: Int, to: Int): JamState? {
         if (from !in jam.queue.indices || to !in jam.queue.indices || from == to) return null
         val queue = jam.queue.toMutableList().apply { add(to, removeAt(from)) }
-        val current = jam.queue[jam.index].videoId
-        return jam.copy(queue = queue, index = queue.indexOfFirst { it.videoId == current })
+        // Where the playing song went, by position: the same song twice in the queue (added again)
+        // would send everyone to the wrong copy if it were looked up by id.
+        val index = when {
+            from == jam.index -> to
+            from < jam.index && to >= jam.index -> jam.index - 1
+            from > jam.index && to <= jam.index -> jam.index + 1
+            else -> jam.index
+        }
+        return jam.copy(queue = queue, index = index)
     }
 
     /** "Aleatório" in a jam: the songs after the current one, shuffled for everyone. */

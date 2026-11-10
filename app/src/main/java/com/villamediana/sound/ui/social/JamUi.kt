@@ -116,7 +116,7 @@ fun JamInviteSheet(invite: JamInvite, onDone: () -> Unit) {
                     style = MaterialTheme.typography.labelLarge,
                     color = SoundColors.TextMuted,
                     modifier = Modifier.clip(CircleShape).clickable {
-                        scope.launch { hub.jam.decline(invite) }
+                        hub.jam.declineNow(invite)
                         onDone()
                     }.padding(horizontal = 18.dp, vertical = 10.dp),
                 )
@@ -178,7 +178,7 @@ fun JamSheet(onDismiss: () -> Unit) {
             tint = SoundColors.Danger,
             labelColor = SoundColors.Danger,
             onClick = {
-                scope.launch { hub.jam.leave() }
+                hub.jam.leaveNow()
                 onDismiss()
             },
         )

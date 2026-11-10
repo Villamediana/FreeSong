@@ -106,6 +106,22 @@ class JamSyncTest {
     }
 
     @Test
+    fun movingAroundASongThatIsInTheQueueTwiceKeepsTheOnePlaying() {
+        // 1, 2, [2 again — playing], 3: moving the 3 to the top must not send everyone to the first 2.
+        val s = JamState(queue = listOf(song(1), song(2), song(2), song(3)), index = 2)
+        val moved = JamSync.move(s, 3, 0)!!
+        assertEquals(ids(listOf(song(3), song(1), song(2), song(2))), ids(moved.queue))
+        assertEquals(3, moved.index)
+        // The playing one itself, moved: it goes where it was dropped.
+        assertEquals(0, JamSync.move(s, 2, 0)!!.index)
+        // From after it to before it, and from before it to after it.
+        assertEquals(3, JamSync.move(s, 3, 1)!!.index)
+        assertEquals(1, JamSync.move(s, 0, 3)!!.index)
+        // Both on the same side: it stays.
+        assertEquals(2, JamSync.move(s, 0, 1)!!.index)
+    }
+
+    @Test
     fun shuffleOnlyMixesWhatComesAfter() {
         val long = JamState(queue = (1..12).map { song(it) }, index = 3)
         val mixed = JamSync.shuffleRest(long, 42)

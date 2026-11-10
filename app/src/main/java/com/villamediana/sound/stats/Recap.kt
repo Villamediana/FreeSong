@@ -75,7 +75,7 @@ object Recaps {
         return start until end
     }
 
-    /** All the history at once: the profile's "Mais ouvidas" and hours (yours and what friends see). */
+    /** All the history at once: the profile's hours (yours and what friends see). */
     fun allTime(events: List<PlayEvent>, tracksById: Map<Long, Track>, online: List<OnlinePlay>, zone: ZoneId = ZoneId.systemDefault()): Recap =
         build(0, events, tracksById, online, zone, span = Long.MIN_VALUE until Long.MAX_VALUE)
 

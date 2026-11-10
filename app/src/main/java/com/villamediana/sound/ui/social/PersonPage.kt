@@ -84,7 +84,7 @@ import com.villamediana.sound.ui.theme.SoundColors
  * A person's page — yours or a friend's. Not an artist's page: a person is a card. At the top,
  * their card in their own color (sound waves rippling from a corner): the photo, the name, the @,
  * the hours listened set big and since when, and at its foot this month in three numbers. Under it
- * the page's buttons ("Mandar música" / "Jam", or yours), their five most heard as big covers with
+ * the page's buttons ("Mandar música" / "Jam", or yours), their five most heard of the month as big covers with
  * the rank over them ("Tocar" plays them), the month's artists, their rhythm lit in their color,
  * then [more]. [firstName] is null on your own page ("Seus artistas") and the friend's otherwise.
  */

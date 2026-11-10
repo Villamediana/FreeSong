@@ -483,22 +483,25 @@ class SocialHub(
     }
 
     /**
-     * For friends to see: hours listened and the five most heard (all time), and the profile's
-     * numbers of the month and of the year (totals only, worked out here).
+     * For friends to see: hours listened (all time), the five most heard of the month, and the
+     * profile's numbers of the month and of the year (totals only, worked out here).
      */
     suspend fun syncStats() = statsLock.withLock {
         if (!account.ready) return@withLock
-        val (recap, numbers) = withContext(Dispatchers.Default) {
+        val (hours, top, numbers) = withContext(Dispatchers.Default) {
             val events = library.playEventsListSince(0)
             val tracks = library.tracks.first().associateBy { it.id }
             val online = library.onlinePlaysListSince(0)
             val now = System.currentTimeMillis()
-            fun period(p: com.villamediana.sound.stats.StatsPeriod) =
-                NumbersOf.period(com.villamediana.sound.stats.ListeningStatsMaker.build(p, events, tracks, online, now))
-            Recaps.allTime(events, tracks, online) to
-                Numbers(month = period(com.villamediana.sound.stats.StatsPeriod.MONTH), year = period(com.villamediana.sound.stats.StatsPeriod.YEAR))
+            fun stats(p: com.villamediana.sound.stats.StatsPeriod) = com.villamediana.sound.stats.ListeningStatsMaker.build(p, events, tracks, online, now)
+            val month = stats(com.villamediana.sound.stats.StatsPeriod.MONTH)
+            Triple(
+                Recaps.allTime(events, tracks, online).listenedMs,
+                NumbersOf.top(month.recap),
+                Numbers(month = NumbersOf.period(month), year = NumbersOf.period(stats(com.villamediana.sound.stats.StatsPeriod.YEAR))),
+            )
         }
-        account.syncStats(recap.listenedMs + listenedBefore(), NumbersOf.top(recap), numbers)
+        account.syncStats(hours + listenedBefore(), top, numbers)
     }
 
     /** The foreground and a song just heard can ask at once: one goes out at a time. */
