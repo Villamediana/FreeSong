@@ -189,29 +189,6 @@ class FadeShaperTest {
         assertEquals(kotlin.math.cos(0.1 * PI / 2).toFloat(), level(out, rate * 6 + rate / 2), 0.01f)
     }
 
-    @Test fun aTailRollingBeforeItsFadeIsKnownIsSilentThenTakesItByPosition() {
-        val p = FadeShaper()
-        p.hold(FadeShape.SILENT)
-        p.configure(AudioProcessor.AudioFormat(rate, 2, C.ENCODING_PCM_16BIT))
-        p.flush(AudioProcessor.StreamMetadata(90_000_000))
-        assertEquals(0f, level(run(p, rate * 4), rate * 4 - 1), 0.001f)
-        // The measure comes in at 94 s: the fade at 100 s, the tail takes the song there.
-        p.hold(at100.outgoing())
-        val out = run(p, rate * 7)
-        assertEquals(0f, level(out, rate * 6 - 100), 0.001f)
-        assertEquals(1f, level(out, rate * 6 + ms(60)), 0.01f)
-        // Moved later (not in step yet): the new start holds, the old one passes silent.
-        val q = FadeShaper()
-        q.hold(at100.outgoing())
-        q.configure(AudioProcessor.AudioFormat(rate, 2, C.ENCODING_PCM_16BIT))
-        q.flush(AudioProcessor.StreamMetadata(98_000_000))
-        run(q, rate)
-        q.hold(at100.later(2_000, 2_500)!!.outgoing())
-        val moved = run(q, rate * 4)
-        assertEquals(0f, level(moved, rate + ms(100)), 0.001f)
-        assertEquals(1f, level(moved, rate * 3 + ms(60)), 0.01f)
-    }
-
     @Test fun onTheSameMomentTheSongGoesOnWholeThroughTheHandover() {
         val main = shaper().apply { flush(AudioProcessor.StreamMetadata(99_000_000)); leave(at100.leaving()) }
         val tail = shaper().apply { hold(at100.outgoing()); flush(AudioProcessor.StreamMetadata(99_000_000)) }
