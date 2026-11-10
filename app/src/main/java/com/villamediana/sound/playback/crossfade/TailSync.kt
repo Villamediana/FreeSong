@@ -10,7 +10,6 @@ import kotlin.math.abs
  * to a couple hundred ms. Handed over like that, a bit of the song would go missing — the blink
  * heard before the fade — or be heard twice. The tail is silent until the fade, so it can be put
  * right freely: a moment a little faster or slower, until both players say the same position.
- * Once there it is checked again every few seconds, and the last word is [lastOffsetMs].
  */
 class TailSync {
     sealed interface Action {
@@ -26,33 +25,22 @@ class TailSync {
     private enum class Phase { SETTLE, SAMPLE, NUDGE, DONE }
 
     private var phase = Phase.DONE
-    private var untilMs = Long.MAX_VALUE
-    private val samples = ArrayDeque<Long>()
-    private var looks = 0
+    private var untilMs = 0L
+    private val samples = ArrayList<Long>(SAMPLES)
 
-    /** Main player's position − tail's at the last steady measure (null: none since the start). */
-    var lastOffsetMs: Long? = null
+    /** Off by no more than [GOOD_MS] the last time it was measured. */
+    var inStep = false
         private set
 
     /** The tail just started (or moved): let its position settle, then measure. */
     fun start(nowMs: Long) {
-        lastOffsetMs = null
+        inStep = false
         settle(nowMs, SETTLE_START_MS)
     }
 
     fun stop() {
         phase = Phase.DONE
-        untilMs = Long.MAX_VALUE
         samples.clear()
-        lastOffsetMs = null
-    }
-
-    /** Measure again now (more time was given before the handover). */
-    fun again() {
-        if (phase != Phase.DONE || untilMs == Long.MAX_VALUE) return
-        phase = Phase.SAMPLE
-        samples.clear()
-        looks = 0
     }
 
     /** When to look again, at the latest: a nudge ends right on time. */
@@ -61,17 +49,11 @@ class TailSync {
 
     /**
      * One look. [offsetMs] = main player's position − tail's (positive: the tail is behind; null:
-     * not both playing); [toDecideMs] = how long until the handover is decided (all must be done by then).
+     * not both playing); [toHandoverMs] = how long until the fade starts.
      */
-    fun step(nowMs: Long, offsetMs: Long?, toDecideMs: Long): Action {
+    fun step(nowMs: Long, offsetMs: Long?, toHandoverMs: Long): Action {
         when (phase) {
-            Phase.DONE -> {
-                // A look again now and then, while there is time to act on it.
-                if (offsetMs == null || nowMs < untilMs || toDecideMs < SAMPLE_SPAN_MS) return Action.None
-                phase = Phase.SAMPLE
-                samples.clear()
-                looks = 0
-            }
+            Phase.DONE -> return Action.None
             Phase.NUDGE -> {
                 if (nowMs < untilMs && offsetMs != null) return Action.None
                 settle(nowMs, if (offsetMs == null) SETTLE_START_MS else SETTLE_NUDGE_MS)
@@ -85,38 +67,33 @@ class TailSync {
                 if (nowMs < untilMs) return Action.None
                 phase = Phase.SAMPLE
                 samples.clear()
-                looks = 0
             }
             Phase.SAMPLE -> if (offsetMs == null) {
                 settle(nowMs, SETTLE_START_MS)
                 return Action.None
             }
         }
-        samples.addLast(offsetMs!!)
-        looks++
-        if (samples.size > SAMPLES) samples.removeFirst()
+        samples += offsetMs!!
         if (samples.size < SAMPLES) return Action.None
-        val sorted = samples.sorted()
-        // Still moving (a position that hasn't settled yet): a few more looks.
-        if (sorted.last() - sorted.first() > STEADY_SPREAD_MS && looks < MAX_LOOKS) return Action.None
-        val off = sorted[SAMPLES / 2]
-        lastOffsetMs = off
+        val off = samples.sorted()[SAMPLES / 2]
+        samples.clear()
+        inStep = abs(off) <= GOOD_MS
         return when {
-            abs(off) <= GOOD_MS -> done(nowMs)
+            inStep -> done()
             abs(off) > JUMP_OVER_MS ->
-                if (toDecideMs >= SETTLE_START_MS + SAMPLE_SPAN_MS) {
+                if (toHandoverMs >= SETTLE_START_MS + SAMPLE_SPAN_MS) {
                     settle(nowMs, SETTLE_START_MS)
                     Action.Jump(off + JUMP_LEAD_MS)
                 } else {
-                    done(nowMs)
+                    done()
                 }
-            toDecideMs >= NUDGE_MS + SETTLE_NUDGE_MS + SAMPLE_SPAN_MS -> {
+            toHandoverMs >= NUDGE_MS + SETTLE_NUDGE_MS + SAMPLE_SPAN_MS -> {
                 phase = Phase.NUDGE
                 untilMs = nowMs + NUDGE_MS
                 Action.Speed(1f + (off.toFloat() / NUDGE_MS).coerceIn(-MAX_NUDGE, MAX_NUDGE))
             }
-            // No time left to put it right before the handover is decided: as close as it got.
-            else -> done(nowMs)
+            // No time left to put it right: as close as it got.
+            else -> done()
         }
     }
 
@@ -124,38 +101,28 @@ class TailSync {
         phase = Phase.SETTLE
         untilMs = nowMs + forMs
         samples.clear()
-        looks = 0
     }
 
-    private fun done(nowMs: Long): Action {
+    private fun done(): Action {
         phase = Phase.DONE
-        untilMs = nowMs + RECHECK_MS
-        samples.clear()
         return Action.None
     }
 
     companion object {
-        /** A player's position needs about this long after it starts to say what is really heard. */
-        const val SETTLE_START_MS = 1_000L
+        /** A player's position needs this long after it starts to say what is really heard. */
+        const val SETTLE_START_MS = 1_500L
 
         /** After a nudge: what was played at the other speed leaves the output's buffer. */
         const val SETTLE_NUDGE_MS = 600L
 
-        /** Positions compared in a row (one per look), the middle one counts… */
+        /** Positions compared in a row (one per look), the middle one counts. */
         const val SAMPLES = 5
 
-        /** …once they agree this closely (or after [MAX_LOOKS] looks anyway). */
-        const val STEADY_SPREAD_MS = 12L
-        const val MAX_LOOKS = 12
-
-        /** The looks a measure takes, at most. */
-        const val SAMPLE_SPAN_MS = 600L
+        /** The looks a measure takes. */
+        const val SAMPLE_SPAN_MS = 300L
 
         /** Close enough: well inside the handover. */
         const val GOOD_MS = 8L
-
-        /** In step, it is measured again this often until the handover. */
-        const val RECHECK_MS = 3_000L
 
         /** A nudge lasts this long, the speed set so it makes up the whole offset. */
         const val NUDGE_MS = 800L
