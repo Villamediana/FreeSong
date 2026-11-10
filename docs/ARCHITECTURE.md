@@ -523,4 +523,6 @@ Miguel: os números estavam inflados e "Mais ouvidas" não atualizava. O que mud
   gravada (`LibraryRepository.lastPlayedAt`), em segundo plano também, um envio por vez (`statsLock`).
   O relay 1.6.1 avisa os amigos com o app aberto (evento `profile`) quando os números mudam.
 - Lista de amigos: tocar na foto abre o perfil do amigo.
+- **"Mais ouvidas" é do mês** (Miguel: "é melhor do mês"), no seu perfil e no que vai para os amigos,
+  com "Este mês" no subtítulo como os artistas. As horas do cartão seguem de todos os tempos.
 

@@ -96,7 +96,7 @@
     <string name="profile_username_fixed">@%1$s es tu identificador en FreeSong y no cambia.</string>
     <string name="friend_since">Amigos desde %1$s</string>
     <string name="friend_top_of">Lo más escuchado de %1$s</string>
-    <string name="profile_top_private">Solo tus amigos lo ven</string>
+    <string name="profile_top_private">Este mes · solo tus amigos lo ven</string>
     <string name="person_hours_value">%1$s h</string>
     <string name="person_hours_label">escuchadas</string>
     <string name="profile_edit_name_action">Editar nombre</string>

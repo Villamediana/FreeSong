@@ -195,6 +195,7 @@ internal fun FriendPage(
         since = since,
         top = if (isFriend) person?.top.orEmpty() else emptyList(),
         topTitle = stringResource(R.string.profile_top),
+        topHint = stringResource(R.string.person_month),
         playTitle = stringResource(R.string.friend_top_of, person?.name.orEmpty()),
         snackbar = snackbar,
         avatar = { size -> CardAvatar(person, size) },
