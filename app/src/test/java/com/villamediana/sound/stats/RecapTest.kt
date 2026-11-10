@@ -63,7 +63,9 @@ class RecapTest {
 
         assertEquals(200_000L * 2 + 20_000 + 180_000 * 3 + 10_000, r.listenedMs)
         assertEquals(5, r.plays)
-        assertEquals(3, r.songs)
+        // Slide was only skipped past: it isn't a song heard.
+        assertEquals(2, r.songs)
+        assertEquals(2, r.artists)
         assertEquals(listOf("Iris", "Bad Guy"), r.topSongs.map { it.title })
         assertEquals(3, r.topSongs.first().plays)
         // The library copy plays offline: the ranking points at it.
@@ -115,5 +117,56 @@ class RecapTest {
         assertEquals("Lady Gaga", Recaps.mainArtist("Lady Gaga, Bruno Mars"))
         assertEquals("Shakira", Recaps.mainArtist("Shakira feat. Wyclef Jean"))
         assertEquals("Ana", Recaps.mainArtist("Ana & Vitória"))
+    }
+
+    @Test fun theNumbersCreditDuosWhole() {
+        assertEquals("Lady Gaga", Recaps.creditedArtist("Lady Gaga, Bruno Mars"))
+        assertEquals("Shakira", Recaps.creditedArtist("Shakira feat. Wyclef Jean"))
+        assertEquals("Pedro Sampaio", Recaps.creditedArtist("Pedro Sampaio x Anitta"))
+        assertEquals("Henrique & Juliano", Recaps.creditedArtist("Henrique & Juliano"))
+        assertEquals("Zé Neto e Cristiano", Recaps.creditedArtist("Zé Neto e Cristiano, Marília Mendonça"))
+        assertEquals("Jesse y Joy", Recaps.creditedArtist("Jesse y Joy"))
+    }
+
+    @Test fun oneArtistHoweverItIsWritten() {
+        assertEquals(Recaps.artistKey("Henrique & Juliano"), Recaps.artistKey("Henrique e Juliano"))
+        assertEquals(Recaps.artistKey("Zé Neto & Cristiano"), Recaps.artistKey("ze neto  e cristiano"))
+        assertEquals(Recaps.artistKey("Anavitória"), Recaps.artistKey("ANAVITORIA"))
+    }
+
+    @Test fun artistsRankByTheTimeTheyShowAndCountOnlyWhatWasHeard() {
+        val day = at(2026, 11, 3, 10)
+        val online = listOf(
+            // Three short songs heard to the end…
+            online("s1", "Curta 1", "Banda Curta", day, ms = 60_000),
+            online("s2", "Curta 2", "Banda Curta", day + 1, ms = 60_000),
+            online("s3", "Curta 3", "Banda Curta", day + 2, ms = 60_000),
+            // …against a duo heard twice, written two ways: more time, fewer plays.
+            online("l1", "Longa", "Henrique & Juliano", day + 3, ms = 400_000),
+            online("l2", "Outra Longa", "Henrique e Juliano", day + 4, ms = 300_000),
+            // Skipped past in seconds: neither a song nor an artist heard.
+            online("k1", "Pulada", "Ninguém Ouviu", day + 5, ms = 3_000, skipped = true),
+            online("k2", "Pulada 2", "Ninguém Ouviu Também", day + 6, ms = 2_000, skipped = true),
+        )
+        val r = Recaps.build(2026, emptyList(), emptyMap(), online, zone)
+
+        // The duo is one artist, under the spelling heard the most, and its time puts it first.
+        assertEquals(listOf("Henrique & Juliano", "Banda Curta"), r.topArtists.map { it.name })
+        assertEquals(700_000L, r.topArtists.first().listenedMs)
+        assertEquals(2, r.topArtists.first().plays)
+        assertEquals(5, r.songs)
+        assertEquals(2, r.artists)
+        // The seconds skipped were still heard: the time keeps them.
+        assertEquals(60_000L * 3 + 700_000L + 5_000L, r.listenedMs)
+    }
+
+    @Test fun allTimeTakesTheWholeHistory() {
+        val online = listOf(
+            online("old", "Antiga", "X", at(2019, 3, 1, 10)),
+            online("new", "Nova", "Y", at(2026, 11, 1, 10)),
+        )
+        val r = Recaps.allTime(emptyList(), emptyMap(), online, zone)
+        assertEquals(2, r.songs)
+        assertEquals(360_000L, r.listenedMs)
     }
 }

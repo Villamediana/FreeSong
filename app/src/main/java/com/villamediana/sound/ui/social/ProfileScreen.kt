@@ -96,12 +96,13 @@ fun ProfileScreen() {
     val pickPhoto = { gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
 
     val stats: ProfileStatsViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
-    val numbers by stats.stats.collectAsStateWithLifecycle()
+    val now by stats.stats.collectAsStateWithLifecycle()
 
     val p = me
     ProfilePage(
         me = p,
-        numbers = numbers,
+        numbers = now?.month,
+        top = now?.top,
         code = code,
         photoBusy = photoBusy,
         snackbar = snackbar,
@@ -173,6 +174,8 @@ fun ProfileScreen() {
 internal fun ProfilePage(
     me: Profile?,
     numbers: com.villamediana.sound.social.NumPeriod?,
+    /** "Mais ouvidas" worked out here; until then (null), what the relay last kept. */
+    top: List<com.villamediana.sound.social.SongRef>? = null,
     code: String?,
     photoBusy: Boolean,
     snackbar: com.villamediana.sound.ui.detail.DetailSnackbar,
@@ -187,7 +190,7 @@ internal fun ProfilePage(
     PersonPage(
         person = me,
         since = me?.let { stringResource(R.string.social_since, monthYear(it.since)) },
-        top = me?.top.orEmpty(),
+        top = top ?: me?.top.orEmpty(),
         topTitle = stringResource(R.string.profile_top),
         topHint = stringResource(R.string.profile_top_private),
         playTitle = stringResource(R.string.profile_top),
