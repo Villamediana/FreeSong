@@ -165,6 +165,54 @@ class MusicDnaTest {
     }
 
     @Test
+    fun aMomentNeverLivedHasNoSongsOfItsOwn() {
+        // Only nights so far: the morning has nothing to say (not the night's songs under its name).
+        val nights = (1..10).flatMap { d -> (0..5).map { heard("Gaiteros", (d + it) % 8, at(d, 22)) } }
+        val dna = MusicDna.build(nights, emptySet(), now, zone)
+        assertTrue(dna.songsFor(night, 16).size >= 5)
+        assertTrue(dna.songsFor(morning, 16).isEmpty())
+        // The late afternoon is still too far from the nights.
+        assertTrue(dna.songsFor(DnaMoment(17, DayOfWeek.WEDNESDAY), 16).isEmpty())
+
+        // Lived once: the morning gets its songs — its own, none of the night's.
+        val lived = MusicDna.build(nights + (1..5).map { heard("Eighties", it, at(1, 9)) }, emptySet(), now, zone)
+        val forMorning = lived.songsFor(morning, 16)
+        assertEquals(5, forMorning.size)
+        assertTrue(forMorning.all { it.artist == "Eighties" })
+        // The night keeps its own.
+        assertTrue(lived.songsFor(night, 16).all { it.artist == "Gaiteros" })
+    }
+
+    @Test
+    fun aSongOfTheMomentWasReallyHeardInItAndNotMonthsAgo() {
+        val nights = (1..10).flatMap { d -> (0..5).map { heard("Gaiteros", (d + it) % 8, at(d, 22)) } }
+        // Half a minute of a song in the morning is not the morning's song; heard through, it is.
+        val brief = heard("Eighties", 1, at(1, 8)).copy(listenedMs = 40_000, completed = false)
+        assertTrue(MusicDna.build(nights + brief, emptySet(), now, zone).songsFor(morning, 16).isEmpty())
+        assertEquals(1, MusicDna.build(nights + heard("Eighties", 1, at(1, 8)), emptySet(), now, zone).songsFor(morning, 16).size)
+        // Across midnight the hours are still neighbours.
+        assertEquals(1, MusicDna.build(listOf(heard("Gaiteros", 1, at(1, 1))), emptySet(), now, zone).songsFor(DnaMoment(23, DayOfWeek.WEDNESDAY), 16).size)
+        // Mornings of months ago have faded: the morning goes quiet again.
+        val longAgo = (170..171).flatMap { d -> (0..5).map { heard("Eighties", it, at(d, 8)) } }
+        assertTrue(MusicDna.build(nights + longAgo, emptySet(), now, zone).songsFor(morning, 16).isEmpty())
+    }
+
+    @Test
+    fun withFriendsAlongTheSongsHeardWithThemCountAtAnyHour() {
+        val listens = (1..10).flatMap { d ->
+            listOf(heard("Gaiteros", d % 6, at(d, 22)), heard("Samba", d % 6, at(d, 22), people = listOf("uana")))
+        }
+        val dna = MusicDna.build(listens, emptySet(), now, zone)
+        assertTrue(dna.songsFor(morning, 16).isEmpty())
+        val withAna = dna.songsFor(morning.copy(people = setOf("uana")), 16)
+        assertEquals(6, withAna.size)
+        assertTrue(withAna.all { it.artist == "Samba" })
+        // A friend never heard with says nothing: no songs, and the mix is not named after them.
+        assertTrue(dna.songsFor(morning.copy(people = setOf("ubia")), 16).isEmpty())
+        assertEquals(setOf("uana"), dna.known(setOf("uana", "ubia")))
+    }
+
+    @Test
     fun theTasteOfTheMomentLeansToItsArtists() {
         val listens = life()
         val profile = TasteProfile.build(listens, emptyList(), now)

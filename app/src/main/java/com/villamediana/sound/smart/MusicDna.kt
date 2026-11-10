@@ -74,6 +74,9 @@ data class DnaMoment(
  *   hour, day, place and company, and which is skipped there. [soundLift] says it for a song, by
  *   its own sound or else by what its artist usually sounds like; so a song never heard in the
  *   morning still fits it when it sounds like the mornings.
+ * - It only speaks of a moment it knows ([songsFor]): while nothing was heard in the mornings
+ *   there are no "songs of the morning" — never the favourites of other hours in their place.
+ *   Each moment fills up by itself as it is lived.
  */
 class MusicDna private constructor(
     private val all: Stat,
@@ -252,6 +255,13 @@ class MusicDna private constructor(
             for (h in 0 until 24) if (byHour[h] > 0) s += near(h, hour) * byHour[h]
             return s / (weight + 1.0)
         }
+
+        /** The listening of this song up to [AROUND_HOURS] hours from [hour] (around the clock). */
+        internal fun heardAround(hour: Int): Double {
+            var s = 0.0
+            for (h in 0 until 24) if (byHour[h] > 0 && hoursApart(h, hour) <= AROUND_HOURS) s += byHour[h]
+            return s
+        }
     }
 
     @Volatile private var clock: Clock? = null
@@ -271,6 +281,9 @@ class MusicDna private constructor(
     }
 
     val isEmpty: Boolean get() = all.total <= 0.0
+
+    /** The ones of [people] the DNA has heard enough music with to know what plays with them. */
+    fun known(people: Set<String>): Set<String> = people.filterTo(LinkedHashSet()) { (all.people[it] ?: 0.0) >= MIN_CONTEXT }
 
     /** How much more the artist fits [m] than usual: 1 = as usual; between [MIN_LIFT] and [MAX_LIFT]. */
     fun lift(artistKey: String, m: DnaMoment): Double =
@@ -380,11 +393,20 @@ class MusicDna private constructor(
     /**
      * Your songs that fit [m] best: heard a lot around this hour (and at this place, with these
      * people), the ones that fit the moment's artists.
+     *
+     * Only what the moment itself knows: the songs really heard around this hour at least once
+     * ([heardAround], [HEARD_AROUND]) and the ones heard with the people along ([known]). A moment
+     * never lived has none — never the favourites of other hours under its name — and gets its
+     * songs as it is lived.
      */
     fun songsFor(m: DnaMoment, count: Int): List<SongStats> {
+        val along = known(m.people)
         val place = m.place?.takeIf { (all.places[it] ?: 0.0) >= MIN_CONTEXT }
         return songs.values
-            .filter { it.weight > 0 && songFactor(it.videoId, m) >= SONGS_FOR_FLOOR }
+            .filter { s ->
+                s.weight > 0 && songFactor(s.videoId, m) >= SONGS_FOR_FLOOR &&
+                    (s.heardAround(m.hour) >= HEARD_AROUND || along.any { (s.together[it] ?: 0.0) > 0.0 })
+            }
             .map { s ->
                 val here = s.around(m.hour)
                 val there = if (place == null) 1.0 else PLACE_BASE + PLACE_SPAN * ((s.places[place] ?: 0.0) / (s.weight + 1.0))
@@ -453,6 +475,14 @@ class MusicDna private constructor(
         const val AVOID_RATE = 0.58
         /** Not among the moment's own songs below this. */
         const val SONGS_FOR_FLOOR = 0.45
+        /** "Around" an hour, for what a moment knows by itself: up to this many hours from it. */
+        const val AROUND_HOURS = 2
+        /**
+         * Really heard around an hour: this much listening as it weighs today (once, through or
+         * most of it; a listen of months ago fades out of it). The bar for a song to be one of
+         * the moment's.
+         */
+        const val HEARD_AROUND = 0.5
 
         /** How far a sound's fit to the moment moves a song, and how far skips push a sound down in it. */
         /** How far the moment can move a song of the library ([fit]). */
@@ -478,9 +508,14 @@ class MusicDna private constructor(
 
         /** How much hour [a] counts for hour [b] (around the clock: 23 h is beside 0 h). */
         internal fun near(a: Int, b: Int): Double {
-            val d = abs(a - b)
-            val around = min(d, 24 - d)
+            val around = hoursApart(a, b)
             return if (around < HOUR_KERNEL.size) HOUR_KERNEL[around] else 0.0
+        }
+
+        /** How many hours between two hours of the day, around the clock (23 h and 1 h: two). */
+        internal fun hoursApart(a: Int, b: Int): Int {
+            val d = abs(a - b)
+            return min(d, 24 - d)
         }
 
         /** Shares [spot] among the (up to four) corners of the sound map around it. */

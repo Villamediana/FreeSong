@@ -117,6 +117,28 @@ class ForYouTest {
     }
 
     @Test
+    fun theMomentsMixWaitsUntilTheMomentWasLived() = runBlocking {
+        val day = 24 * 3_600_000L
+        // A week of one band half a day away from now: this hour has nothing of its own yet.
+        for (d in 1..7) for (i in 0..5) {
+            library.recordOnlinePlay(remote("then-$i", "Then Band"), 200_000, 200_000, "test", now - d * day - 12 * 3_600_000L)
+        }
+        assertEquals(null, forYou.momentPlan())
+        // A few songs at this hour: still too little to make a mix of.
+        for (i in 0..2) library.recordOnlinePlay(remote("now-$i", "Now Band"), 200_000, 200_000, "test", now - day)
+        forYou.invalidate()
+        assertEquals(null, forYou.momentPlan())
+        // Enough of them: the moment has its mix, made of its own songs and new ones from them.
+        for (i in 3..5) library.recordOnlinePlay(remote("now-$i", "Now Band"), 200_000, 200_000, "test", now - day)
+        forYou.invalidate()
+        val plan = forYou.momentPlan()!!
+        assertEquals(6, plan.own.size)
+        assertTrue(plan.own.all { it.artist == "Now Band" })
+        assertTrue(plan.new.isNotEmpty())
+        assertTrue(plan.new.all { it.videoId.startsWith("now-") })
+    }
+
+    @Test
     fun whatSongsSoundLikeIsKeptOnThePhoneAndReachesTheDna() = runBlocking {
         fun sound(e: Float, seconds: Float = 120f) = SoundPrint(-30f + 20f * e, 500f + 3_000f * e, 5f + 40f * e, 0.1f + 0.7f * e, 70f + 90f * e, seconds)
         // Soft songs at this hour of the day, hard ones half a day away, for a week.
