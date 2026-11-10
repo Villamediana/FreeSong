@@ -285,7 +285,7 @@ fun SocialScreen() {
                 InviteLine(
                     inv,
                     onJoin = { scope.launch { hub.jam.join(inv).onFailure { feedback.show(jamFailed) } } },
-                    onDecline = { scope.launch { hub.jam.decline(inv) } },
+                    onDecline = { hub.jam.declineNow(inv) },
                 )
             }
         }

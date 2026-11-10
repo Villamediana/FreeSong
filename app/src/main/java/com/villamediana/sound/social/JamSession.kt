@@ -88,6 +88,12 @@ class JamSession(
     private var seenLocalIndex = -1
     private var seenJamIndex = -1
 
+    /** A jam this phone left whose leave the relay hasn't taken yet (offline): never followed again, sent again. */
+    private class Leaving(val jamId: String, val end: Boolean)
+    private var leaving: Leaving? = null
+    /** Bumped by every start, join, leave and decline: a look at the relay that began before one is old news. */
+    private var epoch = 0
+
     // ------------------------------------------------------------------ joining and leaving
 
     /** A jam with these friends, starting from what this phone plays now. */
@@ -95,7 +101,10 @@ class JamSession(
         // Where the song is now (the jam starts from there for everyone, this phone included).
         val state = withContext(main) { fitted(currentLocalState(player.livePositionMs())) }
         val jam = withContext(Dispatchers.IO) { relay.startJam(friends, state) }
-        withContext(main) { activate(jam, held = false) }
+        withContext(main) {
+            epoch++
+            activate(jam, held = false)
+        }
         jam
     }
 
@@ -109,6 +118,8 @@ class JamSession(
     suspend fun join(invite: JamInvite): Result<Jam> = runCatching {
         val jam = withContext(Dispatchers.IO) { relay.joinJam(invite.jam.id) }
         withContext(main) {
+            epoch++
+            if (leaving?.jamId == jam.id) leaving = null
             _invites.value = _invites.value.filterNot { it.jam.id == invite.jam.id }
             activate(jam, held = false)
         }
@@ -116,19 +127,51 @@ class JamSession(
     }
 
     suspend fun decline(invite: JamInvite) {
-        _invites.value = _invites.value.filterNot { it.jam.id == invite.jam.id }
+        withContext(main) {
+            epoch++
+            _invites.value = _invites.value.filterNot { it.jam.id == invite.jam.id }
+        }
         runCatching { withContext(Dispatchers.IO) { relay.declineJam(invite.jam.id) } }
+    }
+
+    /** [decline] from a screen that closes right away: it goes on in the app's scope, not the screen's. */
+    fun declineNow(invite: JamInvite) {
+        scope.launch { decline(invite) }
     }
 
     /**
      * Leaves (the one who created it ends it for all). The music here goes on as it is. This phone
-     * is out at once, even offline (the relay lets it go when it sees it, or after a while).
+     * is out at once, even offline: until the relay takes the leave, the jam is never followed
+     * again here and the leave goes again at the next look ([refresh]).
      */
     suspend fun leave(): Result<Unit> {
-        val current = _jam.value ?: return Result.success(Unit)
-        withContext(main) { deactivate() }
+        val current = withContext(main) {
+            val jam = _jam.value ?: return@withContext null
+            epoch++
+            leaving = Leaving(jam.id, end = jam.hostId == me())
+            deactivate()
+            jam
+        } ?: return Result.success(Unit)
+        return sendLeave(current.id)
+    }
+
+    /**
+     * [leave] from a sheet that closes right away: in the app's scope, so closing the sheet doesn't
+     * cancel it halfway (out here but still in the jam for everyone else).
+     */
+    fun leaveNow() {
+        scope.launch { leave() }
+    }
+
+    private suspend fun sendLeave(jamId: String): Result<Unit> {
+        val pending = withContext(main) { leaving?.takeIf { it.jamId == jamId } } ?: return Result.success(Unit)
         return runCatching {
-            withContext(Dispatchers.IO) { if (current.hostId == me()) relay.endJam(current.id) else relay.leaveJam(current.id) }
+            withContext(Dispatchers.IO) { if (pending.end) relay.endJam(jamId) else relay.leaveJam(jamId) }
+        }.recoverCatching { e ->
+            // The jam is already gone on the relay (ended, or let go): nothing left to leave.
+            if ((e as? RelayException)?.status != 404) throw e
+        }.onSuccess {
+            withContext(main) { if (leaving?.jamId == jamId) leaving = null }
         }
     }
 
@@ -140,10 +183,16 @@ class JamSession(
 
     /** After launching or reconnecting: the jam this phone is in (paused here until the person plays) and the invites. */
     suspend fun refresh() {
+        // A leave the relay didn't get (offline) goes first.
+        withContext(main) { leaving?.jamId }?.let { sendLeave(it) }
+        val asked = withContext(main) { epoch }
         val current = runCatching { withContext(Dispatchers.IO) { relay.currentJam() } }.getOrNull() ?: return
         withContext(main) {
+            // Joined, started, left or declined while asking: the answer is older than that.
+            if (epoch != asked) return@withContext
             _invites.value = current.invites
-            val jam = current.jam
+            // The jam this phone left stays left, even if the relay didn't hear it yet.
+            val jam = current.jam?.takeIf { it.id != leaving?.jamId }
             when {
                 jam == null -> if (_jam.value != null) deactivate()
                 _jam.value == null -> activate(jam, held = true)
@@ -168,6 +217,8 @@ class JamSession(
             is RelayEvent.JamEnded -> {
                 _invites.value = _invites.value.filterNot { it.jam.id == event.jamId }
                 if (_jam.value?.id == event.jamId) deactivate()
+                // The relay let this phone go (or the jam is over): nothing left to leave.
+                if (leaving?.jamId == event.jamId) leaving = null
             }
             is RelayEvent.Hello -> scope.launch { refresh() }
             else -> Unit
