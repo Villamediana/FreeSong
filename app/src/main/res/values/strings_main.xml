@@ -29,6 +29,8 @@
     <string name="sheet_artist_not_found">Artista não encontrado.</string>
     <string name="settings_group_sound">Som</string>
     <string name="settings_off">Desligado</string>
+    <string name="settings_storage_downloads">Músicas baixadas</string>
+    <string name="settings_storage_kept">Guardado</string>
     <string name="settings_free_space">Liberar espaço</string>
     <string name="settings_free_space_value">%1$s guardados pra economizar internet</string>
     <string name="settings_parallel_short">Quantos downloads de uma vez</string>

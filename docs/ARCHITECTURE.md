@@ -543,3 +543,15 @@ Miguel saiu da jam: quem criou viu na hora, mas o celular dele seguiu "na jam" p
 - Relay 1.6.2: quem sai recebe `jam.ended` (os outros celulares da pessoa também); quem não criou a
   jam e fica 15 min sem conectar sai sozinho (`Jams.gone`, `sweepJams` no heartbeat).
 
+
+## Armazenamento que fecha a conta (1.27.2, 2026-11-10)
+
+- O número grande ("usados no celular") era só a pasta das baixadas (`Storage.usedBytes`) e só era
+  medido de novo quando a biblioteca mudava: os caches (Liberar espaço) ficavam fora e limpar não
+  mexia nele. Agora `AppCaches.measure()` → `StorageUse(downloads, caches, free)`, com
+  `used = downloads + kept`: o número grande, a barra em duas partes (Músicas baixadas · Guardado),
+  "Liberar espaço" e o total da folha saem da mesma medição.
+- `SettingsViewModel.storage` mede ao abrir (depois dos ~450 ms), quando a biblioteca muda e logo
+  depois de cada "Limpar"/"Limpar tudo" (`remeasure` + `collectLatest`).
+- `AppCachesTest` enche cada cache de verdade (SimpleCache, disco do Coil, arquivos) e confere que
+  limpar zera e que o total cai exatamente o que saiu.
