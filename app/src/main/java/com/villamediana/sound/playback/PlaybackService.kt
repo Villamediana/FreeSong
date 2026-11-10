@@ -35,6 +35,9 @@ import com.villamediana.sound.SoundApplication
 import com.villamediana.sound.data.Settings
 import com.villamediana.sound.data.db.Track
 import com.villamediana.sound.online.OnlineException
+import com.villamediana.sound.playback.crossfade.AudioScanner
+import com.villamediana.sound.playback.crossfade.CrossfadeMeasure
+import com.villamediana.sound.playback.crossfade.FadeShaper
 import com.villamediana.sound.playback.stream.OnlineStreams
 import com.villamediana.sound.playback.stream.StreamDataSources
 import com.villamediana.sound.playback.stream.StreamErrors
@@ -89,6 +92,8 @@ class PlaybackService : MediaLibraryService() {
     /** The quick crossfade of a tap on a lyric line ([SeekBlend]). */
     private val seekBlend = SeekBlendProcessor()
     private val soundTap = SoundTap()
+    /** The crossfade's volume and bass in the main player's own audio ([Crossfader]). */
+    private val fadeShaper = FadeShaper()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val listen = ListenTracker { SystemClock.elapsedRealtime() }
 
@@ -130,7 +135,7 @@ class PlaybackService : MediaLibraryService() {
         strings = PlaybackStrings.from(this)
         streams = OnlineStreams(graph.scope, online = { hasInternet(this) }) { graph.youTube }
         artwork = ArtworkShare(this)
-        player = ExoPlayer.Builder(this, SeekBlend.renderers(this, seekBlend, soundTap.processor()))
+        player = ExoPlayer.Builder(this, SeekBlend.renderers(this, seekBlend, soundTap.processor(), fadeShaper))
             // The song playing is kept whole in memory (back buffer): going back in it, or seeking to
             // a part already heard, plays at once instead of downloading that part again.
             .setLoadControl(
@@ -181,11 +186,14 @@ class PlaybackService : MediaLibraryService() {
 
         browser = LibraryBrowser(this, library, ::libraryTracks, ::taste, strings)
         sleep = SleepTimerRunner(player) { publishExtras() }
-        // Crossfade: a tail player plays the end of the song out while the next one fades in.
+        // Crossfade: the end of the song and the start of the next are measured ahead; a tail player
+        // plays the end out while the next one comes in, both shaped inside their own audio.
         crossfader = Crossfader(
             player = player,
+            shaper = fadeShaper,
             newTail = {
-                ExoPlayer.Builder(this)
+                val tailShaper = FadeShaper()
+                val tailPlayer = ExoPlayer.Builder(this, FadeShaper.renderers(this, tailShaper))
                     .setMediaSourceFactory(
                         DefaultMediaSourceFactory(StreamDataSources.factory(this, streams, AudioCache.get(this)))
                             .setLoadErrorHandlingPolicy(StreamLoadErrorPolicy()),
@@ -195,7 +203,9 @@ class PlaybackService : MediaLibraryService() {
                         /* handleAudioFocus = */ false,
                     )
                     .build()
+                Crossfader.Tail(tailPlayer, tailShaper)
             },
+            measure = CrossfadeMeasure(scope, AudioScanner(StreamDataSources.factory(this, streams, AudioCache.get(this)))),
             seconds = { settings.crossfadeSeconds },
             blocked = { sleep.timer != SleepTimer.Off },
             // Same as the player's own "repeat one" transition: every time around is a listen.

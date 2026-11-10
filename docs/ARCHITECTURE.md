@@ -129,6 +129,31 @@ JSON: usar `kotlinx.serialization` (o `org.json` do Android vira stub nos testes
   `DefaultAudioSink` passa no 2º flush de cada seek (`SeekBlendSinkTest` confere no sink real; o
   Media3 1.11 já faz uma rampa de ~20 ms depois de cada flush). Pra tirar: o renderers factory e o
   comando no `PlaybackService`, `PlayerActions.seekLine` (a letra volta ao `seek`).
+- **Crossfade entre músicas** (1.6.0; suave desde 1.28.0, `playback/Crossfader.kt` +
+  `playback/crossfade/`): dura exatamente os segundos do Equalizador, sobre música.
+  - **Medida antes** (`CrossfadeMeasure` → `AudioScanner`): ~45 s antes do fim, decodifica só os
+    últimos 38 s da música e os primeiros 26 s da próxima (MediaExtractor + MediaCodec lendo pela
+    mesma fonte do player: arquivo baixado do disco, online pelo `AudioCache`, que já fica pronto pro
+    player). `LoudnessMeter` dá a loudness BS.1770 (LUFS, filtro K) em blocos de 100 ms (`Envelope`).
+    As últimas 12 medidas de começo/fim ficam em memória (loop do "repetir uma").
+  - **Mix** (`Mixing.mix`, puro): silêncio no fim da que sai (até 20 s) e no começo da próxima
+    (até 8 s) fica fora do fade — silêncio = abaixo de −45 LUFS ou 25 LU abaixo do nível do trecho.
+    Nível da que sai = 5 s antes do fade + 1ª metade dele; da próxima = o fade + 5 s depois. A
+    diferença (até 18 dB) vira `inMatchDb` (a mais alta entra no nível da baixa e sobe até o seu ao
+    longo do fade) ou `outMatchDb` (a alta desce até a baixa). Medida que não chegou ao fim do
+    arquivo, ou toda em silêncio, não vale: fade simples (`Mixing.plain`).
+  - **Forma** (`FadeShape`): potência igual (cos/sin) × casamento de nível em smoothstep; o grave
+    (low shelf 220 Hz, até −24 dB) passa de uma pra outra entre 25% e 75% do fade (potência igual),
+    pra duas batidas nunca baterem juntas. Ritmo/BPM não é casado (mudaria a velocidade das músicas).
+  - **Aplicação** (`FadeShaper`, `AudioProcessor`): volume e grave saem da posição de cada amostra
+    na música (`positionOffsetUs` do flush + frames), não do relógio. O player principal tem um na
+    cadeia (`soundTap → fadeShaper → seekBlend`): `arm` antes do `seekTo(próxima, inStartMs)`, vale
+    a partir do flush desse seek e cai em qualquer seek seguinte. O tail player tem o seu (`hold`,
+    vale em todo flush). `release` = pausa/skip no meio: volta ao normal em 40 ms. `player.volume`
+    fica em 1.
+  - Plano (`CrossfadePlan.step`, puro): Measure ~45 s antes → Prepare 6 s antes do início do fade
+    medido (sem medida a tempo: fade simples) → Start no instante (o tick acorda exatamente nele).
+    A fila mudou depois da medida: só o lado de quem sai vale (`Mix.withoutIncoming`).
 
 ## Acordes (1.10.0, 2026-11-08; ouvido BTC desde 1.11.0; Cifra Club primeiro desde 1.12.0)
 
