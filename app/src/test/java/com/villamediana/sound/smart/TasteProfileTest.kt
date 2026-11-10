@@ -99,6 +99,22 @@ class TasteProfileTest {
     }
 
     @Test
+    fun theSeedsAreNotTheSameFavouritesEveryDay() {
+        val listens = (0 until 8).flatMap { a -> (1..3).flatMap { s -> List(4 - s) { heard("Band $a", s, daysAgo = a * 0.3 + it * 0.01) } } }
+        val p = TasteProfile.build(listens, emptyList(), now)
+        // Without chance: always the same ones, each artist's most heard song.
+        assertEquals(p.seeds(4), p.seeds(4))
+        assertTrue(p.seeds(4).all { it.videoId!!.endsWith("_1") })
+        // With it: the same draw gives the same seeds, other days bring other artists and other songs of theirs.
+        assertEquals(p.seeds(4, kotlin.random.Random(5)), p.seeds(4, kotlin.random.Random(5)))
+        val days = (1..20).map { d -> p.seeds(4, kotlin.random.Random(d)).map { it.videoId!! } }
+        assertTrue(days.all { it.size == 4 && it.map { v -> v.substringBefore('_') }.distinct().size == 4 })
+        assertTrue(days.distinct().size >= 10)
+        assertTrue(days.flatten().distinct().size >= 12)
+        assertTrue(days.flatten().any { !it.endsWith("_1") })
+    }
+
+    @Test
     fun aSongHeardIsKnownASongSkippedIsNot() {
         val p = TasteProfile.build(listOf(heard("A", 1, 1.0), skipped("A", 2, 1.0)), emptyList(), now)
         assertTrue(vid("A", 1) in p.known)

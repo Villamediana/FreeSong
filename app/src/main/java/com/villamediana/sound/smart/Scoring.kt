@@ -107,7 +107,8 @@ internal fun similarity(a: Feat, b: Feat): Double {
 /**
  * Picks up to [limit] tracks from [pool] that fit [score] (> 0 = related), favouring taste and
  * keeping it varied: at most ~a quarter of the picks per artist while there is choice, no artist
- * twice in a row when avoidable. Unrelated tracks only fill what related ones cannot.
+ * twice in a row when avoidable. Unrelated tracks only fill what related ones cannot — and not at
+ * all without [fill] (a radio, or songs woven into a queue: better fewer than off the subject).
  */
 internal fun pickSimilar(
     pool: List<Feat>,
@@ -116,6 +117,7 @@ internal fun pickSimilar(
     limit: Int,
     rnd: Random,
     previous: Feat?,
+    fill: Boolean = true,
 ): List<Feat> {
     if (limit <= 0 || pool.isEmpty()) return emptyList()
     val stable = pool.sortedBy { it.id }
@@ -138,7 +140,7 @@ internal fun pickSimilar(
         }
     }
     if (chosen.size < limit) chosen += deferred.take(limit - chosen.size)
-    if (chosen.size < limit) {
+    if (fill && chosen.size < limit) {
         val unrelated = stable.indices.filter { scores[it] <= 0.0 }.map { stable[it] }
         chosen += weightedOrder(unrelated, taste, rnd).take(limit - chosen.size)
     }

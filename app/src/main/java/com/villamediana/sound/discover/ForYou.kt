@@ -10,6 +10,7 @@ import com.villamediana.sound.social.SongRef
 import com.villamediana.sound.smart.GenreMatch
 import com.villamediana.sound.smart.Heart
 import com.villamediana.sound.smart.MusicDna
+import com.villamediana.sound.smart.Picks
 import com.villamediana.sound.smart.Listen
 import com.villamediana.sound.smart.Recommend
 import com.villamediana.sound.smart.SmartMixes
@@ -26,6 +27,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
+import kotlin.random.Random
 
 /**
  * The Home's suggestions, from what the listener actually likes ([TasteProfile]: everything heard
@@ -35,7 +37,10 @@ import kotlin.math.abs
  * - "Porque você curte <artista>": their favourite artist right now and another one taking turns,
  *   fixed for the 6-hour slot (it doesn't change with every song played).
  * - The genre shelves of the genres they listen to (and picked), leaning to their artists.
- * Songs and artists they keep skipping never come back.
+ * Songs and artists they keep skipping never come back. None of it is the same list day after
+ * day: each starts from other songs of theirs (drawn among the ones they like most), what was
+ * suggested in the last days counts less ([DiscoverRepository.shown]) and a little chance moves
+ * the rest; the songs they already know take a share at most, the rest is new.
  */
 class ForYou(
     private val library: LibraryRepository,
@@ -82,8 +87,9 @@ class ForYou(
     fun moment(): DnaMoment = DnaMoment.at(clock(), place = placeNow(), people = peopleNow())
 
     /**
-     * "Pra agora": your songs that fit this moment best ([MusicDna.songsFor]) and new ones from
-     * their radios in the taste of the moment (made once per moment and day). Null while this
+     * "Pra agora": your songs that fit this moment ([MusicDna.songsFor] — drawn among the best
+     * fits, the ones the mix had in the last days less: not the same ones every morning) and as
+     * many new ones from their radios in the taste of the moment (made once per moment and day). Null while this
      * moment is still being learned (fewer than [MOMENT_MIN] songs heard around this hour): no
      * card rather than the songs of other hours; it shows up by itself once the moment is lived.
      * The friends along name the mix only when there is music heard with them.
@@ -93,19 +99,24 @@ class ForYou(
         val dna = dna()
         if (dna.isEmpty) return null
         val m = moment()
-        val songs = dna.songsFor(m, MOMENT_OWN)
-        if (songs.size < MOMENT_MIN) return null
+        val fits = dna.songsFor(m, MOMENT_POOL)
+        if (fits.size < MOMENT_MIN) return null
+        val day = SmartMixes.dayNumber(clock())
+        // The same draw all day for this moment (the mix doesn't change when the app is opened again).
+        val rnd = Random(day * 1_000_003L + m.key.hashCode())
+        val before = runCatching { discover.shown(today = false) }.getOrDefault(emptyMap())
+        val songs = Picks.draw(fits, MOMENT_OWN, rnd, { it.videoId }) { before[it.videoId] }
         val tracks = library.allTracks()
         val byVideo = tracks.filter { it.videoId != null }.associateBy { it.videoId!! }
         val own = songs.map { s -> byVideo[s.videoId] ?: SongRef(s.videoId, s.title, s.artist).toRemote().asTransientTrack() }
         val inLibrary = tracks.mapNotNullTo(HashSet()) { it.videoId }
         val seeds = songs.take(MOMENT_SEEDS).map { it.videoId }
-        val day = SmartMixes.dayNumber(clock())
         val fresh = runCatching {
-            discover.daily("moment-v1:" + m.key, day) {
-                Recommend.fromRadios(radios(seeds), p.inMoment(dna, m), inLibrary + songs.map { it.videoId }, MOMENT_NEW)
+            discover.daily("moment-v2:" + m.key, day) {
+                Recommend.fromRadios(radios(seeds), p.inMoment(dna, m), inLibrary + fits.map { it.videoId }, MOMENT_NEW, seen = discover.shown(), rnd = rnd)
             }
         }.getOrDefault(emptyList()).filter { it.videoId !in inLibrary && !p.avoids(it.videoId, it.artist) }
+        runCatching { discover.markShown(songs.map { it.videoId }) }
         return MomentPlan(m, own, fresh, names(dna.known(m.people)))
     }
 
@@ -185,9 +196,11 @@ class ForYou(
         if (p.isEmpty) return emptyList()
         val inLibrary = library.allTracks().mapNotNullTo(HashSet()) { it.videoId }
         val day = SmartMixes.dayNumber(clock())
-        val list = discover.daily("discoveries-v1", day) {
-            val seeds = p.seeds(DISCOVERY_SEEDS).mapNotNull { it.videoId }
-            Recommend.fromRadios(radios(seeds), p, inLibrary + seeds, DISCOVERIES)
+        val list = discover.daily("discoveries-v2", day) {
+            // Another draw of the songs they start from each day, and what the last days showed behind.
+            val rnd = Random(day * 1_000_003L + 7)
+            val seeds = p.seeds(DISCOVERY_SEEDS, rnd).mapNotNull { it.videoId }
+            Recommend.fromRadios(radios(seeds), p, inLibrary + seeds, DISCOVERIES, seen = discover.shown(), rnd = rnd)
         }
         // Skipped just now: out of the row for now (the session), back later — a skip is the moment.
         val session = runCatching { SongRadio.sessionOf(library, clock()) }.getOrDefault(com.villamediana.sound.smart.Session())
@@ -218,9 +231,11 @@ class ForYou(
         return coroutineScope {
             chosen.map { a ->
                 async {
-                    val tracks = discover.daily("because-v1:" + a.key, slot) {
-                        val seeds = a.songs.mapNotNull { it.videoId }.take(BECAUSE_SEEDS)
-                        Recommend.fromRadios(radios(seeds), p, inLibrary + seeds, BECAUSE_SIZE, perArtist = 3)
+                    val tracks = discover.daily("because-v2:" + a.key, slot) {
+                        // Not always from the artist's same two songs: two of their best, drawn each slot.
+                        val rnd = Random(slot * 1_000_003L + a.key.hashCode())
+                        val seeds = a.songs.mapNotNull { it.videoId }.take(BECAUSE_SEED_POOL).shuffled(rnd).take(BECAUSE_SEEDS)
+                        Recommend.fromRadios(radios(seeds), p, inLibrary + seeds, BECAUSE_SIZE, perArtist = 3, seen = discover.shown(), rnd = rnd)
                     }.filter { it.videoId !in inLibrary && !p.avoids(it.videoId, it.artist) }
                     tracks.takeIf { it.size >= MIN_ROW }?.let { BecauseRow(a.name, a.key, it) }
                 }
@@ -241,24 +256,35 @@ class ForYou(
     }
 
     /**
-     * A genre's shelf for this listener: half from the radios of their own favourites in the genre
-     * (their corner of it), half from the genre's live pool in their order (their artists and the
-     * unheard first); another draw each session. Without listening in the genre: the pool in that order.
+     * A genre's shelf for this listener: half from the radios of their own artists in the genre
+     * (their corner of it — two of them drawn each session, from one of their best songs), half
+     * from the genre's live pool in their order (their artists and the unheard first); another draw
+     * each session, in the taste of the moment, mostly songs they don't know yet. Without listening
+     * in the genre: the pool in that order.
      */
     suspend fun shelf(genre: GenreDef, force: Boolean = false): List<RemoteTrack> {
-        val p = profile()
+        val p = profileNow()
         val pool = discover.shelfPool(genre, force)
-        val mine = p.artists.filter { it.genre == genre.id }.take(SHELF_SEEDS)
-            .mapNotNull { a -> a.songs.firstOrNull { it.videoId != null }?.videoId }
-        val personal = if (mine.isEmpty()) emptyList() else Recommend.fromRadios(radios(mine), p, mine.toSet(), SHELF_SIZE / 2, onlyNew = false)
+        val rnd = Random(discover.drawSeed("shelf-mine:" + genre.id))
+        val seen = runCatching { discover.shown() }.getOrDefault(emptyMap())
+        val mine = p.artists.filter { it.genre == genre.id }.take(SHELF_ARTISTS).shuffled(rnd).take(SHELF_SEEDS)
+            .mapNotNull { a -> a.songs.filter { it.videoId != null }.take(SHELF_SONGS).randomOrNull(rnd)?.videoId }
+        val personal = if (mine.isEmpty()) emptyList() else Recommend.fromRadios(radios(mine), p, mine.toSet(), SHELF_SIZE / 2, onlyNew = false, seen = seen, rnd = rnd)
         val taken = personal.mapTo(HashSet()) { it.videoId }
-        val rest = Recommend.order(pool.filter { it.videoId !in taken }, p, discover.drawSeed("shelf:" + genre.id), SHELF_SIZE - personal.size)
+        val rest = Recommend.order(pool.filter { it.videoId !in taken }, p, discover.drawSeed("shelf:" + genre.id), SHELF_SIZE - personal.size, seen = seen)
         return weave(personal, rest)
     }
 
-    /** New songs like [seeds] (a page's "Recomendadas"): what their radios agree on, in the listener's taste. */
+    /**
+     * New songs like [seeds] (a page's "Recomendadas"): what their radios agree on, in the
+     * listener's taste of the moment; another draw each session.
+     */
     suspend fun like(seeds: List<String>, exclude: Set<String>, count: Int): List<RemoteTrack> =
-        Recommend.fromRadios(radios(seeds), profile(), exclude + seeds, count)
+        Recommend.fromRadios(
+            radios(seeds), profileNow(), exclude + seeds, count,
+            seen = runCatching { discover.shown() }.getOrDefault(emptyMap()),
+            rnd = Random(discover.drawSeed("like:" + seeds.sorted().joinToString(","))),
+        )
 
     private suspend fun radios(seeds: List<String>): List<List<RemoteTrack>> = coroutineScope {
         seeds.map { id -> async { runCatching { discover.related(id, RADIO_SIZE) }.getOrNull() } }.awaitAll().filterNotNull()
@@ -279,11 +305,15 @@ class ForYou(
         const val PROFILE_TTL_MS = 2L * 60_000L
         /** How far back the listening is read (the long memory fades long before). */
         const val HISTORY_MS = 180L * 24 * 3_600_000L
-        /** "Pra agora": your songs, the least to make it, the seeds of its new songs and how many new. */
-        const val MOMENT_OWN = 16
+        /**
+         * "Pra agora": the songs of yours it is drawn from and how many it takes, the least to
+         * make it, the seeds of its new songs and how many new (as many as yours).
+         */
+        const val MOMENT_POOL = 30
+        const val MOMENT_OWN = 12
         const val MOMENT_MIN = 5
         const val MOMENT_SEEDS = 3
-        const val MOMENT_NEW = 9
+        const val MOMENT_NEW = 12
         const val LEARN_FROM = 20
         const val DISCOVERY_SEEDS = 6
         const val DISCOVERIES = 20
@@ -292,6 +322,8 @@ class ForYou(
         const val BECAUSE_FIXED = 2
         const val BECAUSE_TURNS = 2
         const val BECAUSE_SEEDS = 2
+        /** The artist's best songs the row's two seeds are drawn from. */
+        const val BECAUSE_SEED_POOL = 5
         /** A card opens a mix: long enough to be one. */
         const val BECAUSE_SIZE = 30
         const val MIN_ROW = 4
@@ -299,6 +331,9 @@ class ForYou(
         /** A learned genre gets a shelf when it has at least this share of the strongest one. */
         const val LEARNED_SHARE = 0.2
         const val SHELF_SEEDS = 2
+        /** The listener's artists of the genre the shelf's seeds are drawn from, and the best songs of each. */
+        const val SHELF_ARTISTS = 6
+        const val SHELF_SONGS = 3
         /** A genre's card opens a mix: long enough to be one. */
         const val SHELF_SIZE = 30
         const val RADIO_SIZE = 30

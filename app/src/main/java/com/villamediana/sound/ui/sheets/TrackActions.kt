@@ -393,16 +393,26 @@ fun TrackActionsSheet(
  * its radio and those of songs drawn from it, in the listener's taste — another radio every time),
  * streamed. Runs on the app scope (the sheet is gone by then).
  */
-private fun startOnlineRadio(track: Track, graph: AppGraph, feedback: SheetFeedback, res: Resources) {
+internal fun startOnlineRadio(
+    track: Track,
+    graph: AppGraph,
+    feedback: SheetFeedback,
+    res: Resources,
+    /** What the radio is of, as the player names it (the song; the artist for an artist's radio). */
+    name: String = track.title,
+    done: String = res.getString(R.string.sheet_radio_done, track.title),
+    /** No radio came (the network went away): what to do instead of saying so. */
+    otherwise: (() -> Unit)? = null,
+) {
     val seed = track.toRemoteTrack() ?: return
     graph.scope.launch {
         val related = runCatching { graph.songRadio.songs(listOf(seed.videoId), setOf(seed.videoId), RADIO_START) }.getOrDefault(emptyList())
         withContext(Dispatchers.Main) {
             if (related.isEmpty()) {
-                feedback.show(res.getString(R.string.sheet_radio_unavailable))
+                otherwise?.invoke() ?: feedback.show(res.getString(R.string.sheet_radio_unavailable))
             } else {
-                graph.player.playOnline(listOf(seed) + related, 0, PlaySource(PlaySource.Type.RADIO, res.getString(R.string.playback_source_radio, track.title), seed.videoId))
-                feedback.show(res.getString(R.string.sheet_radio_done, track.title))
+                graph.player.playOnline(listOf(seed) + related, 0, PlaySource(PlaySource.Type.RADIO, res.getString(R.string.playback_source_radio, name), seed.videoId))
+                feedback.show(done)
             }
         }
     }

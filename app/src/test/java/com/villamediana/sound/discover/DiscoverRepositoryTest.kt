@@ -92,6 +92,35 @@ class DiscoverRepositoryTest {
         assertEquals(a.toSet().size, 16)
     }
 
+    @Test fun whatADailyListShowedIsRememberedAFewDays() = runBlocking {
+        fun song(id: String) = RemoteTrack(id, "https://music.youtube.com/watch?v=$id", "Song $id", "Artist $id")
+        val file = tmp.root.resolve("d.json")
+        var now = 1_800_000_000_000L
+        val day = 24L * 3_600_000L
+        val repo = DiscoverRepository(FakeSource(), file, clock = { now }, session = 1)
+        assertTrue(repo.shown().isEmpty())
+        repo.daily("row", 1) { listOf(song("a"), song("b")) }
+        repo.markShown(listOf("mine"))
+        // Shown today: counts in full for the next list, not for one that must stay as it is all day.
+        assertEquals(mapOf("a" to 1.0, "b" to 1.0, "mine" to 1.0), repo.shown())
+        assertTrue(repo.shown(today = false).isEmpty())
+        // The cached row made again the same day marks nothing new; an empty one neither.
+        repo.daily("row", 1) { listOf(song("z")) }
+        repo.daily("other", 1) { emptyList() }
+        assertEquals(setOf("a", "b", "mine"), repo.shown().keys)
+        // The days pass (another start of the app in between): less each day, then forgotten.
+        now += day
+        val later = DiscoverRepository(FakeSource(), file, clock = { now }, session = 2)
+        assertEquals(0.8, later.shown(today = false).getValue("a"), 1e-9)
+        later.markShown(listOf("a"))
+        assertEquals(1.0, later.shown().getValue("a"), 1e-9)
+        assertEquals(0.8, later.shown().getValue("b"), 1e-9)
+        now += 4 * day
+        assertEquals(setOf("a"), later.shown().keys)
+        now += day
+        assertTrue(later.shown().isEmpty())
+    }
+
     @Test fun offlineFallsBackToTheLastShelf() = runBlocking {
         val src = FakeSource()
         var now = 1_000_000_000L

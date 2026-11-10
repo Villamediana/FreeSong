@@ -156,7 +156,7 @@ class SmartQueueTest {
     }
 
     @Test
-    fun `radio starts with the seed, never repeats it, and related songs come first`() {
+    fun `radio starts with the seed, never repeats it, and holds only what is like it`() {
         val seed = rockLibrary.first()
         val related = rockLibrary.filter { Genres.family(it.genre) == GenreFamily.ROCK }.map { it.id }.toSet()
         repeat(20) { s ->
@@ -164,10 +164,8 @@ class SmartQueueTest {
             assertEquals(seed.id, radio.first().id)
             assertEquals(1, radio.count { it.id == seed.id })
             assertEquals(radio.size, radio.map { it.id }.distinct().size)
-            assertEquals(rockLibrary.size, radio.size)
-            // Everything from the rock family before anything unrelated.
-            val firstUnrelated = radio.indexOfFirst { it.id !in related }
-            assertEquals(related.size, firstUnrelated)
+            // Every song of the rock family and nothing else: a radio is not filled with the rest of the library.
+            assertEquals(related, radio.map { it.id }.toSet())
         }
     }
 
@@ -244,5 +242,17 @@ class SmartQueueTest {
         assertEquals(5, SmartQueue.continuation(emptyList(), rockLibrary, taste, limit = 5).size)
         assertTrue(SmartQueue.continuation(rockLibrary, rockLibrary, taste).isEmpty())
         assertTrue(SmartQueue.continuation(rockLibrary, emptyList(), taste).isEmpty())
+    }
+
+    @Test
+    fun `continuation without fill brings only what is like the end of the queue`() {
+        val rock = rockLibrary.filter { Genres.family(it.genre) == GenreFamily.ROCK }
+        val queue = rock.take(3)
+        val filled = SmartQueue.continuation(queue, rockLibrary, taste, limit = 60, seedValue = 1)
+        val close = SmartQueue.continuation(queue, rockLibrary, taste, limit = 60, seedValue = 1, fill = false)
+        // Filling takes the rest of the library when the related run out; without it, the list is shorter.
+        assertTrue(filled.any { Genres.family(it.genre) != GenreFamily.ROCK })
+        assertTrue(close.isNotEmpty() && close.size < filled.size)
+        assertTrue(close.all { Genres.family(it.genre) == GenreFamily.ROCK })
     }
 }

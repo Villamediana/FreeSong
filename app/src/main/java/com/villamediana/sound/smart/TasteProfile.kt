@@ -3,6 +3,7 @@ package com.villamediana.sound.smart
 import kotlin.math.ln
 import kotlin.math.min
 import kotlin.math.pow
+import kotlin.random.Random
 
 /** One listening session, from the library or streamed: what the profile learns from. */
 data class Listen(
@@ -128,11 +129,19 @@ class TasteProfile private constructor(
             .take(count)
 
     /**
-     * The songs to start the day's discoveries from: the best loved, one per artist, taking turns
-     * across the listener's genres so one style doesn't fill everything.
+     * The songs to start the day's discoveries from: one per artist, taking turns across the
+     * listener's genres so one style doesn't fill everything. Without [rnd], the best loved of
+     * each; with it, another draw each time — the artists liked most still come up most, but not
+     * always the same ones, and not always their one best song (one of their [SEED_SONGS] best) —
+     * so the suggestions don't start from the same songs day after day.
      */
-    fun seeds(count: Int): List<SongTaste> {
-        val firsts = artists.filter { it.evidence >= 1 }.mapNotNull { a -> a.songs.firstOrNull { it.videoId != null }?.let { a to it } }
+    fun seeds(count: Int, rnd: Random? = null): List<SongTaste> {
+        val liked = artists.filter { it.evidence >= 1 }
+        val order = if (rnd == null) liked else weightedOrder(liked, { it.key.hashCode().toLong() }, { it.affinity.coerceAtLeast(0.01) }, rnd)
+        val firsts = order.mapNotNull { a ->
+            val songs = a.songs.filter { it.videoId != null }
+            (if (rnd == null) songs.firstOrNull() else songs.take(SEED_SONGS).randomOrNull(rnd))?.let { a to it }
+        }
         val byGenre = firsts.groupBy { it.first.genre }.values.map { it.toMutableList() }.toMutableList()
         val out = ArrayList<SongTaste>(count)
         while (out.size < count && byGenre.any { it.isNotEmpty() }) {
@@ -154,8 +163,17 @@ class TasteProfile private constructor(
         const val SONG_CAP = 5.0
         /** A picked genre counts like this share of the strongest learned one. */
         const val PICKED_SHARE = 0.35
-        /** A downloaded song, in hearts. */
-        const val SAVED_WEIGHT = 0.6
+        /**
+         * A heart, in songs heard to the end: one signal among the others, not the whole taste —
+         * what is being listened to leads, the hearts only keep a song (and its artist) remembered.
+         */
+        const val HEART_WEIGHT = 1.5
+        /** The same in the short memory (the heart just given says something about these days). */
+        const val HEART_NOW = 0.75
+        /** A downloaded song: a quiet "I like this" (the library is not the taste). */
+        const val SAVED_WEIGHT = 0.3
+        /** The songs of an artist a suggestion can start from (the best ones, taking turns). */
+        const val SEED_SONGS = 3
         /** Skips that leave a song never heard through out for good. */
         const val AVOID_SKIPS = 4
         /** Skips (with no song of theirs ever heard through) that leave an artist out for good. */
@@ -216,8 +234,8 @@ class TasteProfile private constructor(
             for (h in hearts) {
                 val s = acc(h.videoId, h.title, h.artist, h.genre) ?: continue
                 val age = (now - h.at).coerceAtLeast(0)
-                s.long += 3.0 * decay(age, HEART_HALF_LIFE_MS)
-                s.short += 1.5 * decay(age, SHORT_HALF_LIFE_MS * 2)
+                s.long += HEART_WEIGHT * decay(age, HEART_HALF_LIFE_MS)
+                s.short += HEART_NOW * decay(age, SHORT_HALF_LIFE_MS * 2)
                 s.hearted = true
             }
             for (h in saved) {

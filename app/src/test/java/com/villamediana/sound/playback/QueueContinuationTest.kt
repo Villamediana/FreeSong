@@ -32,6 +32,31 @@ class QueueContinuationTest {
         assertEquals(QueueContinuation.MAX_OWN_SHARE / 2, QueueContinuation.ownShare(half), 1e-9)
     }
 
+    @Test fun aRadioKeepsTheSongItStartedFromAmongItsSeeds() {
+        val queue = listOf(online("start"), online("a"), online("b"), online("c"), online("d"), online("e"))
+        val radio = PlaySource(PlaySource.Type.RADIO, "Rádio", "start")
+        assertEquals("start", QueueContinuation.anchor(radio, queue))
+        // Right after what is playing now, however far the list went.
+        assertEquals(listOf("e", "start", "d", "c"), QueueContinuation.seeds(queue, anchor = "start"))
+        // Already one of them: nothing changes.
+        assertEquals(listOf("e", "d", "c"), QueueContinuation.seeds(queue, anchor = "d"))
+        // A radio of a downloaded song is found by its library id; any other list has no anchor.
+        val mine = listOf(mine(7, "seven"), mine(8, "eight"))
+        assertEquals("seven", QueueContinuation.anchor(PlaySource(PlaySource.Type.RADIO, "Rádio", "7"), mine))
+        assertEquals(null, QueueContinuation.anchor(PlaySource(PlaySource.Type.ALBUM, "Disco", "start"), queue))
+        assertEquals(null, QueueContinuation.anchor(radio, mine))
+        assertEquals(null, QueueContinuation.anchor(null, queue))
+    }
+
+    @Test fun aRadioFromYouTubeTakesNothingFromTheLibraryByItself() {
+        val yours = List(10) { mine(it + 1L) }
+        // Even with the list's end all yours (downloads played by the radio).
+        assertEquals(0.0, QueueContinuation.ownShare(yours, PlaySource(PlaySource.Type.RADIO, "Rádio", "abcDEF12345")), 1e-9)
+        // The library's own radio (started from a song's library id) stays the library's.
+        assertEquals(QueueContinuation.MAX_OWN_SHARE, QueueContinuation.ownShare(yours, PlaySource(PlaySource.Type.RADIO, "Rádio", "12")), 1e-9)
+        assertEquals(QueueContinuation.MAX_OWN_SHARE, QueueContinuation.ownShare(yours, PlaySource(PlaySource.Type.ALBUM, "Disco", "abc")), 1e-9)
+    }
+
     @Test fun twoOfYoursThenANewOneTakingTurnsAcrossTheRadios() {
         val own = (10L..20L).map { mine(it) }
         val radios = listOf(listOf(r("a1"), r("a2"), r("a3")), listOf(r("b1"), r("b2"), r("b3")))

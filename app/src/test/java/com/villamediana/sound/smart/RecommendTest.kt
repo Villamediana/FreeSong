@@ -17,7 +17,7 @@ class RecommendTest {
         Listen(id, "Song $id", artist, null, now - daysAgo * 86_400_000L, if (skipped) 5_000 else 200_000, 200_000, completed, skipped)
 
     @Test
-    fun whatTheRadiosAgreeOnAndTheLikedArtistsComeFirstNothingSkippedOrKnown() {
+    fun whatTheRadiosAgreeOnComesFirstThenTheLikedArtistsNothingSkippedOrKnown() {
         val profile = TasteProfile.build(
             listOf(
                 listen("seed1", "Djavan"), listen("seed1", "Djavan", daysAgo = 2), listen("known", "Caetano"),
@@ -27,12 +27,15 @@ class RecommendTest {
             now,
         )
         val radioA = listOf(song("both", "Marisa"), song("onlyA", "Zeca"), song("known", "Caetano"), song("bad", "Gil"), song("caet2", "Caetano"))
-        val radioB = listOf(song("onlyB", "Nobody"), song("both", "Marisa"), song("dj2", "Djavan"))
+        val radioB = listOf(song("onlyB", "Nobody"), song("dj2", "Djavan"), song("both", "Marisa"), song("far1", "Someone"), song("dj3", "Djavan"))
         val picks = Recommend.fromRadios(listOf(radioA, radioB), profile, exclude = setOf("seed1"), count = 10)
         val ids = picks.map { it.videoId }
-        // In both radios: first. A song of a liked artist rises past ones only one radio has.
+        // In both radios: first. As close to the seeds as another, the liked artist's song is ahead…
         assertEquals("both", ids.first())
-        assertTrue(ids.indexOf("dj2") < ids.indexOf("onlyB"))
+        assertTrue(ids.indexOf("dj2") < ids.indexOf("onlyA"))
+        // …but liking the artist doesn't bring a song from the end of a radio past the ones at its top.
+        assertTrue(ids.indexOf("onlyB") < ids.indexOf("dj3"))
+        assertTrue(ids.indexOf("onlyA") < ids.indexOf("dj3"))
         // Never: a song already heard to the end, the seed itself.
         assertFalse("known" in ids)
         assertFalse("seed1" in ids)

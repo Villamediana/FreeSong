@@ -606,11 +606,12 @@ class PlaybackService : MediaLibraryService() {
         extendJob = scope.launch {
             val local = tracksFor(items.mapNotNull(MediaItems::trackId).distinct()).associateBy { it.id }
             val list = items.mapNotNull { item -> MediaItems.trackId(item)?.let(local::get) ?: MediaItems.onlineTrack(item) }
-            // Like what is being heard: the queue's last songs not skipped just now, their radios
-            // and one drawn from them (another draw every time), in the listener's taste.
+            // Like what is being heard: the queue's last songs not skipped just now (and the song
+            // a radio was started from, always), their radios and one drawn from them (another draw
+            // every time), in the listener's taste.
             val session = runCatching { com.villamediana.sound.discover.SongRadio.sessionOf(library) }
                 .getOrDefault(com.villamediana.sound.smart.Session())
-            val seeds = QueueContinuation.seeds(list, skipped = session.skipped)
+            val seeds = QueueContinuation.seeds(list, skipped = session.skipped, anchor = QueueContinuation.anchor(src, list))
             val radio = runCatching {
                 graph.songRadio.songs(seeds, list.mapNotNullTo(HashSet()) { it.videoId }, QueueContinuation.SIZE + 10, Random(seed), session)
             }.getOrDefault(emptyList())
@@ -619,11 +620,13 @@ class PlaybackService : MediaLibraryService() {
             val taste = taste()
             val byVideo = localByVideoId(radios.flatten().map { it.videoId })
             val more = withContext(Dispatchers.Default) {
-                val own = SmartPlans.extension(src, list, lib, taste, seed)
+                // Your songs come in when they fit the end of the list; with nothing new to add
+                // (offline), whatever of yours is closest keeps it going.
+                val own = SmartPlans.extension(src, list, lib, taste, seed, fill = radio.isEmpty())
                 QueueContinuation.blend(
                     own = own,
                     radios = radios,
-                    ownShare = QueueContinuation.ownShare(list),
+                    ownShare = QueueContinuation.ownShare(list, src),
                     queuedIds = list.mapTo(HashSet()) { it.id },
                     queuedVideoIds = list.mapNotNullTo(HashSet()) { it.videoId },
                     byVideoId = byVideo,

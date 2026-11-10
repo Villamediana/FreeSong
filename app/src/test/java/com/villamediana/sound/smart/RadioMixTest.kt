@@ -38,20 +38,55 @@ class RadioMixTest {
     }
 
     @Test
-    fun whatSeveralRadiosAgreeOnAndTheListenersArtistsComeFirst() {
+    fun whatSeveralRadiosAgreeOnComesFirstAndTheTasteOnlyNudges() {
         val shared = song("shared", "Shared Artist")
         val a = listOf(song("a1", "A1"), song("a2", "A2"), shared) + (3..20).map { song("a$it", "A$it") }
         val b = listOf(song("b1", "B1"), shared) + (2..20).map { song("b$it", "B$it") }
-        val liked = TasteProfile.build((1..4).map { Listen("x$it", "x", "B9", null, now, 200_000, 200_000, true, false) }, emptyList(), now)
-        var sharedTop = 0
-        var likedTop = 0
-        repeat(30) { i ->
-            val out = RadioMix.rank(listOf(a, b), emptyList(), liked, Session(), emptySet(), 15, Random(i))
-            if (out.take(5).any { it.videoId == "shared" }) sharedTop++
-            if (out.take(8).any { it.artist == "B9" }) likedTop++
+        fun likes(artist: String) = TasteProfile.build((1..4).map { Listen("x$it", "x", artist, null, now, 200_000, 200_000, true, false) }, emptyList(), now)
+        fun top(profile: TasteProfile?, artist: String, first: Int) = (0 until 60).count { i ->
+            RadioMix.rank(listOf(a, b), emptyList(), profile, Session(), emptySet(), 15, Random(i)).take(first).any { it.artist == artist }
+        }
+        val sharedTop = (0 until 30).count { i ->
+            RadioMix.rank(listOf(a, b), emptyList(), likes("A6"), Session(), emptySet(), 15, Random(i)).take(5).any { it.videoId == "shared" }
         }
         assertTrue("shared $sharedTop/30", sharedTop >= 24)
-        assertTrue("liked $likedTop/30", likedTop >= 20)
+        // A favourite artist's song near the seed comes up more often than it would by itself…
+        val plain = top(null, "A6", 6)
+        val liked = top(likes("A6"), "A6", 6)
+        assertTrue("liked $liked plain $plain", liked > plain)
+        // …but one at the far end of the radio never jumps over the songs next to the seed: liking
+        // an artist is not what makes a song belong in this radio.
+        assertEquals(0, top(likes("A20"), "A20", 5))
+    }
+
+    @Test
+    fun aRadioIsMostlySongsTheListenerDoesNotKnowYet() {
+        val list = (1..30).map { song("k$it", "Art $it") }
+        // Everything near the seed was already heard to the end; the new songs are further down.
+        val profile = TasteProfile.build((1..18).map { Listen("k$it", "Song k$it", "Art $it", null, now, 200_000, 200_000, true, false) }, emptyList(), now)
+        repeat(10) { i ->
+            val out = RadioMix.rank(listOf(list), emptyList(), profile, Session(), emptySet(), 12, Random(i))
+            assertEquals(12, out.size)
+            assertEquals(4, out.count { it.videoId in profile.known }) // a third, the rest new
+        }
+        // With nothing new left, the known ones fill in: the radio doesn't come up short.
+        val few = RadioMix.rank(listOf(list.take(18)), emptyList(), profile, Session(), emptySet(), 12, Random(1))
+        assertEquals(12, few.size)
+    }
+
+    @Test
+    fun aSongOnlyARadioOfARadioHasByAnArtistTheSeedDoesNotKnowStaysBehind() {
+        val direct = (1..20).map { song("d$it", "Near ${it % 10}") }
+        // A radio of one of its songs: half artists the seed's radio has, half strangers, taking turns.
+        val wider = (1..20).map { if (it % 2 == 0) song("w$it", "Near ${it % 10}") else song("w$it", "Far $it") }
+        var near = 0
+        var far = 0
+        repeat(30) { i ->
+            val out = RadioMix.rank(listOf(direct), listOf(wider), null, Session(), emptySet(), 20, Random(i))
+            near += out.count { it.videoId.startsWith("w") && it.artist.startsWith("Near") }
+            far += out.count { it.artist.startsWith("Far") }
+        }
+        assertTrue("near $near far $far", far * 2 < near)
     }
 
     @Test

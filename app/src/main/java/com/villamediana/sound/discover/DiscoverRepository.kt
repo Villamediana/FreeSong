@@ -6,6 +6,8 @@ import com.villamediana.sound.online.RemoteTrack
 import com.villamediana.sound.online.SearchFilter
 import com.villamediana.sound.online.SearchItem
 import com.villamediana.sound.online.YouTubeSource
+import com.villamediana.sound.smart.Picks
+import com.villamediana.sound.smart.SmartMixes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -66,6 +68,8 @@ class DiscoverRepository(
         val lists: Map<String, Entry> = emptyMap(),
         /** Artist name (lowercase) → its page, found once. */
         val artists: Map<String, Col> = emptyMap(),
+        /** Songs suggested lately (a mix, a row of the Home) → the day each was last suggested. */
+        val shown: Map<String, Long> = emptyMap(),
     )
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -133,16 +137,40 @@ class DiscoverRepository(
 
     /**
      * A list made once for [day] under [key] (the made-for-you mixes' new songs): the same all day,
-     * remade the next. Offline / on failure: the last one made.
+     * remade the next. Offline / on failure: the last one made. Its songs are remembered as
+     * suggested ([shown]), so the lists made after it lean to other ones.
      */
     suspend fun daily(key: String, day: Long, make: suspend () -> List<RemoteTrack>): List<RemoteTrack> {
         val cached = lock.withLock { load() }.lists[key]
         if (cached != null && cached.slot == day) return cached.songs.map { it.toRemote() }
         val fresh = runCatching { make() }.getOrNull().orEmpty()
         if (fresh.isEmpty()) return cached?.songs?.map { it.toRemote() }.orEmpty()
-        update { it.copy(lists = it.lists + (key to Entry(day, songs = fresh.map { s -> s.toSong() }))) }
+        val today = today()
+        update {
+            it.copy(
+                lists = it.lists + (key to Entry(day, songs = fresh.map { s -> s.toSong() })),
+                shown = Picks.mark(it.shown, fresh.map { s -> s.videoId }, today),
+            )
+        }
         return fresh
     }
+
+    /**
+     * What was suggested in the last days (song → 1 for today, less for each day before): what
+     * the next lists count less, so they don't bring the same songs again. With [today] off, only
+     * the days before — for a list that has to come out the same when made again today.
+     */
+    suspend fun shown(today: Boolean = true): Map<String, Double> = Picks.seen(lock.withLock { load() }.shown, today(), today)
+
+    /** These songs were suggested today (the ones of yours a mix was made of). */
+    suspend fun markShown(ids: Collection<String>) {
+        val today = today()
+        val known = lock.withLock { load() }.shown
+        if (ids.all { known[it] == today }) return
+        update { it.copy(shown = Picks.mark(it.shown, ids, today)) }
+    }
+
+    private fun today(): Long = SmartMixes.dayNumber(clock())
 
     /** Albums/playlists for [query] ([filter] ALBUMS or PLAYLISTS), cached like [songs]. */
     suspend fun collections(key: String, query: String, filter: SearchFilter, size: Int = 6): List<RemoteCollection> =
