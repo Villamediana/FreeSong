@@ -25,17 +25,20 @@ import kotlin.math.sqrt
  * [FadeShape] by that moment's position in the song, so the fade is smooth to the sample and
  * keeps time with the music even when the main thread is busy. Plain audio passes untouched.
  *
+ * - The main player [leave]s the song at the fade's start (the tail takes it over there), from now
+ *   until its next seek.
  * - The main player [arm]s the next song's shape right before it seeks into it: the shape takes
  *   over at that seek's flush and ends at any later seek (a skip, a tap on the bar): a plain cut.
  * - The tail player [hold]s the shape of the song going out: it only ever plays that.
  * - [release] goes back to plain audio with a short ramp (a pause or skip during the fade).
  *
- * [arm], [hold] and [release] come from the main thread; the audio runs on the playback thread.
+ * [leave], [arm], [hold] and [release] come from the main thread; the audio runs on the playback thread.
  */
 @OptIn(UnstableApi::class)
 class FadeShaper : BaseAudioProcessor() {
     @Volatile private var armed: FadeShape? = null
     @Volatile private var held: FadeShape? = null
+    @Volatile private var leaving: FadeShape? = null
     @Volatile private var releaseAsked = false
 
     private var shape: FadeShape? = null
@@ -58,6 +61,12 @@ class FadeShaper : BaseAudioProcessor() {
     private var rampGain = 1f
     private var rampBassDb = 0f
 
+    /** The song playing now follows [shape] ([FadeShape.Role.LEAVE]) until the next seek (main player). */
+    fun leave(shape: FadeShape) {
+        releaseAsked = false
+        leaving = shape
+    }
+
     /** The next seek goes into the song shaped by [shape] (main player). */
     fun arm(shape: FadeShape) {
         releaseAsked = false
@@ -76,6 +85,7 @@ class FadeShaper : BaseAudioProcessor() {
     fun release() {
         armed = null
         held = null
+        leaving = null
         releaseAsked = true
     }
 
@@ -137,6 +147,15 @@ class FadeShaper : BaseAudioProcessor() {
             rampFrames = 0
             rampDone = 0
             shelf.reset(channels, sampleRate)
+        }
+        // Like an armed shape once its seek is in: the next seek (or song) ends it.
+        val leave = leaving
+        if (leave != null) {
+            leaving = null
+            shape = leave
+            fromArm = true
+            rampFrames = 0
+            rampDone = 0
         }
     }
 
@@ -205,6 +224,7 @@ class FadeShaper : BaseAudioProcessor() {
     override fun onReset() {
         armed = null
         held = null
+        leaving = null
         releaseAsked = false
         shape = null
         fromArm = false

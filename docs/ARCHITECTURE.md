@@ -151,9 +151,24 @@ JSON: usar `kotlinx.serialization` (o `org.json` do Android vira stub nos testes
     a partir do flush desse seek e cai em qualquer seek seguinte. O tail player tem o seu (`hold`,
     vale em todo flush). `release` = pausa/skip no meio: volta ao normal em 40 ms. `player.volume`
     fica em 1.
-  - Plano (`CrossfadePlan.step`, puro): Measure ~45 s antes → Prepare 6 s antes do início do fade
-    medido (sem medida a tempo: fade simples) → Start no instante (o tick acorda exatamente nele).
-    A fila mudou depois da medida: só o lado de quem sai vale (`Mix.withoutIncoming`).
+  - **Passagem sem piscada** (1.28.1): a música que sai troca de player no início do fade. Antes o
+    principal pulava pra próxima na hora e o tail só soava ~50–200 ms depois (o AudioTrack dele
+    começando) — um buraco ouvido como "piscada". Agora o tail **rola mudo 6 s antes**
+    (`hold(mix.outgoing())` antes do prepare: `enterUs` = silêncio até o fade) e o `TailSync`
+    (puro) o mantém no mesmo instante do principal: compara `currentPosition` dos dois (mediana de
+    5), corrige com velocidade 0,5–1,5× por 800 ms (o tail está mudo, ninguém ouve) ou pulo se
+    passou de 600 ms; acerta até ±8 ms. No `Roll` o principal recebe `shaper.leave(mix.leaving())`
+    (`Role.LEAVE`): cala na posição do fade em 40 ms enquanto o tail sobe no mesmo trecho
+    (`HANDOVER_US`, potência igual — a poucos ms de distância os agudos já não somam em fase),
+    tudo pela posição no próprio áudio de cada um. Só depois (`START_AFTER_MS`, já mudo) o
+    principal faz o `seekTo(próxima)`. Pausa/seek/carregando no meio: `stopRoll` (o tail espera
+    onde está, o principal volta a soar) e rola de novo depois; tail sem tocar 250 ms antes do fade:
+    sem fade dessa vez.
+  - Plano (`CrossfadePlan.step`, puro): Measure ~45 s antes → Prepare 8 s antes do início do fade
+    medido (sem medida a tempo: fade simples) → Roll 6 s antes → Start logo depois da passagem.
+    Menos de 0,5 s antes do fade sem rolar: sem fade, a música só termina. Timer, crossfade
+    desligado ou fim da fila no meio: `Cancel`. A fila mudou depois da medida: só o lado de quem
+    sai vale (`Mix.withoutIncoming`).
 
 ## Acordes (1.10.0, 2026-11-08; ouvido BTC desde 1.11.0; Cifra Club primeiro desde 1.12.0)
 

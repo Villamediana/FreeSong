@@ -4,6 +4,7 @@ import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.util.UnstableApi
+import com.villamediana.sound.playback.CrossfadePlan
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -95,20 +96,25 @@ class CrossfadeEndToEndTest {
         assertEquals(1_000 - Mixing.LEAD_MARGIN_MS, mix.inStartMs)
         assertTrue("match ${mix.inMatchDb}", mix.inMatchDb < -18f + 0.01f)
 
-        // 3 s of the quiet song before the fade, as the main player plays it…
-        val before = play(::quiet, mix.fadeStartMs - 3_000, rate * 3, null)
-        // …then the tail plays its end out while the main player is already in the next song.
+        // 3 s of the quiet song before the fade, as the main player plays it, handing it over at the
+        // fade's start to the tail, which rolls from 3 s before, silent until then…
+        val handOn = (CrossfadePlan.START_AFTER_MS * rate / 1_000).toInt()
+        val main = shaper(mix.fadeStartMs - 3_000).apply { leave(mix.leaving()) }
+        val before = play(::quiet, mix.fadeStartMs - 3_000, rate * 3 + handOn, main)
         val fadeFrames = (fadeMs * rate / 1_000).toInt()
         val after = rate * 3
-        val tail = shaper(mix.fadeStartMs).apply { hold(mix.outgoing()) }
-        val out = play(::quiet, mix.fadeStartMs, fadeFrames + after, tail)
-        val main = FadeShaper().apply {
+        val tail = FadeShaper().apply {
+            hold(mix.outgoing())
             configure(AudioProcessor.AudioFormat(rate, 2, C.ENCODING_PCM_16BIT))
-            arm(mix.incoming())
-            flush(AudioProcessor.StreamMetadata(mix.inStartMs * 1_000))
+            flush(AudioProcessor.StreamMetadata((mix.fadeStartMs - 3_000) * 1_000))
         }
-        val inc = play(::loud, mix.inStartMs, fadeFrames + after, main)
-        val heard = before + FloatArray(out.size) { out[it] + inc[it] }
+        val out = play(::quiet, mix.fadeStartMs - 3_000, rate * 3 + fadeFrames + after, tail)
+        // …then the main player moves on into the next song.
+        main.arm(mix.incoming())
+        main.flush(AudioProcessor.StreamMetadata(mix.inStartMs * 1_000))
+        val inc = play(::loud, mix.inStartMs, fadeFrames + after - handOn, main)
+        val mainOut = before + inc
+        val heard = FloatArray(out.size) { out[it] + mainOut[it] }
 
         // What the ear gets, in 400 ms windows every 100 ms.
         val meter = LoudnessMeter(rate, 1, 0, Long.MAX_VALUE)

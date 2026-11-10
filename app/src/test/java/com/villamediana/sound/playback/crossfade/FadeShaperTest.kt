@@ -157,6 +157,98 @@ class FadeShaperTest {
         assertEquals(10_000, abs(out[rate * FadeShaper.RELEASE_MS / 1_000 + 200].toInt()))
     }
 
+    // ---------------------------------------------------------------- the handover at the fade's start
+
+    /** A fade starting at 100 s. */
+    private val at100 = Mix(5_000, 100_000, 0, 0f, 0f)
+
+    private fun ms(ms: Int) = rate * ms / 1_000
+
+    @Test fun theMainPlayerHandsTheSongOverAtTheFade() {
+        val p = shaper()
+        p.flush(AudioProcessor.StreamMetadata(99_000_000))
+        p.leave(at100.leaving())
+        val out = run(p, rate * 2)
+        assertEquals(1f, level(out, rate - 100), 0.001f)
+        assertEquals(FadeShape.handOut(20_000), level(out, rate + ms(20)), 0.02f)
+        // Silent from the handover on, until it moves on.
+        assertEquals(0f, level(out, rate + ms(41)), 0.001f)
+        assertEquals(0f, level(out, rate * 2 - 1), 0.001f)
+    }
+
+    @Test fun theTailIsSilentUntilTheHandoverThenTakesTheSongAndFadesItOut() {
+        val p = FadeShaper()
+        p.hold(at100.outgoing())
+        p.configure(AudioProcessor.AudioFormat(rate, 2, C.ENCODING_PCM_16BIT))
+        p.flush(AudioProcessor.StreamMetadata(94_000_000))
+        val out = run(p, rate * 7)
+        assertEquals(0f, level(out, rate * 3), 0.001f)
+        assertEquals(0f, level(out, rate * 6 - 100), 0.001f)
+        assertEquals(FadeShape.handIn(20_000), level(out, rate * 6 + ms(20)), 0.02f)
+        assertEquals(1f, level(out, rate * 6 + ms(60)), 0.01f)
+        assertEquals(kotlin.math.cos(0.1 * PI / 2).toFloat(), level(out, rate * 6 + rate / 2), 0.01f)
+    }
+
+    @Test fun onTheSameMomentTheSongGoesOnWholeThroughTheHandover() {
+        val main = shaper().apply { flush(AudioProcessor.StreamMetadata(99_000_000)); leave(at100.leaving()) }
+        val tail = shaper().apply { hold(at100.outgoing()); flush(AudioProcessor.StreamMetadata(99_000_000)) }
+        val wave = { k: Int -> (8_000 * sin(2 * PI * 440 * k / rate) + 4_000 * sin(2 * PI * 55 * k / rate)).toInt() }
+        val a = run(main, rate * 3 / 2, wave)
+        val b = run(tail, rate * 3 / 2, wave)
+        // Before and after it, the song to the sample; along it, never under (a few dB over, for ms).
+        for (k in ms(900) until ms(1_000)) assertEquals("at $k", wave(k).toFloat(), (a[k] + b[k]).toFloat(), 3f)
+        for (k in ms(1_041) until ms(1_050)) assertEquals("at $k", wave(k).toFloat(), (a[k] + b[k]).toFloat(), 3f)
+        for (k in ms(1_000) until ms(1_041)) {
+            val g = FadeShape.handIn((k - rate) * 1_000_000L / rate) + FadeShape.handOut((k - rate) * 1_000_000L / rate)
+            assertTrue("at $k: $g", g in 0.999f..1.415f)
+            assertEquals("at $k", wave(k) * g, (a[k] + b[k]).toFloat(), 4f + abs(wave(k)) * 0.002f)
+        }
+    }
+
+    @Test fun aFewMsApartNothingDropsOut() {
+        // The players as close as TailSync leaves them: the tail 6 ms behind. Noise: no two parts alike.
+        val behind = ms(6)
+        val random = java.util.Random(7)
+        val table = IntArray(rate * 3) { random.nextInt(16_384) - 8_192 }
+        val noise = { k: Int -> table[k + behind] }
+        val main = shaper().apply { flush(AudioProcessor.StreamMetadata(99_000_000)); leave(at100.leaving()) }
+        val tail = shaper().apply { hold(at100.outgoing()); flush(AudioProcessor.StreamMetadata(99_000_000L - 6_000)) }
+        val a = run(main, rate * 2, noise)
+        val b = run(tail, rate * 2, { k -> noise(k - behind) })
+        fun rms(x: (Int) -> Double, from: Int) = kotlin.math.sqrt((from until from + ms(10)).sumOf { x(it) * x(it) } / ms(10))
+        val plain = rms({ noise(it).toDouble() }, ms(500))
+        // Every 10 ms around the handover: never more than ~1.5 dB down where the two cross, never up.
+        for (w in ms(900) until ms(1_150) step ms(10)) {
+            val r = rms({ (a[it] + b[it]).toDouble() }, w) / plain
+            assertTrue("at ${w * 1_000 / rate} ms: $r", r > 0.84 && r < 1.08)
+        }
+    }
+
+    @Test fun leavingEndsAtTheNextSeekOrARelease() {
+        val p = shaper()
+        p.flush(AudioProcessor.StreamMetadata(99_000_000))
+        p.leave(at100.leaving())
+        run(p, rate * 2)
+        // The listener seeks back: the song as it is.
+        p.flush(AudioProcessor.StreamMetadata(50_000_000))
+        assertEquals(1f, level(run(p, 100), 50), 0.001f)
+        // Paused before the handover: the song as it is, past it too.
+        val q = shaper()
+        q.flush(AudioProcessor.StreamMetadata(99_000_000))
+        q.leave(at100.leaving())
+        run(q, rate / 2)
+        q.release()
+        assertEquals(1f, level(run(q, rate), rate * 3 / 4), 0.001f)
+        // The next song armed after it: the leaving ends at that seek, the next one fades in.
+        val r = shaper()
+        r.flush(AudioProcessor.StreamMetadata(99_000_000))
+        r.leave(at100.leaving())
+        run(r, rate * 2)
+        r.arm(FadeShape(Role.IN, 0, 1_000_000, 0f))
+        r.flush(AudioProcessor.StreamMetadata(0))
+        assertEquals(sin(0.5 * PI / 2).toFloat(), level(run(r, rate), rate / 2), 0.01f)
+    }
+
     // ---------------------------------------------------------------- through ExoPlayer's real sink
 
     @Test fun theNextSongFadesInThroughTheRealSink() {
