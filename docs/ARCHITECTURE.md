@@ -526,3 +526,20 @@ Miguel: os números estavam inflados e "Mais ouvidas" não atualizava. O que mud
 - **"Mais ouvidas" é do mês** (Miguel: "é melhor do mês"), no seu perfil e no que vai para os amigos,
   com "Este mês" no subtítulo como os artistas. As horas do cartão seguem de todos os tempos.
 
+## Jam: sair é na hora e para valer (1.27.1 + relay 1.6.2, 2026-11-10)
+
+Miguel saiu da jam: quem criou viu na hora, mas o celular dele seguiu "na jam" por muito tempo.
+
+- `JamSheet` chamava `leave()` no escopo da folha e fechava a folha em seguida: fechar podia cancelar
+  a saída no meio. Agora `leaveNow()`/`declineNow()` rodam no escopo do app.
+- `JamSession.epoch`: começar, entrar, sair e recusar mudam a época; um `refresh()` cuja pergunta ao
+  relay começou antes disso descarta a resposta (antes, um refresh em andamento — app voltando pra
+  tela, reconexão — recolocava a pessoa na jam que ela tinha acabado de deixar).
+- Saída que o relay não recebeu (offline) fica pendente (`leaving`): a jam nunca é seguida de novo
+  aqui e a saída vai de novo no próximo `refresh()`; 404 conta como saída feita. Antes ninguém
+  reenviava e o relay mantinha a pessoa na jam para sempre.
+- `JamSync.move` acha a música que toca pela posição, não pelo id (a mesma música duas vezes na fila
+  mandava todo mundo pra cópia errada).
+- Relay 1.6.2: quem sai recebe `jam.ended` (os outros celulares da pessoa também); quem não criou a
+  jam e fica 15 min sem conectar sai sozinho (`Jams.gone`, `sweepJams` no heartbeat).
+
