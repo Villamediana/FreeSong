@@ -167,4 +167,15 @@ class MixingTest {
             assertTrue(abs(at(i, (k + 1) / 100f) - at(i, k / 100f)) < 3f)
         }
     }
+
+    @Test fun aFadeMovedLaterEndsWhereItDidAndKeepsAMinimum() {
+        val mix = Mix(7_000, 180_000, 800, -2f, 0f)
+        assertEquals(mix, mix.notBefore(179_000, 2_000))
+        assertEquals(mix, mix.notBefore(180_000, 2_000))
+        assertEquals(mix.copy(fadeStartMs = 183_000, fadeMs = 4_000), mix.notBefore(183_000, 2_000))
+        assertEquals(mix.copy(fadeStartMs = 185_000, fadeMs = 2_000), mix.notBefore(186_500, 2_000))
+        // One already shorter than the minimum stays as it is.
+        val short = Mix(1_000, 180_000, 0, 0f, 0f)
+        assertEquals(short, short.notBefore(180_700, 2_000))
+    }
 }

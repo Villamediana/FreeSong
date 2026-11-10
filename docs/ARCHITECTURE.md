@@ -166,6 +166,13 @@ JSON: usar `kotlinx.serialization` (o `org.json` do Android vira stub nos testes
     sem fade dessa vez.
   - Plano (`CrossfadePlan.step`, puro): Measure ~45 s antes → Prepare 8 s antes do início do fade
     medido (sem medida a tempo: fade simples) → Roll 6 s antes → Start logo depois da passagem.
+    **O tail sempre rola os 6 s inteiros** (`CrossfadePlan.fit`): se ele começa atrasado (medida
+    que demorou — música nunca ouvida + seek perto do fim —, pausa ou seek dentro do rolo), a
+    passagem não sai fora de sincronia (era a "quebrada da primeira vez"): o fade começa mais
+    tarde e termina no mesmo ponto (`Mix.notBefore`, mínimo `MIN_FADE_MS` 2 s). `Ready`/`Prepare`
+    levam o mix decidido (`base`) e o que vale (`mix`); `park()` reposiciona o tail (e solta o
+    áudio que ele já tinha moldado) a cada pausa/seek. Sem medida, o fade simples só é decidido
+    7 s antes (1 s de preparo + rolo). A medida lê o fim e o começo em paralelo.
     Menos de 0,5 s antes do fade sem rolar: sem fade, a música só termina. Timer, crossfade
     desligado ou fim da fila no meio: `Cancel`. A fila mudou depois da medida: só o lado de quem
     sai vale (`Mix.withoutIncoming`).
