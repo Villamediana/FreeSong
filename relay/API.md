@@ -217,7 +217,7 @@ Do servidor pro app:
 | `jam` | `jam, rejected?` | a jam mudou (ou sua mudança foi recusada: `stale`/`invalid`) |
 | `jam.ended` | `jamId` | a jam acabou (ou você não está nela) |
 | `typing` | `from, on` | um amigo começou (`on: true`) ou parou de escrever pra você |
-| `profile` | `user` | nome ou foto de um amigo (perfil completo), de alguém da sua jam (público) ou seu (outro celular) mudou |
+| `profile` | `user` | nome ou foto de um amigo (perfil completo), de alguém da sua jam (público) ou seu (outro celular) mudou; também quando os números de um amigo mudam (`PUT /v1/me/stats` com algo novo, só para os amigos) |
 
 Do app pro servidor (até 64 KB por mensagem; toda mensagem conta no limite de 600/min):
 

@@ -20,7 +20,7 @@ import { cleanNumbers } from './numbers.js';
 import { cleanJpeg } from './jpeg.js';
 import { cleanDisplayName, cleanMessage, normalizeUsername, randomIdentity } from './names.js';
 
-export const VERSION = '1.6.0';
+export const VERSION = '1.6.1';
 const JSON_LIMIT = 64 * 1024;
 const AVATAR_LIMIT = 600 * 1024;
 /** Mensagem de voz: AAC em MP4 (o app grava ~24 kbps, até 5 min ≈ 0,9 MB). */
@@ -249,6 +249,14 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
     }
   }
 
+  /** Os números mudaram: só os amigos veem (quem está na jam sem ser amigo não recebe números). */
+  function statsChanged(userId) {
+    const u = store.user(userId);
+    if (!u) return;
+    const full = { t: 'profile', user: fullProfile(u) };
+    for (const f of new Set(store.friendIds(userId))) emit(f, full);
+  }
+
   // ---------------------------------------------------------------- HTTP
 
   async function body(req, limit) {
@@ -423,7 +431,7 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
     return { me: fullProfile(store.user(me.id)) };
   });
 
-  // Horas escutadas, as 5 mais ouvidas e os números do perfil (o app manda de tempos em tempos).
+  // Horas escutadas, as 5 mais ouvidas e os números do perfil (o app manda depois de cada música).
   route('PUT', /^\/v1\/me\/stats$/, async (req) => {
     const me = auth(req);
     const b = await json(req);
@@ -431,8 +439,14 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
     if (listenedMs == null || !Array.isArray(b.top)) throw new HttpError(400, 'invalid_stats');
     const top = b.top.slice(0, 5).map(cleanTrack).filter(Boolean);
     const numbers = b.numbers === undefined ? undefined : cleanNumbers(b.numbers);
+    const before = store.user(me.id);
     store.setStats(me.id, { listenedMs, top, numbers });
-    return { me: fullProfile(store.user(me.id)) };
+    const after = store.user(me.id);
+    // Amigos com o app aberto veem a música que acabou de tocar; os mesmos números não avisam ninguém.
+    if (before.listened_ms !== after.listened_ms || before.top_json !== after.top_json || before.numbers_json !== after.numbers_json) {
+      statsChanged(me.id);
+    }
+    return { me: fullProfile(after) };
   });
 
   route('POST', /^\/v1\/me\/recovery$/, (req) => {
