@@ -197,7 +197,7 @@ internal object StreamDataSources {
  */
 @OptIn(UnstableApi::class)
 internal object AudioCache {
-    const val BYTES = 300L * 1024 * 1024
+    const val BYTES = 100L * 1024 * 1024
 
     @Volatile private var shared: androidx.media3.datasource.cache.SimpleCache? = null
     @Volatile private var database: androidx.media3.database.StandaloneDatabaseProvider? = null
