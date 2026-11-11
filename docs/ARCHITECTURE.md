@@ -334,7 +334,10 @@ global com foto/@/nome de todos, horas e top 5 só pra amigos; o servidor guarda
   tempo: o relay aceita o primeiro (`baseRev`) e manda a versão atual pro outro.
 - UI em `ui/social/` (Amigos, Perfil, página do amigo com as músicas trocadas, folhas de jam e de
   mandar música); entrada pela foto no topo da tela principal; "Mandar pra um amigo" no ⋮ das
-  músicas; rostos da jam no topo do player.
+  músicas; rostos da jam no topo do player. Amigos·Descobrir são páginas lado a lado
+  (`SwipeTabsList`, 1.30.0): deslizar pro lado na lista troca de aba (a pílula acompanha), o topo
+  (perfil, jam, convites, pílulas) rola junto e sai primeiro ao subir (`HeaderFirst`), cada aba
+  guarda a própria rolagem.
 - Testes: `social/JamSyncTest`, `JamSessionTest` (relay e player falsos), `SharedSongsTest`
   (inclui migração 5→6), `RelayClientTest` (o relay Node de verdade numa porta livre; precisa de
   `relay/node_modules`), `ui/social/SocialUiTest` (prints com `SOUND_SHOTS=1`); servidor:

@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -247,66 +246,72 @@ fun SocialScreen() {
         },
         modifier = Modifier.fillMaxSize().background(SoundColors.Ink),
     ) {
-    LazyColumn(
-        Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(top = top, bottom = LocalBottomInset.current),
-    ) {
-        item(key = "top") {
-            Row(Modifier.fillMaxWidth().padding(start = 6.dp, end = 12.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { nav.back() }) {
-                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.back), tint = SoundColors.Text)
+    // Amigos and Descobrir are pages side by side: a sideways swipe on the list goes from one to the other.
+    SwipeTabsList(
+        tabs = if (status == AccountStatus.READY) SocialTab.entries else emptyList(),
+        selected = tab,
+        onSelect = { tab = it },
+        modifier = Modifier.fillMaxSize(),
+        top = top,
+        bottom = LocalBottomInset.current,
+        header = {
+            item(key = "top") {
+                Row(Modifier.fillMaxWidth().padding(start = 6.dp, end = 12.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { nav.back() }) {
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.back), tint = SoundColors.Text)
+                    }
+                    Spacer(Modifier.weight(1f))
+                    if (status == AccountStatus.READY && friends.friends.isNotEmpty() && jam == null) {
+                        PillButton(stringResource(R.string.social_start_jam), onClick = { starting = true }, icon = Icons.Rounded.GraphicEq)
+                    }
                 }
-                Spacer(Modifier.weight(1f))
-                if (status == AccountStatus.READY && friends.friends.isNotEmpty() && jam == null) {
-                    PillButton(stringResource(R.string.social_start_jam), onClick = { starting = true }, icon = Icons.Rounded.GraphicEq)
-                }
-            }
-            Text(
-                stringResource(R.string.social_title),
-                style = MaterialTheme.typography.displaySmall,
-                color = SoundColors.Text,
-                modifier = Modifier.padding(horizontal = Dimens.Gutter).padding(top = 4.dp, bottom = 18.dp),
-            )
-        }
-
-        item(key = "me") {
-            MeHeader(status, me, onEdit = nav::openProfile, onCreate = vm::createProfile, onRetry = vm::retry)
-        }
-        if (status != AccountStatus.READY) return@LazyColumn
-
-        jam?.let { j ->
-            item(key = "jam") {
-                JamCard(j, onOpen = { jamOpen = true }, modifier = Modifier.padding(horizontal = Dimens.Gutter).padding(top = 18.dp))
-            }
-        }
-        if (invites.isNotEmpty()) {
-            item(key = "invites") { Label(stringResource(R.string.jam_invites_title)) }
-            items(invites, key = { "inv-" + it.jam.id }) { inv ->
-                InviteLine(
-                    inv,
-                    onJoin = { scope.launch { hub.jam.join(inv).onFailure { feedback.show(jamFailed) } } },
-                    onDecline = { hub.jam.declineNow(inv) },
+                Text(
+                    stringResource(R.string.social_title),
+                    style = MaterialTheme.typography.displaySmall,
+                    color = SoundColors.Text,
+                    modifier = Modifier.padding(horizontal = Dimens.Gutter).padding(top = 4.dp, bottom = 18.dp),
                 )
             }
-        }
 
-        item(key = "tabs") {
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = Dimens.Gutter).padding(top = 22.dp, bottom = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                val requests = friends.incoming.size
-                FilterPill(
-                    if (requests > 0) "${stringResource(R.string.social_tab_friends)} · $requests" else stringResource(R.string.social_tab_friends),
-                    selected = tab == SocialTab.FRIENDS,
-                    onClick = { tab = SocialTab.FRIENDS },
-                )
-                FilterPill(stringResource(R.string.social_tab_people), selected = tab == SocialTab.PEOPLE, onClick = { tab = SocialTab.PEOPLE })
-                Spacer(Modifier.weight(1f))
+            item(key = "me") {
+                MeHeader(status, me, onEdit = nav::openProfile, onCreate = vm::createProfile, onRetry = vm::retry)
             }
-        }
+            if (status != AccountStatus.READY) return@SwipeTabsList
 
-        when (tab) {
+            jam?.let { j ->
+                item(key = "jam") {
+                    JamCard(j, onOpen = { jamOpen = true }, modifier = Modifier.padding(horizontal = Dimens.Gutter).padding(top = 18.dp))
+                }
+            }
+            if (invites.isNotEmpty()) {
+                item(key = "invites") { Label(stringResource(R.string.jam_invites_title)) }
+                items(invites, key = { "inv-" + it.jam.id }) { inv ->
+                    InviteLine(
+                        inv,
+                        onJoin = { scope.launch { hub.jam.join(inv).onFailure { feedback.show(jamFailed) } } },
+                        onDecline = { hub.jam.declineNow(inv) },
+                    )
+                }
+            }
+
+            item(key = "tabs") {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = Dimens.Gutter).padding(top = 22.dp, bottom = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    val requests = friends.incoming.size
+                    FilterPill(
+                        if (requests > 0) "${stringResource(R.string.social_tab_friends)} · $requests" else stringResource(R.string.social_tab_friends),
+                        selected = tab == SocialTab.FRIENDS,
+                        onClick = { tab = SocialTab.FRIENDS },
+                    )
+                    FilterPill(stringResource(R.string.social_tab_people), selected = tab == SocialTab.PEOPLE, onClick = { tab = SocialTab.PEOPLE })
+                    Spacer(Modifier.weight(1f))
+                }
+            }
+        },
+    ) { page ->
+        when (page) {
             SocialTab.FRIENDS -> {
                 if (friends.incoming.isNotEmpty()) {
                     item(key = "req-label") { Label(stringResource(R.string.social_requests)) }
