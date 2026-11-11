@@ -32,6 +32,7 @@ import com.villamediana.sound.playback.EqPreset
 import com.villamediana.sound.playback.EqState
 import com.villamediana.sound.ui.theme.SoundTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -135,6 +136,61 @@ class EqualizerScreenSmokeTest {
         // The switch.
         rule.onNodeWithTag("eq_switch").performScrollTo().performClick()
         assertEquals(listOf(false), calls.enabled)
+    }
+
+    /** A band of [s] at [levelMb]. */
+    private fun withBand(s: EqState, band: Int, levelMb: Int) =
+        s.copy(bands = s.bands.map { if (it.index == band) it.copy(levelMb = levelMb) else it })
+
+    @Test
+    fun aDraggedBandStaysWhereTheFingerLeftIt() {
+        // The screen the way the app runs it: every move of the finger is the new state.
+        var state by mutableStateOf(full)
+        rule.setContent {
+            SoundTheme {
+                EqualizerContent(
+                    state = state,
+                    hasMedia = true,
+                    onBack = {},
+                    onEnabled = {},
+                    onPreset = {},
+                    onCustom = {},
+                    onBand = { b, l -> state = withBand(state, b, l).copy(preset = null) },
+                    onBassBoost = {},
+                    onVirtualizer = {},
+                    onReset = {},
+                    crossfadeSeconds = 5,
+                    onCrossfade = {},
+                )
+            }
+        }
+        val slider = rule.onNodeWithTag("eq_band_1")
+        // The finger moves (the screen redrawing between moves), rests, and only then lets go — as on the phone.
+        slider.performScrollTo().performTouchInput { down(center) }
+        slider.performTouchInput { moveBy(androidx.compose.ui.geometry.Offset(0f, -80f)) }
+        rule.mainClock.advanceTimeBy(100)
+        slider.performTouchInput { moveBy(androidx.compose.ui.geometry.Offset(0f, -60f)) }
+        rule.mainClock.advanceTimeBy(500)
+        slider.performTouchInput { up() }
+        rule.mainClock.advanceTimeBy(2_000)
+        rule.waitForIdle()
+        val level = state.bands[1].levelMb
+        assertTrue(level > 0)
+        val afterDrag = slider.captureToImage().asAndroidBitmap()
+
+        // Back to flat and up to the same level from outside (as a preset lands): that is how the
+        // bar looks at that level — and how it must look right after the finger let go.
+        state = withBand(state, 1, 0)
+        rule.mainClock.advanceTimeBy(2_000)
+        rule.waitForIdle()
+        val flat = slider.captureToImage().asAndroidBitmap()
+        state = withBand(state, 1, level)
+        rule.mainClock.advanceTimeBy(2_000)
+        rule.waitForIdle()
+        val settled = slider.captureToImage().asAndroidBitmap()
+
+        assertFalse(flat.sameAs(settled))
+        assertTrue(afterDrag.sameAs(settled))
     }
 
     @Test
