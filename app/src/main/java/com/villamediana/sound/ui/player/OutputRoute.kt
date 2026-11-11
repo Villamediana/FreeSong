@@ -5,23 +5,40 @@ import android.content.Intent
 import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
-import android.media.MediaRouter2
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import com.villamediana.sound.SoundApplication
+import com.villamediana.sound.playback.OutputChoice
+import com.villamediana.sound.playback.Outputs
+import kotlinx.coroutines.flow.MutableStateFlow
 
 /** Kind of the device media is coming out of — picks the chip's icon. */
 internal enum class OutputKind { PHONE, WIRED, BLUETOOTH, USB }
 
-internal data class OutputRoute(val kind: OutputKind, val deviceName: String?)
+/** Where the music comes out; [external] = earphones, a speaker… are connected (the player offers the choice). */
+internal data class OutputRoute(val kind: OutputKind, val deviceName: String?, val external: Boolean = kind != OutputKind.PHONE)
+
+internal fun Outputs.Kind.toRouteKind(): OutputKind = when (this) {
+    Outputs.Kind.PHONE -> OutputKind.PHONE
+    Outputs.Kind.BLUETOOTH -> OutputKind.BLUETOOTH
+    Outputs.Kind.WIRED -> OutputKind.WIRED
+    Outputs.Kind.USB -> OutputKind.USB
+}
+
+/** The outputs on offer, where the music comes out now ([current]) and where Android would send it ([systemDefault]). */
+internal data class OutputsState(val options: List<Outputs.Option>, val current: Outputs.Option?, val systemDefault: Int?) {
+    val route: OutputRoute
+        get() = OutputRoute(current?.kind?.toRouteKind() ?: OutputKind.PHONE, current?.name, external = options.any { it.kind != Outputs.Kind.PHONE })
+}
 
 internal object OutputRoutes {
     private val BLUETOOTH = setOf(
@@ -56,35 +73,40 @@ internal object OutputRoutes {
         return OutputRoute(OutputKind.PHONE, null)
     }
 
-    fun current(audio: AudioManager): OutputRoute =
-        pick(audio.getDevices(AudioManager.GET_DEVICES_OUTPUTS).map { it.type to it.productName?.toString() })
-
-    /** Opens the system output picker (Android 14+), else Bluetooth settings. */
-    fun openSwitcher(context: Context) {
-        if (Build.VERSION.SDK_INT >= 34) {
-            val shown = runCatching { MediaRouter2.getInstance(context).showSystemOutputSwitcher() }.getOrDefault(false)
-            if (shown) return
-        }
+    /** "Conectar dispositivo": the phone's Bluetooth settings (pairing, connecting). */
+    fun openBluetooth(context: Context) {
         runCatching {
             context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         }
     }
 }
 
-/** Live media output route; follows headphones/Bluetooth being plugged and unplugged. */
+/** Live outputs: follows headphones/Bluetooth coming and going, and the output picked in the player. */
 @Composable
-internal fun rememberOutputRoute(): OutputRoute {
+internal fun rememberOutputs(): OutputsState {
     val context = LocalContext.current
     val audio = remember(context) { context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager }
-    var route by remember(audio) { mutableStateOf(audio?.let(OutputRoutes::current) ?: OutputRoute(OutputKind.PHONE, null)) }
+    val choice = remember { runCatching { SoundApplication.graph.outputChoice.preferred }.getOrElse { MutableStateFlow(null) } }
+    val preferred by choice.collectAsState()
+    var raw by remember(audio) { mutableStateOf(audio?.let(OutputChoice::connected).orEmpty()) }
+    var systemDefault by remember(audio) { mutableStateOf(audio?.let(OutputChoice::systemDefault)) }
     DisposableEffect(audio) {
         if (audio == null) return@DisposableEffect onDispose { }
+        val refresh = {
+            raw = OutputChoice.connected(audio)
+            systemDefault = OutputChoice.systemDefault(audio)
+        }
         val callback = object : AudioDeviceCallback() {
-            override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) { route = OutputRoutes.current(audio) }
-            override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>?) { route = OutputRoutes.current(audio) }
+            override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) = refresh()
+            override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>?) = refresh()
         }
         audio.registerAudioDeviceCallback(callback, Handler(Looper.getMainLooper()))
         onDispose { audio.unregisterAudioDeviceCallback(callback) }
     }
-    return route
+    val options = remember(raw) { Outputs.options(raw) }
+    return OutputsState(options, Outputs.current(options, preferred, systemDefault), systemDefault)
 }
+
+/** Live media output route (see [rememberOutputs]). */
+@Composable
+internal fun rememberOutputRoute(): OutputRoute = rememberOutputs().route

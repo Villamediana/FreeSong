@@ -57,6 +57,12 @@
     <string name="player_output_bluetooth">Bluetooth</string>
     <string name="player_output_usb">Audio USB</string>
     <string name="player_output_choose">Elegir salida de audio</string>
+    <string name="player_output_title">Reproducir en</string>
+    <string name="player_output_volume">Volumen</string>
+    <string name="player_output_connect">Conectar dispositivo</string>
+    <string name="player_output_kind_speaker">Altavoz</string>
+    <string name="player_output_kind_wired">Con cable</string>
+    <string name="player_output_kind_usb">USB</string>
 
     <string name="player_error_dismiss">Descartar</string>
 

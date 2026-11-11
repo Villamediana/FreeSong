@@ -37,11 +37,27 @@ internal sealed interface AudioOutput {
             if (devices.any { it.first in WIRED }) return Headphones
             return Phone
         }
+
+        /** The output a device the listener picked is ([Outputs.Kind] of its type). */
+        fun of(kind: Outputs.Kind, name: String?): AudioOutput = when (kind) {
+            Outputs.Kind.PHONE -> Phone
+            Outputs.Kind.BLUETOOTH -> Bluetooth(name)
+            Outputs.Kind.WIRED, Outputs.Kind.USB -> Headphones
+        }
     }
 }
 
-/** Watches audio outputs coming and going (headphones plugged, Bluetooth connected) and reports the current one by name. */
-internal class OutputDeviceMonitor(private val context: Context, private val onChange: (String) -> Unit) {
+/**
+ * Watches audio outputs coming and going (headphones plugged, Bluetooth connected) and reports the
+ * current one by name: the output the listener picked ([preferred], see [OutputChoice]) while it is
+ * connected, else Android's. A picked output that goes away is [forgotten][onPreferredGone].
+ */
+internal class OutputDeviceMonitor(
+    private val context: Context,
+    private val preferred: () -> Int? = { null },
+    private val onPreferredGone: () -> Unit = {},
+    private val onChange: (String) -> Unit,
+) {
     private val audio: AudioManager? = context.getSystemService(AudioManager::class.java)
     private var last: String? = null
     private val callback = object : AudioDeviceCallback() {
@@ -59,16 +75,24 @@ internal class OutputDeviceMonitor(private val context: Context, private val onC
     }
 
     fun currentName(): String {
-        val devices = audio?.getDevices(AudioManager.GET_DEVICES_OUTPUTS).orEmpty()
-            .map { it.type to it.productName?.toString() }
-        return when (val out = AudioOutput.choose(devices)) {
+        val am = audio ?: return context.getString(R.string.playback_output_phone)
+        val picked = OutputChoice.device(am, preferred())
+        val out = if (picked != null) {
+            Outputs.kindOf(picked.type)?.let { AudioOutput.of(it, picked.productName?.toString()?.trim()?.takeIf(String::isNotEmpty)) }
+        } else {
+            null
+        } ?: AudioOutput.choose(am.getDevices(AudioManager.GET_DEVICES_OUTPUTS).map { it.type to it.productName?.toString() })
+        return when (out) {
             is AudioOutput.Bluetooth -> out.name ?: context.getString(R.string.playback_output_bluetooth)
             AudioOutput.Headphones -> context.getString(R.string.playback_output_headphones)
             AudioOutput.Phone -> context.getString(R.string.playback_output_phone)
         }
     }
 
-    private fun publish() {
+    /** Says the current output again (the listener picked another one). */
+    fun publish() {
+        val am = audio
+        if (am != null && preferred() != null && OutputChoice.device(am, preferred()) == null) onPreferredGone()
         val name = currentName()
         if (name != last) {
             last = name

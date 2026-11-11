@@ -261,6 +261,45 @@ class PlaybackServiceTest {
         assertEquals("yt:b", order.last())
     }
 
+    /** The phone's network back, working (what Android tells the service). */
+    private fun internetBack() {
+        val cm = app.getSystemService(ConnectivityManager::class.java)
+        val caps = org.robolectric.shadows.ShadowNetworkCapabilities.newInstance()
+        shadowOf(caps).addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        shadowOf(caps).addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+        val net = org.robolectric.shadows.ShadowNetwork.newInstance(77)
+        shadowOf(cm).networkCallbacks.toList().forEach { it.onCapabilitiesChanged(net, caps) }
+        idle(100)
+    }
+
+    /** Offline in an online list with nothing downloaded ahead: songs of yours took over. */
+    private fun bridged(): String {
+        autoplay(false)
+        goOffline()
+        start()
+        playMixed(listOf(tracks[0], onlineSong("a"), onlineSong("b")))
+        player.seekTo(0, 19_900)
+        idleUntil { currentId() != null && currentId() != tracks[0].id && player.playerError == null }
+        return player.currentMediaItem!!.mediaId
+    }
+
+    @Test fun theConnectionBackTheListThatWasPlayingComesBackAfterThisSong() {
+        val playing = bridged()
+        internetBack()
+        // The song of yours playing goes on; then the cut song, then the list as it was.
+        assertEquals(playing, player.currentMediaItem!!.mediaId)
+        assertTrue(player.playWhenReady)
+        assertEquals(listOf(tracks[0].id.toString(), "yt:a", playing, "yt:a", "yt:b"), playOrderKeys())
+    }
+
+    @Test fun theConnectionBackAfterTheListenerChangedTheQueueNothingMoves() {
+        bridged()
+        add(listOf(tracks[0].id), SessionProtocol.WHERE_END)
+        val before = playOrderKeys()
+        internetBack()
+        assertEquals(before, playOrderKeys())
+    }
+
     @Test fun offlineWithNothingOnThePhoneItStopsSayingWhy() {
         autoplay(false)
         runBlocking { tracks.forEach { graph.db.tracks().delete(it) } }

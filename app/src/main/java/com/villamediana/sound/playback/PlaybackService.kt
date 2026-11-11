@@ -106,6 +106,8 @@ class PlaybackService : MediaLibraryService() {
     private var source: PlaySource? = null
     private var smart = false
     private var outputName: String? = null
+    /** The output the listener picked ([OutputChoice]); null = Android's. */
+    private var preferredOutput: android.media.AudioDeviceInfo? = null
 
     private var tasteCache: Taste? = null
     private var tasteAt = 0L
@@ -118,6 +120,11 @@ class PlaybackService : MediaLibraryService() {
     private var extendJob: Job? = null
     /** Songs of yours being picked to go on with, the connection gone ([bridgeOffline]). */
     private var bridgeJob: Job? = null
+    /** The songs of yours put in when the connection went ([bridgeOffline]), while they may still give way to the list. */
+    private var bridge: OfflineBridge.Placed? = null
+    /** The connection was seen gone since the bridge went in: its coming back is news. */
+    private var connectionLost = false
+    private var network: android.net.ConnectivityManager.NetworkCallback? = null
     private var extendedAtCount = -1
     /** Retries of an extension that found nothing (reset once one lands, or a new queue starts). */
     private var extendRetries = 0
@@ -203,6 +210,7 @@ class PlaybackService : MediaLibraryService() {
                         /* handleAudioFocus = */ false,
                     )
                     .build()
+                tailPlayer.setPreferredAudioDevice(preferredOutput)
                 Crossfader.Tail(tailPlayer, tailShaper)
             },
             measure = CrossfadeMeasure(scope, AudioScanner(StreamDataSources.factory(this, streams, AudioCache.get(this)))),
@@ -214,11 +222,19 @@ class PlaybackService : MediaLibraryService() {
                 startListen(player.currentMediaItem)
             },
         ).also { it.start() }
-        output = OutputDeviceMonitor(this) { name ->
+        output = OutputDeviceMonitor(
+            this,
+            preferred = { graph.outputChoice.preferred.value },
+            // The output picked in the player went away (earphones off): back to Android's.
+            onPreferredGone = { graph.outputChoice.prefer(null) },
+        ) { name ->
             outputName = name
             publishExtras()
         }
         output.start()
+        // The output picked in the player: the music, its crossfade, follow it.
+        scope.launch { graph.outputChoice.preferred.collect(::applyOutput) }
+        watchConnection()
 
         scope.launch { library.tracks.collect(::onLibrary) }
         scope.launch { graph.settings.settings.collect(::onSettings) }
@@ -243,6 +259,7 @@ class PlaybackService : MediaLibraryService() {
         crossfader.release()
         sleep.release()
         output.stop()
+        network?.let { cb -> runCatching { getSystemService(android.net.ConnectivityManager::class.java)?.unregisterNetworkCallback(cb) } }
         leveler.release()
         runCatching { graph.effects.release() }
         scope.cancel()
@@ -332,6 +349,20 @@ class PlaybackService : MediaLibraryService() {
         val local = tracksFor(ids.filter { it >= 0 }.distinct()).associateBy { it.id }
         val byVideo = localByVideoId(online.values.map { it.videoId })
         return OnlineQueue.resolve(ids, online, local, byVideo)
+    }
+
+    /** Sends the music (and the crossfade's tail) to the output picked in the player, or back to Android's. */
+    private fun applyOutput(deviceId: Int?) {
+        val audio = getSystemService(android.media.AudioManager::class.java) ?: return
+        val device = OutputChoice.device(audio, deviceId)
+        if (deviceId != null && device == null) {
+            graph.outputChoice.prefer(null)
+            return
+        }
+        preferredOutput = device
+        player.setPreferredAudioDevice(device)
+        crossfader.setPreferredAudioDevice(device)
+        output.publish()
     }
 
     private fun attachEffects(audioSessionId: Int) {
@@ -1061,7 +1092,51 @@ class PlaybackService : MediaLibraryService() {
             player.seekTo(current + 1, 0)
             player.prepare()
             scheduleSave()
+            bridge = OfflineBridge.Placed(mediaKeys(), start = current + 1, size = songs.size, cut = player.getMediaItemAt(current))
+            connectionLost = !hasInternet(this@PlaybackService)
         }
+    }
+
+    /**
+     * The phone's connection, for the bridge: gone (or not working) and then back with working
+     * internet, the list that was playing comes back ([returnToList]).
+     */
+    private fun watchConnection() {
+        val cm = getSystemService(android.net.ConnectivityManager::class.java) ?: return
+        val cb = object : android.net.ConnectivityManager.NetworkCallback() {
+            override fun onLost(net: android.net.Network) {
+                connectionLost = true
+            }
+
+            override fun onCapabilitiesChanged(net: android.net.Network, caps: android.net.NetworkCapabilities) {
+                val working = caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                    caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+                if (!working) {
+                    connectionLost = true
+                } else if (connectionLost) {
+                    connectionLost = false
+                    returnToList()
+                }
+            }
+        }
+        if (runCatching { cm.registerDefaultNetworkCallback(cb, android.os.Handler(mainLooper)) }.isSuccess) network = cb
+    }
+
+    /**
+     * The connection is back while songs of yours stand in for the list (the listener changed
+     * nothing meanwhile — same queue, still on those songs): the ones not heard yet leave, and the
+     * song the connection cut comes back right after the one playing — which plays to its end and
+     * hands over as any song does. Then the list as it was.
+     */
+    private fun returnToList() {
+        val placed = bridge ?: return
+        bridge = null
+        val plan = OfflineBridge.giveWay(placed, mediaKeys(), player.currentMediaItemIndex) ?: return
+        val cut = MediaItems.onlineTrack(placed.cut) ?: return
+        if (plan.until > plan.from) player.removeMediaItems(plan.from, plan.until)
+        insert(listOf(cut), next = true)
+        prefetchUpcoming()
+        scheduleSave()
     }
 
     /** Timeline index of the next library song after the current one, in play order (around again on "repeat all"). */
