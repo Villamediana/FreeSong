@@ -78,7 +78,13 @@ private fun BandSlider(
     val haptic = LocalHapticFeedback.current
     var dragging by remember { mutableStateOf<Int?>(null) }
     val shown = remember { Animatable(band.levelMb.toFloat()) }
-    LaunchedEffect(band.levelMb) { if (dragging == null) shown.animateTo(band.levelMb.toFloat(), spring(dampingRatio = 0.8f, stiffness = 300f)) }
+    // Under the finger the bar is where the finger is, and stays there when it lets go; any other
+    // change (a preset, "Restaurar") glides there.
+    LaunchedEffect(band.levelMb, dragging) {
+        val held = dragging
+        if (held != null) shown.snapTo(held.toFloat())
+        else shown.animateTo(band.levelMb.toFloat(), spring(dampingRatio = 0.8f, stiffness = 300f))
+    }
     val change by rememberUpdatedState(onBandChange)
     val level = dragging ?: band.levelMb
     val range = (maxMb - minMb).coerceAtLeast(1)
