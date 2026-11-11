@@ -614,6 +614,16 @@ Onde cada coisa mudou:
   dela e tocam (as online ficam depois, pra quando a conexão voltar). Biblioteca vazia ou jam: para
   com "Sem conexão". Escolher outra música com o player parado num erro (próxima, anterior, linha
   da fila — app, notificação ou fone) prepara e toca (`onMediaItemTransition`, `SEEK`).
+  **Volta da conexão** (1.31.0, `watchConnection` + `OfflineBridge.giveWay`): o Android avisando
+  rede de novo funcionando (VALIDATED) depois de ter caído/parado desde a ponte, com a fila igual
+  (mesmos media ids) e uma das suas tocando → as suas que não tocaram saem e a cortada volta logo
+  depois da atual (do começo), que termina normal com crossfade; depois a lista como estava. Fila
+  mexida pela pessoa = fica como está.
+- **Saída de áudio** (1.31.0): o chip do fone abre `ui/player/OutputSheet` (música, volume do
+  sistema numa pílula, saídas conectadas via `Outputs.options`, "Conectar dispositivo" → ajustes de
+  Bluetooth), no lugar do seletor do sistema. Escolher uma saída diferente da do Android grava em
+  `OutputChoice` (só nesta execução) e o serviço aplica `setPreferredAudioDevice` no player, na
+  cauda do crossfade e no vídeo; a saída sumir volta pra do Android.
 - **Rádio do artista** (`ArtistScreen`): online é a do YouTube Music a partir da música mais ouvida
   (`startOnlineRadio(name = artista, otherwise = a da biblioteca)`); offline, a da biblioteca.
 - **Feitos pra você** (`MadeForYou`): coração vale 1,0 (era 3,0) contra `2·ln(1+escutas recentes)`;

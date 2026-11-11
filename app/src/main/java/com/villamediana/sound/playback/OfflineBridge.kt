@@ -31,4 +31,25 @@ internal object OfflineBridge {
     fun songs(source: PlaySource?, heard: List<Track>, library: List<Track>, taste: Taste, seed: Long): List<Track> =
         SmartPlans.extension(source, heard, library, taste, seed, fill = true).take(SIZE)
             .ifEmpty { QueueContinuation.again(heard, library, taste, seed, SIZE) }
+
+    /**
+     * Songs of yours put in for the online song the connection [cut]: [size] of them from timeline
+     * index [start] (right after it, in play order too), the queue then being [keys] (media ids).
+     */
+    data class Placed(val keys: List<String>, val start: Int, val size: Int, val cut: androidx.media3.common.MediaItem)
+
+    /** The songs of yours to take out when the list comes back: timeline [from] until [until]. */
+    data class GiveWay(val from: Int, val until: Int)
+
+    /**
+     * The connection is back: the songs of yours after the one playing ([current], timeline) give
+     * way to the list — only while the listener changed nothing (the queue is still [Placed.keys])
+     * and one of them is playing. null = leave the queue as it is.
+     */
+    fun giveWay(placed: Placed, keys: List<String>, current: Int): GiveWay? {
+        if (keys != placed.keys) return null
+        val end = placed.start + placed.size
+        if (current !in placed.start until end) return null
+        return GiveWay(current + 1, end)
+    }
 }

@@ -50,4 +50,19 @@ class OfflineBridgeTest {
     @Test fun nothingOnThePhoneNothingToGoOnWith() {
         assertEquals(emptyList<Track>(), OfflineBridge.songs(null, listOf(online("a")), emptyList(), neutralTaste(), seed = 7))
     }
+
+    @Test fun theListComesBackOnlyIfNothingChangedAndOnlyForTheSongsNotHeard() {
+        val cut = androidx.media3.common.MediaItem.Builder().setMediaId("yt:a").build()
+        // [yours 0, yt:a (cut), bridge 2..4, yt:b]
+        val keys = listOf("0", "yt:a", "1", "2", "3", "yt:b")
+        val placed = OfflineBridge.Placed(keys, start = 2, size = 3, cut = cut)
+        assertEquals(OfflineBridge.GiveWay(3, 5), OfflineBridge.giveWay(placed, keys, current = 2))
+        // On the last of yours: nothing to take out, the cut song still comes back after it.
+        assertEquals(OfflineBridge.GiveWay(5, 5), OfflineBridge.giveWay(placed, keys, current = 4))
+        // The listener went back to the cut song, or on past the bridge: as it is.
+        assertEquals(null, OfflineBridge.giveWay(placed, keys, current = 1))
+        assertEquals(null, OfflineBridge.giveWay(placed, keys, current = 5))
+        // Another list, or the queue edited: as it is.
+        assertEquals(null, OfflineBridge.giveWay(placed, keys + "yt:c", current = 2))
+    }
 }

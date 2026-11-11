@@ -120,6 +120,11 @@ class PlaybackService : MediaLibraryService() {
     private var extendJob: Job? = null
     /** Songs of yours being picked to go on with, the connection gone ([bridgeOffline]). */
     private var bridgeJob: Job? = null
+    /** The songs of yours put in when the connection went ([bridgeOffline]), while they may still give way to the list. */
+    private var bridge: OfflineBridge.Placed? = null
+    /** The connection was seen gone since the bridge went in: its coming back is news. */
+    private var connectionLost = false
+    private var network: android.net.ConnectivityManager.NetworkCallback? = null
     private var extendedAtCount = -1
     /** Retries of an extension that found nothing (reset once one lands, or a new queue starts). */
     private var extendRetries = 0
@@ -229,6 +234,7 @@ class PlaybackService : MediaLibraryService() {
         output.start()
         // The output picked in the player: the music, its crossfade, follow it.
         scope.launch { graph.outputChoice.preferred.collect(::applyOutput) }
+        watchConnection()
 
         scope.launch { library.tracks.collect(::onLibrary) }
         scope.launch { graph.settings.settings.collect(::onSettings) }
@@ -253,6 +259,7 @@ class PlaybackService : MediaLibraryService() {
         crossfader.release()
         sleep.release()
         output.stop()
+        network?.let { cb -> runCatching { getSystemService(android.net.ConnectivityManager::class.java)?.unregisterNetworkCallback(cb) } }
         leveler.release()
         runCatching { graph.effects.release() }
         scope.cancel()
@@ -1085,7 +1092,51 @@ class PlaybackService : MediaLibraryService() {
             player.seekTo(current + 1, 0)
             player.prepare()
             scheduleSave()
+            bridge = OfflineBridge.Placed(mediaKeys(), start = current + 1, size = songs.size, cut = player.getMediaItemAt(current))
+            connectionLost = !hasInternet(this@PlaybackService)
         }
+    }
+
+    /**
+     * The phone's connection, for the bridge: gone (or not working) and then back with working
+     * internet, the list that was playing comes back ([returnToList]).
+     */
+    private fun watchConnection() {
+        val cm = getSystemService(android.net.ConnectivityManager::class.java) ?: return
+        val cb = object : android.net.ConnectivityManager.NetworkCallback() {
+            override fun onLost(net: android.net.Network) {
+                connectionLost = true
+            }
+
+            override fun onCapabilitiesChanged(net: android.net.Network, caps: android.net.NetworkCapabilities) {
+                val working = caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                    caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+                if (!working) {
+                    connectionLost = true
+                } else if (connectionLost) {
+                    connectionLost = false
+                    returnToList()
+                }
+            }
+        }
+        if (runCatching { cm.registerDefaultNetworkCallback(cb, android.os.Handler(mainLooper)) }.isSuccess) network = cb
+    }
+
+    /**
+     * The connection is back while songs of yours stand in for the list (the listener changed
+     * nothing meanwhile — same queue, still on those songs): the ones not heard yet leave, and the
+     * song the connection cut comes back right after the one playing — which plays to its end and
+     * hands over as any song does. Then the list as it was.
+     */
+    private fun returnToList() {
+        val placed = bridge ?: return
+        bridge = null
+        val plan = OfflineBridge.giveWay(placed, mediaKeys(), player.currentMediaItemIndex) ?: return
+        val cut = MediaItems.onlineTrack(placed.cut) ?: return
+        if (plan.until > plan.from) player.removeMediaItems(plan.from, plan.until)
+        insert(listOf(cut), next = true)
+        prefetchUpcoming()
+        scheduleSave()
     }
 
     /** Timeline index of the next library song after the current one, in play order (around again on "repeat all"). */
