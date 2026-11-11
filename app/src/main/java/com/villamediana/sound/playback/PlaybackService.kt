@@ -34,13 +34,11 @@ import com.villamediana.sound.R
 import com.villamediana.sound.SoundApplication
 import com.villamediana.sound.data.Settings
 import com.villamediana.sound.data.db.Track
-import com.villamediana.sound.online.OnlineException
 import com.villamediana.sound.playback.crossfade.AudioScanner
 import com.villamediana.sound.playback.crossfade.CrossfadeMeasure
 import com.villamediana.sound.playback.crossfade.FadeShaper
 import com.villamediana.sound.playback.stream.OnlineStreams
 import com.villamediana.sound.playback.stream.StreamDataSources
-import com.villamediana.sound.playback.stream.StreamErrors
 import com.villamediana.sound.playback.stream.StreamLoadErrorPolicy
 import com.villamediana.sound.playback.stream.hasInternet
 import com.villamediana.sound.smart.Taste
@@ -118,6 +116,8 @@ class PlaybackService : MediaLibraryService() {
     /** Media ids of the queue handed to Media3 by [onPlaybackResumption], to recognise it when it lands. */
     private var pendingRestoreKeys: List<String>? = null
     private var extendJob: Job? = null
+    /** Songs of yours being picked to go on with, the connection gone ([bridgeOffline]). */
+    private var bridgeJob: Job? = null
     private var extendedAtCount = -1
     /** Retries of an extension that found nothing (reset once one lands, or a new queue starts). */
     private var extendRetries = 0
@@ -904,6 +904,14 @@ class PlaybackService : MediaLibraryService() {
                 finishListen()
                 startListen(mediaItem)
             }
+            // A song chosen while the player stood on an error ("next", "previous", a row of the
+            // queue — from the app, the notification or the earphones): it plays, instead of the
+            // player sitting idle on it.
+            if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_SEEK &&
+                player.playbackState == Player.STATE_IDLE && player.playerError != null
+            ) {
+                player.prepare()
+            }
             // Downloaded while it waited in the queue: switch to the file now that it starts from the top.
             if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED &&
                 MediaItems.videoId(mediaItem)?.let(tracksByVideoId::containsKey) == true
@@ -991,7 +999,7 @@ class PlaybackService : MediaLibraryService() {
 
         override fun onPlayerError(error: PlaybackException) {
             finishListen()
-            if (skipOfflineSongs(error)) return
+            if (continueOffline(error)) return
             consecutiveErrors++
             // A broken or missing file, or a song that can't be streamed (offline, unavailable),
             // shouldn't stop the music: skip it (a few times at most). The app shows why.
@@ -1008,19 +1016,52 @@ class PlaybackService : MediaLibraryService() {
     }
 
     /**
-     * Offline, an online song fails at once (no request, no retries — see OnlineStreams): playback
-     * goes straight on to the next song on the phone, past the other online ones, without counting
-     * as a broken song. With none left it stops here, and the app shows why ("Sem conexão").
+     * The connection dropped under an online song (offline it fails at once, no request, no retries
+     * — see OnlineStreams; a network that carries nothing fails once the player's retries run out).
+     * The music goes on with the songs on the phone, without counting as broken songs: the next
+     * downloaded song of the queue, past the other online ones; with none ahead, songs of yours like
+     * what was playing come in right after this one ([OfflineBridge]). The app shows why ("Sem
+     * conexão"). With nothing on the phone (or in a jam, whose queue is everyone's) it stops here.
      */
-    private fun skipOfflineSongs(error: PlaybackException): Boolean {
-        if (StreamErrors.kindOf(error.errorCode) != OnlineException.Kind.NO_NETWORK) return false
-        if (!MediaItems.isOnline(player.currentMediaItem) || hasInternet(this)) return false
+    private fun continueOffline(error: PlaybackException): Boolean {
+        if (!OfflineBridge.isConnectionLoss(error.errorCode, MediaItems.isOnline(player.currentMediaItem))) return false
         val next = nextLocalIndex()
         if (next != C.INDEX_UNSET) {
             player.seekTo(next, 0)
             player.prepare()
+        } else if (!(source?.type == PlaySource.Type.JAM && graph.social.jam.active)) {
+            bridgeOffline()
         }
         return true
+    }
+
+    /**
+     * No song of the phone ahead in the queue: songs of yours like the ones heard go in right after
+     * the one that stopped, and play. The online songs stay after them.
+     */
+    private fun bridgeOffline() {
+        bridgeJob?.cancel()
+        val current = player.currentMediaItemIndex
+        if (current == C.INDEX_UNSET) return
+        val keys = mediaKeys()
+        val order = playOrder()
+        val heard = (0..order.playIndexOf(current)).map { player.getMediaItemAt(order.timelineIndexOf(it)) }
+        val src = source
+        val seed = Random.nextLong()
+        bridgeJob = scope.launch {
+            val local = tracksFor(heard.mapNotNull(MediaItems::trackId).distinct()).associateBy { it.id }
+            val list = heard.mapNotNull { item -> MediaItems.trackId(item)?.let(local::get) ?: MediaItems.onlineTrack(item) }
+            val lib = libraryTracks()
+            val taste = taste()
+            val songs = withContext(Dispatchers.Default) { OfflineBridge.songs(src, list, lib, taste, seed) }
+            // Made for the queue as it was: the listener may have moved on meanwhile (or pressed play).
+            if (songs.isEmpty() || mediaKeys() != keys || player.currentMediaItemIndex != current || player.playerError == null) return@launch
+            insert(songs, next = true)
+            // Right after the one that stopped, in play order too (shuffled or not).
+            player.seekTo(current + 1, 0)
+            player.prepare()
+            scheduleSave()
+        }
     }
 
     /** Timeline index of the next library song after the current one, in play order (around again on "repeat all"). */

@@ -239,15 +239,56 @@ class PlaybackServiceTest {
         assertTrue(player.playWhenReady)
     }
 
-    @Test fun offlineWithNoSongOnThePhoneLeftItStopsSayingWhy() {
+    private fun playOrderKeys(): List<String> =
+        PlayOrder.of(player.currentTimeline, player.shuffleModeEnabled).toList().map { player.getMediaItemAt(it).mediaId }
+
+    @Test fun offlineWithNoSongOnThePhoneAheadYourOwnSongsTakeOver() {
+        // The metro: an online list, the connection gone, nothing downloaded ahead in it.
         autoplay(false)
         goOffline()
         start()
         playMixed(listOf(tracks[0], onlineSong("a"), onlineSong("b")))
         player.seekTo(0, 19_900)
+        // Songs of yours come right after the one that couldn't play, and the music goes on.
+        idleUntil { currentId() != null && currentId() != tracks[0].id && player.playerError == null }
+        assertTrue(player.playWhenReady)
+        val order = playOrderKeys()
+        assertEquals(listOf(tracks[0].id.toString(), "yt:a"), order.take(2))
+        val yours = order.drop(2).dropLast(1)
+        assertEquals(tracks.drop(1).map { it.id.toString() }.toSet(), yours.toSet())
+        assertEquals(yours.first(), player.currentMediaItem!!.mediaId)
+        // The online songs wait after them, for when the connection is back.
+        assertEquals("yt:b", order.last())
+    }
+
+    @Test fun offlineWithNothingOnThePhoneItStopsSayingWhy() {
+        autoplay(false)
+        runBlocking { tracks.forEach { graph.db.tracks().delete(it) } }
+        goOffline()
+        start()
+        playMixed(listOf(onlineSong("a"), onlineSong("b")))
         idleUntil { player.playerError != null }
+        idle(300)
         assertEquals(StreamErrors.code(OnlineException.Kind.NO_NETWORK), player.playerError!!.errorCode)
-        assertEquals("yt:a", player.currentMediaItem!!.mediaId)
+        assertEquals(listOf("yt:a", "yt:b"), playOrderKeys())
+    }
+
+    @Test fun aSongChosenAfterAnErrorPlays() {
+        autoplay(false)
+        val broken = runBlocking {
+            val t = Track(title = "Gone", artist = "Artist", filePath = File(tmp.root, "gone.wav").absolutePath, durationMs = 20_000)
+            t.copy(id = graph.db.tracks().insert(t))
+        }
+        start()
+        play(listOf(tracks[0].id, broken.id), 0)
+        player.seekTo(0, 19_900)
+        // The last song can't be read: the player stops on it.
+        idleUntil { player.playerError != null && currentId() == broken.id }
+        assertEquals(Player.STATE_IDLE, player.playbackState)
+        // "Previous" from there (the app, the notification, the earphones): that song plays.
+        controller.seekToPreviousMediaItem()
+        idleUntil { currentId() == tracks[0].id && player.isPlaying }
+        assertNull(player.playerError)
     }
 
     // ------------------------------------------------------------------ covers for other apps

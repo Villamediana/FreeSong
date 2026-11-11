@@ -604,6 +604,13 @@ Onde cada coisa mudou:
 - **Continuação da fila** (`maybeExtend`): as músicas da biblioteca só entram se combinam com o fim
   da fila (`SmartPlans.extension(fill = radio.isEmpty())`); offline, sem nada novo, vale o mais
   próximo que houver.
+- **Conexão caiu no meio de uma online** (metrô; `PlaybackService.continueOffline` +
+  `OfflineBridge`): erro `NO_NETWORK` de música online — o celular sem rede OU uma rede que não
+  passa nada (os pedidos do stream estouram) — não conta como música quebrada. Vai pra próxima
+  baixada da fila; sem nenhuma à frente, até 20 suas parecidas com o que tocou entram logo depois
+  dela e tocam (as online ficam depois, pra quando a conexão voltar). Biblioteca vazia ou jam: para
+  com "Sem conexão". Escolher outra música com o player parado num erro (próxima, anterior, linha
+  da fila — app, notificação ou fone) prepara e toca (`onMediaItemTransition`, `SEEK`).
 - **Rádio do artista** (`ArtistScreen`): online é a do YouTube Music a partir da música mais ouvida
   (`startOnlineRadio(name = artista, otherwise = a da biblioteca)`); offline, a da biblioteca.
 - **Feitos pra você** (`MadeForYou`): coração vale 1,0 (era 3,0) contra `2·ln(1+escutas recentes)`;
