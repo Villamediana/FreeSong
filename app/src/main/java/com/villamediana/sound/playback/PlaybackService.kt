@@ -106,6 +106,8 @@ class PlaybackService : MediaLibraryService() {
     private var source: PlaySource? = null
     private var smart = false
     private var outputName: String? = null
+    /** The output the listener picked ([OutputChoice]); null = Android's. */
+    private var preferredOutput: android.media.AudioDeviceInfo? = null
 
     private var tasteCache: Taste? = null
     private var tasteAt = 0L
@@ -203,6 +205,7 @@ class PlaybackService : MediaLibraryService() {
                         /* handleAudioFocus = */ false,
                     )
                     .build()
+                tailPlayer.setPreferredAudioDevice(preferredOutput)
                 Crossfader.Tail(tailPlayer, tailShaper)
             },
             measure = CrossfadeMeasure(scope, AudioScanner(StreamDataSources.factory(this, streams, AudioCache.get(this)))),
@@ -214,11 +217,18 @@ class PlaybackService : MediaLibraryService() {
                 startListen(player.currentMediaItem)
             },
         ).also { it.start() }
-        output = OutputDeviceMonitor(this) { name ->
+        output = OutputDeviceMonitor(
+            this,
+            preferred = { graph.outputChoice.preferred.value },
+            // The output picked in the player went away (earphones off): back to Android's.
+            onPreferredGone = { graph.outputChoice.prefer(null) },
+        ) { name ->
             outputName = name
             publishExtras()
         }
         output.start()
+        // The output picked in the player: the music, its crossfade, follow it.
+        scope.launch { graph.outputChoice.preferred.collect(::applyOutput) }
 
         scope.launch { library.tracks.collect(::onLibrary) }
         scope.launch { graph.settings.settings.collect(::onSettings) }
@@ -332,6 +342,20 @@ class PlaybackService : MediaLibraryService() {
         val local = tracksFor(ids.filter { it >= 0 }.distinct()).associateBy { it.id }
         val byVideo = localByVideoId(online.values.map { it.videoId })
         return OnlineQueue.resolve(ids, online, local, byVideo)
+    }
+
+    /** Sends the music (and the crossfade's tail) to the output picked in the player, or back to Android's. */
+    private fun applyOutput(deviceId: Int?) {
+        val audio = getSystemService(android.media.AudioManager::class.java) ?: return
+        val device = OutputChoice.device(audio, deviceId)
+        if (deviceId != null && device == null) {
+            graph.outputChoice.prefer(null)
+            return
+        }
+        preferredOutput = device
+        player.setPreferredAudioDevice(device)
+        crossfader.setPreferredAudioDevice(device)
+        output.publish()
     }
 
     private fun attachEffects(audioSessionId: Int) {

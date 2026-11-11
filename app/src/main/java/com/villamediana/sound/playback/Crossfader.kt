@@ -467,6 +467,11 @@ internal class Crossfader(
         tail?.player?.pause()
     }
 
+    /** The output the listener picked (see [OutputChoice]) for the tail playing a song's end now; new tails get it when made. */
+    fun setPreferredAudioDevice(device: android.media.AudioDeviceInfo?) {
+        tail?.player?.setPreferredAudioDevice(device)
+    }
+
     private fun dropTail() {
         tail?.let { runCatching { it.player.stop(); it.player.release() } }
         tail = null

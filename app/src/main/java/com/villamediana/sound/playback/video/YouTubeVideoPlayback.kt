@@ -218,6 +218,11 @@ class YouTubeVideoPlayback internal constructor(
         .apply {
             videoScalingMode = C.VIDEO_SCALING_MODE_SCALE_TO_FIT
             addListener(Events(this))
+            // The output picked in the player (the phone's speaker with earphones on…) goes for the video too.
+            val picked = runCatching { com.villamediana.sound.SoundApplication.graph.outputChoice.preferred.value }.getOrNull()
+            context.getSystemService(android.media.AudioManager::class.java)?.let { audio ->
+                setPreferredAudioDevice(com.villamediana.sound.playback.OutputChoice.device(audio, picked))
+            }
         }
 
     private fun mediaSource(videoId: String, stream: VideoStream): MediaSource {

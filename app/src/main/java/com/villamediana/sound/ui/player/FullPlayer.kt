@@ -83,11 +83,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
-import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.Bedtime
 import androidx.compose.material.icons.rounded.BluetoothAudio
 import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.Headset
+import androidx.compose.material.icons.rounded.Smartphone
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Lyrics
 import androidx.compose.material.icons.rounded.MoreVert
@@ -721,7 +721,8 @@ private fun BottomRow(outputName: String?, output: OutputRoute, sleep: SleepTime
                 PlayerIconButton(Icons.AutoMirrored.Rounded.QueueMusic, stringResource(R.string.player_queue), actions.openQueue, size = 48.dp, iconSize = 26.dp, tint = SoundColors.Text.copy(alpha = 0.85f))
             }
         }
-        if (output.kind != OutputKind.PHONE) {
+        // Shown while earphones, a speaker… are connected — also when the music was sent to the phone.
+        if (output.external) {
             Spacer(Modifier.height(10.dp))
             OutputChip(outputName, output, actions.openOutput, Modifier.align(Alignment.CenterHorizontally))
         }
@@ -770,7 +771,7 @@ private fun OutputChip(outputName: String?, route: OutputRoute, onClick: () -> U
         OutputKind.BLUETOOTH -> Icons.Rounded.BluetoothAudio
         OutputKind.WIRED -> Icons.Rounded.Headphones
         OutputKind.USB -> Icons.Rounded.Headset
-        OutputKind.PHONE -> Icons.AutoMirrored.Rounded.VolumeUp
+        OutputKind.PHONE -> Icons.Rounded.Smartphone
     }
     val tint = if (external) SoundColors.Accent else SoundColors.Text.copy(alpha = 0.8f)
     val interaction = remember { MutableInteractionSource() }

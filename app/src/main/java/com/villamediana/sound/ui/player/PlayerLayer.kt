@@ -241,6 +241,7 @@ internal fun PlayerHost(
     var queueOpen by rememberSaveable { mutableStateOf(false) }
     var sleepOpen by rememberSaveable { mutableStateOf(false) }
     var lyricsOpen by rememberSaveable { mutableStateOf(false) }
+    var outputOpen by rememberSaveable { mutableStateOf(false) }
     // The song the ⋮ sheet was opened for: it stays on it when the player moves to the next one.
     var actionsFor by remember { mutableStateOf<Track?>(null) }
 
@@ -253,6 +254,7 @@ internal fun PlayerHost(
         val closeSheets = {
             queueOpen = false
             sleepOpen = false
+            outputOpen = false
             actionsFor = null
         }
         val hooks = PlayerHooks(
@@ -296,6 +298,7 @@ internal fun PlayerHost(
             lyricsOpen = false
             queueOpen = false
             sleepOpen = false
+            outputOpen = false
         }
     }
     val shown = state.current ?: lastTrack ?: return
@@ -395,7 +398,7 @@ internal fun PlayerHost(
                     else -> navigator.findAlbum(key.title, com.villamediana.sound.stats.Recaps.mainArtist(key.artist))
                 }
             },
-            openOutput = { OutputRoutes.openSwitcher(context) },
+            openOutput = { outputOpen = true },
             download = {
                 val t = latestTrack
                 val d = latestDownload
@@ -766,6 +769,9 @@ internal fun PlayerHost(
             onRemove = { player.removeAt(it) },
             onDismiss = { queueOpen = false },
         )
+    }
+    if (outputOpen && state.hasMedia) {
+        OutputSheet(track = state.current, onDismiss = { outputOpen = false })
     }
     if (sleepOpen) {
         SleepTimerSheet(timer = sleep, onSet = { player.setSleepTimer(it) }, onDismiss = { sleepOpen = false })

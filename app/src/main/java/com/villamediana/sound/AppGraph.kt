@@ -320,6 +320,8 @@ class AppGraph(context: Context) {
     }
 
     val effects: AudioEffectsController by lazy { DeviceAudioEffects(appContext, scope) }
+    /** The output the listener picked in the player (the phone's speaker with earphones on…), for this run. */
+    val outputChoice = com.villamediana.sound.playback.OutputChoice()
     val video: VideoPlayback by lazy { YouTubeVideoPlayback(appContext, scope) }
     /** Album covers for songs that came as video uploads (their thumbnail is a video frame). */
     /** The artist of the song in the open player, loaded ahead (only that one). */
