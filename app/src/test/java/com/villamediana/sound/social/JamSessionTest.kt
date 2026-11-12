@@ -383,6 +383,24 @@ class JamSessionTest {
     }
 
     @Test
+    fun addingToTheQueueKeepsTheSongWhereItIsForEveryone() {
+        runBlocking { session.join(JamInvite(Jam("j9", "host"), Profile("host", "h", "Host"))) }
+        waitFor { playback.value.isPlaying && playback.value.queueIndex == 1 }
+        // A friend went to this song 40 s ago: the jam has it at place 0 since then.
+        session.onEvent(RelayEvent.JamChanged(Jam("j9", "host", state = JamState(q, 1, 0, true, serverNow - 40_000, rev = 6)), null))
+        waitFor { position.value == 40_000L }
+        Thread.sleep(400) // settled
+        val before = player.steps.size
+        assertTrue(gate!!.enqueue(tracks(listOf(song(8))), next = true))
+        waitFor { relay.sent.isNotEmpty() && playback.value.queue.size == 4 }
+        Thread.sleep(400)
+        // The change says where the song is now; nobody (this phone included) goes back to its start.
+        assertEquals(40_000, relay.sent.single().state.positionMs)
+        assertEquals(listOf("load 4@1:40000:true"), player.steps.drop(before))
+        assertEquals(40_000L, position.value)
+    }
+
+    @Test
     fun aFriendsNextIsFollowedHereNotFoughtBack() {
         runBlocking { session.join(JamInvite(Jam("j9", "host"), Profile("host", "h", "Host"))) }
         waitFor { playback.value.isPlaying && playback.value.queueIndex == 1 }
