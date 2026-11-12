@@ -116,7 +116,7 @@ private fun SongsContent(songs: SortedSongs, vm: SongsViewModel) {
     val tracks = songs.tracks
     val title = stringResource(R.string.detail_songs_title)
     val source = Sources.songs(title)
-    val status = playback.statusOf(source)
+    val status = playback.statusOf(source, tracks)
     val shuffleOn = if (status.isSource) playback.shuffle else shuffleLocal
     val duration = remember(tracks) { tracks.sumOf { it.durationMs } }
     val countText = songCount(tracks.size)

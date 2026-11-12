@@ -107,8 +107,11 @@ class HomeLogicTest {
         assertTrue(fromList.isFromAlbum(t.albumKey!!.normalized))
         assertFalse(fromList.isFromLiked())
         val mix = PlaybackState(current = t, source = PlaySource(PlaySource.Type.MIX, "Mix", "genre:pop"))
-        assertTrue(mix.isFromMix("genre:pop"))
-        assertFalse(mix.isFromMix("liked"))
+        val pop = com.villamediana.sound.smart.Mix(id = "genre:pop", title = "Mix", subtitle = "", kind = com.villamediana.sound.smart.Mix.Kind.GENRE, tracks = listOf(t), covers = emptyList(), tint = null)
+        assertTrue(mix.isFromMix(pop))
+        assertFalse(mix.isFromMix(pop.copy(id = "liked")))
+        // The same mix remade without the song playing (or a queue kept from before): not it any more.
+        assertFalse(mix.isFromMix(pop.copy(tracks = listOf(track(2, album = "A")))))
         assertTrue(PlaybackState(source = PlaySource(PlaySource.Type.SMART_SHUFFLE, "x")).isSmartLibrary())
     }
 }

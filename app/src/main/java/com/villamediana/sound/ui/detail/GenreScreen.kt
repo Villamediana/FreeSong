@@ -95,7 +95,7 @@ private fun GenreContent(routeName: String, tracks: List<Track>, vm: GenreViewMo
     val artists = remember(tracks) { MetaFormat.topArtists(tracks) }
     val duration = remember(tracks) { tracks.sumOf { it.durationMs } }
     val source = Sources.genre(name)
-    val status = playback.statusOf(source)
+    val status = playback.statusOf(source, tracks)
     val countText = songCount(tracks.size)
     val artistsText = when {
         artists.isEmpty() -> null

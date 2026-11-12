@@ -3,6 +3,7 @@ package com.villamediana.sound.ui.detail
 import com.villamediana.sound.data.db.Track
 import com.villamediana.sound.data.model.TrackSort
 import com.villamediana.sound.data.sortKey
+import com.villamediana.sound.playback.PlayRequests
 import com.villamediana.sound.playback.PlaySource
 import com.villamediana.sound.ui.components.formatDuration
 import com.villamediana.sound.ui.components.formatLongDuration
@@ -164,6 +165,15 @@ object Sources {
         if (!bothIds || mine.type in titleMatchable) return current.title.isNotBlank() && current.title.equals(mine.title, ignoreCase = true)
         return false
     }
+
+    /**
+     * The player is on [mine] as it is now: it came from it and the song playing is one of [songs]
+     * (what the collection holds right now). A queue kept from before (the app closed and opened
+     * again), a mix remade since (the moment's one changes all day) or the songs that came after
+     * the collection ended don't count: its Play starts it instead of resuming something else.
+     */
+    fun playingFrom(current: Track?, playingFrom: PlaySource?, mine: PlaySource, songs: Collection<Track>): Boolean =
+        current != null && matches(playingFrom, mine) && songs.any { PlayRequests.sameSong(current, it) }
 
     /** Types where a title match is good enough even when ids differ in format (smart sessions). */
     private val titleMatchable = setOf(PlaySource.Type.GENRE, PlaySource.Type.MIX)

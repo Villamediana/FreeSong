@@ -115,7 +115,7 @@ private fun MixContent(mix: Mix) {
     val tint = remember(mix.tint) { mix.tint?.let { Color(it) } ?: CoverColors.tune(SoundColors.Accent) }
     val duration = remember(tracks) { tracks.sumOf { it.durationMs } }
     val source = Sources.mix(mix.id, mix.title)
-    val status = playback.statusOf(source)
+    val status = playback.statusOf(source, tracks)
     val countText = songCount(tracks.size)
 
     CollectionScaffold(

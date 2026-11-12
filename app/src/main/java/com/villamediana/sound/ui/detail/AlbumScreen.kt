@@ -172,7 +172,7 @@ private fun AlbumContent(detail: AlbumDetail, vm: AlbumViewModel) {
     var shuffleLocal by rememberSaveable { mutableStateOf(false) }
 
     val source = Sources.album(s.key.artist, s.key.title, s.title)
-    val status = playback.statusOf(source)
+    val status = playback.statusOf(source, tracks)
     val shuffleOn = if (status.isSource) playback.shuffle else shuffleLocal
     val countText = songCount(tracks.size)
     val wash = rememberWash(s.coverPath, s.accentColor, seed = s.title)

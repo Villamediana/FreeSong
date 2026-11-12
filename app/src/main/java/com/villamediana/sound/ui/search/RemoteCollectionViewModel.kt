@@ -125,7 +125,10 @@ class RemoteCollectionViewModel(
 
     /** Whether the player is on this page (played online from here), and whether it sounds. */
     val here: StateFlow<HerePlaying?> = combine(player.state, _load) { s, load ->
-        if (s.current != null && s.source?.id == pageUrl(load)) HerePlaying(s.isPlaying || s.isBuffering, s.shuffle, s.isBuffering) else null
+        // On one of the page's songs too: a queue kept from before (or what came after the page ended) isn't it.
+        val songs = (load as? RemoteLoad.Loaded)?.detail?.tracks.orEmpty()
+        val onPage = s.current?.videoId?.let { v -> songs.any { it.videoId == v } } == true
+        if (s.current != null && s.source?.id == pageUrl(load) && onPage) HerePlaying(s.isPlaying || s.isBuffering, s.shuffle, s.isBuffering) else null
     }
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)

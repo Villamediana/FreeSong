@@ -304,7 +304,7 @@ private fun HomeFeed(
             item(key = "mixes", contentType = "carousel") {
                 Carousel(stringResource(R.string.home_made_for_you), Modifier.animateItem().staggerIn(idx, intro)) {
                     items(state.mixes, key = { it.id }) { mix ->
-                        val active = playback.hasMedia && playback.isFromMix(mix.id)
+                        val active = playback.hasMedia && playback.isFromMix(mix)
                         MixCard(
                             mix = mix,
                             playing = active && playback.isPlaying,
