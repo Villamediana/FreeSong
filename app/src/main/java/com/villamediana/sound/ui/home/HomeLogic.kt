@@ -3,6 +3,7 @@ package com.villamediana.sound.ui.home
 import com.villamediana.sound.data.db.PlayEvent
 import com.villamediana.sound.data.db.Track
 import com.villamediana.sound.data.model.AlbumSummary
+import com.villamediana.sound.playback.PlayRequests
 import com.villamediana.sound.playback.PlaySource
 import com.villamediana.sound.playback.PlaybackState
 import com.villamediana.sound.smart.Taste
@@ -64,5 +65,8 @@ fun decadeShort(decade: Int): Int? = if (decade in 1900..1999) decade % 100 else
 fun PlaybackState.isFromPlaylist(id: Long): Boolean = source?.type == PlaySource.Type.PLAYLIST && source.id == id.toString()
 fun PlaybackState.isFromAlbum(normalizedKey: String): Boolean = current?.albumKey?.normalized == normalizedKey
 fun PlaybackState.isFromLiked(): Boolean = source?.type == PlaySource.Type.LIKED
-fun PlaybackState.isFromMix(id: String): Boolean = source?.type == PlaySource.Type.MIX && source.id == id
+
+/** On this mix as it is now: from it, and on one of its songs (a mix remade since, or a queue kept from before, isn't it). */
+fun PlaybackState.isFromMix(mix: com.villamediana.sound.smart.Mix): Boolean =
+    current != null && source?.type == PlaySource.Type.MIX && source.id == mix.id && mix.tracks.any { PlayRequests.sameSong(current, it) }
 fun PlaybackState.isSmartLibrary(): Boolean = source?.type == PlaySource.Type.SMART_SHUFFLE

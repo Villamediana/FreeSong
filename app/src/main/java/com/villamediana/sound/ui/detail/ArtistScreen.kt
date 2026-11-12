@@ -98,9 +98,9 @@ private fun ArtistContent(detail: ArtistDetail) {
     }
 
     val source = Sources.artist(s.name)
-    val status = playback.statusOf(source)
-    val shuffleOn = if (status.isSource) playback.shuffle else shuffleLocal
     val playOrder = PlayOrder.artist(detail.topTracks, detail.allTracks)
+    val status = playback.statusOf(source, playOrder)
+    val shuffleOn = if (status.isSource) playback.shuffle else shuffleLocal
     val wash = rememberWash(s.coverPath, null, seed = s.name)
     val top = detail.topTracks.take(if (expanded) 10 else TOP_COLLAPSED)
     val single = stringResource(R.string.detail_single)

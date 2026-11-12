@@ -188,8 +188,7 @@ class DiscoverViewModel(app: Application) : AndroidViewModel(app) {
     /** A mix card plays it from the start (or pauses/resumes it when it is what plays). */
     fun playMix(mix: Mix) {
         val player = graph.player
-        val state = player.state.value
-        if (state.source?.type == PlaySource.Type.MIX && state.source.id == mix.id) {
+        if (player.state.value.isFromMix(mix)) {
             player.togglePlayPause()
             return
         }

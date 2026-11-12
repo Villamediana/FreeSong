@@ -286,7 +286,8 @@ private fun LibraryContent(
         verticalArrangement = Arrangement.spacedBy(if (grid) 18.dp else 0.dp),
     ) {
         item(key = "sortbar", span = { GridItemSpan(maxLineSpan) }, contentType = "sortbar") {
-            val listHere = playback.hasMedia && playback.isFromLiked()
+            // Its Play resumes only the list as it is now (not a queue kept from before).
+            val listHere = com.villamediana.sound.ui.detail.Sources.playingFrom(playback.current, playback.source, songsSource, songs)
             SortBar(
                 filter = s.filter,
                 sort = s.sort,

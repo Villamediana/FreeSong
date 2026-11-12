@@ -236,7 +236,7 @@ private fun DiscoverRow(title: String, subtitle: String? = null, content: LazyLi
 private fun MixRow(title: String, mixes: List<Mix>, playback: PlaybackState, onOpen: (Mix) -> Unit, onPlay: (Mix) -> Unit) {
     DiscoverRow(title) {
         items(mixes, key = { it.id }) { mix ->
-            val active = playback.hasMedia && playback.isFromMix(mix.id)
+            val active = playback.hasMedia && playback.isFromMix(mix)
             MixCard(mix = mix, playing = active && playback.isPlaying, onOpen = { onOpen(mix) }, onPlay = { onPlay(mix) })
         }
     }

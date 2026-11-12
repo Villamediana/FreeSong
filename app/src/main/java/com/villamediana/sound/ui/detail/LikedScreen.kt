@@ -55,7 +55,7 @@ private fun LikedContent(tracks: List<Track>) {
 
     val title = stringResource(R.string.detail_liked_title)
     val source = Sources.liked(title)
-    val status = playback.statusOf(source)
+    val status = playback.statusOf(source, tracks)
     val shuffleOn = if (status.isSource) playback.shuffle else shuffleLocal
     val duration = remember(tracks) { tracks.sumOf { it.durationMs } }
     val countText = songCount(tracks.size)

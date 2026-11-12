@@ -78,8 +78,9 @@ internal fun rememberPlaybackState(): State<PlaybackState> = graph.player.state.
 /** [isPlaying] counts a song that is loading to play ([isLoading]): the button shows Pause at once. */
 internal data class SourceStatus(val isSource: Boolean, val isPlaying: Boolean, val isLoading: Boolean = false)
 
-internal fun PlaybackState.statusOf(source: PlaySource): SourceStatus {
-    val mine = Sources.matches(this.source, source)
+/** [songs] = what the collection holds now (see [Sources.playingFrom]). */
+internal fun PlaybackState.statusOf(source: PlaySource, songs: Collection<Track>): SourceStatus {
+    val mine = Sources.playingFrom(current, this.source, source, songs)
     return SourceStatus(mine, mine && (isPlaying || isBuffering), mine && isBuffering)
 }
 

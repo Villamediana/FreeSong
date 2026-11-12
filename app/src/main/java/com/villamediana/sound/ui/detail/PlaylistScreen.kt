@@ -230,7 +230,7 @@ private fun PlaylistContent(detail: PlaylistDetail, vm: PlaylistViewModel) {
     LaunchedEffect(entries.isEmpty()) { if (entries.isEmpty()) editing = false }
 
     val source = Sources.playlist(summary.id, summary.name)
-    val status = playback.statusOf(source)
+    val status = playback.statusOf(source, tracks)
     val shuffleOn = if (status.isSource) playback.shuffle else shuffleLocal
     val countText = songCount(summary.trackCount)
     val wash = rememberWash(summary.coverPath ?: summary.mosaic.firstOrNull(), null, seed = summary.name)

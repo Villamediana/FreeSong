@@ -182,6 +182,21 @@ class DetailLogicTest {
         assertFalse(Sources.matches(PlaySource(PlaySource.Type.ALBUM, "Greatest Hits", "a\u0001greatest hits"), Sources.album("B", "Greatest Hits")))
     }
 
+    @Test fun aCollectionIsWhatPlaysOnlyOnOneOfItsSongsAsItIsNow() {
+        val mix = Sources.mix("dna:moment", "Pra agora")
+        val today = listOf(track(1), track(2))
+        // Playing from it, on one of its songs: its Play pauses/resumes.
+        assertTrue(Sources.playingFrom(track(2), mix, mix, today))
+        // The same downloaded song by its YouTube id counts too.
+        assertTrue(Sources.playingFrom(track(9).copy(videoId = "yt1"), mix, mix, listOf(track(1).copy(videoId = "yt1"))))
+        // Remade since (the moment changed), a queue kept from before the app closed, or the songs
+        // after it ended: the song isn't one of its songs now → its Play starts it.
+        assertFalse(Sources.playingFrom(track(7), mix, mix, today))
+        // Another collection, or nothing playing.
+        assertFalse(Sources.playingFrom(track(1), Sources.mix("daily", "Mix do dia"), mix, today))
+        assertFalse(Sources.playingFrom(null, mix, mix, today))
+    }
+
     // ------------------------------------------------------------ ordering
 
     @Test fun artistPlayOrderIsTopFirstWithoutRepeats() {
