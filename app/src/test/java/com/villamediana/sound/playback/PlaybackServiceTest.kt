@@ -592,4 +592,36 @@ class PlaybackServiceTest {
         assertEquals(listOf(tracks[0].id, tracks[1].id, tracks[5].id) + suggested, playOrderIds())
         assertEquals(suggested, suggestedIds())
     }
+
+    // ------------------------------------------------------------------ the song playing stays put
+
+    /** "Tocar a seguir" / "Adicionar à fila" never move the song playing (no seek, no other song). */
+    private fun addKeepsThePlayingSong(shuffle: Int, where: String) {
+        autoplay(false)
+        start()
+        play(tracks.take(3).map { it.id }, 0, shuffle)
+        idleUntil { player.playbackState == Player.STATE_READY }
+        // Paused mid-song: here the clock doesn't run the songs out, so any move shows.
+        player.pause()
+        player.seekTo(player.currentMediaItemIndex, 12_000)
+        idle(100)
+        val playing = currentId()
+        val moves = ArrayList<String>()
+        player.addListener(object : Player.Listener {
+            override fun onPositionDiscontinuity(o: Player.PositionInfo, n: Player.PositionInfo, reason: Int) {
+                moves += "${o.mediaItemIndex}@${o.positionMs} -> ${n.mediaItemIndex}@${n.positionMs} ($reason)"
+            }
+        })
+        add(listOf(tracks[5].id), where)
+        idle(200)
+        assertEquals(emptyList<String>(), moves)
+        assertEquals(playing, currentId())
+        assertEquals(12_000L, player.currentPosition)
+        assertTrue(tracks[5].id in playOrderIds())
+    }
+
+    @Test fun addingToTheEndKeepsTheSongWhereItIs() = addKeepsThePlayingSong(SessionProtocol.SHUFFLE_OFF, SessionProtocol.WHERE_END)
+    @Test fun playNextKeepsTheSongWhereItIs() = addKeepsThePlayingSong(SessionProtocol.SHUFFLE_OFF, SessionProtocol.WHERE_NEXT)
+    @Test fun addingWhileShuffledKeepsTheSongWhereItIs() = addKeepsThePlayingSong(SessionProtocol.SHUFFLE_ON, SessionProtocol.WHERE_END)
+    @Test fun playNextWhileShuffledKeepsTheSongWhereItIs() = addKeepsThePlayingSong(SessionProtocol.SHUFFLE_ON, SessionProtocol.WHERE_NEXT)
 }

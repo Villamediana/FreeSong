@@ -94,37 +94,62 @@ class JamSyncTest {
     @Test
     fun queueEditsKeepTheSongPlaying() {
         val s = jam(index = 1)
-        assertEquals(ids(listOf(song(1), song(2), song(8), song(3))), ids(JamSync.enqueue(s, listOf(song(8)), next = true)!!.queue))
-        assertEquals(ids(q + song(8)), ids(JamSync.enqueue(s, listOf(song(8)), next = false)!!.queue))
-        val removed = JamSync.remove(s, 0)!!
+        assertEquals(ids(listOf(song(1), song(2), song(8), song(3))), ids(JamSync.enqueue(s, listOf(song(8)), next = true, serverNow = 0)!!.queue))
+        assertEquals(ids(q + song(8)), ids(JamSync.enqueue(s, listOf(song(8)), next = false, serverNow = 0)!!.queue))
+        val removed = JamSync.remove(s, 0, 0)!!
         assertEquals(ids(listOf(song(2), song(3))), ids(removed.queue))
         assertEquals(0, removed.index)
-        assertNull(JamSync.remove(s, 1)) // the one playing
-        val moved = JamSync.move(s, 2, 0)!!
+        assertNull(JamSync.remove(s, 1, 0)) // the one playing
+        val moved = JamSync.move(s, 2, 0, 0)!!
         assertEquals(ids(listOf(song(3), song(1), song(2))), ids(moved.queue))
         assertEquals(song(2).videoId, moved.current!!.videoId)
+    }
+
+    @Test
+    fun queueEditsCarryWhereTheSongIsNotWhereItStarted() {
+        // Playing since "next" (place 0) at 1 s; 40 s later someone edits the queue: the change goes
+        // out stamped "now", so it must say 40 s — 0 would send everyone back to the song's start.
+        val s = jam(index = 1, pos = 0, at = 1_000)
+        val now = 41_000L
+        listOf(
+            JamSync.enqueue(s, listOf(song(8)), next = true, serverNow = now)!!,
+            JamSync.enqueue(s, listOf(song(8)), next = false, serverNow = now)!!,
+            JamSync.remove(s, 0, now)!!,
+            JamSync.move(s, 2, 0, now)!!,
+            JamSync.shuffleRest(s, 42, now),
+            JamSync.extend(s, listOf(song(7)), now)!!,
+        ).forEach { edited ->
+            assertEquals(40_000, edited.positionMs)
+            assertEquals(song(2).videoId, edited.current!!.videoId)
+            assertTrue(edited.playing)
+            // Stamped "now" (as propose and the relay do), it is still where the song is.
+            assertEquals(40_000, edited.copy(updatedAt = now).positionAt(now))
+            assertEquals(JamStep.None, JamSync.follow(edited.copy(updatedAt = now), local(index = edited.index, pos = 40_000, queue = edited.queue), now, held = false))
+        }
+        // Paused: it stays where it was paused.
+        assertEquals(15_000, JamSync.enqueue(jam(index = 1, pos = 15_000, playing = false, at = 0), listOf(song(8)), next = true, serverNow = 90_000)!!.positionMs)
     }
 
     @Test
     fun movingAroundASongThatIsInTheQueueTwiceKeepsTheOnePlaying() {
         // 1, 2, [2 again — playing], 3: moving the 3 to the top must not send everyone to the first 2.
         val s = JamState(queue = listOf(song(1), song(2), song(2), song(3)), index = 2)
-        val moved = JamSync.move(s, 3, 0)!!
+        val moved = JamSync.move(s, 3, 0, 0)!!
         assertEquals(ids(listOf(song(3), song(1), song(2), song(2))), ids(moved.queue))
         assertEquals(3, moved.index)
         // The playing one itself, moved: it goes where it was dropped.
-        assertEquals(0, JamSync.move(s, 2, 0)!!.index)
+        assertEquals(0, JamSync.move(s, 2, 0, 0)!!.index)
         // From after it to before it, and from before it to after it.
-        assertEquals(3, JamSync.move(s, 3, 1)!!.index)
-        assertEquals(1, JamSync.move(s, 0, 3)!!.index)
+        assertEquals(3, JamSync.move(s, 3, 1, 0)!!.index)
+        assertEquals(1, JamSync.move(s, 0, 3, 0)!!.index)
         // Both on the same side: it stays.
-        assertEquals(2, JamSync.move(s, 0, 1)!!.index)
+        assertEquals(2, JamSync.move(s, 0, 1, 0)!!.index)
     }
 
     @Test
     fun shuffleOnlyMixesWhatComesAfter() {
         val long = JamState(queue = (1..12).map { song(it) }, index = 3)
-        val mixed = JamSync.shuffleRest(long, 42)
+        val mixed = JamSync.shuffleRest(long, 42, 0)
         assertEquals(ids(long.queue.take(4)), ids(mixed.queue.take(4)))
         assertEquals(ids(long.queue).toSet(), ids(mixed.queue).toSet())
     }
@@ -133,9 +158,9 @@ class JamSyncTest {
     fun theEndOfTheQueueGrowsWithoutRepeats() {
         assertTrue(JamSync.nearEnd(jam(index = 1)))
         assertFalse(JamSync.nearEnd(JamState(queue = (1..5).map { song(it) }, index = 1)))
-        val grown = JamSync.extend(jam(), listOf(song(2), song(7), song(7), song(8)))!!
+        val grown = JamSync.extend(jam(), listOf(song(2), song(7), song(7), song(8)), 0)!!
         assertEquals(ids(q + song(7) + song(8)), ids(grown.queue))
-        assertNull(JamSync.extend(jam(), listOf(song(1))))
+        assertNull(JamSync.extend(jam(), listOf(song(1)), 0))
     }
 
     @Test

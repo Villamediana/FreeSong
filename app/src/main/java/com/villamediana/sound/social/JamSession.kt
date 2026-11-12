@@ -357,7 +357,7 @@ class JamSession(
             val more = withContext(Dispatchers.IO) { runCatching { related(last) }.getOrDefault(emptyList()) }
             val now = _jam.value ?: return@launch
             if (now.state.queue.lastOrNull()?.videoId != last) return@launch
-            JamSync.extend(now.state, more)?.let { propose(it) }
+            JamSync.extend(now.state, more, relay.serverNow())?.let { propose(it) }
         }
     }
 
@@ -421,7 +421,7 @@ class JamSession(
         scope.launch(main) {
             val more = withContext(Dispatchers.IO) { runCatching { related(last) }.getOrDefault(emptyList()) }
             val now = _jam.value ?: return@launch
-            val grown = if (now.state.queue.lastOrNull()?.videoId == last) JamSync.extend(now.state, more) ?: now.state else now.state
+            val grown = if (now.state.queue.lastOrNull()?.videoId == last) JamSync.extend(now.state, more, relay.serverNow()) ?: now.state else now.state
             JamSync.next(grown)?.let { propose(it) }
         }
         return true
@@ -438,10 +438,10 @@ class JamSession(
         if (next != null && next.current?.videoId == s.current?.videoId) next.copy(positionMs = s.positionAt(now), playing = true) else next
     }
 
-    override fun enqueue(tracks: List<Track>, next: Boolean): Boolean = withJam { s, _ -> JamSync.enqueue(s, tracks.mapNotNull(SongRef::of), next) }
-    override fun removeAt(queueIndex: Int): Boolean = withJam { s, _ -> JamSync.remove(s, queueIndex) }
-    override fun move(from: Int, to: Int): Boolean = withJam { s, _ -> JamSync.move(s, from, to) }
-    override fun setShuffle(enabled: Boolean): Boolean = withJam { s, now -> if (enabled) JamSync.shuffleRest(s, now) else null }
+    override fun enqueue(tracks: List<Track>, next: Boolean): Boolean = withJam { s, now -> JamSync.enqueue(s, tracks.mapNotNull(SongRef::of), next, now) }
+    override fun removeAt(queueIndex: Int): Boolean = withJam { s, now -> JamSync.remove(s, queueIndex, now) }
+    override fun move(from: Int, to: Int): Boolean = withJam { s, now -> JamSync.move(s, from, to, now) }
+    override fun setShuffle(enabled: Boolean): Boolean = withJam { s, now -> if (enabled) JamSync.shuffleRest(s, seed = now, serverNow = now) else null }
 
     /** Repeat would take this phone away from the others: off in a jam. */
     override fun cycleRepeat(): Boolean = _jam.value != null

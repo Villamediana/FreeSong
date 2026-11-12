@@ -60,6 +60,13 @@ object JamSync {
 
     private fun JamState.at(serverNow: Long) = positionAt(serverNow)
 
+    /**
+     * The same song, where it is now. A change goes out stamped with the relay's "now" (here and
+     * on the relay), so one that leaves the song alone (a queue edit) has to carry where the song
+     * is at that moment: the place it had at the last change would send everyone back there.
+     */
+    private fun JamState.stillPlaying(serverNow: Long) = copy(positionMs = at(serverNow))
+
     fun togglePlay(jam: JamState, serverNow: Long): JamState =
         jam.copy(playing = !jam.playing && jam.queue.isNotEmpty(), positionMs = jam.at(serverNow))
 
@@ -93,22 +100,22 @@ object JamSync {
         return JamState(queue = window, index = index - from, positionMs = 0, playing = true)
     }
 
-    /** "Tocar a seguir" ([next]) or "Adicionar à fila". */
-    fun enqueue(jam: JamState, songs: List<SongRef>, next: Boolean): JamState? {
+    /** "Tocar a seguir" ([next]) or "Adicionar à fila". The song playing goes on from where it is. */
+    fun enqueue(jam: JamState, songs: List<SongRef>, next: Boolean, serverNow: Long): JamState? {
         if (songs.isEmpty()) return null
         if (jam.queue.isEmpty()) return play(songs, 0)
         val at = if (next) jam.index + 1 else jam.queue.size
         val queue = (jam.queue.take(at) + songs + jam.queue.drop(at)).take(MAX_QUEUE)
-        return jam.copy(queue = queue)
+        return jam.stillPlaying(serverNow).copy(queue = queue)
     }
 
-    fun remove(jam: JamState, index: Int): JamState? {
+    fun remove(jam: JamState, index: Int, serverNow: Long): JamState? {
         if (index !in jam.queue.indices || index == jam.index) return null
         val queue = jam.queue.toMutableList().apply { removeAt(index) }
-        return jam.copy(queue = queue, index = if (index < jam.index) jam.index - 1 else jam.index)
+        return jam.stillPlaying(serverNow).copy(queue = queue, index = if (index < jam.index) jam.index - 1 else jam.index)
     }
 
-    fun move(jam: JamState, from: Int, to: Int): JamState? {
+    fun move(jam: JamState, from: Int, to: Int, serverNow: Long): JamState? {
         if (from !in jam.queue.indices || to !in jam.queue.indices || from == to) return null
         val queue = jam.queue.toMutableList().apply { add(to, removeAt(from)) }
         // Where the playing song went, by position: the same song twice in the queue (added again)
@@ -119,22 +126,22 @@ object JamSync {
             from > jam.index && to <= jam.index -> jam.index + 1
             else -> jam.index
         }
-        return jam.copy(queue = queue, index = index)
+        return jam.stillPlaying(serverNow).copy(queue = queue, index = index)
     }
 
     /** "Aleatório" in a jam: the songs after the current one, shuffled for everyone. */
-    fun shuffleRest(jam: JamState, seed: Long): JamState {
+    fun shuffleRest(jam: JamState, seed: Long, serverNow: Long): JamState {
         val head = jam.queue.take(jam.index + 1)
         val rest = jam.queue.drop(jam.index + 1).shuffled(kotlin.random.Random(seed))
-        return jam.copy(queue = head + rest)
+        return jam.stillPlaying(serverNow).copy(queue = head + rest)
     }
 
     /** More songs at the end (the radio of the last ones), so the jam doesn't run out. */
-    fun extend(jam: JamState, more: List<SongRef>): JamState? {
+    fun extend(jam: JamState, more: List<SongRef>, serverNow: Long): JamState? {
         val known = jam.queue.mapTo(HashSet()) { it.videoId }
         val fresh = more.filter { known.add(it.videoId) }.take(MAX_QUEUE - jam.queue.size)
         if (fresh.isEmpty()) return null
-        return jam.copy(queue = jam.queue + fresh)
+        return jam.stillPlaying(serverNow).copy(queue = jam.queue + fresh)
     }
 
     /** The jam is on its last songs: time to add more. */
