@@ -111,6 +111,7 @@
     <!-- Tocar junto: la letra se vuelve escenario para tocar y cantar -->
     <string name="chords_play_along_on">Tocar junto</string>
     <string name="chords_play_along_off">Volver a la letra</string>
+    <string name="chords_play_along_label">Tocar</string>
     <string name="chords_now">Ahora</string>
     <string name="chords_up_next">Sigue</string>
 </resources>

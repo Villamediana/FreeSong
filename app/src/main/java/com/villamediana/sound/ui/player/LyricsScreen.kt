@@ -252,16 +252,6 @@ internal fun LyricsScreen(
                         tint = if (chordsOn) SoundColors.Text else SoundColors.Text.copy(alpha = 0.4f),
                     )
                 }
-                if (chordsDeps != null && chordsOn && lane != null) {
-                    PlayerIconButton(
-                        com.villamediana.sound.ui.chords.PlayAlongIcon,
-                        stringResource(if (playAlong) R.string.chords_play_along_off else R.string.chords_play_along_on),
-                        onClick = { scope.launch { chordsDeps.setPlayAlong(!playAlong) } },
-                        size = 44.dp,
-                        iconSize = 22.dp,
-                        tint = if (playAlong) SoundColors.Text else SoundColors.Text.copy(alpha = 0.4f),
-                    )
-                }
                 // Chords and translation go together: the chords over a line, its translation under it.
                 if (lyrics is LyricsState.Ready) TranslateToggle()
             }
@@ -356,7 +346,24 @@ internal fun LyricsScreen(
                             // The "−" lines up with the time under the bar's start.
                             modifier = Modifier.align(Alignment.TopStart).offset(x = (-11).dp),
                         )
-                        com.villamediana.sound.ui.chords.ChordSheetNote(found?.sheet, Modifier.align(Alignment.TopEnd))
+                        // The other side: what the sheet says (capo, whose version) and "Tocar junto" —
+                        // a way of showing the chords, so it sits with them, not up with the modes.
+                        Row(
+                            Modifier.align(Alignment.TopEnd).fillMaxWidth(0.42f),
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.Top,
+                        ) {
+                            com.villamediana.sound.ui.chords.ChordSheetNote(found?.sheet, Modifier.weight(1f, fill = false))
+                            if (chordsDeps != null && chordsOn && lane != null) {
+                                Spacer(Modifier.width(14.dp))
+                                com.villamediana.sound.ui.chords.PlayAlongToggle(
+                                    on = playAlong,
+                                    onToggle = { scope.launch { chordsDeps.setPlayAlong(!playAlong) } },
+                                    // The pick's middle under the time's end, as the "−" is under its start.
+                                    modifier = Modifier.offset(x = 9.dp),
+                                )
+                            }
+                        }
                     }
                     MorphPlayPause(playing = playing, onClick = onTogglePlay, size = 60.dp, modifier = Modifier.align(Alignment.Center))
                 }
