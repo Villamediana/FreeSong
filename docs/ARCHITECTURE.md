@@ -346,6 +346,12 @@ pra seguir); liga/desliga guardado em `Settings.chordsPlayAlong`. A letra vira p
   acordes dividem o tempo até a próxima). Cifra sem letra sincronizada não tem tempo → sem botão.
   Acorde repetido na linha seguinte não conta como troca. Aparece 220 ms antes (`LEAD_MS`).
 - Deitado: acordes à esquerda, letra à direita; sem altura pro desenho grande, vai o pequeno.
+- 1.33.2: o botão saiu do topo (topo = modos gerais: acordes, tradução) e foi pra fileira do play,
+  do outro lado do TOM ("TOCAR" sobre a palheta, ao lado do capotraste) — Miguel: embaixo ficam os
+  "subconjuntos" do que foi ligado em cima. Tempo dos acordes da cifra (`PlayAlong.lyricTimes`):
+  acordes escritos depois das palavras ("borrar  G D G D") dividem o resto da linha (~900 ms cada,
+  no máximo metade da linha), e acordes colados (< 300 ms) dividem o tempo até o próximo — antes
+  vinham todos juntos no fim (segurava um e piscava quatro).
 - **Pra tirar**: `ui/chords/PlayAlongStage.kt`, `chords/PlayAlong.kt`, o parâmetro `ringing`/`view`
   do `ChordLyricsLines` (+ `lit` do `ChordChip`), o botão e o `Crossfade` na `LyricsScreen`,
   `playAlong`/`setPlayAlong` do `ChordsDeps` e `chordsPlayAlong` do `SettingsStore`. Ou

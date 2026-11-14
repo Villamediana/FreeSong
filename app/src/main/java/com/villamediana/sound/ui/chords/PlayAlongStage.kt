@@ -16,6 +16,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -65,6 +67,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
@@ -175,6 +178,38 @@ internal val PlayAlongIcon: ImageVector by lazy {
             moveTo(10.6f, 14.6f); lineTo(13.4f, 14.6f)
         }
     }.build()
+}
+
+/**
+ * "TOCAR" over a pick, by the play button across from the key: on, the pick in full ink on a soft
+ * round pill (as a chosen word is); off, faint.
+ */
+@Composable
+internal fun PlayAlongToggle(on: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
+    val said = stringResource(if (on) R.string.chords_play_along_off else R.string.chords_play_along_on)
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val pill by animateColorAsState(SoundColors.Text.copy(alpha = if (on) 0.1f else 0f), tween(200), label = "playAlongPill")
+    val ink by animateColorAsState(if (on) SoundColors.Text else SoundColors.Text.copy(alpha = 0.45f), tween(200), label = "playAlongInk")
+    Column(modifier.testTag("playAlongToggle"), horizontalAlignment = Alignment.CenterHorizontally) {
+        StageLabel(stringResource(R.string.chords_play_along_label))
+        Box(
+            Modifier
+                .size(40.dp)
+                .clip(androidx.compose.foundation.shape.CircleShape)
+                .background(pill)
+                .clickable(role = Role.Switch, onClickLabel = said) {
+                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.ContextClick)
+                    onToggle()
+                }
+                .semantics {
+                    contentDescription = said
+                    selected = on
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            androidx.compose.material3.Icon(PlayAlongIcon, contentDescription = null, tint = ink, modifier = Modifier.size(22.dp))
+        }
+    }
 }
 
 // ---- Now and next ----
