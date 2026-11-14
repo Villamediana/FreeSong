@@ -35,6 +35,10 @@ class SoundApplication : Application(), SingletonImageLoader.Factory {
                 if (removed > 0) graph.settings.addListenedBefore(removed)
             }
         }
+        // The karaoke left the app (1.32.1): what it downloaded and worked out goes too.
+        graph.scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching { com.villamediana.sound.data.Leftovers.clear(filesDir, cacheDir) }
+        }
         // "Downloads inteligentes" follows its switch (scheduled on, cancelled off).
         graph.scope.launch {
             graph.settings.settings.map { it.smartDownloads }.distinctUntilChanged().collect { on ->

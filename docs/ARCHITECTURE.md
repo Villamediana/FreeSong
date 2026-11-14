@@ -187,6 +187,13 @@ JSON: usar `kotlinx.serialization` (o `org.json` do Android vira stub nos testes
     desligado ou fim da fila no meio: `Cancel`. A fila mudou depois da medida: só o lado de quem
     sai vale (`Mix.withoutIncoming`).
 
+## Karaokê: removido (1.32.1)
+
+Entrou na 1.32.0 (Spleeter no ONNX Runtime, no celular) e saiu na 1.32.1 — o Miguel: "não serve e
+não quero ele mais". O código está no commit `15f92ac` (revertido em seguida). Ao abrir, o app apaga
+o que ele deixou no celular (`data/Leftovers`: `filesDir/karaoke-model`, `cacheDir/karaoke`). Não
+reintroduzir sem ele pedir.
+
 ## Acordes (1.10.0, 2026-11-08; ouvido BTC desde 1.11.0; Cifra Club primeiro desde 1.12.0)
 
 Acordes em cima da letra. **Primeiro a cifra do Cifra Club** (escrita por quem toca); só música sem
