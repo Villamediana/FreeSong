@@ -349,7 +349,7 @@ internal fun LyricsScreen(
                         // The other side: "Tocar junto", a way of showing the chords, so it sits with
                         // them, not up with the modes. (What the sheet says — capo, whose version —
                         // is a line before the words.)
-                        if (chordsDeps != null && chordsOn && lane != null) {
+                        if (chordsDeps != null && chordsDeps.playAlongOffered && chordsOn && lane != null) {
                             com.villamediana.sound.ui.chords.PlayAlongToggle(
                                 on = playAlong,
                                 onToggle = { scope.launch { chordsDeps.setPlayAlong(!playAlong) } },

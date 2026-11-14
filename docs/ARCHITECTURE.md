@@ -372,6 +372,9 @@ pra seguir); liga/desliga guardado em `Settings.chordsPlayAlong`. A letra vira p
   esquerda: o que soa + os três seguintes. Todos na tinta cheia e do mesmo tamanho; o que soa na cor
   da linha cantada — só essa cor anda. O lugar que fica pra trás recebe o acorde três à frente.
   Desenho pequeno (`MiniFret`/teclado sem nomes) do tamanho do lugar.
+- 1.33.8: GUARDADO a pedido ("oculta por enquanto, depois vemos certinho"). `ChordsDeps.playAlongOffered`
+  (padrão true; a `AppGraph` passa false): sem botão TOCAR e sem palco, mesmo com o ajuste salvo ligado.
+  Todo o código e os testes seguem; pra voltar, `playAlongOffered = true` na `AppGraph`.
 - **Pra tirar**: `ui/chords/PlayAlongStage.kt`, `chords/PlayAlong.kt`, o parâmetro `ringing`/`view`
   do `ChordLyricsLines` (+ `lit` do `ChordChip`), o botão e o `Crossfade` na `LyricsScreen`,
   `playAlong`/`setPlayAlong` do `ChordsDeps` e `chordsPlayAlong` do `SettingsStore`. Ou
