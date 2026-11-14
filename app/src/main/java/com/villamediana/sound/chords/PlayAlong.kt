@@ -69,11 +69,8 @@ object PlayAlong {
     /** A pause shorter than this after a line is still the line (as [ChordLayout] reads it). */
     private const val MIN_GAP_MS = 3_000L
 
-    /** Room each chord written after the words wants (about two beats). */
-    private const val AFTER_WORDS_MS = 900L
-
-    /** Chords closer than this would flash by: they share the time to the next one instead. */
-    private const val CROWDED_MS = 300L
+    /** The least time a written chord rings on its line (about two beats), so it can be seen and played. */
+    private const val MIN_CHORD_MS = 1_200L
 
     /** How long the last chord is held when the song's length isn't known. */
     private const val LAST_HOLD_MS = 4_000L
@@ -101,41 +98,30 @@ object PlayAlong {
     }
 
     /**
-     * When the chords of a sung line come, the line given [from]–[to]. Over the words: as far into
-     * the singing as their word is into the line. After the words ("borrar  G D G D"): one after the
-     * other in the time left, the singing made shorter if it would leave them too little. Chords
-     * written close together never come at once: a crowded run shares the time up to what's next.
+     * When the chords of a sung line come, the line given [from]–[to]. A chord over a word comes as
+     * far into the singing as its word is into the line; one written after the words, when the
+     * singing ends. Then every chord gets time to be seen and played — [MIN_CHORD_MS], or an even
+     * share when the line has more chords than that fits: chords that would come too close push
+     * the later ones on, and the last ones, near the end of the line, come earlier instead of
+     * flashing by before the next line ("amanecer  A/B  Bm": A/B used to last half a second). A
+     * singer lands the last words earlier and holds them, so earlier is the safer side.
      */
     internal fun lyricTimes(row: ChordRow.Lyric, from: Long, to: Long): List<Pair<Long, Int>> {
-        if (row.chords.isEmpty()) return emptyList()
+        val chords = row.chords
+        val n = chords.size
+        if (n == 0) return emptyList()
         val length = row.text.trimEnd().length
-        val window = (to - from).coerceAtLeast(1)
-        val inside = row.chords.filter { length > 0 && it.at < length }
-        val after = row.chords.filter { length == 0 || it.at >= length }
+        val window = (to - from).coerceAtLeast(n.toLong())
+        // A line with no words is played like a row of chords alone: evenly.
+        if (length == 0) return chords.mapIndexed { k, c -> from + window * k / n to c.index }
         val natural = minOf(window, ChordLayout.sungMs(row.text))
-        val sung = when {
-            after.isEmpty() -> if (window - natural < MIN_GAP_MS) window else natural
-            inside.isEmpty() -> 0L
-            // The chords after the words need room of their own (half the line at most).
-            else -> minOf(natural, window - minOf(after.size * AFTER_WORDS_MS, window / 2))
-        }
-        val times = LongArray(row.chords.size)
-        var k = 0
-        for (c in inside) times[k++] = from + sung * c.at / length
-        for ((n, c) in after.withIndex()) times[k++] = from + sung + (window - sung) * n / after.size
-        // A run of chords closer than a quick change shares the time up to the next one (or the line's end).
-        var a = 0
-        while (a < times.size) {
-            var b = a
-            while (b + 1 < times.size && times[b + 1] - times[b] < CROWDED_MS) b++
-            if (b > a) {
-                val end = times.getOrNull(b + 1) ?: to
-                val span = (end - times[a]).coerceAtLeast((b - a + 1).toLong())
-                for (n in a..b) times[n] = times[a] + span * (n - a) / (b - a + 1)
-            }
-            a = b + 1
-        }
-        return (inside + after).mapIndexed { n, c -> times[n] to c.index }
+        val sung = if (window - natural < MIN_GAP_MS) window else natural
+        val times = LongArray(n) { k -> from + sung * minOf(chords[k].at, length) / length }
+        val room = minOf(MIN_CHORD_MS, window / n)
+        for (k in 1 until n) times[k] = maxOf(times[k], times[k - 1] + room)
+        times[n - 1] = minOf(times[n - 1], from + window - room)
+        for (k in n - 2 downTo 0) times[k] = minOf(times[k], times[k + 1] - room)
+        return chords.mapIndexed { k, c -> times[k] to c.index }
     }
 
     /** When each written chord comes ([Pair] of start and label index), in order, from rows with known times. */

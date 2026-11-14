@@ -356,6 +356,11 @@ pra seguir); liga/desliga guardado em `Settings.chordsPlayAlong`. A letra vira p
   capotraste/"versão de" saiu da fileira do play: é uma linha pequena antes da letra
   (`sheetNote` no `ChordLyricsLines`), na tipografia da letra, só com acordes — "é só uma instrução".
   No palco ela fica visível enquanto a primeira linha (a intro) soa.
+- 1.33.5: acorde do fim da linha piscava ("amanecer  A/B  Bm": A/B meio segundo). Agora todo acorde
+  escrito fica no mínimo 1,2 s na linha (`MIN_CHORD_MS`; linha com acordes demais divide por igual):
+  os colados empurram os seguintes, e os do fim da linha vêm MAIS CEDO em vez de espremidos — quem
+  canta chega na última palavra antes e segura. Substitui o "depois das palavras ~900 ms" da 1.33.2.
+  O tempo de verdade só ouvindo a música (BTC casado com a cifra) — oferecido ao Miguel, não feito.
 - **Pra tirar**: `ui/chords/PlayAlongStage.kt`, `chords/PlayAlong.kt`, o parâmetro `ringing`/`view`
   do `ChordLyricsLines` (+ `lit` do `ChordChip`), o botão e o `Crossfade` na `LyricsScreen`,
   `playAlong`/`setPlayAlong` do `ChordsDeps` e `chordsPlayAlong` do `SettingsStore`. Ou
