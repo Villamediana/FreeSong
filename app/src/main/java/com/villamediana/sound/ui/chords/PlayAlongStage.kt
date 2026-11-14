@@ -159,44 +159,47 @@ internal fun PlayAlongStage(
     }
 }
 
-/** A guitar pick: the "Tocar junto" button. */
+/**
+ * An acoustic guitar leaning up to the right: the "Tocar junto" button. One silhouette (two bouts
+ * and a sound hole), the neck and the head as strokes — drawn like the chords button.
+ */
 internal val PlayAlongIcon: ImageVector by lazy {
     ImageVector.Builder("PlayAlong", 24.dp, 24.dp, 24f, 24f).apply {
         val ink = SolidColor(Color.White)
-        path(stroke = ink, strokeLineWidth = 1.9f, strokeLineCap = StrokeCap.Round) {
-            moveTo(12f, 21.2f)
-            curveTo(8.4f, 18.4f, 4.2f, 13.2f, 4.2f, 8.6f)
-            curveTo(4.2f, 5.1f, 7.6f, 3.2f, 12f, 3.2f)
-            curveTo(16.4f, 3.2f, 19.8f, 5.1f, 19.8f, 8.6f)
-            curveTo(19.8f, 13.2f, 15.6f, 18.4f, 12f, 21.2f)
+        fun androidx.compose.ui.graphics.vector.PathBuilder.circle(cx: Float, cy: Float, r: Float, clockwise: Boolean) {
+            moveTo(cx - r, cy)
+            arcToRelative(r, r, 0f, true, clockwise, 2 * r, 0f)
+            arcToRelative(r, r, 0f, true, clockwise, -2 * r, 0f)
             close()
         }
-        // Three short strings across it: what the pick is for.
-        path(stroke = ink, strokeLineWidth = 1.6f, strokeLineCap = StrokeCap.Round) {
-            moveTo(9f, 8.2f); lineTo(15f, 8.2f)
-            moveTo(9.6f, 11.4f); lineTo(14.4f, 11.4f)
-            moveTo(10.6f, 14.6f); lineTo(13.4f, 14.6f)
+        // The neck and the head.
+        path(stroke = ink, strokeLineWidth = 2f, strokeLineCap = StrokeCap.Round) {
+            moveTo(11.5f, 12.5f); lineTo(18.6f, 5.4f)
+        }
+        path(stroke = ink, strokeLineWidth = 3.4f, strokeLineCap = StrokeCap.Round) {
+            moveTo(18.9f, 5.1f); lineTo(20.6f, 3.4f)
+        }
+        // The body: the lower and upper bouts as one, the sound hole cut out (wound the other way).
+        path(fill = ink) {
+            circle(7.9f, 16.1f, 5.1f, clockwise = true)
+            circle(11.7f, 12.3f, 3.5f, clockwise = true)
+            circle(8f, 16f, 1.5f, clockwise = false)
         }
     }.build()
 }
 
-/**
- * "TOCAR" over a pick, by the play button across from the key: on, the pick in full ink on a soft
- * round pill (as a chosen word is); off, faint.
- */
+/** "TOCAR" over a guitar, by the play button across from the key: full ink when on, faint when off. */
 @Composable
 internal fun PlayAlongToggle(on: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
     val said = stringResource(if (on) R.string.chords_play_along_off else R.string.chords_play_along_on)
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
-    val pill by animateColorAsState(SoundColors.Text.copy(alpha = if (on) 0.1f else 0f), tween(200), label = "playAlongPill")
-    val ink by animateColorAsState(if (on) SoundColors.Text else SoundColors.Text.copy(alpha = 0.45f), tween(200), label = "playAlongInk")
+    val ink by animateColorAsState(if (on) SoundColors.Text else SoundColors.Text.copy(alpha = 0.4f), tween(200), label = "playAlongInk")
     Column(modifier.testTag("playAlongToggle"), horizontalAlignment = Alignment.CenterHorizontally) {
         StageLabel(stringResource(R.string.chords_play_along_label))
         Box(
             Modifier
                 .size(40.dp)
                 .clip(androidx.compose.foundation.shape.CircleShape)
-                .background(pill)
                 .clickable(role = Role.Switch, onClickLabel = said) {
                     haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.ContextClick)
                     onToggle()
@@ -207,7 +210,7 @@ internal fun PlayAlongToggle(on: Boolean, onToggle: () -> Unit, modifier: Modifi
                 },
             contentAlignment = Alignment.Center,
         ) {
-            androidx.compose.material3.Icon(PlayAlongIcon, contentDescription = null, tint = ink, modifier = Modifier.size(22.dp))
+            androidx.compose.material3.Icon(PlayAlongIcon, contentDescription = null, tint = ink, modifier = Modifier.size(24.dp))
         }
     }
 }

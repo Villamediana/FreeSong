@@ -203,8 +203,9 @@ class ChordScreensTest {
         compose.onNodeWithTag("chordLyrics").assertExists()
         // No source label (Miguel: not needed); the capo and the key are, by the play button.
         compose.onNodeWithText("Cifra Club", substring = true).assertDoesNotExist()
-        compose.onNodeWithText("CAPOTRASTE").assertExists()
-        compose.onNodeWithText("2ª casa").assertExists()
+        // The capo is a line before the words now, not by the play button.
+        compose.onNodeWithText("Capotraste na 2ª casa").assertExists()
+        compose.onNodeWithText("CAPOTRASTE").assertDoesNotExist()
         compose.onNodeWithText("TOM").assertExists()
         compose.onNodeWithContentDescription("Tom G").assertExists()
         compose.onAllNodesWithText("Am7(9)").onFirst().assertExists()

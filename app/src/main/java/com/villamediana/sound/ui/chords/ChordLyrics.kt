@@ -129,9 +129,13 @@ internal fun ChordLyricsLines(
             resting = true
         }
     }
-    LaunchedEffect(rows, current, resting) {
+    // How to play the sheet (capo, whose version), small, before the words: an instruction, not a control.
+    val note = sheetNote(chart.sheet)
+    val header = if (note != null) 1 else 0
+    LaunchedEffect(rows, current, resting, header) {
         if (!timed || !resting) return@LaunchedEffect
-        if (current < 0) listState.animateScrollToItem(0) else listState.animateScrollToItem((current - linesAbove).coerceAtLeast(0))
+        // The first row keeps the note over it in sight, even on a stage that keeps the sung line on top.
+        if (current <= 0) listState.animateScrollToItem(0) else listState.animateScrollToItem((current + header - linesAbove).coerceAtLeast(0))
     }
     val chordStyle = remember(textStyle) { chordStyleFor(textStyle) }
     val names = remember(chart) { chart.labels().map(ChordName::typeset) }
@@ -139,6 +143,19 @@ internal fun ChordLyricsLines(
     val ahead = colors.future.copy(alpha = (colors.future.alpha + AHEAD_LIFT).coerceAtMost(0.92f))
 
     LazyColumn(state = listState, modifier = modifier.testTag("chordLyrics"), contentPadding = contentPadding) {
+        if (note != null) {
+            item(key = "sheetNote") {
+                Text(
+                    note,
+                    style = chordStyle.copy(fontWeight = FontWeight.Medium, letterSpacing = 0.01.em),
+                    color = colors.future.copy(alpha = colors.future.alpha * 0.85f),
+                    modifier = Modifier
+                        .testTag("chordSheetNote")
+                        .padding(horizontal = horizontalPadding)
+                        .padding(bottom = lineGap / 2 + 6.dp),
+                )
+            }
+        }
         itemsIndexed(rows) { index, row ->
             val target = when {
                 !timed -> colors.active.copy(alpha = 0.92f)
@@ -320,6 +337,20 @@ private fun InstrumentalRow(
         )
         for (k in chords) ChordChip(names[k], chordStyle, chordColor, onClick = { onChord(k) }, lit = lit?.let { f -> { f(k) } })
     }
+}
+
+/**
+ * What a player's sheet says about playing it, as one short line: "Capotraste na 2ª casa · Versão
+ * de Ricardo Arjona"; null when it says nothing (or the chords were heard).
+ */
+@Composable
+private fun sheetNote(sheet: com.villamediana.sound.chords.WrittenSheet?): String? {
+    sheet ?: return null
+    val parts = listOfNotNull(
+        sheet.capo.takeIf { it > 0 }?.let { androidx.compose.ui.res.stringResource(com.villamediana.sound.R.string.chords_capo_note, it) },
+        sheet.versionOf.takeIf { it.isNotBlank() }?.let { androidx.compose.ui.res.stringResource(com.villamediana.sound.R.string.chords_version, it) },
+    )
+    return parts.takeIf { it.isNotEmpty() }?.joinToString("  ·  ")
 }
 
 /**

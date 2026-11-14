@@ -352,6 +352,10 @@ pra seguir); liga/desliga guardado em `Settings.chordsPlayAlong`. A letra vira p
   acordes escritos depois das palavras ("borrar  G D G D") dividem o resto da linha (~900 ms cada,
   no máximo metade da linha), e acordes colados (< 300 ms) dividem o tempo até o próximo — antes
   vinham todos juntos no fim (segurava um e piscava quatro).
+- 1.33.3: botão = "TOCAR" sobre um violão (a palheta e a pílula de fundo saíram, a pedido). O
+  capotraste/"versão de" saiu da fileira do play: é uma linha pequena antes da letra
+  (`sheetNote` no `ChordLyricsLines`), na tipografia da letra, só com acordes — "é só uma instrução".
+  No palco ela fica visível enquanto a primeira linha (a intro) soa.
 - **Pra tirar**: `ui/chords/PlayAlongStage.kt`, `chords/PlayAlong.kt`, o parâmetro `ringing`/`view`
   do `ChordLyricsLines` (+ `lit` do `ChordChip`), o botão e o `Crossfade` na `LyricsScreen`,
   `playAlong`/`setPlayAlong` do `ChordsDeps` e `chordsPlayAlong` do `SettingsStore`. Ou

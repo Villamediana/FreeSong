@@ -156,37 +156,3 @@ private fun StepButton(icon: androidx.compose.ui.graphics.vector.ImageVector, la
         Icon(icon, contentDescription = null, tint = SoundColors.Text.copy(alpha = if (enabled) 0.85f else 0.25f), modifier = Modifier.size(18.dp))
     }
 }
-
-/**
- * What a written sheet says about how to play it, on the other side of the play button: the capo
- * ("CAPOTRASTE" over "2ª casa"), and whose version it is when it's another artist's.
- */
-@Composable
-internal fun ChordSheetNote(sheet: WrittenSheet?, modifier: Modifier = Modifier) {
-    sheet ?: return
-    val capo = sheet.capo > 0
-    val version = sheet.versionOf.isNotBlank()
-    if (!capo && !version) return
-    Column(modifier.widthIn(max = 150.dp).testTag("chordSheetNote"), horizontalAlignment = Alignment.End) {
-        MicroLabel(stringResource(if (capo) R.string.chords_capo_label else R.string.chords_version_label))
-        // The value on the same line as the key's on the other side.
-        Box(Modifier.height(40.dp), contentAlignment = Alignment.CenterEnd) {
-            Text(
-                if (capo) stringResource(R.string.chords_capo_fret, sheet.capo) else sheet.versionOf,
-                style = valueStyle,
-                color = SoundColors.Text,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        if (capo && version) {
-            Text(
-                stringResource(R.string.chords_version, sheet.versionOf),
-                style = MaterialTheme.typography.labelMedium,
-                color = SoundColors.Text.copy(alpha = 0.6f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
-}
