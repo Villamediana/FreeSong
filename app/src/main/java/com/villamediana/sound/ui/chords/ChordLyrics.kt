@@ -103,10 +103,16 @@ internal fun ChordLyricsLines(
     lineGap: Dp = 10.dp,
     /** Each lyric line's translation, by its text ("Tradução" on); the chords stay over the words. */
     translations: Map<String, String>? = lyrics?.let { rememberTranslationsByText(it) },
-) {
-    val view = remember(lyrics, chart, durationMs) {
+    /** The rows, when whoever shows them laid them out already ("Tocar junto" times its chords by them). */
+    view: ChordLayout.View = remember(lyrics, chart, durationMs) {
         ChordLayout.view(lyrics ?: ParsedLyrics(false, emptyList()), chart, durationMs)
-    }
+    },
+    /**
+     * "Tocar junto" only: the chord ringing now (its index, −1 none), lit on a soft pill in the line
+     * being sung. Without it — the chords over the lyrics — no chord is ever marked.
+     */
+    ringing: (() -> Int)? = null,
+) {
     val rows = view.rows
     val listState = rememberSaveable(rows, saver = LazyListState.Saver) { LazyListState() }
     // Times known: synced lyrics, or no lyrics at all (the heard chords' own times). Not guessed
@@ -150,14 +156,16 @@ internal fun ChordLyricsLines(
                     else Modifier,
                 )
                 .padding(horizontal = horizontalPadding, vertical = lineGap / 2)
+            // Only the line being sung lights its ringing chord.
+            val lit: ((Int) -> Boolean)? = if (ringing != null && timed && index == current) { k -> ringing() == k } else null
             when (row) {
                 is ChordRow.Lyric -> {
                     val translation = translations?.get(row.text.trim())
                     if (translation == null) {
-                        ChordedLine(row.text, row.chords, names, textStyle, chordStyle, { color }, { chordColor }, tap, rowModifier)
+                        ChordedLine(row.text, row.chords, names, textStyle, chordStyle, { color }, { chordColor }, tap, rowModifier, lit)
                     } else {
                         androidx.compose.foundation.layout.Column(rowModifier) {
-                            ChordedLine(row.text, row.chords, names, textStyle, chordStyle, { color }, { chordColor }, tap, Modifier.fillMaxWidth())
+                            ChordedLine(row.text, row.chords, names, textStyle, chordStyle, { color }, { chordColor }, tap, Modifier.fillMaxWidth(), lit)
                             Text(
                                 text = translation,
                                 style = textStyle.translationStyle(),
@@ -175,6 +183,7 @@ internal fun ChordLyricsLines(
                     chordColor = { chordColor },
                     onChord = tap,
                     modifier = rowModifier,
+                    lit = lit,
                 )
             }
         }
@@ -197,6 +206,7 @@ private fun ChordedLine(
     chordColor: () -> Color,
     onChord: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    lit: ((Int) -> Boolean)? = null,
 ) {
     val measurer = rememberTextMeasurer()
     // Untrimmed line boxes: a line measured alone sits exactly as it does in the paragraph.
@@ -205,7 +215,7 @@ private fun ChordedLine(
     val drawn = remember(text, style) { mutableListOf<Pair<TextLayoutResult, Float>>() }
     Layout(
         content = {
-            for (c in chords) ChordChip(names[c.index], chordStyle, chordColor, onClick = { onChord(c.index) })
+            for (c in chords) ChordChip(names[c.index], chordStyle, chordColor, onClick = { onChord(c.index) }, lit = lit?.let { f -> { f(c.index) } })
         },
         modifier = modifier
             .semantics { contentDescription = text }
@@ -294,6 +304,7 @@ private fun InstrumentalRow(
     chordColor: () -> Color,
     onChord: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    lit: ((Int) -> Boolean)? = null,
 ) {
     FlowRow(
         modifier = modifier,
@@ -307,7 +318,7 @@ private fun InstrumentalRow(
             color = { noteColor().let { it.copy(alpha = it.alpha * 0.55f) } },
             modifier = Modifier.padding(end = 2.dp),
         )
-        for (k in chords) ChordChip(names[k], chordStyle, chordColor, onClick = { onChord(k) })
+        for (k in chords) ChordChip(names[k], chordStyle, chordColor, onClick = { onChord(k) }, lit = lit?.let { f -> { f(k) } })
     }
 }
 
@@ -330,10 +341,16 @@ internal fun rememberTranslationsByText(lyrics: ParsedLyrics): Map<String, Strin
 
 /**
  * A chord name, typeset ([ChordName]), in its line's ink — read at draw time, so a line fading in
- * or out doesn't measure its chords again. Tapping it shows how to play it.
+ * or out doesn't measure its chords again. Tapping it shows how to play it. Playing along ([lit]),
+ * the one ringing sits on a soft pill of its own ink.
  */
 @Composable
-internal fun ChordChip(name: AnnotatedString, style: TextStyle, color: () -> Color, onClick: () -> Unit, modifier: Modifier = Modifier) {
+internal fun ChordChip(name: AnnotatedString, style: TextStyle, color: () -> Color, onClick: () -> Unit, modifier: Modifier = Modifier, lit: (() -> Boolean)? = null) {
+    val glow = if (lit != null) {
+        androidx.compose.animation.core.animateFloatAsState(if (lit()) 1f else 0f, tween(LIT_FADE_MS), label = "chordLit")
+    } else {
+        null
+    }
     androidx.compose.foundation.text.BasicText(
         text = name,
         style = style,
@@ -342,6 +359,13 @@ internal fun ChordChip(name: AnnotatedString, style: TextStyle, color: () -> Col
         softWrap = false,
         modifier = modifier
             .clip(RoundedCornerShape(8.dp))
+            .then(
+                if (glow == null) Modifier
+                else Modifier.drawBehind {
+                    val g = glow.value
+                    if (g > 0f) drawRect(color().let { it.copy(alpha = it.alpha * LIT_ALPHA * g) })
+                },
+            )
             .clickable(role = Role.Button, onClick = onClick)
             .padding(horizontal = CHIP_PAD, vertical = 1.dp),
     )
@@ -353,3 +377,6 @@ private val CHORD_TUCK = 3.dp
 private const val AHEAD_LIFT = 0.2f
 private const val FOLLOW_PAUSE_MS = 3_000L
 private const val LINE_FADE_MS = 260
+private const val LIT_FADE_MS = 160
+/** How strong the pill under the ringing chord is, of its ink. */
+private const val LIT_ALPHA = 0.22f

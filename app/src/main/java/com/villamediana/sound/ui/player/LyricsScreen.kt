@@ -205,6 +205,18 @@ internal fun LyricsScreen(
     var sheetChord by remember(track.id) { mutableStateOf<com.villamediana.sound.chords.Chord?>(null) }
     val instrument = com.villamediana.sound.ui.chords.rememberChordInstrument()
     val scope = androidx.compose.runtime.rememberCoroutineScope()
+    // "Tocar junto": the chords laid out once, here, so the stage can time them by the same rows.
+    val readyLyrics = (lyrics as? LyricsState.Ready)?.lyrics
+    val chordView = remember(readyLyrics, chart, durationMs, lyrics == LyricsState.Loading) {
+        if (chart == null || lyrics == LyricsState.Loading) null
+        else com.villamediana.sound.chords.ChordLayout.view(readyLyrics ?: com.villamediana.sound.data.ParsedLyrics(false, emptyList()), chart, durationMs)
+    }
+    // Only a song that can be followed (its chords in time) can be played along.
+    val lane = remember(chordView, chart, durationMs) {
+        if (chordView == null || chart == null) null else com.villamediana.sound.chords.PlayAlong.lane(chordView, chart, durationMs)
+    }
+    val playAlong = com.villamediana.sound.ui.chords.rememberPlayAlong()
+    val staged = playAlong && lane != null && chordView != null && chart != null
     Box(
         modifier
             .fillMaxSize()
@@ -240,6 +252,16 @@ internal fun LyricsScreen(
                         tint = if (chordsOn) SoundColors.Text else SoundColors.Text.copy(alpha = 0.4f),
                     )
                 }
+                if (chordsDeps != null && chordsOn && lane != null) {
+                    PlayerIconButton(
+                        com.villamediana.sound.ui.chords.PlayAlongIcon,
+                        stringResource(if (playAlong) R.string.chords_play_along_off else R.string.chords_play_along_on),
+                        onClick = { scope.launch { chordsDeps.setPlayAlong(!playAlong) } },
+                        size = 44.dp,
+                        iconSize = 22.dp,
+                        tint = if (playAlong) SoundColors.Text else SoundColors.Text.copy(alpha = 0.4f),
+                    )
+                }
                 // Chords and translation go together: the chords over a line, its translation under it.
                 if (lyrics is LyricsState.Ready) TranslateToggle()
             }
@@ -251,50 +273,71 @@ internal fun LyricsScreen(
                     modifier = Modifier.padding(start = 24.dp, end = 28.dp).padding(bottom = 6.dp),
                 )
             }
-            Box(
-                Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .drawWithContent {
-                        drawContent()
-                        val bg = lyricsBackground(wash.value)
-                        val fade = 36.dp.toPx()
-                        drawRect(Brush.verticalGradient(listOf(bg, bg.copy(alpha = 0f)), startY = 0f, endY = fade))
-                        drawRect(Brush.verticalGradient(listOf(bg.copy(alpha = 0f), bg), startY = size.height - fade * 1.6f, endY = size.height))
-                    },
-            ) {
-                when {
-                    chart != null && lyrics != LyricsState.Loading -> com.villamediana.sound.ui.chords.ChordLyricsLines(
-                        lyrics = (lyrics as? LyricsState.Ready)?.lyrics,
+            androidx.compose.animation.Crossfade(
+                targetState = staged,
+                animationSpec = androidx.compose.animation.core.tween(320),
+                label = "playAlong",
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+            ) { stage ->
+                if (stage && chart != null && chordView != null && lane != null) {
+                    com.villamediana.sound.ui.chords.PlayAlongStage(
+                        lyrics = readyLyrics,
                         chart = chart,
+                        view = chordView,
+                        lane = lane,
                         durationMs = durationMs,
                         clock = clock,
+                        instrument = instrument,
+                        colors = colors,
                         onSeek = onLineSeek,
                         onChord = { sheetChord = it },
-                        // A touch smaller than the plain lyrics: each line carries its chords too.
-                        textStyle = MaterialTheme.typography.displaySmall.copy(fontSize = 28.sp, lineHeight = 35.sp, fontWeight = FontWeight.Bold),
-                        colors = colors,
                         modifier = Modifier.fillMaxSize(),
-                        linesAbove = 2,
-                        contentPadding = PaddingValues(top = 28.dp, bottom = 160.dp),
-                        horizontalPadding = 28.dp,
-                        // A little more air between lines than plain lyrics: each one carries its chords.
-                        lineGap = 18.dp,
                     )
-                    lyrics == LyricsState.Loading -> LyricsLoading(lineHeight = 28.dp, Modifier.padding(horizontal = 28.dp, vertical = 32.dp))
-                    lyrics == LyricsState.None || lyrics == LyricsState.Offline -> NoLyrics(lyrics, Modifier.padding(horizontal = 28.dp, vertical = 24.dp))
-                    lyrics is LyricsState.Ready -> LyricsLines(
-                        lyrics = lyrics.lyrics,
-                        clock = clock,
-                        onSeek = onLineSeek,
-                        textStyle = MaterialTheme.typography.displaySmall.copy(fontSize = 31.sp, lineHeight = 39.sp, fontWeight = FontWeight.Bold),
-                        colors = colors,
-                        modifier = Modifier.fillMaxSize(),
-                        linesAbove = 2,
-                        contentPadding = PaddingValues(top = 28.dp, bottom = 160.dp),
-                        horizontalPadding = 28.dp,
-                        lineGap = 14.dp,
-                    )
+                } else Box(
+                    Modifier
+                        .fillMaxSize()
+                        .drawWithContent {
+                            drawContent()
+                            val bg = lyricsBackground(wash.value)
+                            val fade = 36.dp.toPx()
+                            drawRect(Brush.verticalGradient(listOf(bg, bg.copy(alpha = 0f)), startY = 0f, endY = fade))
+                            drawRect(Brush.verticalGradient(listOf(bg.copy(alpha = 0f), bg), startY = size.height - fade * 1.6f, endY = size.height))
+                        },
+                ) {
+                    when {
+                        chart != null && chordView != null -> com.villamediana.sound.ui.chords.ChordLyricsLines(
+                            lyrics = readyLyrics,
+                            chart = chart,
+                            view = chordView,
+                            durationMs = durationMs,
+                            clock = clock,
+                            onSeek = onLineSeek,
+                            onChord = { sheetChord = it },
+                            // A touch smaller than the plain lyrics: each line carries its chords too.
+                            textStyle = MaterialTheme.typography.displaySmall.copy(fontSize = 28.sp, lineHeight = 35.sp, fontWeight = FontWeight.Bold),
+                            colors = colors,
+                            modifier = Modifier.fillMaxSize(),
+                            linesAbove = 2,
+                            contentPadding = PaddingValues(top = 28.dp, bottom = 160.dp),
+                            horizontalPadding = 28.dp,
+                            // A little more air between lines than plain lyrics: each one carries its chords.
+                            lineGap = 18.dp,
+                        )
+                        lyrics == LyricsState.Loading -> LyricsLoading(lineHeight = 28.dp, Modifier.padding(horizontal = 28.dp, vertical = 32.dp))
+                        lyrics == LyricsState.None || lyrics == LyricsState.Offline -> NoLyrics(lyrics, Modifier.padding(horizontal = 28.dp, vertical = 24.dp))
+                        lyrics is LyricsState.Ready -> LyricsLines(
+                            lyrics = lyrics.lyrics,
+                            clock = clock,
+                            onSeek = onLineSeek,
+                            textStyle = MaterialTheme.typography.displaySmall.copy(fontSize = 31.sp, lineHeight = 39.sp, fontWeight = FontWeight.Bold),
+                            colors = colors,
+                            modifier = Modifier.fillMaxSize(),
+                            linesAbove = 2,
+                            contentPadding = PaddingValues(top = 28.dp, bottom = 160.dp),
+                            horizontalPadding = 28.dp,
+                            lineGap = 14.dp,
+                        )
+                    }
                 }
             }
             Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 28.dp).padding(bottom = 12.dp)) {

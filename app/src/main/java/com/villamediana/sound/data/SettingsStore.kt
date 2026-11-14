@@ -57,6 +57,8 @@ data class Settings(
     val chords: Boolean = false,
     /** The instrument chord shapes are drawn for ([com.villamediana.sound.chords.Instrument] name). */
     val chordInstrument: String = "VIOLAO",
+    /** "Tocar junto": with the chords on, the lyrics become a stage with the chord ringing now, the next and when it comes. */
+    val chordsPlayAlong: Boolean = false,
     val theme: ThemeMode = ThemeMode.DARK,
     /** Highlight color id (see [com.villamediana.sound.ui.theme.SoundAccents]). */
     val accent: String = "purple",
@@ -89,6 +91,7 @@ class SettingsStore(private val context: Context) {
         val learnPlaces = booleanPreferencesKey("learn_places")
         val chords = booleanPreferencesKey("chords")
         val chordInstrument = stringPreferencesKey("chord_instrument")
+        val chordsPlayAlong = booleanPreferencesKey("chords_play_along")
         val theme = stringPreferencesKey("theme")
         val accent = stringPreferencesKey("accent")
         val genres = stringSetPreferencesKey("favorite_genres")
@@ -115,6 +118,7 @@ class SettingsStore(private val context: Context) {
             learnPlaces = p[K.learnPlaces] ?: false,
             chords = p[K.chords] ?: false,
             chordInstrument = p[K.chordInstrument] ?: "VIOLAO",
+            chordsPlayAlong = p[K.chordsPlayAlong] ?: false,
             theme = p[K.theme]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() } ?: ThemeMode.DARK,
             accent = p[K.accent] ?: "purple",
             favoriteGenres = p[K.genres].orEmpty(),
@@ -150,6 +154,7 @@ class SettingsStore(private val context: Context) {
     suspend fun setLearnPlaces(v: Boolean) = context.dataStore.edit { it[K.learnPlaces] = v }
     suspend fun setChords(v: Boolean) = context.dataStore.edit { it[K.chords] = v }
     suspend fun setChordInstrument(id: String) = context.dataStore.edit { it[K.chordInstrument] = id }
+    suspend fun setChordsPlayAlong(v: Boolean) = context.dataStore.edit { it[K.chordsPlayAlong] = v }
     suspend fun setLastQueueJson(v: String?) = context.dataStore.edit { if (v == null) it.remove(K.lastQueue) else it[K.lastQueue] = v }
 }
 

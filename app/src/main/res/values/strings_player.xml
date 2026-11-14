@@ -107,4 +107,11 @@
     <string name="chords_no_shape">Sem desenho deste acorde neste instrumento.</string>
     <string name="chords_previous_shape">Forma anterior</string>
     <string name="chords_next_shape">Próxima forma</string>
+
+    <!-- Tocar junto: a letra vira palco pra tocar e cantar -->
+    <string name="chords_play_along_on">Tocar junto</string>
+    <string name="chords_play_along_off">Voltar à letra</string>
+    <string name="chords_now">Agora</string>
+    <string name="chords_up_next">A seguir</string>
+    <string name="chords_lane">Acordes no tempo da música</string>
 </resources>
