@@ -353,8 +353,9 @@ internal fun LyricsScreen(
                             com.villamediana.sound.ui.chords.PlayAlongToggle(
                                 on = playAlong,
                                 onToggle = { scope.launch { chordsDeps.setPlayAlong(!playAlong) } },
-                                // Its middle under the time's end, as the "−" is under its start.
-                                modifier = Modifier.align(Alignment.TopEnd).offset(x = 9.dp),
+                                // The key's mirror: as wide as the key (− value +) and pushed out as far,
+                                // so both sit the same distance from the play button.
+                                modifier = Modifier.align(Alignment.TopEnd).offset(x = 11.dp).width(132.dp),
                             )
                         }
                     }
