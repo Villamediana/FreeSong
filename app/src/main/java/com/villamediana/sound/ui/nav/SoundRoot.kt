@@ -168,6 +168,7 @@ fun SoundRoot(incoming: MutableStateFlow<Inbound?>) {
         com.villamediana.sound.ui.components.LocalArtistPhotos provides SoundApplication.graph.artistPhotos,
         com.villamediana.sound.ui.player.LocalLyricsTranslator provides SoundApplication.graph.lyricsTranslator,
         com.villamediana.sound.ui.chords.LocalChords provides SoundApplication.graph.chordsDeps,
+        com.villamediana.sound.ui.karaoke.LocalKaraoke provides SoundApplication.graph.karaokeDeps,
         LocalBottomInset provides barSpace + miniPlayerSpace + jamSpace + 16.dp,
     ) {
         Box(Modifier.fillMaxSize().background(SoundColors.Ink)) {

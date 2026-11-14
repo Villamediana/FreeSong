@@ -107,4 +107,12 @@
     <string name="chords_no_shape">Sin diagrama de este acorde en este instrumento.</string>
     <string name="chords_previous_shape">Forma anterior</string>
     <string name="chords_next_shape">Forma siguiente</string>
+    <string name="lyrics_karaoke_on">Karaoke: quitar la voz</string>
+    <string name="lyrics_karaoke_off">Karaoke: devolver la voz</string>
+    <string name="karaoke_fetching">Descargando el karaoke… %1$d%%</string>
+    <string name="karaoke_working">Quitando la voz… %1$d%%</string>
+    <string name="karaoke_failed_error">No se pudo quitar la voz de esta canción.</string>
+    <string name="karaoke_failed_offline">Sin conexión para preparar el karaoke.</string>
+    <string name="karaoke_failed_too_long">Canción demasiado larga para el karaoke.</string>
+    <string name="karaoke_failed_unsupported">Este celular no puede con el karaoke.</string>
 </resources>

@@ -656,6 +656,40 @@ class PlaybackServiceTest {
         }
     }
 
+    /** The masks the service hands the players for a song's audio (null: it keeps its voice). */
+    private fun karaokeOf(mediaId: String?): Any? =
+        PlaybackService::class.java.getDeclaredMethod("karaokeOf", String::class.java).apply { isAccessible = true }.invoke(service.get(), mediaId)
+
+    @Test fun aSongSungBeforeLosesItsVoiceOnlyWhileTheKaraokeIsOn() {
+        autoplay(false)
+        start()
+        // This song was sung before: its masks are on the phone, whole.
+        val key = com.villamediana.sound.chords.ChordSubject.of(tracks[0])!!.key
+        val file = File(app.cacheDir, "karaoke/$key.masks").apply { parentFile?.mkdirs() }
+        com.villamediana.sound.karaoke.VoiceMasks.open(file, com.villamediana.sound.karaoke.VoiceMasks.framesFor(20L * 44_100)).apply {
+            for (p in 0 until parts) write(p, ByteArray(framesIn(p) * com.villamediana.sound.karaoke.VoiceMasks.FRAME_BYTES))
+            close()
+        }
+        try {
+            // Only this song in the queue: nothing next to work out.
+            play(listOf(tracks[0].id), 0)
+            idleUntil { player.currentMediaItem?.mediaId == tracks[0].id.toString() }
+            assertEquals(null, karaokeOf(tracks[0].id.toString()))
+            send(SessionProtocol.KARAOKE, Bundle().apply { putBoolean(SessionProtocol.ARG_ENABLED, true) })
+            idleUntil { graph.karaoke.state(key).value == com.villamediana.sound.karaoke.KaraokeState.Ready }
+            idleUntil { karaokeOf(tracks[0].id.toString()) != null }
+            // Songs never sung keep their voice.
+            assertEquals(null, karaokeOf(tracks[1].id.toString()))
+            assertEquals(null, karaokeOf(null))
+            send(SessionProtocol.KARAOKE, Bundle().apply { putBoolean(SessionProtocol.ARG_ENABLED, false) })
+            assertEquals(null, karaokeOf(tracks[0].id.toString()))
+        } finally {
+            send(SessionProtocol.KARAOKE, Bundle().apply { putBoolean(SessionProtocol.ARG_ENABLED, false) })
+            idle(100)
+            file.delete()
+        }
+    }
+
     @Test fun addingToTheEndKeepsTheSongWhereItIs() = addKeepsThePlayingSong(SessionProtocol.SHUFFLE_OFF, SessionProtocol.WHERE_END)
     @Test fun playNextKeepsTheSongWhereItIs() = addKeepsThePlayingSong(SessionProtocol.SHUFFLE_OFF, SessionProtocol.WHERE_NEXT)
     @Test fun addingWhileShuffledKeepsTheSongWhereItIs() = addKeepsThePlayingSong(SessionProtocol.SHUFFLE_ON, SessionProtocol.WHERE_END)

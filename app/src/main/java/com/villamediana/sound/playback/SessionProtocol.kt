@@ -55,7 +55,13 @@ internal object SessionProtocol {
      */
     const val TRANSPOSE = "sound.TRANSPOSE"
 
-    val appCommands = listOf(PLAY, QUEUE_ADD, QUEUE_MOVE, QUEUE_REMOVE, SLEEP, RESTORE, SET_SHUFFLE, PREFETCH, SEEK_BLEND, TRANSPOSE)
+    /**
+     * Karaoke ([ARG_ENABLED]): the songs play without their voice — on while the lyrics are open
+     * with the microphone on, off otherwise.
+     */
+    const val KARAOKE = "sound.KARAOKE"
+
+    val appCommands = listOf(PLAY, QUEUE_ADD, QUEUE_MOVE, QUEUE_REMOVE, SLEEP, RESTORE, SET_SHUFFLE, PREFETCH, SEEK_BLEND, TRANSPOSE, KARAOKE)
 
     fun command(action: String) = SessionCommand(action, Bundle.EMPTY)
 
