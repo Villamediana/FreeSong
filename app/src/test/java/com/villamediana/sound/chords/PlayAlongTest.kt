@@ -72,9 +72,10 @@ class PlayAlongTest {
         // The intro shares the time before the first line.
         assertEquals(0L, lane.chords[0].startMs)
         assertEquals(5_000L, lane.chords[1].startMs)
-        // The line's first chord with the voice; the second as far into the 6 s as its word is into the line.
+        // The line's first chord with the voice; the second near its word, "linda", but early enough
+        // to ring a while before the next line (its word is at 84% of the line, it'd last under a second).
         assertEquals(10_000L, lane.chords[2].startMs)
-        assertEquals(10_000L + 6_000L * 21 / 25, lane.chords[3].startMs)
+        assertEquals(16_000L - 1_200L, lane.chords[3].startMs)
         assertEquals(16_000L, lane.chords[4].startMs)
         // The last one holds to the end.
         assertEquals(30_000L, lane.chords.last().endMs)
@@ -135,6 +136,25 @@ class PlayAlongTest {
         val times = PlayAlong.lyricTimes(row, 0, 6_000).map { it.first }
         times.zipWithNext().forEach { (a, b) -> assertTrue("$a → $b", b - a >= 300) }
         assertEquals(listOf(0, 1, 2, 3), PlayAlong.lyricTimes(row, 0, 6_000).map { it.second })
+    }
+
+    @Test fun chordsAtTheEndOfTheLineGetTimeToBeSeen() {
+        // Luis Enrique, "No sé si después de amanecer": A/B over "amanecer", Bm after it. A/B used
+        // to come at 85% of the line and Bm right after: half a second of A/B.
+        val text = "No sé si después de amanecer"
+        val row = ChordRow.Lyric(0, text, 30_000, listOf(PlacedChord(text.indexOf("amanecer"), 0), PlacedChord(text.length, 1)))
+        val times = PlayAlong.lyricTimes(row, 30_000, 34_500).map { it.first }
+        assertTrue(times[1] - times[0] >= 1_200)
+        assertTrue(34_500 - times[1] >= 1_200)
+        // Still on the line's second half: it's where the words put them.
+        assertTrue(times[0] > 31_500)
+    }
+
+    @Test fun moreChordsThanFitShareTheLineEvenly() {
+        val row = ChordRow.Lyric(0, "Uh uh", 0, (0 until 6).map { PlacedChord(it, it) })
+        val times = PlayAlong.lyricTimes(row, 0, 3_000).map { it.first }
+        times.zipWithNext().forEach { (a, b) -> assertTrue("$a → $b", b - a >= 500) }
+        assertTrue(times.first() >= 0 && times.last() <= 2_500)
     }
 
     @Test fun chordsAtTheSameMomentKeepTheirOrder() {
