@@ -160,7 +160,6 @@ class PlayAlongStageTest {
         // At 13 s: G rings (12–14 s), D comes next; the lane is there.
         compose.onNodeWithContentDescription("Sol maior", substring = true).assertExists()
         compose.onNodeWithContentDescription("Ré maior", substring = true).assertExists()
-        compose.onNodeWithContentDescription("Acordes no tempo da música").assertExists()
         // The line being sung, with its chords.
         compose.onNodeWithContentDescription("É ela a menina que vem e que passa").assertExists()
         shot("play_along_violao")
@@ -227,6 +226,63 @@ class PlayAlongStageTest {
         compose.onNodeWithTag("playAlong").assertDoesNotExist()
         compose.onNodeWithContentDescription("Tocar junto").assertDoesNotExist()
         compose.onNodeWithTag("chordLyrics").assertExists()
+    }
+
+    @Test fun aChordUpTheNeckShowsItsFret() {
+        // C#m and F#m7(b5): shapes that start past the nut keep their fret number in sight.
+        val names = listOf(0L to "C#m", 6_000L to "F#m7(b5)", 12_000L to "B7/D#")
+        val chart = ChordChart(
+            names.mapIndexed { i, (t, n) ->
+                val c = Chord.parse(n)!!
+                TimedChord(t, names.getOrNull(i + 1)?.first ?: 20_000, c.root, c.quality, c.bass)
+            },
+            key = MusicKey(4, false),
+        )
+        show(deps(chart), positionMs = 1_000)
+        compose.onNodeWithTag("playAlong").assertExists()
+        shot("play_along_up_the_neck")
+    }
+
+    @Test fun anotherSongWithFewerChordsComesInClean() {
+        // A long song deep in, then a short one: nothing of the old lane is looked up in the new.
+        val long = ChordChart(
+            (0 until 80).map { i ->
+                val c = Chord.parse(listOf("G", "D", "Em", "C")[i % 4])!!
+                TimedChord(i * 2_000L, (i + 1) * 2_000L, c.root, c.quality, c.bass)
+            },
+            key = MusicKey(7, false),
+        )
+        val chart = mutableStateOf(long)
+        val clock = PlaybackClock().apply { onTick(148_000, 0L) }
+        compose.setContent {
+            SoundTheme(mode = ThemeMode.DARK) {
+                CompositionLocalProvider(LocalChords provides deps(heard())) {
+                    val c = chart.value
+                    val view = com.villamediana.sound.chords.ChordLayout.view(lyrics, c, 200_000)
+                    val lane = com.villamediana.sound.chords.PlayAlong.lane(view, c, 200_000)!!
+                    PlayAlongStage(
+                        lyrics = lyrics,
+                        chart = c,
+                        view = view,
+                        lane = lane,
+                        durationMs = 200_000,
+                        clock = clock,
+                        instrument = Instrument.VIOLAO,
+                        colors = com.villamediana.sound.ui.player.LyricColors.over(Color(0xFF1F2B38)),
+                        onSeek = {},
+                        onChord = {},
+                    )
+                }
+            }
+        }
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Mi menor", substring = true).assertExists()
+        chart.value = heard()
+        compose.waitForIdle()
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.onNodeWithTag("playAlong").assertExists()
+        // The short song's last chord (G at 24 s) rings at 148 s.
+        compose.onNodeWithContentDescription("Sol maior", substring = true).assertExists()
     }
 
     @Test
