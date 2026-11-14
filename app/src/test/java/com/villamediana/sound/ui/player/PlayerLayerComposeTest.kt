@@ -87,10 +87,6 @@ class PlayerLayerComposeTest {
         override fun setTransposing(on: Boolean) {
             transposing += on
         }
-        val singing = mutableListOf<Boolean>()
-        override fun setSinging(on: Boolean) {
-            singing += on
-        }
         override fun play(tracks: List<Track>, startIndex: Int, source: PlaySource, shuffle: Boolean) = Unit
         override fun playSmart(seed: SmartSeed) = Unit
         override fun togglePlayPause() {
@@ -531,45 +527,6 @@ class PlayerLayerComposeTest {
         compose.onNodeWithContentDescription("Fechar letra").performClick()
         compose.waitForIdle()
         assertEquals(false, player.transposing.last())
-    }
-
-    @Test
-    fun theVoiceGoesOnlyWithTheLyricsOpenAndTheMicrophoneOn() {
-        val micOn = MutableStateFlow(false)
-        val karaoke = com.villamediana.sound.ui.karaoke.KaraokeDeps(micOn, { micOn.value = it }, { MutableStateFlow(com.villamediana.sound.karaoke.KaraokeState.Idle) })
-        val player = FakePlayer(PlaybackState(current = tracks[0], isPlaying = true, durationMs = 180_000, queue = tracks, queueIndex = 0, source = PlaySource(PlaySource.Type.ALBUM, "Disco")))
-        val deps = PlayerDeps(player, { id -> flowOf(tracks.firstOrNull { it.id == id }) }, { _, _ -> })
-        compose.setContent {
-            SoundTheme {
-                val nav = rememberNavController()
-                CompositionLocalProvider(LocalNavigator provides Navigator(nav), com.villamediana.sound.ui.karaoke.LocalKaraoke provides karaoke) {
-                    PlayerHost(deps, bottomBarHeight = 64.dp)
-                }
-            }
-        }
-        expand()
-        compose.onAllNodesWithContentDescription("Letra em tela cheia").onFirst().performClick()
-        compose.waitForIdle()
-        assertEquals(false, player.singing.last())
-        compose.onNodeWithContentDescription("Karaokê: tirar a voz").performClick()
-        compose.waitForIdle()
-        assertEquals(true, player.singing.last())
-        // The lyrics closed: the song as it is. Open again, the microphone is still on (for this run of the app).
-        compose.onNodeWithContentDescription("Fechar letra").performClick()
-        compose.waitForIdle()
-        assertEquals(false, player.singing.last())
-        compose.onAllNodesWithContentDescription("Letra em tela cheia").onFirst().performClick()
-        compose.waitForIdle()
-        assertEquals(true, player.singing.last())
-        // The next song comes with the lyrics open: it is sung too, nothing turned off in between.
-        val before = player.singing.size
-        player.state.update { it.copy(current = tracks[1], queueIndex = 1, durationMs = 200_000) }
-        compose.waitForIdle()
-        assertEquals(true, player.singing.last())
-        assertTrue(player.singing.drop(before).none { !it })
-        compose.onNodeWithContentDescription("Karaokê: voltar a voz").performClick()
-        compose.waitForIdle()
-        assertEquals(false, player.singing.last())
     }
 
     @Test

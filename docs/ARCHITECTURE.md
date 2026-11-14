@@ -187,56 +187,6 @@ JSON: usar `kotlinx.serialization` (o `org.json` do Android vira stub nos testes
     desligado ou fim da fila no meio: `Cancel`. A fila mudou depois da medida: só o lado de quem
     sai vale (`Mix.withoutIncoming`).
 
-## Karaokê (1.32.0, 2026-11-14)
-
-O microfone ao lado dos acordes e da tradução, na letra cheia: **a música toca sem a voz** enquanto
-a letra está aberta. Fica ligado de uma música pra outra (a fila é cantada sem esperar) e ao fechar
-e abrir a letra; **não** é guardado entre uma abertura do app e outra (`graph.karaokeOn`) — o app
-sempre abre com as músicas como são. Fechou a letra ou desligou o microfone, a voz volta.
-
-- **Tudo no celular.** O modelo é o Spleeter de duas pistas (Deezer, MIT) em ONNX, meia precisão:
-  duas redes de 20 MB (voz e banda). **Não vai na APK**: `KaraokeModel` baixa as duas uma vez, na
-  primeira vez que alguém canta (release `karaoke-1` do repositório, marcada como pré-release pra
-  não virar a "última versão" que os celulares leem), confere tamanho e SHA-256 e guarda em
-  `filesDir/karaoke-model`. Roda no **ONNX Runtime** (`OnnxStems`); a biblioteca dele (14 MB) só
-  entra na APK para ARM de 64 bits (`packaging.jniLibs` no Gradle) — nos outros processadores o app
-  instala e funciona, sem o botão (`KaraokeDeps.supported`).
-- **O karaokê de uma música é uma máscara, não um áudio** (`karaoke/VoiceMasks`): para cada
-  instante (1024 quadros a 44,1 kHz) e cada lado, um byte por faixa de frequência até 11 kHz dizendo
-  quanto dela **não** é voz, e mais um para tudo acima. Arquivo mapeado em memória em
-  `cacheDir/karaoke/<chave>.masks` (~5 MB por minuto; a chave é a do `ChordSubject`, então a música
-  baixada e a tocada online dividem). Vantagens: serve a qualquer taxa de amostragem, alguns ms de
-  diferença entre decodificadores não mudam nada, ligar/desligar é só um ganho. Teto de 260 MB:
-  as cantadas há mais tempo dão lugar. Ajustes › Armazenamento tem "Karaokê" (máscaras + modelo).
-- **Ouvir a música** (`VocalRemover`): o áudio a 44,1 kHz (`ModelAudio` reamostra o de 48 kHz;
-  `DecodedSong` decodifica pela mesma fonte do player — arquivo ou cache do stream — com salto) em
-  janelas de Hann de 4096, a força de cada faixa entregue ao modelo em blocos de 512 instantes; a
-  máscara é `(banda² / (banda² + voz²))²` (ao quadrado: a voz cai 10 dB em vez de 8, ao custo de
-  0,2 dB do instrumental — medido). A música é feita em **partes** de 448 instantes (~10 s; o meio
-  do bloco de 512, então todo instante foi ouvido com contexto dos dois lados), em qualquer ordem.
-- **Ordem** (`KaraokeEngine`, uma thread): primeiro a parte **que está tocando**, daí até o fim,
-  depois o começo; pronta a música, a **próxima da fila**. A voz some 1–2 s depois do toque e o
-  resto fica pronto em segundos (0,02 do tempo da música no servidor). Um salto na música
-  (`sing` de novo) muda a prioridade. Parar (`stop`) guarda o que foi feito; cantar de novo
-  continua dali; música já cantada fica pronta sem abrir o áudio nem o modelo. Estados por música:
-  `Fetching` (modelo vindo), `Working` (N%), `Ready`, `Failed` (sem conexão, longa demais — 15 min —,
-  celular sem suporte, erro) — a tela mostra só enquanto não está pronto, como os acordes.
-- **Tocar sem a voz** (`KaraokeProcessor`, `AudioProcessor` no sink, depois do `soundTap` e antes
-  do tom; a cauda do crossfade tem o dele): pergunta ao serviço as máscaras **da música de cada
-  trecho** (como o tom, pelo `StreamMetadata`). `VoiceMasker` desmonta o áudio em janelas
-  (raiz de Hann, 75% de sobreposição), abaixa cada faixa pelo que a máscara diz daquele instante
-  (interpolada no tempo e, a 48 kHz, na frequência) e remonta. Sem máscara para um instante (parte
-  ainda não feita), a janela volta como veio — a voz fica até a parte chegar. Ligar/desligar no meio:
-  a voz desce ou volta em ~0,2 s; desligado de vez, o áudio passa intocado e sem atraso.
-- Serviço: comando `KARAOKE`; `sing()` (música atual + próxima) a cada troca de música, salto ou
-  mudança de fila; `karaokeOf(mediaId)`; `graph.karaoke.changes` → `revoice()`.
-- Testes: `VoiceMasksTest`, `KaraokeEngineTest`, `KaraokeProcessorTest` (inclusive no
-  `DefaultAudioSink` de verdade), `KaraokeModelTest`, `KaraokeUiTest`; com o modelo real e pistas
-  separadas de verdade, `KaraokeOnSongsLiveTest` (`tools/audio/README.md`, com a régua que escolheu
-  o modelo: os MDX-Net da Luna tiram a voz 3 dB melhor, mas pedem 2,5–5 GB de memória).
-- Para tirar: as fábricas de renderers e o comando `KARAOKE` do `PlaybackService`, o botão na
-  `LyricsScreen`, a dependência do ONNX Runtime.
-
 ## Acordes (1.10.0, 2026-11-08; ouvido BTC desde 1.11.0; Cifra Club primeiro desde 1.12.0)
 
 Acordes em cima da letra. **Primeiro a cifra do Cifra Club** (escrita por quem toca); só música sem
