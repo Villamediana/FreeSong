@@ -173,9 +173,9 @@ class PlayAlongStageTest {
         shot("play_along_sheet", dialog = true)
     }
 
-    @Test fun theLightMovesTheChordsStayPut() {
-        // G (12–14 s) rings on the left with D waiting on the right; when D rings it lights up where
-        // it was, and the left place takes the chord after it (Am7) while dark.
+    @Test fun fourChordsStayPutOnlyTheColorMoves() {
+        // At 13 s G rings, with D, Am7 and D7 after it, four places in a row. When D rings it takes
+        // the color where it was, and G's place takes the chord three after D (G again).
         val clock = PlaybackClock().apply { onTick(13_000, 0L) }
         val d = deps(heard())
         compose.setContent {
@@ -190,17 +190,18 @@ class PlayAlongStageTest {
             }
         }
         compose.waitForIdle()
-        val dBefore = compose.onNodeWithContentDescription("A seguir: Ré maior").fetchSemanticsNode().boundsInRoot
         compose.onNodeWithContentDescription("Agora: Sol maior").assertExists()
+        compose.onNodeWithContentDescription("Lá menor com sétima").assertExists()
+        compose.onNodeWithContentDescription("Ré com sétima").assertExists()
+        val dBefore = compose.onNodeWithContentDescription("Ré maior").fetchSemanticsNode().boundsInRoot
         clock.reset(14_500, 0L)
         compose.waitForIdle()
         compose.mainClock.advanceTimeBy(1_000)
         val dAfter = compose.onNodeWithContentDescription("Agora: Ré maior").fetchSemanticsNode().boundsInRoot
-        // Same place: the light grew it from its name's baseline, so its left edge didn't move and
-        // its baseline stayed where it was (the bottoms are within the little the descent grew).
-        assertTrue(kotlin.math.abs(dBefore.left - dAfter.left) < 1f)
-        assertTrue(kotlin.math.abs(dBefore.bottom - dAfter.bottom) < dAfter.height * 0.1f)
-        compose.onNodeWithContentDescription("A seguir: Lá menor com sétima").assertExists()
+        // Same place, same size: nothing moved but the color.
+        assertTrue(kotlin.math.abs(dBefore.left - dAfter.left) < 1f && kotlin.math.abs(dBefore.top - dAfter.top) < 1f)
+        assertTrue(kotlin.math.abs(dBefore.width - dAfter.width) < 1f)
+        compose.onNodeWithContentDescription("Sol maior").assertExists()
         shot("play_along_light_moved")
     }
 

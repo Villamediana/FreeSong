@@ -100,10 +100,10 @@ import kotlin.math.max
  */
 
 /**
- * On top, two places that never move: the chord ringing lit — full size, in the sung line's color,
- * with where the hands go on the chosen instrument — and the one coming, faint, beside it; at each
- * change the light moves over ([ChordPair]). Under them the line being sung with its chords, the one
- * ringing lit, and the lines to come. A tap on a chord shows how to play it (the chord sheet).
+ * On top, four places in a row that never move: the chord ringing, in the sung line's color, and
+ * the next three, each with where the hands go on the chosen instrument ([ChordRow]). Under them
+ * the line being sung with its chords, the one ringing lit, and the lines to come. A tap on a chord
+ * shows how to play it (the chord sheet).
  */
 @Composable
 internal fun PlayAlongStage(
@@ -129,8 +129,8 @@ internal fun PlayAlongStage(
             if (maxWidth <= maxHeight) {
                 val diagram = (maxHeight * 0.34f).coerceIn(110.dp, 216.dp)
                 Column(Modifier.fillMaxSize()) {
-                    ChordPair(
-                        lane, labels, chart, now, instrument, fingerings, diagram, nameSize = 60.sp, onChord,
+                    ChordRow(
+                        lane, labels, chart, now, instrument, fingerings, diagram, nameSize = 34.sp, onChord,
                         Modifier.fillMaxWidth().padding(horizontal = 28.dp).padding(top = 6.dp),
                     )
                     StageLines(lyrics, chart, view, durationMs, clock, colors, ringing, onSeek, onChord, Modifier.padding(top = 12.dp).weight(1f).fillMaxWidth())
@@ -139,8 +139,8 @@ internal fun PlayAlongStage(
                 // Lying down: the chords on the left, the words on the right.
                 val diagram = (maxHeight - 96.dp).coerceIn(64.dp, 216.dp)
                 Row(Modifier.fillMaxSize()) {
-                    ChordPair(
-                        lane, labels, chart, now, instrument, fingerings, diagram, nameSize = 46.sp, onChord,
+                    ChordRow(
+                        lane, labels, chart, now, instrument, fingerings, diagram, nameSize = 32.sp, onChord,
                         Modifier.weight(1f).fillMaxHeight().padding(horizontal = 28.dp),
                     )
                     StageLines(lyrics, chart, view, durationMs, clock, colors, ringing, onSeek, onChord, Modifier.weight(1f).fillMaxHeight())
@@ -223,14 +223,15 @@ private fun rememberShown(chart: ChordChart, labels: List<String>, index: Int): 
 }
 
 /**
- * The chord ringing and the one coming, in two places that never move. A chord takes its place
- * while it's still coming — faint and a little smaller — and lights up right there, full size in
- * the sung line's color, when it rings; the place it leaves fades and takes the chord after next.
- * The eye stays put: only the light moves from one place to the other. (In 1.33 the next chord slid
- * over into the "now" place and a new one filled its own: too much moving to follow while playing.)
+ * The chord ringing and the three coming, in four places in a row that never move — read left to
+ * right like a progression, starting over on the left. Every chord is in full ink and the same
+ * size; the one ringing is in the sung line's color. At a change only that color moves on to the
+ * next place, and the place it leaves takes the chord three ahead. (1.33: the next chord slid into
+ * the "now" place, too much moving to follow while playing; 1.33.6: two places, the coming one
+ * faint and smaller, still hard to read — Miguel asked for four, all lit, all the same size.)
  */
 @Composable
-private fun ChordPair(
+private fun ChordRow(
     lane: PlayAlongLane,
     labels: List<String>,
     chart: ChordChart,
@@ -246,32 +247,31 @@ private fun ChordPair(
     // The change the hand is on (a chord written again is the same one); −1 before the first.
     val run = if (at >= 0) lane.run[at] else -1
     val starts = remember(lane) { lane.chords.indices.filter { it == 0 || lane.run[it] != lane.run[it - 1] } }
-    // The keys need less height than a neck.
-    val room = if (instrument.fretted) diagram else min(diagram, 118.dp)
     BoxWithConstraints(modifier) {
-        // The sheet's drawing keeps its proportions: as tall as its place's width makes it, so the
-        // words below come right after it.
-        val place = (maxWidth - COLUMN_GAP) / 2
-        val aspect = if (instrument.strings.size >= 6) 1.08f else 0.95f
-        val fitted = if (instrument.fretted) min(room, (place + BIG_MARGIN) / aspect - BIG_LIFT) else room
+        val place = (maxWidth - PLACE_GAP * (PLACES - 1)) / PLACES
+        // Each shape as tall as its place's width makes it (the small drawing keeps its proportions).
+        val ratio = when {
+            !instrument.fretted -> 1.25f
+            instrument.strings.size >= 6 -> 0.92f
+            else -> 0.74f
+        }
+        val shapeHeight = min(diagram, place / ratio)
         Row(Modifier.fillMaxWidth()) {
-            for (side in 0..1) {
-                if (side == 1) Spacer(Modifier.width(COLUMN_GAP))
-                // Changes take turns: even ones on the left, odd ones on the right.
-                val shownRun = when {
-                    run < 0 -> side
-                    run % 2 == side -> run
-                    else -> run + 1
-                }
+            for (p in 0 until PLACES) {
+                if (p > 0) Spacer(Modifier.width(PLACE_GAP))
+                // Changes take turns in the places: the one ringing, then the next three to its right
+                // (going on from the left after the last place).
+                val from = maxOf(run, 0)
+                val shownRun = from + Math.floorMod(p - from, PLACES)
                 val index = starts.getOrNull(shownRun)?.let { lane.chords[it].index } ?: -1
                 ChordPlace(
                     index = index,
-                    lit = run >= 0 && run % 2 == side,
+                    ringing = run >= 0 && shownRun == run,
                     chart = chart,
                     labels = labels,
                     instrument = instrument,
                     fingerings = fingerings,
-                    shapeHeight = fitted,
+                    shapeHeight = shapeHeight,
                     nameSize = nameSize,
                     onChord = onChord,
                     modifier = Modifier.weight(1f),
@@ -282,14 +282,13 @@ private fun ChordPair(
 }
 
 /**
- * One of the two places: the chord in it, lit while it rings (full size, the sung line's color) or
- * waiting (faint, a little smaller, shrunk toward its name's baseline so the names stay on one line
- * and nothing moves). A new chord comes in only while the place is dark, with a soft cross-fade.
+ * One of the places: the chord in it, its name in full ink — in the sung line's color while it
+ * rings — and its shape under it. A new chord comes in with a soft cross-fade.
  */
 @Composable
 private fun ChordPlace(
     index: Int,
-    lit: Boolean,
+    ringing: Boolean,
     chart: ChordChart,
     labels: List<String>,
     instrument: Instrument,
@@ -299,27 +298,9 @@ private fun ChordPlace(
     onChord: (Chord) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val light by androidx.compose.animation.core.animateFloatAsState(
-        if (lit) 1f else 0f,
-        tween(LIGHT_MS, easing = FastOutSlowInEasing),
-        label = "chordLight",
-    )
-    val ink = SoundColors.Text
-    val accent = SoundColors.Lyric
+    val ink by animateColorAsState(if (ringing) SoundColors.Lyric else SoundColors.Text, tween(LIGHT_MS), label = "chordPlaceInk")
     val nowSaid = stringResource(R.string.chords_now)
-    val nextSaid = stringResource(R.string.chords_up_next)
-    Box(
-        modifier.graphicsLayer {
-            val scale = WAITING_SCALE + (1f - WAITING_SCALE) * light
-            scaleX = scale
-            scaleY = scale
-            alpha = WAITING_ALPHA + (1f - WAITING_ALPHA) * light
-            // Shrunk toward the name's baseline (its left end): both names stay on one line, the
-            // smaller shape tucked under it.
-            val baseline = nameSize.toPx() * NAME_BASELINE_EM
-            transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, if (size.height > 0f) (baseline / size.height).coerceIn(0f, 1f) else 0f)
-        },
-    ) {
+    Box(modifier) {
         androidx.compose.animation.Crossfade(targetState = index, animationSpec = tween(SWAP_MS), label = "chordPlace") { k ->
             val shown = rememberShown(chart, labels, k)
             if (shown == null) {
@@ -330,11 +311,11 @@ private fun ChordPlace(
                 StageName(
                     shown,
                     nameSize,
-                    ink = { androidx.compose.ui.graphics.lerp(ink, accent, light) },
+                    ink = { ink },
                     onChord = onChord,
-                    say = (if (lit) nowSaid else nextSaid) + ": " + shown.said,
+                    say = if (ringing) "$nowSaid: ${shown.said}" else shown.said,
                 )
-                ChordShape(shown, chart.spelling, instrument, fingerings, big = true, onChord, Modifier.fillMaxWidth().height(shapeHeight).padding(top = 8.dp))
+                ChordShape(shown, chart.spelling, instrument, fingerings, big = true, onChord, Modifier.fillMaxWidth().height(shapeHeight).padding(top = 6.dp))
             }
         }
     }
@@ -408,7 +389,7 @@ private fun ChordShape(shown: Shown, spelling: Spelling, instrument: Instrument,
         } else {
             val notes = remember(chord) { PianoVoicing.voicings(chord).firstOrNull() } ?: return@BoxWithConstraints
             val bass = chord.bass?.takeIf { it != chord.root }?.let { notes.first() }
-            StageKeys(notes, bass, spelling, labels = big && maxHeight >= 72.dp, Modifier.fillMaxSize())
+            StageKeys(notes, bass, spelling, labels = big && maxHeight >= 72.dp && maxWidth >= 140.dp, Modifier.fillMaxSize())
         }
     }
 }
@@ -582,14 +563,11 @@ private fun StageLines(
     )
 }
 
-private val COLUMN_GAP = 18.dp
-/** A chord waiting for its turn: this much of its size, this much of its ink. */
-private const val WAITING_SCALE = 0.8f
-private const val WAITING_ALPHA = 0.4f
-/** Where a name's baseline sits under the top of its line, in its own size. */
-private const val NAME_BASELINE_EM = 0.86f
-/** How long the light takes to move over, and a dark place to take its next chord. */
-private const val LIGHT_MS = 260
+/** The chord ringing and the next three. */
+private const val PLACES = 4
+private val PLACE_GAP = 12.dp
+/** How long the color takes to move on, and a place to take its next chord. */
+private const val LIGHT_MS = 200
 private const val SWAP_MS = 220
 /** The sheet's chord box keeps this much room on its left (for the first fret's number)… */
 private val BIG_MARGIN = 22.dp

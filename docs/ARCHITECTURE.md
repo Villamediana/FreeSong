@@ -367,6 +367,11 @@ pra seguir); liga/desliga guardado em `Settings.chordsPlayAlong`. A letra vira p
   encolhido pela linha de base do nome) e acende ALI quando soa (cor da linha cantada, tamanho
   cheio); o lugar que apaga recebe o acorde seguinte com cross-fade, apagado. Sem rótulos
   AGORA/A SEGUIR (o aceso é o agora). Não voltar ao deslize de um lugar pro outro sem ele pedir.
+- 1.33.7: Miguel: "todos iluminados e mesmo tamanho, e 4 ao invés de 2". `ChordRow`: QUATRO lugares
+  fixos numa fileira (troca r no lugar r mod 4), lidos da esquerda pra direita e recomeçando na
+  esquerda: o que soa + os três seguintes. Todos na tinta cheia e do mesmo tamanho; o que soa na cor
+  da linha cantada — só essa cor anda. O lugar que fica pra trás recebe o acorde três à frente.
+  Desenho pequeno (`MiniFret`/teclado sem nomes) do tamanho do lugar.
 - **Pra tirar**: `ui/chords/PlayAlongStage.kt`, `chords/PlayAlong.kt`, o parâmetro `ringing`/`view`
   do `ChordLyricsLines` (+ `lit` do `ChordChip`), o botão e o `Crossfade` na `LyricsScreen`,
   `playAlong`/`setPlayAlong` do `ChordsDeps` e `chordsPlayAlong` do `SettingsStore`. Ou
