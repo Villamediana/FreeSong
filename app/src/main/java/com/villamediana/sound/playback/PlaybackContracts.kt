@@ -98,8 +98,6 @@ interface PlayerConnection {
      * on), or as recorded again.
      */
     fun setTransposing(on: Boolean) = Unit
-    /** Karaoke: the songs play without their voice (the lyrics open with the microphone on), or as they are again. */
-    fun setSinging(on: Boolean) = Unit
     fun skipTo(queueIndex: Int)
     fun setShuffle(enabled: Boolean)
     fun cycleRepeat()

@@ -107,12 +107,4 @@
     <string name="chords_no_shape">Sem desenho deste acorde neste instrumento.</string>
     <string name="chords_previous_shape">Forma anterior</string>
     <string name="chords_next_shape">Próxima forma</string>
-    <string name="lyrics_karaoke_on">Karaokê: tirar a voz</string>
-    <string name="lyrics_karaoke_off">Karaokê: voltar a voz</string>
-    <string name="karaoke_fetching">Baixando o karaokê… %1$d%%</string>
-    <string name="karaoke_working">Tirando a voz… %1$d%%</string>
-    <string name="karaoke_failed_error">Não deu pra tirar a voz desta música.</string>
-    <string name="karaoke_failed_offline">Sem conexão pra preparar o karaokê.</string>
-    <string name="karaoke_failed_too_long">Música longa demais pro karaokê.</string>
-    <string name="karaoke_failed_unsupported">Este celular não roda o karaokê.</string>
 </resources>

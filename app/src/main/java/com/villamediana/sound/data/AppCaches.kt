@@ -32,9 +32,6 @@ enum class CacheKind {
 
     /** Chords heard from the songs (hearing them again takes a few seconds each). */
     CHORDS,
-
-    /** Where the voice is in the songs sung in karaoke, and the model that hears it (it comes again when someone sings). */
-    KARAOKE,
 }
 
 /**
@@ -72,7 +69,6 @@ class AppCaches(private val context: Context) {
         CacheKind.LYRICS -> PlayerLyrics.cache.bytes() + graph.lyricsTranslator.bytes()
         CacheKind.HOME -> graph.discover.bytes()
         CacheKind.CHORDS -> graph.chords.bytes()
-        CacheKind.KARAOKE -> graph.karaoke.bytes() + graph.karaokeModel.bytes()
     }
 
     suspend fun clear(kind: CacheKind) = withContext(Dispatchers.IO) {
@@ -93,11 +89,6 @@ class AppCaches(private val context: Context) {
                 }
                 CacheKind.HOME -> graph.discover.clear()
                 CacheKind.CHORDS -> graph.chords.clear()
-                CacheKind.KARAOKE -> {
-                    graph.karaoke.clear()
-                    // The model goes too, unless someone is singing right now.
-                    if (!graph.karaokeOn.value) graph.karaokeModel.clear()
-                }
             }
         }
         Unit

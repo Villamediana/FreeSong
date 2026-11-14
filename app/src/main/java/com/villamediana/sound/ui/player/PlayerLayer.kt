@@ -354,15 +354,7 @@ internal fun PlayerHost(
     // The song sounds in the key its chords are shown in: only with the lyrics open and the chords on.
     val transposing = lyricsOpen && state.hasMedia && com.villamediana.sound.ui.chords.rememberChordsEnabled()
     LaunchedEffect(player, transposing) { player.setTransposing(transposing) }
-    // Karaoke: the song without its voice, also only with the lyrics open (and the microphone on).
-    val singing = lyricsOpen && state.hasMedia && com.villamediana.sound.ui.karaoke.rememberKaraokeOn()
-    LaunchedEffect(player, singing) { player.setSinging(singing) }
-    DisposableEffect(player) {
-        onDispose {
-            player.setTransposing(false)
-            player.setSinging(false)
-        }
-    }
+    DisposableEffect(player) { onDispose { player.setTransposing(false) } }
     val output = rememberOutputRoute()
     val feedback = rememberSheetFeedback()
 
@@ -768,7 +760,6 @@ internal fun PlayerHost(
                 onTogglePlay = actions.togglePlay,
                 onClose = { lyricsOpen = false },
                 online = online,
-                onKaraokeRetry = { player.setSinging(true) },
             )
         }
     }

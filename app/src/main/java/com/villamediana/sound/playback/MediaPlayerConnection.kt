@@ -484,10 +484,6 @@ class MediaPlayerConnection(
         send(SessionProtocol.TRANSPOSE, Bundle().apply { putBoolean(SessionProtocol.ARG_ENABLED, on) })
     }
 
-    override fun setSinging(on: Boolean) {
-        send(SessionProtocol.KARAOKE, Bundle().apply { putBoolean(SessionProtocol.ARG_ENABLED, on) })
-    }
-
     override fun skipTo(queueIndex: Int) {
         if (gate?.skipTo(queueIndex) == true) return
         skipNow(queueIndex)

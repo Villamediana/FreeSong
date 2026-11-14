@@ -33,8 +33,8 @@ android {
         applicationId = "com.villamediana.sound"
         minSdk = 26
         targetSdk = 36
-        versionCode = 101
-        versionName = "1.32.0"
+        versionCode = 102
+        versionName = "1.32.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // The FreeSong relay (relay/): profiles, friends, shared songs and jams.
         buildConfigField("String", "RELAY_URL", "\"https://freesong.simplyonegoal.com\"")
@@ -84,18 +84,6 @@ android {
     }
 
     packaging {
-        jniLibs {
-            // ONNX Runtime (the karaoke's model) only for 64-bit ARM, which is every phone of the
-            // last years: its library is 14 MB per kind of processor. The APK still installs on the
-            // others (the small AndroidX libraries are there for all of them); they have no karaoke.
-            excludes += setOf(
-                "lib/armeabi-v7a/libonnxruntime*.so",
-                "lib/x86/libonnxruntime*.so",
-                "lib/x86_64/libonnxruntime*.so",
-            )
-            // Compressed in the APK (36 MB as it is): unpacked when the app is installed.
-            useLegacyPackaging = true
-        }
         resources {
             excludes += setOf(
                 "/META-INF/{AL2.0,LGPL2.1}",
@@ -126,7 +114,6 @@ android {
                 it.systemProperty("sound.cifra.dir", System.getenv("SOUND_CIFRA_DIR") ?: "")
                 // Real songs (WAV) to hear the transposer and the karaoke on: tools/audio/README.md.
                 it.systemProperty("sound.audio.dir", System.getenv("SOUND_AUDIO_DIR") ?: "")
-                it.systemProperty("sound.karaoke.model", System.getenv("SOUND_KARAOKE_MODEL") ?: "")
                 // Robolectric 4.17 on JDK 21 at API 36 needs these to touch FileDescriptor internals.
                 it.jvmArgs(
                     "--add-opens=java.base/java.io=ALL-UNNAMED",
@@ -194,13 +181,9 @@ dependencies {
     implementation(libs.coroutines.android)
     implementation(libs.serialization.json)
     implementation(libs.newpipe.extractor)
-    // ONNX Runtime runs the model that tells the voice from the band (karaoke/), on the phone.
-    implementation(libs.onnxruntime.android)
     // LiteRT (TensorFlow Lite) for Basic Pitch, the 200 KB model that hears the notes of a song (chords).
 
     testImplementation(libs.junit)
-    // The same runtime with this machine's libraries, so the tests run the real model.
-    testImplementation(libs.onnxruntime.desktop)
     testImplementation(libs.coroutines.test)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
