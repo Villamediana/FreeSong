@@ -301,16 +301,19 @@ internal fun LyricsScreen(
                 SeekBar(clock = clock, durationMs = durationMs, onSeek = onSeek, timeColor = SoundColors.Text.copy(alpha = 0.7f))
                 // With chords shown, the key sits left of the play button and a sheet's capo right of
                 // it: the transport row holds them, as the player's row holds its controls.
-                Box(Modifier.fillMaxWidth().padding(top = if (found != null) 10.dp else 2.dp).heightIn(min = 60.dp)) {
-                    if (found != null) {
+                // The key moves the chords and the song itself. A song left in another key keeps
+                // its key in reach even while its chords are still being looked for.
+                val keyShown = found != null || (chordsOn && shift != 0)
+                Box(Modifier.fillMaxWidth().padding(top = if (keyShown) 10.dp else 2.dp).heightIn(min = 60.dp)) {
+                    if (keyShown) {
                         com.villamediana.sound.ui.chords.ChordKey(
-                            key = found.key,
+                            key = found?.key,
                             shift = shift,
                             onShift = setShift,
                             // The "−" lines up with the time under the bar's start.
                             modifier = Modifier.align(Alignment.TopStart).offset(x = (-11).dp),
                         )
-                        com.villamediana.sound.ui.chords.ChordSheetNote(found.sheet, Modifier.align(Alignment.TopEnd))
+                        com.villamediana.sound.ui.chords.ChordSheetNote(found?.sheet, Modifier.align(Alignment.TopEnd))
                     }
                     MorphPlayPause(playing = playing, onClick = onTogglePlay, size = 60.dp, modifier = Modifier.align(Alignment.Center))
                 }

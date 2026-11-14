@@ -112,6 +112,8 @@ android {
                 it.systemProperty("sound.chords.variant", System.getenv("SOUND_CHORDS_VARIANT") ?: "")
                 it.systemProperty("sound.bench.dir", System.getenv("SOUND_BENCH_DIR") ?: "")
                 it.systemProperty("sound.cifra.dir", System.getenv("SOUND_CIFRA_DIR") ?: "")
+                // Real songs (WAV) to hear the transposer and the karaoke on: tools/audio/README.md.
+                it.systemProperty("sound.audio.dir", System.getenv("SOUND_AUDIO_DIR") ?: "")
                 // Robolectric 4.17 on JDK 21 at API 36 needs these to touch FileDescriptor internals.
                 it.jvmArgs(
                     "--add-opens=java.base/java.io=ALL-UNNAMED",

@@ -620,6 +620,42 @@ class PlaybackServiceTest {
         assertTrue(tracks[5].id in playOrderIds())
     }
 
+    /** How far the service says a song sounds from its own key (the players' audio asks as it flows). */
+    private fun transposeOf(mediaId: String?): Int =
+        PlaybackService::class.java.getDeclaredMethod("transposeOf", String::class.java).apply { isAccessible = true }.invoke(service.get(), mediaId) as Int
+
+    @Test fun aSongSoundsInItsChordsKeyOnlyWhileTheyShow() {
+        start()
+        val mine = com.villamediana.sound.chords.ChordSubject.of(tracks[0])!!.key
+        val streamed = com.villamediana.sound.chords.ChordSubject.keyOfVideo("abcdefghijk")
+        runBlocking {
+            graph.chordShifts.set(mine, 2)
+            graph.chordShifts.set(streamed, -3)
+        }
+        try {
+            // The lyrics closed, or the chords off: every song as recorded.
+            assertEquals(0, transposeOf(tracks[0].id.toString()))
+            send(SessionProtocol.TRANSPOSE, Bundle().apply { putBoolean(SessionProtocol.ARG_ENABLED, true) })
+            idleUntil { transposeOf(tracks[0].id.toString()) == 2 }
+            assertEquals(-3, transposeOf("yt:abcdefghijk"))
+            // A song nobody transposed, one that isn't there, audio of no song.
+            assertEquals(0, transposeOf(tracks[1].id.toString()))
+            assertEquals(0, transposeOf("999999"))
+            assertEquals(0, transposeOf(null))
+            // The "+" by the chords, while it plays.
+            runBlocking { graph.chordShifts.set(mine, 3) }
+            assertEquals(3, transposeOf(tracks[0].id.toString()))
+            send(SessionProtocol.TRANSPOSE, Bundle().apply { putBoolean(SessionProtocol.ARG_ENABLED, false) })
+            assertEquals(0, transposeOf(tracks[0].id.toString()))
+            assertEquals(0, transposeOf("yt:abcdefghijk"))
+        } finally {
+            runBlocking {
+                graph.chordShifts.set(mine, 0)
+                graph.chordShifts.set(streamed, 0)
+            }
+        }
+    }
+
     @Test fun addingToTheEndKeepsTheSongWhereItIs() = addKeepsThePlayingSong(SessionProtocol.SHUFFLE_OFF, SessionProtocol.WHERE_END)
     @Test fun playNextKeepsTheSongWhereItIs() = addKeepsThePlayingSong(SessionProtocol.SHUFFLE_OFF, SessionProtocol.WHERE_NEXT)
     @Test fun addingWhileShuffledKeepsTheSongWhereItIs() = addKeepsThePlayingSong(SessionProtocol.SHUFFLE_ON, SessionProtocol.WHERE_END)

@@ -351,6 +351,10 @@ internal fun PlayerHost(
     }
     val lyricsSubject = streamedAs?.takeIf { shown.videoId != null && it.videoId == shown.videoId } ?: shown
     val lyrics by rememberLyrics(LyricsOrigin.choose(lyricsSubject, libraryCopy), online, deps.lyrics)
+    // The song sounds in the key its chords are shown in: only with the lyrics open and the chords on.
+    val transposing = lyricsOpen && state.hasMedia && com.villamediana.sound.ui.chords.rememberChordsEnabled()
+    LaunchedEffect(player, transposing) { player.setTransposing(transposing) }
+    DisposableEffect(player) { onDispose { player.setTransposing(false) } }
     val output = rememberOutputRoute()
     val feedback = rememberSheetFeedback()
 

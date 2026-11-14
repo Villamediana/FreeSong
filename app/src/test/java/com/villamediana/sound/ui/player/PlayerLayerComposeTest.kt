@@ -83,6 +83,10 @@ class PlayerLayerComposeTest {
         var nexts = 0
         var skippedTo = -1
         var timer: SleepTimer? = null
+        val transposing = mutableListOf<Boolean>()
+        override fun setTransposing(on: Boolean) {
+            transposing += on
+        }
         override fun play(tracks: List<Track>, startIndex: Int, source: PlaySource, shuffle: Boolean) = Unit
         override fun playSmart(seed: SmartSeed) = Unit
         override fun togglePlayPause() {
@@ -475,6 +479,54 @@ class PlayerLayerComposeTest {
         compose.onNodeWithContentDescription("Fechar letra").assertIsDisplayed()
         compose.waitUntil(5_000) { compose.onAllNodesWithText("Una verdad sin fin").fetchSemanticsNodes().isNotEmpty() }
         assertEquals(listOf(LyricsQuery("Té para Tres", "Soda Stereo", "Canción Animal", 140_000)), lyricsAsked.distinct())
+    }
+
+    @Test
+    fun theSongIsTransposedOnlyWithTheLyricsOpenAndTheChordsOn() {
+        val chordsOn = MutableStateFlow(true)
+        val chords = com.villamediana.sound.ui.chords.ChordsDeps(
+            engine = com.villamediana.sound.chords.ChordEngine(
+                scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Main.immediate),
+                store = com.villamediana.sound.chords.ChordStore(java.nio.file.Files.createTempDirectory("chords").toFile()),
+                worker = kotlinx.coroutines.Dispatchers.Main,
+                analyze = { _, _ -> com.villamediana.sound.chords.ChordChart(emptyList()) },
+                io = kotlinx.coroutines.Dispatchers.Main,
+                find = null,
+            ),
+            fingerings = com.villamediana.sound.chords.Fingerings { null },
+            enabled = chordsOn,
+            instrument = MutableStateFlow(com.villamediana.sound.chords.Instrument.VIOLAO),
+            setEnabled = { chordsOn.value = it },
+            setInstrument = {},
+        )
+        val player = FakePlayer(PlaybackState(current = tracks[0], isPlaying = true, durationMs = 180_000, queue = tracks, queueIndex = 0, source = PlaySource(PlaySource.Type.ALBUM, "Disco")))
+        val deps = PlayerDeps(player, { id -> flowOf(tracks.firstOrNull { it.id == id }) }, { _, _ -> })
+        compose.setContent {
+            SoundTheme {
+                val nav = rememberNavController()
+                CompositionLocalProvider(LocalNavigator provides Navigator(nav), com.villamediana.sound.ui.chords.LocalChords provides chords) {
+                    PlayerHost(deps, bottomBarHeight = 64.dp)
+                }
+            }
+        }
+        compose.waitForIdle()
+        // The chords are on, but the lyrics aren't open: the song as recorded.
+        assertEquals(false, player.transposing.last())
+        expand()
+        assertEquals(false, player.transposing.last())
+        compose.onAllNodesWithContentDescription("Letra em tela cheia").onFirst().performClick()
+        compose.waitForIdle()
+        assertEquals(true, player.transposing.last())
+        // The chords button off and on again.
+        compose.onNodeWithContentDescription("Esconder acordes").performClick()
+        compose.waitForIdle()
+        assertEquals(false, player.transposing.last())
+        compose.onNodeWithContentDescription("Mostrar acordes").performClick()
+        compose.waitForIdle()
+        assertEquals(true, player.transposing.last())
+        compose.onNodeWithContentDescription("Fechar letra").performClick()
+        compose.waitForIdle()
+        assertEquals(false, player.transposing.last())
     }
 
     @Test

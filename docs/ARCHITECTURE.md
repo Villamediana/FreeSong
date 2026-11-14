@@ -219,6 +219,38 @@ cifra lá é **ouvida no celular** a partir do áudio (1.12.0, pedido do Miguel:
   cifra (nomes escritos mantêm as extensões, grafia pelo tom novo), as linhas não mudam. Guardado por
   música em `filesDir/chord-shifts.json` (`ChordShifts`, ±11). **Tradução junto com acordes**: o botão
   não some; a tradução vai embaixo da linha (`rememberTranslationsByText`, achada pelo texto da linha).
+- **O tom vale pra música também** (1.32.0, pedido do Miguel: "transpor a música… a pessoa
+  consegue ouvir como ficaria"): o mesmo transpositor (− Tom +, no mesmo lugar) agora muda os
+  acordes **e o áudio**. Regra: a música soa no tom guardado dela **enquanto os acordes aparecem**
+  (letra cheia aberta com o botão de acordes ligado); letra fechada ou acordes desligados, o áudio
+  volta ao tom gravado — nunca fica transposta sem o controle à vista (por isso o Tom aparece
+  também com a cifra ainda sendo procurada, se a música já tem tom guardado).
+  - `playback/pitch/PitchShifter.kt` (Kotlin puro): vocoder de fase com travamento de fase
+    (Laroche & Dolson) estica o som sem mudar as notas, e uma reamostragem com sinc janelado devolve
+    o tamanho — a nota sai **exata** (erro 0,000 cent nos testes) e o quadro n que sai é o quadro n
+    que entrou (a letra e o crossfade seguem valendo). Os dois canais giram pelo mesmo ângulo (o
+    estéreo fica onde estava). **Ataques** (bateria, palhetada): onde a energia de uma faixa de
+    oitava dobra de uma janela pra outra, os bins que a batida tomou (4× mais fortes que antes
+    dela) deixam de girar como parcial e são só deslocados, pelo quanto as janelas se afastaram
+    desde o centro — toda janela põe a batida no mesmo instante. Sem isso o clique virava um borrão
+    de 90 ms. ~20 ms de CPU por segundo de música estéreo no servidor.
+  - `TransposeProcessor` (`AudioProcessor` no sink, depois do `soundTap`, antes do `fadeShaper`; o
+    player de cauda do crossfade tem o dele): pergunta ao serviço o tom **da música de cada trecho**
+    — desde o Media3 1.11 o sink diz, a cada flush, de qual item é o áudio (`StreamMetadata.timeline`
+    + `periodUid` → `mediaId()`), então a música seguinte começa no tom dela desde o primeiro
+    quadro. Tom 0 = o áudio passa intocado, sem custo. Mudar o tom com a música tocando (`refresh`):
+    o shifter parte dos últimos 190 ms já tocados e entra por cima do som puro em 60 ms; voltar ao
+    tom gravado devolve o que estava retido e zera o atraso. Enquanto transpõe, o processador
+    consome ~0,1 s a mais do que entregou (o vocoder precisa olhar à frente). Picos acima do fundo
+    de escala são arredondados (`limit`), não cortados.
+  - Serviço: comando `TRANSPOSE` (ligado pela `PlayerLayer` com a letra aberta + acordes ligados);
+    `transposeOf(mediaId)` lê `graph.chordShifts` (o mesmo arquivo dos acordes) pela chave da música
+    (`ChordSubject`); mudança de tom guardado → `retune()`.
+  - Testes: `PitchShifterTest` (nota, acorde, clique, estéreo, blocos, troca de tom),
+    `TransposeProcessorTest` (por música, no `DefaultAudioSink` de verdade), e em música real
+    `PitchOnSongsLiveTest` (`tools/audio/README.md`). Signalsmith Stretch (C++/NDK) foi cogitado;
+    ficou o Kotlin puro: mesma classe de qualidade nas medidas, afinação exata, roda nos testes.
+  - Para tirar: as fábricas de renderers do `PlaybackService` e o comando `TRANSPOSE`.
 - Visual dos acordes (1.12.2), pra caber no design da letra como a tradução cabe:
   - Acorde na **tinta da própria linha** (amarelo na cantada, esmaecido nas já cantadas; nas que vêm,
     um pouco mais firme que as palavras, porque quem toca lê adiante). Nada de menta fixo por cima.

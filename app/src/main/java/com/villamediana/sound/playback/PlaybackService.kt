@@ -92,12 +92,17 @@ class PlaybackService : MediaLibraryService() {
     private val soundTap = SoundTap()
     /** The crossfade's volume and bass in the main player's own audio ([Crossfader]). */
     private val fadeShaper = FadeShaper()
+    /** The song in the key picked for it, while its chords show ([transposeOf]); the crossfade's tail has its own. */
+    private val transposer = com.villamediana.sound.playback.pitch.TransposeProcessor(::transposeOf)
+    private var tailTransposer: com.villamediana.sound.playback.pitch.TransposeProcessor? = null
+    /** The lyrics are open with the chords on: songs sound in the key their chords are shown in. */
+    @Volatile private var transposing = false
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val listen = ListenTracker { SystemClock.elapsedRealtime() }
 
     // Library mirror (kept fresh by the repository's flow).
     private var allTracks: List<Track> = emptyList()
-    private var tracksById: Map<Long, Track> = emptyMap()
+    @Volatile private var tracksById: Map<Long, Track> = emptyMap()
     private var tracksByVideoId: Map<String, Track> = emptyMap()
     private var libraryLoaded = false
     private var settings = Settings()
@@ -142,7 +147,7 @@ class PlaybackService : MediaLibraryService() {
         strings = PlaybackStrings.from(this)
         streams = OnlineStreams(graph.scope, online = { hasInternet(this) }) { graph.youTube }
         artwork = ArtworkShare(this)
-        player = ExoPlayer.Builder(this, SeekBlend.renderers(this, seekBlend, soundTap.processor(), fadeShaper))
+        player = ExoPlayer.Builder(this, SeekBlend.renderers(this, seekBlend, soundTap.processor(), transposer, fadeShaper))
             // The song playing is kept whole in memory (back buffer): going back in it, or seeking to
             // a part already heard, plays at once instead of downloading that part again.
             .setLoadControl(
@@ -200,7 +205,9 @@ class PlaybackService : MediaLibraryService() {
             shaper = fadeShaper,
             newTail = {
                 val tailShaper = FadeShaper()
-                val tailPlayer = ExoPlayer.Builder(this, FadeShaper.renderers(this, tailShaper))
+                // The song going out keeps the key it was playing in.
+                val tailKey = com.villamediana.sound.playback.pitch.TransposeProcessor(::transposeOf).also { tailTransposer = it }
+                val tailPlayer = ExoPlayer.Builder(this, FadeShaper.renderers(this, tailKey, tailShaper))
                     .setMediaSourceFactory(
                         DefaultMediaSourceFactory(StreamDataSources.factory(this, streams, AudioCache.get(this)))
                             .setLoadErrorHandlingPolicy(StreamLoadErrorPolicy()),
@@ -238,6 +245,8 @@ class PlaybackService : MediaLibraryService() {
 
         scope.launch { library.tracks.collect(::onLibrary) }
         scope.launch { graph.settings.settings.collect(::onSettings) }
+        // A song's key changed (the − and + by the chords): it is heard at once.
+        scope.launch { graph.chordShifts.all.collect { retune() } }
         publishExtras()
     }
 
@@ -369,6 +378,26 @@ class PlaybackService : MediaLibraryService() {
         if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
         // Equalizer/BassBoost/Virtualizer and the leveler's DynamicsProcessing are separate effects on the same session.
         runCatching { graph.effects.attach(audioSessionId) }
+    }
+
+    /**
+     * How far the song [mediaId] sounds from its own key: as far as its chords are transposed, while
+     * they show (the lyrics open with the chords on); 0 otherwise. Asked from the playback thread.
+     */
+    private fun transposeOf(mediaId: String?): Int {
+        if (!transposing || mediaId == null) return 0
+        val key = if (mediaId.startsWith(com.villamediana.sound.data.ONLINE_MEDIA_PREFIX)) {
+            com.villamediana.sound.chords.ChordSubject.keyOfVideo(mediaId.removePrefix(com.villamediana.sound.data.ONLINE_MEDIA_PREFIX))
+        } else {
+            mediaId.toLongOrNull()?.let { tracksById[it] }?.let { com.villamediana.sound.chords.ChordSubject.of(it)?.key }
+        } ?: return 0
+        return graph.chordShifts.current(key)
+    }
+
+    /** The key of what is playing may have changed: the players ask again. */
+    private fun retune() {
+        transposer.refresh()
+        tailTransposer?.refresh()
     }
 
     private fun onSettings(s: Settings) {
@@ -1232,6 +1261,10 @@ class PlaybackService : MediaLibraryService() {
                     streams.prefetch(com.villamediana.sound.playback.stream.StreamUris.audio(id, settings.audioQuality))
                 }
                 SessionProtocol.RESTORE -> return serialized { restore() }
+                SessionProtocol.TRANSPOSE -> {
+                    transposing = args.getBoolean(SessionProtocol.ARG_ENABLED)
+                    retune()
+                }
                 SessionProtocol.SEEK_BLEND -> {
                     if (player.isPlaying) seekBlend.arm(player.currentPosition)
                     player.seekTo(args.getLong(SessionProtocol.ARG_POSITION).coerceAtLeast(0))
