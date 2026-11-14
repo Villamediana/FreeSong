@@ -355,7 +355,9 @@ private fun TopBar(source: PlaySource?, actions: PlayerActions, hasVideo: Boolea
                 color = ink.copy(alpha = 0.72f),
                 maxLines = 1,
             )
-            val inJam = com.villamediana.sound.SoundApplication.graph.social.jam.jam.collectAsStateWithLifecycle().value != null
+            // No app graph in previews and tests: no jam there.
+            val jam = remember { runCatching { com.villamediana.sound.SoundApplication.graph.social.jam.jam }.getOrNull() }
+            val inJam = jam?.collectAsStateWithLifecycle()?.value != null
             if (source?.type == PlaySource.Type.JAM && inJam) {
                 // In a jam: the faces of who is in (tap for the jam).
                 com.villamediana.sound.ui.social.JamBadge(ink)
