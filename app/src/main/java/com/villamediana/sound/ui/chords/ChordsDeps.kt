@@ -34,6 +34,8 @@ class ChordsDeps(
     /** "Tocar junto" on or off (Ajustes keeps it): the lyrics as a stage for playing along. */
     val playAlong: Flow<Boolean> = flowOf(false),
     val setPlayAlong: suspend (Boolean) -> Unit = {},
+    /** Whether "Tocar junto" is offered at all: off, neither its button nor its stage show. */
+    val playAlongOffered: Boolean = true,
 )
 
 /** None in previews and in tests that don't give one: no chords button then. */
@@ -52,7 +54,7 @@ internal fun rememberChordsEnabled(): Boolean {
 internal fun rememberPlayAlong(): Boolean {
     val deps = LocalChords.current
     val on by (deps?.playAlong ?: remember { flowOf(false) }).collectAsState(initial = false)
-    return deps != null && on
+    return deps != null && deps.playAlongOffered && on
 }
 
 /**

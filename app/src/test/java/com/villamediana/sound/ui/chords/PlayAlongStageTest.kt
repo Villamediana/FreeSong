@@ -104,7 +104,7 @@ class PlayAlongStageTest {
     private val instrument = MutableStateFlow(Instrument.VIOLAO)
     private val playAlong = MutableStateFlow(true)
 
-    private fun deps(chart: ChordChart, sheet: ChordChart? = null) = ChordsDeps(
+    private fun deps(chart: ChordChart, sheet: ChordChart? = null, offered: Boolean = true) = ChordsDeps(
         engine = ChordEngine(
             scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
             store = ChordStore(tmp.newFolder()),
@@ -120,6 +120,7 @@ class PlayAlongStageTest {
         setInstrument = { instrument.value = it },
         playAlong = playAlong,
         setPlayAlong = { playAlong.value = it },
+        playAlongOffered = offered,
     )
 
     private fun show(deps: ChordsDeps, positionMs: Long = 13_000, theme: ThemeMode = ThemeMode.DARK, words: ParsedLyrics = lyrics) {
@@ -255,6 +256,16 @@ class PlayAlongStageTest {
         compose.waitForIdle()
         assertFalse(playAlong.value)
         compose.onNodeWithTag("playAlong").assertDoesNotExist()
+    }
+
+    @Test fun putAwayItShowsNothingEvenIfLeftOn() {
+        // Not offered: no button, and a "Tocar junto" left on in Ajustes still shows the plain lyrics.
+        playAlong.value = true
+        show(deps(heard(), offered = false))
+        compose.onNodeWithTag("playAlong").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Tocar junto").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Voltar à letra").assertDoesNotExist()
+        compose.onNodeWithTag("chordLyrics").assertExists()
     }
 
     @Test fun aSheetOverLyricsWithoutTimesCantBePlayedAlong() {

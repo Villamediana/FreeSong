@@ -140,6 +140,8 @@ class AppGraph(context: Context) {
             shifts = chordShifts,
             playAlong = settings.settings.map { it.chordsPlayAlong }.distinctUntilChanged(),
             setPlayAlong = { settings.setChordsPlayAlong(it) },
+            // "Tocar junto" put away for now (1.33.8): its code stays, true brings it back.
+            playAlongOffered = false,
         )
     }
 
