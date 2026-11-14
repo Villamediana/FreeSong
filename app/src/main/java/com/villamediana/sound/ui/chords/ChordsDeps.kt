@@ -31,6 +31,9 @@ class ChordsDeps(
     val setEnabled: suspend (Boolean) -> Unit,
     val setInstrument: suspend (Instrument) -> Unit,
     val shifts: com.villamediana.sound.chords.ChordShifts = com.villamediana.sound.chords.ChordShifts(null),
+    /** "Tocar junto" on or off (Ajustes keeps it): the lyrics as a stage for playing along. */
+    val playAlong: Flow<Boolean> = flowOf(false),
+    val setPlayAlong: suspend (Boolean) -> Unit = {},
 )
 
 /** None in previews and in tests that don't give one: no chords button then. */
@@ -41,6 +44,14 @@ val LocalChords = staticCompositionLocalOf<ChordsDeps?> { null }
 internal fun rememberChordsEnabled(): Boolean {
     val deps = LocalChords.current
     val on by (deps?.enabled ?: remember { flowOf(false) }).collectAsState(initial = false)
+    return deps != null && on
+}
+
+/** "Tocar junto" on or off (Ajustes keeps it). */
+@Composable
+internal fun rememberPlayAlong(): Boolean {
+    val deps = LocalChords.current
+    val on by (deps?.playAlong ?: remember { flowOf(false) }).collectAsState(initial = false)
     return deps != null && on
 }
 

@@ -138,6 +138,8 @@ class AppGraph(context: Context) {
             setEnabled = { settings.setChords(it) },
             setInstrument = { settings.setChordInstrument(it.name) },
             shifts = chordShifts,
+            playAlong = settings.settings.map { it.chordsPlayAlong }.distinctUntilChanged(),
+            setPlayAlong = { settings.setChordsPlayAlong(it) },
         )
     }
 

@@ -324,6 +324,29 @@ cifra lá é **ouvida no celular** a partir do áudio (1.12.0, pedido do Miguel:
   pra 22 kHz com filtro anti-aliasing (Butterworth de 8ª ordem).
 - Validação: `tools/chords/README.md` (régua Billboard e músicas avulsas, inclusive comparação com cifra).
 
+### Tocar junto (1.33.0, 2026-11-14)
+
+Pedido do Miguel (em espanhol): com os acordes ligados, uma ajuda visual pra tocar e cantar com a
+música rodando. Botão de palheta no topo da letra (só aparece com acordes ligados **e** música que dá
+pra seguir); liga/desliga guardado em `Settings.chordsPlayAlong`. A letra vira palco:
+- **Agora / A seguir**: acorde que soa, grande, na cor da linha cantada, com o desenho do instrumento
+  escolhido (o mesmo `FretDiagram` da folha; `MiniFret`/`StageKeys` quando pequeno) e o próximo
+  acorde diferente ao lado. Troca deslizando no sentido da pista. Toque abre a folha do acorde.
+- **Pista**: os acordes vêm da direita e cruzam uma linha parada (agora); o que soa enche na cor da
+  linha até a linha — o que falta é quanto falta pra trocar. Desenhada direto do relógio (sem
+  recompor); pausado, parada.
+- **Letra**: a linha cantada no topo com o acorde que soa numa pílula suave (`ringing` do
+  `ChordLyricsLines`); a letra normal com acordes **continua sem marcar acorde nenhum** (regra 1.11.1).
+- Tempo (`chords/PlayAlong.kt`): acordes ouvidos já têm tempo; cifra sobre letra sincronizada ganha
+  tempo pelas linhas (linha cantada por igual: acorde chega quando a palavra chega; linhas só de
+  acordes dividem o tempo até a próxima). Cifra sem letra sincronizada não tem tempo → sem botão.
+  Acorde repetido na linha seguinte não conta como troca. Aparece 220 ms antes (`LEAD_MS`).
+- Deitado: acordes à esquerda (nome ao lado do desenho), letra à direita.
+- **Pra tirar**: `ui/chords/PlayAlongStage.kt`, `chords/PlayAlong.kt`, o parâmetro `ringing`/`view`
+  do `ChordLyricsLines` (+ `lit` do `ChordChip`), o botão e o `Crossfade` na `LyricsScreen`,
+  `playAlong`/`setPlayAlong` do `ChordsDeps` e `chordsPlayAlong` do `SettingsStore`. Ou
+  `git revert` do commit da 1.33.0; ponto de volta: tag `antes-do-tocar-junto`.
+
 ## Atualização sem loja (1.13.0, 2026-11-09)
 
 O app se atualiza pelas releases do GitHub (`Villamediana/FreeSong`), sem Play Store.
