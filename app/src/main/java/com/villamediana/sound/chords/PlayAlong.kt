@@ -69,6 +69,12 @@ object PlayAlong {
     /** A pause shorter than this after a line is still the line (as [ChordLayout] reads it). */
     private const val MIN_GAP_MS = 3_000L
 
+    /** Room each chord written after the words wants (about two beats). */
+    private const val AFTER_WORDS_MS = 900L
+
+    /** Chords closer than this would flash by: they share the time to the next one instead. */
+    private const val CROWDED_MS = 300L
+
     /** How long the last chord is held when the song's length isn't known. */
     private const val LAST_HOLD_MS = 4_000L
 
@@ -94,6 +100,44 @@ object PlayAlong {
         return PlayAlongLane(lane, labels)
     }
 
+    /**
+     * When the chords of a sung line come, the line given [from]–[to]. Over the words: as far into
+     * the singing as their word is into the line. After the words ("borrar  G D G D"): one after the
+     * other in the time left, the singing made shorter if it would leave them too little. Chords
+     * written close together never come at once: a crowded run shares the time up to what's next.
+     */
+    internal fun lyricTimes(row: ChordRow.Lyric, from: Long, to: Long): List<Pair<Long, Int>> {
+        if (row.chords.isEmpty()) return emptyList()
+        val length = row.text.trimEnd().length
+        val window = (to - from).coerceAtLeast(1)
+        val inside = row.chords.filter { length > 0 && it.at < length }
+        val after = row.chords.filter { length == 0 || it.at >= length }
+        val natural = minOf(window, ChordLayout.sungMs(row.text))
+        val sung = when {
+            after.isEmpty() -> if (window - natural < MIN_GAP_MS) window else natural
+            inside.isEmpty() -> 0L
+            // The chords after the words need room of their own (half the line at most).
+            else -> minOf(natural, window - minOf(after.size * AFTER_WORDS_MS, window / 2))
+        }
+        val times = LongArray(row.chords.size)
+        var k = 0
+        for (c in inside) times[k++] = from + sung * c.at / length
+        for ((n, c) in after.withIndex()) times[k++] = from + sung + (window - sung) * n / after.size
+        // A run of chords closer than a quick change shares the time up to the next one (or the line's end).
+        var a = 0
+        while (a < times.size) {
+            var b = a
+            while (b + 1 < times.size && times[b + 1] - times[b] < CROWDED_MS) b++
+            if (b > a) {
+                val end = times.getOrNull(b + 1) ?: to
+                val span = (end - times[a]).coerceAtLeast((b - a + 1).toLong())
+                for (n in a..b) times[n] = times[a] + span * (n - a) / (b - a + 1)
+            }
+            a = b + 1
+        }
+        return (inside + after).mapIndexed { n, c -> times[n] to c.index }
+    }
+
     /** When each written chord comes ([Pair] of start and label index), in order, from rows with known times. */
     internal fun fromRows(rows: List<ChordRow>, durationMs: Long): List<Pair<Long, Int>> {
         val out = mutableListOf<Pair<Long, Int>>()
@@ -115,20 +159,13 @@ object PlayAlong {
                         val n = row.chords.size
                         row.chords.forEachIndexed { k, index -> out += from + (to - from) * k / n to index }
                     }
-                    is ChordRow.Lyric -> {
-                        val length = row.text.length
-                        val window = to - from
-                        val sung = minOf(window, ChordLayout.sungMs(row.text)).let { if (window - it < MIN_GAP_MS) window else it }
-                        for (c in row.chords) {
-                            val frac = if (length == 0) 0.0 else (c.at.toDouble() / length).coerceAtMost(0.95)
-                            out += from + (sung * frac).toLong() to c.index
-                        }
-                    }
+                    is ChordRow.Lyric -> out += lyricTimes(row, from, to)
                 }
             }
             i = j + 1
         }
-        // In order, one after the other: two chords at the same moment keep their written order.
+        // In order, one after the other: two chords at the same moment keep their written order
+        // (each row has spread its own; rows that start together could still meet).
         out.sortBy { it.first }
         for (k in 1 until out.size) {
             if (out[k].first <= out[k - 1].first) out[k] = out[k - 1].first + 1 to out[k].second

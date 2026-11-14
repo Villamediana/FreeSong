@@ -115,6 +115,28 @@ class PlayAlongTest {
         assertEquals(listOf(0, 1, 2, 3, 4), starts.map { it.second })
     }
 
+    @Test fun chordsAfterTheWordsShareTheRestOfTheLine() {
+        // Maná, "Se pudiera ya borrar  G D G D": D over the words, four quick ones after them. They
+        // used to come all at once at the end (D held, then four flashes).
+        val row = ChordRow.Lyric(0, "Se pudiera ya borrar", 10_000, listOf(PlacedChord(0, 0)) + (1..4).map { PlacedChord(21, it) })
+        val times = PlayAlong.lyricTimes(row, 10_000, 18_000).map { it.first }
+        assertEquals(10_000L, times[0])
+        // Each of the four gets the same share of what's left after the singing, two beats or so.
+        val after = times.drop(1)
+        val steps = after.zipWithNext { a, b -> b - a }
+        assertTrue(steps.all { it == steps[0] && it >= 800 })
+        assertTrue(after.first() - times[0] >= 3_000) // the words still have their time
+        assertTrue(18_000 - after.last() >= 800) // and the last one rings before the next line
+    }
+
+    @Test fun chordsWrittenTogetherNeverFlashBy() {
+        // Two chords over the same word: they share the time to the next chord, not a millisecond each.
+        val row = ChordRow.Lyric(0, "Vuelve corazón que te quiero", 0, listOf(PlacedChord(0, 0), PlacedChord(7, 1), PlacedChord(7, 2), PlacedChord(20, 3)))
+        val times = PlayAlong.lyricTimes(row, 0, 6_000).map { it.first }
+        times.zipWithNext().forEach { (a, b) -> assertTrue("$a → $b", b - a >= 300) }
+        assertEquals(listOf(0, 1, 2, 3), PlayAlong.lyricTimes(row, 0, 6_000).map { it.second })
+    }
+
     @Test fun chordsAtTheSameMomentKeepTheirOrder() {
         val rows = listOf(ChordRow.Lyric(0, "", 1_000, listOf(PlacedChord(0, 0), PlacedChord(0, 1))))
         val starts = PlayAlong.fromRows(rows, 10_000)
