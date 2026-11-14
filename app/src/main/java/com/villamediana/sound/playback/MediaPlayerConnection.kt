@@ -155,6 +155,8 @@ class MediaPlayerConnection(
                 restoreRequested = true
                 c.sendCustomCommand(SessionProtocol.command(SessionProtocol.RESTORE), Bundle.EMPTY)
             }
+            // A service that restarted knows nothing of the lyrics being open: the key is told again.
+            if (transposing) c.sendCustomCommand(SessionProtocol.command(SessionProtocol.TRANSPOSE), Bundle().apply { putBoolean(SessionProtocol.ARG_ENABLED, true) })
             while (pending.isNotEmpty()) pending.removeFirst().invoke(c)
         }, ContextCompat.getMainExecutor(app))
     }
@@ -481,8 +483,12 @@ class MediaPlayerConnection(
     }
 
     override fun setTransposing(on: Boolean) {
+        transposing = on
         send(SessionProtocol.TRANSPOSE, Bundle().apply { putBoolean(SessionProtocol.ARG_ENABLED, on) })
     }
+
+    /** What the screen last asked about the key: told again to a music service that restarted. */
+    private var transposing = false
 
     override fun skipTo(queueIndex: Int) {
         if (gate?.skipTo(queueIndex) == true) return
