@@ -175,9 +175,23 @@ interface MetadataEnricher {
     suspend fun enrich(input: MetaInput): TrackMeta
 }
 
-data class Lyrics(val text: String, val synced: Boolean)
+/**
+ * A song's words. [provisional]: found while the source that has the timing couldn't be reached —
+ * shown now, never kept (a later look may find them synced).
+ */
+data class Lyrics(val text: String, val synced: Boolean, val provisional: Boolean = false)
 
 interface LyricsSource {
     /** Synced (LRC) lyrics when available, plain otherwise, null if not found. Never throws. */
     suspend fun find(title: String, artist: String, album: String?, durationMs: Long?): Lyrics?
+
+    /** Like [find], telling a source that couldn't be asked (offline, server trouble) apart from one that doesn't have the song. */
+    suspend fun lookup(title: String, artist: String, album: String?, durationMs: Long?): LyricsLookup =
+        find(title, artist, album, durationMs)?.let { LyricsLookup.Found(it) } ?: LyricsLookup.Missing
+}
+
+sealed interface LyricsLookup {
+    data class Found(val lyrics: Lyrics) : LyricsLookup
+    data object Missing : LyricsLookup
+    data object Unreachable : LyricsLookup
 }

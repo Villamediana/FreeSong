@@ -27,9 +27,10 @@ import kotlin.coroutines.resume
  */
 object BrowserFetch {
     @SuppressLint("SetJavaScriptEnabled")
-    suspend fun html(context: Context, url: String, ready: String, timeoutMs: Long = 25_000): String = withTimeout(timeoutMs) {
+    /** [also]: other sites that are the same one (Letras is letras.com and letras.mus.br). */
+    suspend fun html(context: Context, url: String, ready: String, timeoutMs: Long = 25_000, also: Set<String> = emptySet()): String = withTimeout(timeoutMs) {
         withContext(Dispatchers.Main) {
-            val site = siteOf(android.net.Uri.parse(url).host.orEmpty())
+            val sites = also + siteOf(android.net.Uri.parse(url).host.orEmpty())
             val view = WebView(context.applicationContext)
             val handler = Handler(Looper.getMainLooper())
             try {
@@ -62,7 +63,7 @@ object BrowserFetch {
 
                         override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
                             val host = request.url.host.orEmpty()
-                            return if (siteOf(host) == site || host.endsWith("sscdn.co")) null
+                            return if (siteOf(host) in sites || host.endsWith("sscdn.co")) null
                             else WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream(ByteArray(0)))
                         }
 

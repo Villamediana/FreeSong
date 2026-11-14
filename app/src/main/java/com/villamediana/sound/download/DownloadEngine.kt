@@ -402,7 +402,8 @@ internal class DownloadEngine(
 
     private suspend fun saveLyrics(videoId: String, title: String, artist: String, album: String?, durationMs: Long): Pair<File, Boolean>? {
         val found = lyrics.find(title, artist, album, durationMs.takeIf { it > 0 }) ?: return null
-        if (found.text.isBlank()) return null
+        // Provisional words aren't kept: without a file the song looks its lyrics up when it plays.
+        if (found.text.isBlank() || found.provisional) return null
         val file = storage.lyricsFile(videoId, found.synced)
         storage.lyricsFile(videoId, !found.synced).delete()
         withContext(Dispatchers.IO) { file.writeText(found.text) }

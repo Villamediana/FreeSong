@@ -81,4 +81,20 @@ class LrclibLyricsSourceTest {
         val serverError = OnlineFixtures.FakeHttp { 500 to "" }
         assertNull(LrclibLyricsSource(serverError.client).find("Envolver", "Anitta", null, 194_000))
     }
+
+    @Test fun saysWhenItCouldNotBeAskedApartFromNotHavingTheSong() = runTest {
+        val down = OnlineFixtures.FakeHttp { 503 to "" }
+        assertEquals(LyricsLookup.Unreachable, LrclibLyricsSource(down.client).lookup("DtMF", "Bad Bunny", null, 237_000))
+        assertNull(LrclibLyricsSource(down.client).find("DtMF", "Bad Bunny", null, 237_000))
+        val broken = OnlineFixtures.FakeHttp { throw java.io.IOException("no route") }
+        assertEquals(LyricsLookup.Unreachable, LrclibLyricsSource(broken.client).lookup("DtMF", "Bad Bunny", null, 237_000))
+        // Not there: asked and answered.
+        val none = OnlineFixtures.FakeHttp { req -> if (req.url.encodedPath == "/api/get") 404 to OnlineFixtures.lrclibNotFound else 200 to "[]" }
+        assertEquals(LyricsLookup.Missing, LrclibLyricsSource(none.client).lookup("DtMF", "Bad Bunny", null, 237_000))
+        // An instrumental is an answer (no words): nobody else needs asking, and find() has none.
+        val instrumental = OnlineFixtures.FakeHttp { 200 to """{"id":1,"trackName":"Intro","artistName":"X","duration":60,"instrumental":true}""" }
+        val got = LrclibLyricsSource(instrumental.client).lookup("Intro", "X", null, 60_000)
+        assertTrue(got is LyricsLookup.Found && got.lyrics.text.isEmpty())
+        assertNull(LrclibLyricsSource(instrumental.client).find("Intro", "X", null, 60_000))
+    }
 }

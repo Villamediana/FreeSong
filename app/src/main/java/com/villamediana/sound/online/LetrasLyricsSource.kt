@@ -16,10 +16,22 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.net.URLEncoder
 
-/** The first of [sources] that has the song's lyrics, asked in order. Never throws. */
+/**
+ * The first of [sources] that has the song's lyrics, asked in order. A source that couldn't be
+ * asked (offline, server trouble) doesn't count as not having them: what a later one finds then is
+ * [Lyrics.provisional] — shown, not kept, so the song gets the first one's (synced) words once it
+ * is back. An instrumental (found, no words) ends the search. Never throws.
+ */
 class LyricsSources(private vararg val sources: LyricsSource) : LyricsSource {
     override suspend fun find(title: String, artist: String, album: String?, durationMs: Long?): Lyrics? {
-        for (source in sources) source.find(title, artist, album, durationMs)?.let { return it }
+        var missedOne = false
+        for (source in sources) {
+            when (val got = source.lookup(title, artist, album, durationMs)) {
+                is LyricsLookup.Found -> return got.lyrics.takeIf { it.text.isNotBlank() }?.let { if (missedOne) it.copy(provisional = true) else it }
+                LyricsLookup.Unreachable -> missedOne = true
+                LyricsLookup.Missing -> Unit
+            }
+        }
         return null
     }
 }
@@ -90,6 +102,9 @@ class LetrasLyricsSource(
     companion object {
         /** The element that holds the words: the page is read as soon as it is there. */
         const val READY = ".lyric-original, .lyric-translation-left"
+
+        /** The site answers under both names (letras.mus.br is the Brazilian one): the browser may follow either. */
+        val SITES = setOf("letras.com", "letras.mus.br")
         private const val PAGE_TIMEOUT_MS = 25_000L
         private const val UA = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36"
     }

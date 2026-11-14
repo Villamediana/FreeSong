@@ -129,4 +129,24 @@ class LetrasLyricsSourceTest {
         assertEquals(listOf("lrclib", "letras"), asked)
         assertNull(LyricsSources(source("lrclib", null), source("letras", null)).find("t", "a", null, null))
     }
+
+    @Test fun `what is found while the first source is out of reach is provisional`() = runTest {
+        fun answering(lookup: LyricsLookup) = object : LyricsSource {
+            override suspend fun find(title: String, artist: String, album: String?, durationMs: Long?): Lyrics? = (lookup as? LyricsLookup.Found)?.lyrics
+            override suspend fun lookup(title: String, artist: String, album: String?, durationMs: Long?): LyricsLookup = lookup
+        }
+        val plain = Lyrics("Uno", synced = false)
+        val letras = answering(LyricsLookup.Found(plain))
+        // LRCLIB down: shown, but marked so nobody keeps it.
+        assertEquals(plain.copy(provisional = true), LyricsSources(answering(LyricsLookup.Unreachable), letras).find("t", "a", null, null))
+        // LRCLIB answered "not here": Letras' words are as good as they get.
+        assertEquals(plain, LyricsSources(answering(LyricsLookup.Missing), letras).find("t", "a", null, null))
+        // An instrumental: no words, and Letras isn't asked.
+        var asked = false
+        val watched = object : LyricsSource {
+            override suspend fun find(title: String, artist: String, album: String?, durationMs: Long?): Lyrics? { asked = true; return plain }
+        }
+        assertNull(LyricsSources(answering(LyricsLookup.Found(Lyrics("", synced = false))), watched).find("t", "a", null, null))
+        assertFalse(asked)
+    }
 }

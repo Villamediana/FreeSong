@@ -110,6 +110,14 @@ class DownloadEngineTest {
         assertTrue(audioHits("aaa").all { it.range != null && it.status == 206 })
     }
 
+    @Test fun provisionalLyricsAreNotSavedWithTheSong() = runBlocking {
+        // Found while the source with the timing was out of reach: the song asks again when it plays.
+        h.lyrics.result = Lyrics("plain", synced = false, provisional = true)
+        h.queue.download(listOf(h.song("ccc")))
+        h.engine.runQueue()
+        assertNull(h.library.trackByVideoId("ccc")!!.lyricsPath)
+    }
+
     @Test fun durationFallsBackToTheFileAndLyricsCanBeOff() = runBlocking {
         h.settings = Settings(fetchLyrics = false)
         h.lyrics.result = Lyrics("plain", synced = false)

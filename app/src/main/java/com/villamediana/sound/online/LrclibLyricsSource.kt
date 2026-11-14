@@ -19,32 +19,36 @@ class LrclibLyricsSource(
     private val baseUrl: String = "https://lrclib.net",
 ) : LyricsSource {
 
-    override suspend fun find(title: String, artist: String, album: String?, durationMs: Long?): Lyrics? {
-        if (title.isBlank() || artist.isBlank()) return null
+    override suspend fun find(title: String, artist: String, album: String?, durationMs: Long?): Lyrics? =
+        (lookup(title, artist, album, durationMs) as? LyricsLookup.Found)?.lyrics?.takeIf { it.text.isNotBlank() }
+
+    override suspend fun lookup(title: String, artist: String, album: String?, durationMs: Long?): LyricsLookup {
+        if (title.isBlank() || artist.isBlank()) return LyricsLookup.Missing
         return try {
-            withContext(Dispatchers.IO) { lookup(title.trim(), artist.trim(), album?.trim()?.ifEmpty { null }, durationMs) }
+            withContext(Dispatchers.IO) { ask(title.trim(), artist.trim(), album?.trim()?.ifEmpty { null }, durationMs) }
         } catch (e: CancellationException) {
             throw e
         } catch (_: Throwable) {
-            null
+            LyricsLookup.Unreachable
         }
     }
 
-    private fun lookup(title: String, artist: String, album: String?, durationMs: Long?): Lyrics? {
+    private fun ask(title: String, artist: String, album: String?, durationMs: Long?): LyricsLookup {
         val seconds = durationMs?.takeIf { it > 0 }?.let { (it + 500) / 1000 }
         val exact = get(title, artist, album, seconds)
         when (exact) {
             is Fetch.Found -> {
-                if (exact.record.instrumental) return null
-                LrclibMatcher.lyricsOf(exact.record)?.let { return it }
+                // An instrumental has no words anywhere: no one else is asked either.
+                if (exact.record.instrumental) return LyricsLookup.Found(Lyrics("", synced = false))
+                LrclibMatcher.lyricsOf(exact.record)?.let { return LyricsLookup.Found(it) }
             }
-            Fetch.Failed -> return null // offline or server trouble: don't hammer the search endpoint too
+            Fetch.Failed -> return LyricsLookup.Unreachable // offline or server trouble: don't hammer the search endpoint too
             Fetch.NotFound -> Unit
         }
         val baseTitle = TitleCleaner.baseTitle(title)
         val primaryArtist = TitleCleaner.primaryArtist(artist)
-        val results = search(baseTitle, primaryArtist) ?: return null
-        return LrclibMatcher.pick(results, baseTitle, primaryArtist, durationMs)
+        val results = search(baseTitle, primaryArtist) ?: return LyricsLookup.Unreachable
+        return LrclibMatcher.pick(results, baseTitle, primaryArtist, durationMs)?.let { LyricsLookup.Found(it) } ?: LyricsLookup.Missing
     }
 
     private sealed interface Fetch {
