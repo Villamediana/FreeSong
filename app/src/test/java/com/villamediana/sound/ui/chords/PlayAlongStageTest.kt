@@ -199,9 +199,15 @@ class PlayAlongStageTest {
         show(deps(heard(), sheet = written), positionMs = 10_500)
         compose.onNodeWithTag("playAlong").assertExists()
         compose.onAllNodesWithText("Am7(9)").onFirst().assertExists()
-        // The capo and the key stay by the play button.
-        compose.onNodeWithText("CAPOTRASTE").assertExists()
         shot("play_along_sheet_written")
+    }
+
+    @Test fun theCapoIsSaidBeforeTheWords() {
+        // During the intro the stage shows how to play the sheet over the first row.
+        show(deps(heard(), sheet = written), positionMs = 1_000)
+        compose.onNodeWithTag("playAlong").assertExists()
+        compose.onNodeWithText("Capotraste na 2ª casa").assertExists()
+        shot("play_along_capo")
     }
 
     @Test fun theButtonTurnsItOnAndOff() {

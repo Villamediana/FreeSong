@@ -288,7 +288,7 @@ internal fun ChordSheetHost(chart: ChordChart, chord: Chord?, instrument: Instru
 /**
  * Under the lyrics header while the chords are on and not shown yet: looking for a sheet, how far
  * the hearing is, or why it failed. Once they show, the key and the capo sit by the play button
- * ([ChordKey], [ChordSheetNote]).
+ * ([ChordKey]); the capo, before the words.
  */
 @Composable
 internal fun ChordStatus(state: ChordState, onRetry: () -> Unit, modifier: Modifier = Modifier) {
