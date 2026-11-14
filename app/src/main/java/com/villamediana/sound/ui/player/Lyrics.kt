@@ -144,14 +144,16 @@ internal class OnlineLyricsCache(
 
     suspend fun get(query: LyricsQuery): ParsedLyrics? {
         peek(query)?.let { return it.takeUnless { l -> l === MISSING } }
-        val text = runCatching { find(query) }.getOrNull()?.text
+        val got = runCatching { find(query) }.getOrNull()
+        val text = got?.text
         val parsed = text?.let(::parse)
         mutex.withLock {
             if (parsed != null) {
                 found[query.key] = parsed
                 missing.remove(query.key)
                 val f = file
-                if (f != null && text != null) {
+                // Provisional words (the source with the timing was out of reach) last this session only.
+                if (f != null && text != null && got.provisional != true) {
                     val map = disk()
                     map[query.key] = text
                     while (map.size > DISK_ENTRIES) map.remove(map.keys.first())

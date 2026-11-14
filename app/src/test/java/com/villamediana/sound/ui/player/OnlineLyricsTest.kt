@@ -72,6 +72,22 @@ class OnlineLyricsTest {
         file.delete()
     }
 
+    @Test fun `provisional words are shown but not kept for another day`() = runBlocking<Unit> {
+        val file = java.io.File.createTempFile("lyrics-online", ".json").apply { delete() }
+        val q = LyricsQuery("Té para Tres", "Soda Stereo", "Canción Animal", 140_000)
+        val first = OnlineLyricsCache({ Lyrics("Uno\nDos", synced = false, provisional = true) }, file = file)
+        assertEquals(listOf("Uno", "Dos"), first.get(q)!!.lines.map { it.text })
+        // This session keeps them in memory.
+        assertEquals(listOf("Uno", "Dos"), first.peek(q)!!.lines.map { it.text })
+        // Another day asks again, and gets the synced ones.
+        var calls = 0
+        val later = OnlineLyricsCache({ calls++; Lyrics("[00:01.00]Uno\n[00:05.50]Dos", synced = true) }, file = file)
+        assertNull(later.peek(q))
+        assertTrue(later.get(q)!!.synced)
+        assertEquals(1, calls)
+        file.delete()
+    }
+
     @Test fun `not found is remembered for a while only`() = runBlocking {
         var now = 0L
         var calls = 0

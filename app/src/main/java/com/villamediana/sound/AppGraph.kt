@@ -74,7 +74,12 @@ class AppGraph(context: Context) {
         com.villamediana.sound.online.LyricsSources(
             LrclibLyricsSource(http),
             com.villamediana.sound.online.LetrasLyricsSource(http) { url ->
-                com.villamediana.sound.online.BrowserFetch.html(appContext, url, ready = com.villamediana.sound.online.LetrasLyricsSource.READY)
+                com.villamediana.sound.online.BrowserFetch.html(
+                    appContext,
+                    url,
+                    ready = com.villamediana.sound.online.LetrasLyricsSource.READY,
+                    also = com.villamediana.sound.online.LetrasLyricsSource.SITES,
+                )
             },
         )
     }
