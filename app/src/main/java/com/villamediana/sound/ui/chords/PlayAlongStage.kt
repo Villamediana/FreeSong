@@ -14,6 +14,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -36,6 +37,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,10 +58,12 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -94,18 +98,18 @@ import kotlin.math.max
 /*
  * "Tocar junto": the lyrics screen as a stage for whoever plays while singing. Everything here is
  * in the chords' own language (the type of the lyrics, ink and the sung line's color, small spaced
- * capitals for labels, no boxes) and follows the song only while it plays: the chord is read from
- * the clock behind derivedStateOf (a change recomposes, a frame doesn't) and the lane is drawn
- * straight from the clock. To take it out: this file, chords/PlayAlong.kt, the "ringing" parameter
- * of ChordLyricsLines and the button and branch in LyricsScreen.
+ * capitals for labels, no boxes). The chord ringing is read from the clock behind derivedStateOf:
+ * a change recomposes, a frame doesn't — nothing here is drawn per frame. No timeline: the hand
+ * keeps its own time (Miguel: a line running with the clock can be off, better the player leads).
+ * To take it out: this file, chords/PlayAlong.kt, the "ringing" parameter of ChordLyricsLines and
+ * the button and branch in LyricsScreen.
  */
 
 /**
  * On top, the chord ringing now — big, in the sung line's color, with where the hands go on the
- * chosen instrument — and the one coming next beside it, smaller. Under them a lane where the
- * chords come in from the right and cross a still line as they ring, so the change is seen coming.
- * Under that the line being sung with its chords, the one ringing lit, and the lines to come.
- * A tap on a chord shows how to play it (the chord sheet).
+ * chosen instrument — and the one coming next beside it, smaller. Under them the line being sung
+ * with its chords, the one ringing lit, and the lines to come. A tap on a chord shows how to play
+ * it (the chord sheet).
  */
 @Composable
 internal fun PlayAlongStage(
@@ -126,29 +130,27 @@ internal fun PlayAlongStage(
     val now = remember(lane, clock) { derivedStateOf { lane.at(clock.positionMs + PlayAlong.LEAD_MS) } }
     val ringing: () -> Int = remember(lane, now) { { lane.chords.getOrNull(now.value)?.index ?: -1 } }
     BoxWithConstraints(modifier.testTag("playAlong")) {
-        if (maxWidth <= maxHeight) {
-            val diagram = (maxHeight * 0.3f).coerceIn(104.dp, 196.dp)
-            Column(Modifier.fillMaxSize()) {
-                NowAndNext(
-                    lane, labels, chart, now, instrument, fingerings, diagram, nameSize = 60.sp, onChord,
-                    Modifier.fillMaxWidth().padding(horizontal = 28.dp).padding(top = 2.dp),
-                )
-                ChordLane(lane, labels, clock, Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 2.dp).height(LANE_HEIGHT))
-                StageLines(lyrics, chart, view, durationMs, clock, colors, ringing, onSeek, onChord, Modifier.weight(1f).fillMaxWidth())
-            }
-        } else {
-            // Lying down: the chords on the left (each name beside its shape), the words on the right.
-            val diagram = (maxHeight - LANE_HEIGHT - 40.dp).coerceIn(64.dp, 200.dp)
-            Row(Modifier.fillMaxSize()) {
-                Column(Modifier.weight(1f).fillMaxHeight()) {
+        // Another song (or key) is another lane: its chords come in fresh, nothing slides over from the last one.
+        key(lane) {
+            if (maxWidth <= maxHeight) {
+                val diagram = (maxHeight * 0.34f).coerceIn(110.dp, 216.dp)
+                Column(Modifier.fillMaxSize()) {
+                    NowAndNext(
+                        lane, labels, chart, now, instrument, fingerings, diagram, nameSize = 62.sp, onChord,
+                        Modifier.fillMaxWidth().padding(horizontal = 28.dp).padding(top = 2.dp),
+                    )
+                    StageLines(lyrics, chart, view, durationMs, clock, colors, ringing, onSeek, onChord, Modifier.padding(top = 12.dp).weight(1f).fillMaxWidth())
+                }
+            } else {
+                // Lying down: the chords on the left, the words on the right.
+                val diagram = (maxHeight - 96.dp).coerceIn(64.dp, 216.dp)
+                Row(Modifier.fillMaxSize()) {
                     NowAndNext(
                         lane, labels, chart, now, instrument, fingerings, diagram, nameSize = 46.sp, onChord,
-                        Modifier.fillMaxWidth().padding(horizontal = 28.dp),
-                        beside = true,
+                        Modifier.weight(1f).fillMaxHeight().padding(horizontal = 28.dp),
                     )
-                    ChordLane(lane, labels, clock, Modifier.fillMaxWidth().padding(top = 10.dp).height(LANE_HEIGHT))
+                    StageLines(lyrics, chart, view, durationMs, clock, colors, ringing, onSeek, onChord, Modifier.weight(1f).fillMaxHeight())
                 }
-                StageLines(lyrics, chart, view, durationMs, clock, colors, ringing, onSeek, onChord, Modifier.weight(1f).fillMaxHeight())
             }
         }
     }
@@ -177,6 +179,24 @@ internal val PlayAlongIcon: ImageVector by lazy {
 
 // ---- Now and next ----
 
+/** What a chord on the stage shows: its name as written, its shape and how it's said. */
+private class Shown(val name: String, val chord: Chord?, val said: String)
+
+@Composable
+private fun rememberShown(chart: ChordChart, labels: List<String>, index: Int): Shown? {
+    val language = LocalConfiguration.current.locales[0]?.language ?: "pt"
+    return remember(chart, labels, index, language) {
+        labels.getOrNull(index)?.let { name ->
+            val chord = chart.chordAt(index)
+            Shown(name, chord, chord?.let { ChordSpeech.say(it, chart.spelling, language) } ?: name)
+        }
+    }
+}
+
+/**
+ * "AGORA" and "A SEGUIR" over the two chords: the names on one baseline, the shapes under them
+ * starting on one line. A change slides name and shape along together, the way the song goes.
+ */
 @Composable
 private fun NowAndNext(
     lane: PlayAlongLane,
@@ -189,7 +209,6 @@ private fun NowAndNext(
     nameSize: TextUnit,
     onChord: (Chord) -> Unit,
     modifier: Modifier = Modifier,
-    beside: Boolean = false,
 ) {
     val at = now.value
     // Before the song's first chord, that one shows, faint: the one to get ready for.
@@ -201,140 +220,140 @@ private fun NowAndNext(
         tween(240),
         label = "nowInk",
     )
-    val nextInk = SoundColors.Text.copy(alpha = 0.78f)
-    Row(modifier, verticalAlignment = Alignment.Top) {
-        Column(Modifier.weight(1.4f)) {
-            StageLabel(stringResource(R.string.chords_now))
-            AnimatedContent(targetState = run, transitionSpec = { flow() }, contentAlignment = Alignment.TopStart, label = "nowChord") { i ->
-                val index = lane.chords[i].index
-                ChordFace(labels[index], chart.chordAt(index), chart.spelling, instrument, fingerings, diagram, nameSize, big = true, beside = beside, ink = { nowInk }, onChord = onChord)
-            }
+    val nextInk = SoundColors.Text.copy(alpha = 0.74f)
+    val nextSize = nameSize * 0.55f
+    // The keys need less height than a neck.
+    val bigRoom = if (instrument.fretted) diagram else min(diagram, 118.dp)
+    val smallRoom = if (instrument.fretted) diagram * 0.62f else min(diagram * 0.6f, 66.dp)
+    // What a lane position shows; −1, or one left from another lane, shows nothing.
+    val index: (Int) -> Int = { i -> lane.chords.getOrNull(i)?.index ?: -1 }
+    val name: @Composable (Int, TextUnit, () -> Color, Modifier) -> Unit = { i, size, ink, m ->
+        Slot(i, m) { k -> rememberShown(chart, labels, index(k))?.let { StageName(it, size, ink, onChord) } }
+    }
+    val shape: @Composable (Int, Boolean, Modifier) -> Unit = { i, big, m ->
+        Slot(i, m) { k ->
+            rememberShown(chart, labels, index(k))?.let { ChordShape(it, chart.spelling, instrument, fingerings, big, onChord, Modifier.fillMaxSize()) }
         }
-        Spacer(Modifier.width(18.dp))
-        Column(Modifier.weight(1f)) {
-            StageLabel(stringResource(R.string.chords_up_next))
-            AnimatedContent(targetState = next, transitionSpec = { flow() }, contentAlignment = Alignment.TopStart, label = "nextChord") { j ->
-                if (j < 0) {
-                    Spacer(Modifier.fillMaxWidth())
-                } else {
-                    val index = lane.chords[j].index
-                    ChordFace(labels[index], chart.chordAt(index), chart.spelling, instrument, fingerings, diagram, nameSize * 0.56f, big = false, beside = beside, ink = { nextInk }, onChord = onChord)
-                }
+    }
+    Column(modifier) {
+        Row {
+            StageLabel(stringResource(R.string.chords_now), Modifier.weight(NOW_WEIGHT))
+            Spacer(Modifier.width(COLUMN_GAP))
+            StageLabel(stringResource(R.string.chords_up_next), Modifier.weight(1f))
+        }
+        Row {
+            name(run, nameSize, { nowInk }, Modifier.weight(NOW_WEIGHT).alignByBaseline())
+            Spacer(Modifier.width(COLUMN_GAP))
+            name(next, nextSize, { nextInk }, Modifier.weight(1f).alignByBaseline())
+        }
+        BoxWithConstraints(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+            // The sheet's drawing keeps its proportions: as tall as its column's width makes
+            // it, so the words below come right after it.
+            val column = (maxWidth - COLUMN_GAP) * (NOW_WEIGHT / (NOW_WEIGHT + 1f))
+            val aspect = if (instrument.strings.size >= 6) 1.08f else 0.95f
+            val fitted = if (instrument.fretted) min(bigRoom, (column + BIG_MARGIN) / aspect - BIG_LIFT) else bigRoom
+            Row {
+                shape(run, true, Modifier.weight(NOW_WEIGHT).height(fitted))
+                Spacer(Modifier.width(COLUMN_GAP))
+                shape(next, false, Modifier.weight(1f).height(minOf(smallRoom, fitted)))
             }
         }
     }
 }
 
-/** The chords go by the way the lane runs: the new one in from the right, the old one out to the left (back when seeking back). */
+/** One lane position, sliding to the next the way the song goes ([flow]). */
+@Composable
+private fun Slot(target: Int, modifier: Modifier, content: @Composable (Int) -> Unit) {
+    AnimatedContent(
+        targetState = target,
+        transitionSpec = { flow() },
+        contentAlignment = Alignment.TopStart,
+        label = "stageChord",
+        modifier = modifier,
+    ) { content(it) }
+}
+
+/** The new chord in from the right, the old one out to the left (back when seeking back). */
 private fun AnimatedContentTransitionScope<Int>.flow(): ContentTransform {
     val forward = targetState > initialState
     return (
-        slideInHorizontally(tween(300, easing = FastOutSlowInEasing)) { if (forward) it / 3 else -it / 3 } +
-            fadeIn(tween(220, delayMillis = 50))
+        slideInHorizontally(tween(320, easing = FastOutSlowInEasing)) { if (forward) it / 4 else -it / 4 } +
+            fadeIn(tween(240, delayMillis = 60))
         ) togetherWith (
-        slideOutHorizontally(tween(260, easing = FastOutSlowInEasing)) { if (forward) -it / 3 else it / 3 } +
-            fadeOut(tween(150))
+        slideOutHorizontally(tween(260, easing = FastOutSlowInEasing)) { if (forward) -it / 4 else it / 4 } +
+            fadeOut(tween(140))
         ) using SizeTransform(clip = false)
 }
 
 /** A small spaced capital label, as "TOM" by the play button. */
 @Composable
-private fun StageLabel(text: String) {
+private fun StageLabel(text: String, modifier: Modifier = Modifier) {
     Text(
         text.uppercase(),
         style = MaterialTheme.typography.labelSmall,
         color = SoundColors.Text.copy(alpha = 0.6f),
         maxLines = 1,
-        modifier = Modifier.padding(bottom = 2.dp),
+        modifier = modifier,
+    )
+}
+
+/** A chord's name set as over the words, big; a tap shows how to play it. A long one gets smaller rather than cut. */
+@Composable
+private fun StageName(shown: Shown, size: TextUnit, ink: () -> Color, onChord: (Chord) -> Unit) {
+    val style = MaterialTheme.typography.displayMedium.copy(
+        fontSize = size,
+        lineHeight = size * 1.1f,
+        fontWeight = FontWeight.Bold,
+        letterSpacing = (-0.02).em,
+    )
+    BasicText(
+        ChordName.typeset(shown.name, display = true),
+        style = style,
+        color = ink,
+        maxLines = 1,
+        softWrap = false,
+        autoSize = TextAutoSize.StepBased(minFontSize = size * 0.5f, maxFontSize = size),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(interactionSource = null, indication = null, enabled = shown.chord != null, role = Role.Button, onClickLabel = shown.said) {
+                shown.chord?.let(onChord)
+            }
+            .semantics { contentDescription = shown.said },
     )
 }
 
 /**
- * A chord's name set as over the words, and under it (beside it, lying down) where the hands go:
- * the chord sheet's own drawing for the one ringing ([big]) when there's room for it, a small one
- * for the next. A name that isn't a chord ("N.C.") keeps the room of its drawing, so nothing jumps.
+ * Where the hands go, as big as [modifier]'s room lets it be: the chord sheet's own drawing for the
+ * one ringing ([big]) when there's room for its numbers, the small one otherwise. A tap shows how
+ * to play it; it says nothing itself (its name, right above it, does).
  */
 @Composable
-private fun ChordFace(
-    name: String,
-    chord: Chord?,
-    spelling: Spelling,
-    instrument: Instrument,
-    fingerings: Fingerings?,
-    diagram: Dp,
-    nameSize: TextUnit,
-    big: Boolean,
-    beside: Boolean,
-    ink: () -> Color,
-    onChord: (Chord) -> Unit,
-) {
-    val language = LocalConfiguration.current.locales[0]?.language ?: "pt"
-    val said = remember(chord, spelling, language) { chord?.let { ChordSpeech.say(it, spelling, language) } ?: name }
-    val style = MaterialTheme.typography.displayMedium.copy(
-        fontSize = nameSize,
-        lineHeight = nameSize * 1.12f,
-        fontWeight = FontWeight.Bold,
-        letterSpacing = (-0.02).em,
-    )
-    // The keys need less height than a neck.
-    val room = when {
-        !instrument.fretted -> if (big) min(diagram, 118.dp) else min(diagram * 0.6f, 66.dp)
-        big -> diagram
-        else -> diagram * (if (beside) 0.8f else 0.6f)
-    }
-    val face = Modifier
-        .fillMaxWidth()
-        .clip(RoundedCornerShape(14.dp))
-        .clickable(enabled = chord != null, role = Role.Button, onClickLabel = said) { chord?.let(onChord) }
-        .semantics(mergeDescendants = true) { contentDescription = said }
-    val title: @Composable (Modifier) -> Unit = { m ->
-        BasicText(
-            ChordName.typeset(name, display = true),
-            style = style,
-            color = ink,
-            maxLines = 1,
-            softWrap = false,
-            // A long name ("F#m7(b5)/C") gets smaller rather than cut.
-            autoSize = TextAutoSize.StepBased(minFontSize = nameSize * 0.5f, maxFontSize = nameSize),
-            modifier = m,
-        )
-    }
-    if (beside) {
-        Row(face.height(room)) {
-            title(Modifier.weight(0.85f))
-            Spacer(Modifier.width(8.dp))
-            ChordShape(chord, spelling, instrument, fingerings, big, said, Modifier.weight(1f).fillMaxHeight())
-        }
-    } else {
-        Column(face) {
-            title(Modifier.fillMaxWidth())
-            ChordShape(chord, spelling, instrument, fingerings, big, said, Modifier.fillMaxWidth().height(room).padding(top = 6.dp))
-        }
-    }
-}
-
-/** Where the hands go, as big as [modifier]'s room lets it be. */
-@Composable
-private fun ChordShape(chord: Chord?, spelling: Spelling, instrument: Instrument, fingerings: Fingerings?, big: Boolean, said: String, modifier: Modifier) {
-    BoxWithConstraints(modifier) {
-        if (chord == null || fingerings == null) return@BoxWithConstraints
+private fun ChordShape(shown: Shown, spelling: Spelling, instrument: Instrument, fingerings: Fingerings?, big: Boolean, onChord: (Chord) -> Unit, modifier: Modifier) {
+    val chord = shown.chord ?: return
+    fingerings ?: return
+    BoxWithConstraints(
+        modifier
+            .clearAndSetSemantics { }
+            .pointerInput(chord) { detectTapGestures { onChord(chord) } },
+    ) {
         if (instrument.fretted) {
             val shape = remember(chord, instrument) { fingerings.of(chord, instrument).firstOrNull() } ?: return@BoxWithConstraints
             val wide = instrument.strings.size >= 6
-            if (big && maxHeight >= FULL_DIAGRAM) {
-                // The sheet's drawing; its margins (the first fret's number, ○ and × on top) hang
-                // out, so the strings start under the name and close to it.
+            if (big && maxHeight >= FULL_DIAGRAM - BIG_LIFT && maxWidth + BIG_MARGIN >= FULL_DIAGRAM) {
+                // The sheet's drawing; its margins (the first fret's number on the left, ○ and ×
+                // on top) hang out into the page's, so the strings start under the name.
                 val aspect = if (wide) 1.08f else 0.95f
                 val w = min(maxWidth + BIG_MARGIN, (maxHeight + BIG_LIFT) * aspect)
-                FretDiagram(chord, shape, instrument, spelling, said, Modifier.offset(x = -BIG_MARGIN, y = -BIG_LIFT).width(w))
+                FretDiagram(chord, shape, instrument, spelling, shown.said, Modifier.offset(x = -BIG_MARGIN, y = -BIG_LIFT).width(w))
             } else {
-                val w = min(maxWidth, maxHeight * (if (wide) 0.92f else 0.74f))
-                MiniFret(chord, shape, instrument, Modifier.width(w).fillMaxHeight())
+                val ratio = if (wide) 0.92f else 0.74f
+                val w = min(maxWidth, maxHeight * ratio)
+                MiniFret(chord, shape, instrument, Modifier.width(w).height(min(maxHeight, w / ratio)))
             }
         } else {
             val notes = remember(chord) { PianoVoicing.voicings(chord).firstOrNull() } ?: return@BoxWithConstraints
             val bass = chord.bass?.takeIf { it != chord.root }?.let { notes.first() }
-            StageKeys(notes, bass, spelling, labels = big && maxHeight >= 72.dp, Modifier.fillMaxWidth().fillMaxHeight())
+            StageKeys(notes, bass, spelling, labels = big && maxHeight >= 72.dp, Modifier.fillMaxSize())
         }
     }
 }
@@ -455,101 +474,6 @@ private fun DrawScope.keyName(measurer: androidx.compose.ui.text.TextMeasurer, t
     drawText(layout, color = color, topLeft = Offset(center.x - layout.size.width / 2f, center.y - layout.size.height / 2f))
 }
 
-// ---- The lane ----
-
-/** A stretch of the lane where the hand holds one chord (the same chord written again is one). */
-private class LaneRun(val startMs: Long, val endMs: Long, val label: Int)
-
-/**
- * The chords on a lane, coming in from the right and crossing a still line (now) as they ring:
- * each one a bar as long as it lasts, its name over its start. The one ringing fills in the sung
- * line's color up to the line — what's left of it is how long until the change — and its name
- * stays by the line until the next one pushes it out. Past ones fade to the left. Drawn straight
- * from the clock: while the song plays it moves every frame without recomposing, paused it's still.
- */
-@Composable
-private fun ChordLane(lane: PlayAlongLane, labels: List<String>, clock: PlaybackClock, modifier: Modifier = Modifier) {
-    val measurer = rememberTextMeasurer()
-    val style = MaterialTheme.typography.titleLarge.copy(fontSize = 19.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.sp)
-    val names = remember(labels, style) {
-        labels.distinct().associateWith { measurer.measure(ChordName.typeset(it), style, softWrap = false, maxLines = 1) }
-    }
-    val runs = remember(lane) {
-        buildList {
-            var i = 0
-            while (i < lane.chords.size) {
-                val first = i
-                while (i + 1 < lane.chords.size && lane.run[i + 1] == lane.run[first]) i++
-                add(LaneRun(lane.chords[first].startMs, lane.chords[i].endMs, lane.chords[first].index))
-                i++
-            }
-        }
-    }
-    val ink = SoundColors.Text
-    val accent = SoundColors.Lyric
-    val description = stringResource(R.string.chords_lane)
-    Canvas(
-        modifier
-            .semantics { contentDescription = description }
-            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-            .drawWithContent {
-                drawContent()
-                // Both ends fade out: chords come in from nowhere and leave the same way.
-                drawRect(
-                    Brush.horizontalGradient(0f to Color.Transparent, 0.1f to Color.Black, 0.86f to Color.Black, 1f to Color.Transparent),
-                    blendMode = BlendMode.DstIn,
-                )
-            },
-    ) {
-        val t = clock.positionMs + PlayAlong.LEAD_MS
-        val head = size.width * HEAD
-        val perMs = (size.width - head) / AHEAD_MS
-        val barH = 6.dp.toPx()
-        val barY = size.height - barH - 6.dp.toPx()
-        val nameBottom = barY - 7.dp.toPx()
-        val gap = 3.dp.toPx()
-        val radius = CornerRadius(barH / 2, barH / 2)
-        val firstMs = t - (head / perMs).toLong() - 2_000
-        val lastMs = t + AHEAD_MS + 2_000
-        var lastRight = Float.NEGATIVE_INFINITY
-        for (r in runs) {
-            if (r.endMs < firstMs) continue
-            if (r.startMs > lastMs) break
-            val xs = head + (r.startMs - t) * perMs
-            val xe = head + (r.endMs - t) * perMs
-            val ringing = r.startMs <= t && t < r.endMs
-            val past = r.endMs <= t
-            val left = xs + gap / 2
-            val right = xe - gap / 2
-            if (right > left) {
-                if (ringing) {
-                    drawRoundRect(accent.copy(alpha = 0.26f), Offset(left, barY), Size(right - left, barH), radius)
-                    val filled = (head - left).coerceIn(0f, right - left)
-                    if (filled > 0f) drawRoundRect(accent, Offset(left, barY), Size(filled, barH), radius)
-                } else {
-                    drawRoundRect(ink.copy(alpha = if (past) 0.13f else 0.24f), Offset(left, barY), Size(right - left, barH), radius)
-                }
-            }
-            val text = names[labels[r.label]] ?: continue
-            val tw = text.size.width
-            // By its start; while it rings, held just past the line until the next one pushes it out.
-            val x = max(xs + 2.dp.toPx(), minOf(head + 8.dp.toPx(), xe - tw - gap * 2))
-            // No room (quick changes): the name waits for the cards above; the bar still shows.
-            if (!ringing && x < lastRight + 6.dp.toPx()) continue
-            val color = when {
-                ringing -> accent
-                past -> ink.copy(alpha = 0.32f)
-                else -> ink.copy(alpha = 0.86f)
-            }
-            drawText(text, color = color, topLeft = Offset(x, nameBottom - text.size.height))
-            lastRight = x + tw
-        }
-        // The still line: now.
-        drawLine(accent, Offset(head, 2.dp.toPx()), Offset(head, size.height - 1.dp.toPx()), strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round)
-        drawCircle(accent, radius = 5.dp.toPx(), center = Offset(head, barY + barH / 2))
-    }
-}
-
 // ---- The words ----
 
 /** The line being sung at the top, its ringing chord lit, the next ones under it. */
@@ -603,11 +527,9 @@ private fun StageLines(
     )
 }
 
-private val LANE_HEIGHT = 58.dp
-/** Where the still line stands, of the lane's width. */
-private const val HEAD = 0.26f
-/** How far ahead the lane shows. */
-private const val AHEAD_MS = 6_500L
+/** The chord ringing takes this much of the width, the next the rest. */
+private const val NOW_WEIGHT = 1.45f
+private val COLUMN_GAP = 18.dp
 /** The sheet's chord box keeps this much room on its left (for the first fret's number)… */
 private val BIG_MARGIN = 22.dp
 /** …and on top (for ○ and ×), more than the marks need. */

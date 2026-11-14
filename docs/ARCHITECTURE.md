@@ -332,16 +332,20 @@ pra seguir); liga/desliga guardado em `Settings.chordsPlayAlong`. A letra vira p
 - **Agora / A seguir**: acorde que soa, grande, na cor da linha cantada, com o desenho do instrumento
   escolhido (o mesmo `FretDiagram` da folha; `MiniFret`/`StageKeys` quando pequeno) e o próximo
   acorde diferente ao lado. Troca deslizando no sentido da pista. Toque abre a folha do acorde.
-- **Pista**: os acordes vêm da direita e cruzam uma linha parada (agora); o que soa enche na cor da
-  linha até a linha — o que falta é quanto falta pra trocar. Desenhada direto do relógio (sem
-  recompor); pausado, parada.
+- **Sem pista/linha do tempo** (1.33.1, Miguel: "pode errar, melhor a pessoa que acompanhe"): a
+  1.33.0 tinha uma faixa com os acordes cruzando uma linha parada; saiu. Não recolocar sem ele pedir.
+  Nada no palco é desenhado por quadro: o acorde muda por `derivedStateOf` do relógio.
+- 1.33.1: nomes de Agora/A seguir na mesma linha de base e desenhos começando na mesma altura;
+  desenho grande do tamanho da coluna (a letra vem logo depois); pílula do acorde que soa na tinta
+  da página; número da casa ("4ª") não é mais cortado; trocar de música com o palco aberto não
+  procura posição da música anterior (`key(lane)` + `getOrNull`) — fechava o app.
 - **Letra**: a linha cantada no topo com o acorde que soa numa pílula suave (`ringing` do
   `ChordLyricsLines`); a letra normal com acordes **continua sem marcar acorde nenhum** (regra 1.11.1).
 - Tempo (`chords/PlayAlong.kt`): acordes ouvidos já têm tempo; cifra sobre letra sincronizada ganha
   tempo pelas linhas (linha cantada por igual: acorde chega quando a palavra chega; linhas só de
   acordes dividem o tempo até a próxima). Cifra sem letra sincronizada não tem tempo → sem botão.
   Acorde repetido na linha seguinte não conta como troca. Aparece 220 ms antes (`LEAD_MS`).
-- Deitado: acordes à esquerda (nome ao lado do desenho), letra à direita.
+- Deitado: acordes à esquerda, letra à direita; sem altura pro desenho grande, vai o pequeno.
 - **Pra tirar**: `ui/chords/PlayAlongStage.kt`, `chords/PlayAlong.kt`, o parâmetro `ringing`/`view`
   do `ChordLyricsLines` (+ `lit` do `ChordChip`), o botão e o `Crossfade` na `LyricsScreen`,
   `playAlong`/`setPlayAlong` do `ChordsDeps` e `chordsPlayAlong` do `SettingsStore`. Ou

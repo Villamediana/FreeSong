@@ -342,7 +342,7 @@ internal fun rememberTranslationsByText(lyrics: ParsedLyrics): Map<String, Strin
 /**
  * A chord name, typeset ([ChordName]), in its line's ink — read at draw time, so a line fading in
  * or out doesn't measure its chords again. Tapping it shows how to play it. Playing along ([lit]),
- * the one ringing sits on a soft pill of its own ink.
+ * the one ringing sits on a soft pill.
  */
 @Composable
 internal fun ChordChip(name: AnnotatedString, style: TextStyle, color: () -> Color, onClick: () -> Unit, modifier: Modifier = Modifier, lit: (() -> Boolean)? = null) {
@@ -351,6 +351,8 @@ internal fun ChordChip(name: AnnotatedString, style: TextStyle, color: () -> Col
     } else {
         null
     }
+    // A pill of the page's own ink, as a chosen word is: the chord keeps its color over it.
+    val glass = if (lit != null) com.villamediana.sound.ui.theme.SoundColors.Text else Color.Unspecified
     androidx.compose.foundation.text.BasicText(
         text = name,
         style = style,
@@ -363,7 +365,7 @@ internal fun ChordChip(name: AnnotatedString, style: TextStyle, color: () -> Col
                 if (glow == null) Modifier
                 else Modifier.drawBehind {
                     val g = glow.value
-                    if (g > 0f) drawRect(color().let { it.copy(alpha = it.alpha * LIT_ALPHA * g) })
+                    if (g > 0f) drawRect(glass.copy(alpha = LIT_ALPHA * g))
                 },
             )
             .clickable(role = Role.Button, onClick = onClick)
@@ -378,5 +380,5 @@ private const val AHEAD_LIFT = 0.2f
 private const val FOLLOW_PAUSE_MS = 3_000L
 private const val LINE_FADE_MS = 260
 private const val LIT_FADE_MS = 160
-/** How strong the pill under the ringing chord is, of its ink. */
-private const val LIT_ALPHA = 0.22f
+/** How strong the pill under the ringing chord is, of the page's ink. */
+private const val LIT_ALPHA = 0.13f
