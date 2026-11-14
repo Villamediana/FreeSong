@@ -80,7 +80,6 @@ internal fun LyricsCard(
     onSeek: (Long) -> Unit,
     onOpen: () -> Unit,
     modifier: Modifier = Modifier,
-    streamed: Boolean = false,
     /**
      * The song, for its chords: shown here when they are on and were already heard. The card never
      * hears a song itself — that happens only with the lyrics open and the chords button on.
@@ -133,7 +132,7 @@ internal fun LyricsCard(
                 lineGap = 14.dp,
             )
             lyrics == LyricsState.Loading -> LyricsLoading(lineHeight = 20.dp, Modifier.padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 30.dp))
-            lyrics == LyricsState.None || lyrics == LyricsState.Offline -> NoLyrics(lyrics, streamed, Modifier.padding(start = 20.dp, end = 20.dp, bottom = 26.dp))
+            lyrics == LyricsState.None || lyrics == LyricsState.Offline -> NoLyrics(lyrics, Modifier.padding(start = 20.dp, end = 20.dp, bottom = 26.dp))
             lyrics is LyricsState.Ready -> LyricsLines(
                 lyrics = lyrics.lyrics,
                 clock = clock,
@@ -152,11 +151,11 @@ internal fun LyricsCard(
 }
 
 @Composable
-private fun NoLyrics(state: LyricsState, streamed: Boolean, modifier: Modifier = Modifier) {
-    val (title, body) = when {
-        state == LyricsState.Offline -> R.string.player_lyrics_offline_title to R.string.player_lyrics_offline_body
-        streamed -> R.string.player_lyrics_none_title to R.string.player_lyrics_none_online
-        else -> R.string.player_lyrics_none_title to R.string.player_lyrics_none_body
+private fun NoLyrics(state: LyricsState, modifier: Modifier = Modifier) {
+    // Every song without a lyrics file was looked up: none means nobody has its words.
+    val (title, body) = when (state) {
+        LyricsState.Offline -> R.string.player_lyrics_offline_title to R.string.player_lyrics_offline_body
+        else -> R.string.player_lyrics_none_title to R.string.player_lyrics_none_online
     }
     Column(modifier) {
         Text(stringResource(title), style = MaterialTheme.typography.headlineSmall, color = SoundColors.Text)
@@ -192,7 +191,6 @@ internal fun LyricsScreen(
     onTogglePlay: () -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
-    streamed: Boolean = false,
     online: Boolean = true,
     /** A tap on a line (the seek bar uses [onSeek]). */
     onLineSeek: (Long) -> Unit = onSeek,
@@ -284,7 +282,7 @@ internal fun LyricsScreen(
                         lineGap = 18.dp,
                     )
                     lyrics == LyricsState.Loading -> LyricsLoading(lineHeight = 28.dp, Modifier.padding(horizontal = 28.dp, vertical = 32.dp))
-                    lyrics == LyricsState.None || lyrics == LyricsState.Offline -> NoLyrics(lyrics, streamed, Modifier.padding(horizontal = 28.dp, vertical = 24.dp))
+                    lyrics == LyricsState.None || lyrics == LyricsState.Offline -> NoLyrics(lyrics, Modifier.padding(horizontal = 28.dp, vertical = 24.dp))
                     lyrics is LyricsState.Ready -> LyricsLines(
                         lyrics = lyrics.lyrics,
                         clock = clock,

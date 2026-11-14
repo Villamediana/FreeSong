@@ -69,7 +69,15 @@ class AppGraph(context: Context) {
         NewPipeYouTubeSource(http)
     }
     val enricher: MetadataEnricher by lazy { CatalogMetadataEnricher(http) }
-    val lyrics: LyricsSource by lazy { LrclibLyricsSource(http) }
+    /** Lyrics: LRCLIB first (it has the timing); what it doesn't have, from Letras (its page read as Cifra Club's). */
+    val lyrics: LyricsSource by lazy {
+        com.villamediana.sound.online.LyricsSources(
+            LrclibLyricsSource(http),
+            com.villamediana.sound.online.LetrasLyricsSource(http) { url ->
+                com.villamediana.sound.online.BrowserFetch.html(appContext, url, ready = com.villamediana.sound.online.LetrasLyricsSource.READY)
+            },
+        )
+    }
 
     /** Chords heard from the songs, on the phone, one at a time on a background thread. */
     val chords: com.villamediana.sound.chords.ChordEngine by lazy {

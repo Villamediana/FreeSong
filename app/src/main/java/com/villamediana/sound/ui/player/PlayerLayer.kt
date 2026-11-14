@@ -138,7 +138,7 @@ internal class PlayerDeps(
     /** Download state of every song: the "Baixar" button that stands in for the heart of streamed songs. */
     val downloads: Flow<DownloadLookup> = flowOf(DownloadLookup.Empty),
     val download: (RemoteTrack) -> Unit = {},
-    /** Lyrics of streamed songs (LRCLIB on demand); null = none. */
+    /** Lyrics looked up online for songs without a lyrics file (LRCLIB, then Letras); null = none. */
     val lyrics: OnlineLyricsCache? = null,
     val online: StateFlow<Boolean> = MutableStateFlow(true),
     /** Video ids in Curtidas: the heart of a streamed song. */
@@ -755,7 +755,6 @@ internal fun PlayerHost(
                 onLineSeek = actions.seekLine,
                 onTogglePlay = actions.togglePlay,
                 onClose = { lyricsOpen = false },
-                streamed = stream.streamed,
                 online = online,
             )
         }

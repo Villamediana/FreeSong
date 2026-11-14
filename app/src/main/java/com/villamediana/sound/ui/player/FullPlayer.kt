@@ -332,7 +332,6 @@ internal fun FullPlayer(
                 onSeek = actions.seekLine,
                 onOpen = actions.openLyrics,
                 modifier = Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)),
-                streamed = stream.streamed,
                 track = track,
                 durationMs = durationMs,
             )

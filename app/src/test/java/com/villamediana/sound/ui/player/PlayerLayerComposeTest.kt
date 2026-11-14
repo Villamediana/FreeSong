@@ -14,6 +14,7 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -474,6 +475,40 @@ class PlayerLayerComposeTest {
         compose.onNodeWithContentDescription("Fechar letra").assertIsDisplayed()
         compose.waitUntil(5_000) { compose.onAllNodesWithText("Una verdad sin fin").fetchSemanticsNodes().isNotEmpty() }
         assertEquals(listOf(LyricsQuery("Té para Tres", "Soda Stereo", "Canción Animal", 140_000)), lyricsAsked.distinct())
+    }
+
+    @Test
+    fun withTheLyricsOpenTheNextSongBringsItsOwn() {
+        val first = remote.asTransientTrack()
+        val second = remote.copy(videoId = "lmnopqrstuv", url = "https://music.youtube.com/watch?v=lmnopqrstuv", title = "Cae el Sol", durationMs = 200_000).asTransientTrack()
+        val queue = listOf(first, second)
+        val player = FakePlayer(PlaybackState(current = first, isPlaying = true, durationMs = 140_000, queue = queue, queueIndex = 0, source = PlaySource(PlaySource.Type.SEARCH, "soda")))
+        val deps = PlayerDeps(
+            player = player,
+            trackFlow = { flowOf(null) },
+            setLiked = { _, _ -> },
+            lyrics = OnlineLyricsCache({ q ->
+                lyricsAsked += q
+                if (q.title == "Cae el Sol") Lyrics("[00:01.00]Cae el sol en la ciudad", synced = true) else Lyrics("[00:01.00]Una verdad sin fin", synced = true)
+            }),
+            online = MutableStateFlow(true),
+        )
+        compose.setContent {
+            SoundTheme {
+                val nav = rememberNavController()
+                CompositionLocalProvider(LocalNavigator provides Navigator(nav)) { PlayerHost(deps, bottomBarHeight = 64.dp) }
+            }
+        }
+        expand()
+        compose.onAllNodesWithContentDescription("Letra em tela cheia").onFirst().performClick()
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("Una verdad sin fin").fetchSemanticsNodes().isNotEmpty() }
+
+        // The song ends and the next one starts: the lyrics stay open, on the new song's words.
+        player.state.update { it.copy(current = second, queueIndex = 1, durationMs = 200_000) }
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("Cae el sol en la ciudad").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithContentDescription("Fechar letra").assertIsDisplayed()
+        compose.onAllNodesWithText("Una verdad sin fin").assertCountEquals(0)
+        assertEquals(listOf("Té para Tres", "Cae el Sol"), lyricsAsked.map { it.title }.distinct())
     }
 
     @Test

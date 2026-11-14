@@ -37,7 +37,6 @@
     <string name="player_lyrics_open">Letra en pantalla completa</string>
     <string name="player_lyrics_close">Cerrar letra</string>
     <string name="player_lyrics_none_title">Sin letra</string>
-    <string name="player_lyrics_none_body">Esta canción no tiene letra guardada.</string>
 
     <string name="player_sleep">Temporizador</string>
     <string name="player_sleep_hint">La música se detiene sola.</string>

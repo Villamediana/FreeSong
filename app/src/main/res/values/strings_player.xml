@@ -37,7 +37,6 @@
     <string name="player_lyrics_open">Letra em tela cheia</string>
     <string name="player_lyrics_close">Fechar letra</string>
     <string name="player_lyrics_none_title">Sem letra</string>
-    <string name="player_lyrics_none_body">Esta música não tem letra salva.</string>
 
     <string name="player_sleep">Timer de sono</string>
     <string name="player_sleep_hint">A música para sozinha.</string>

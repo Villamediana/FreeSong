@@ -2,7 +2,7 @@
 
 Sound é um player de música para Android (Kotlin + Jetpack Compose + Media3) pensado para ser
 **offline**: busca e baixa do YouTube / YouTube Music (NewPipeExtractor), com metadados do iTunes
-Search API e letras do LRCLIB. Também **toca online** sem baixar (padrão ao tocar um resultado da
+Search API e letras do LRCLIB (o que ele não tem, do Letras). Também **toca online** sem baixar (padrão ao tocar um resultado da
 busca), mostra o **vídeo** da música e tem **equalizador**. Biblioteca, playlists, álbuns, aleatório,
 reprodução inteligente por gênero e letras sincronizadas das músicas baixadas funcionam sem rede.
 
@@ -47,7 +47,7 @@ próprio pacote ou descreva a necessidade no relatório final. Nada de dependên
 
 | Módulo | Pastas | Entrega |
 |---|---|---|
-| online | `online/` (menos `OnlineContracts.kt`) | `NewPipeYouTubeSource`, `CatalogMetadataEnricher` (limpeza de título + iTunes), `LrclibLyricsSource` |
+| online | `online/` (menos `OnlineContracts.kt`) | `NewPipeYouTubeSource`, `CatalogMetadataEnricher` (limpeza de título + iTunes), `LrclibLyricsSource`, `LetrasLyricsSource` |
 | download | `download/` (menos `DownloadContracts.kt`) | `WorkDownloadController` + worker em WorkManager |
 | playback | `playback/` (menos `PlaybackContracts.kt`), `smart/` (menos `SmartContracts.kt`) | `PlaybackService`, `MediaPlayerConnection`, `SmartQueue`, `SmartMixes` |
 | ui-player | `ui/player/` | `PlayerLayer`: mini player + tela cheia, letras, fila, timer |
@@ -107,6 +107,16 @@ JSON: usar `kotlinx.serialization` (o `org.json` do Android vira stub nos testes
   `sound://stream/<id>?q=<qualidade>`, pré-resolve a próxima). Fila online que acaba continua com
   `YouTubeSource.related` (o "a seguir" do YouTube Music).
   No player, música online mostra "Baixar" no lugar do coração; letra buscada na hora (LRCLIB).
+- **Letra de tudo** (1.32.0): `graph.lyrics` = `LyricsSources(LRCLIB, Letras)` — o LRCLIB primeiro
+  (tem o tempo); a música que ele não tem é procurada no Letras (`online/LetrasLyricsSource.kt`),
+  do jeito do Cifra Club: a busca (`solr.sscdn.co/letras/m1`) responde a qualquer um; a página
+  (`letras.com/<artista>/<id>/`) é pedida direto e, recusada, lida pelo `BrowserFetch`. Só vale a
+  mesma música do mesmo artista (`CifraMatch.pick`); a letra vem sem tempo (fica parada, como toda
+  letra só de texto), uma linha por verso, linha em branco entre estrofes; a leitura de outro
+  alfabeto (`romanization`) fica de fora. Vale no player e no download. **Música baixada sem
+  arquivo de letra também procura** (`LyricsOrigin.choose`): antes ela ficava "Sem letra" pra
+  sempre; o achado fica no cache das letras online (`filesDir/lyrics-online.json`). Nada do site
+  no repo: testes com música inventada (`LetrasLyricsSourceTest`).
 - **Equalizador** (`AudioEffectsController` em `playback/FeatureContracts.kt`, `graph.effects`):
   Equalizer/BassBoost/Virtualizer na sessão de áudio do ExoPlayer, presets próprios (`EqPreset`),
   persistido. Tela em `ui/equalizer/` (rota `EqualizerRoute`, `navigator.openEqualizer()`).
