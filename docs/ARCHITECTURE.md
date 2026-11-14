@@ -361,6 +361,12 @@ pra seguir); liga/desliga guardado em `Settings.chordsPlayAlong`. A letra vira p
   os colados empurram os seguintes, e os do fim da linha vêm MAIS CEDO em vez de espremidos — quem
   canta chega na última palavra antes e segura. Substitui o "depois das palavras ~900 ms" da 1.33.2.
   O tempo de verdade só ouvindo a música (BTC casado com a cifra) — oferecido ao Miguel, não feito.
+- 1.33.6: **a luz anda, os acordes ficam** (Miguel: "o seguinte passa pro atual e aí enche o seguinte,
+  os olhos não acompanham"). `ChordPair`: dois lugares fixos que se revezam (troca par à esquerda,
+  ímpar à direita). O acorde entra no seu lugar ainda esperando (40% da tinta, 80% do tamanho,
+  encolhido pela linha de base do nome) e acende ALI quando soa (cor da linha cantada, tamanho
+  cheio); o lugar que apaga recebe o acorde seguinte com cross-fade, apagado. Sem rótulos
+  AGORA/A SEGUIR (o aceso é o agora). Não voltar ao deslize de um lugar pro outro sem ele pedir.
 - **Pra tirar**: `ui/chords/PlayAlongStage.kt`, `chords/PlayAlong.kt`, o parâmetro `ringing`/`view`
   do `ChordLyricsLines` (+ `lit` do `ChordChip`), o botão e o `Crossfade` na `LyricsScreen`,
   `playAlong`/`setPlayAlong` do `ChordsDeps` e `chordsPlayAlong` do `SettingsStore`. Ou
