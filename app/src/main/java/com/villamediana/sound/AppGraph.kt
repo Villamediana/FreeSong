@@ -69,7 +69,15 @@ class AppGraph(context: Context) {
         NewPipeYouTubeSource(http)
     }
     val enricher: MetadataEnricher by lazy { CatalogMetadataEnricher(http) }
-    val lyrics: LyricsSource by lazy { LrclibLyricsSource(http) }
+    /** Lyrics: LRCLIB first (it has the timing); what it doesn't have, from Letras (its page read as Cifra Club's). */
+    val lyrics: LyricsSource by lazy {
+        com.villamediana.sound.online.LyricsSources(
+            LrclibLyricsSource(http),
+            com.villamediana.sound.online.LetrasLyricsSource(http) { url ->
+                com.villamediana.sound.online.BrowserFetch.html(appContext, url, ready = com.villamediana.sound.online.LetrasLyricsSource.READY)
+            },
+        )
+    }
 
     /** Chords heard from the songs, on the phone, one at a time on a background thread. */
     val chords: com.villamediana.sound.chords.ChordEngine by lazy {
@@ -124,8 +132,13 @@ class AppGraph(context: Context) {
             instrument = settings.settings.map { com.villamediana.sound.chords.Instrument.fromId(it.chordInstrument) }.distinctUntilChanged(),
             setEnabled = { settings.setChords(it) },
             setInstrument = { settings.setChordInstrument(it.name) },
-            shifts = com.villamediana.sound.chords.ChordShifts(appContext.filesDir.resolve("chord-shifts.json")),
+            shifts = chordShifts,
         )
+    }
+
+    /** How far each song is transposed: its chords on screen and, with them showing, its audio (PlaybackService). */
+    val chordShifts: com.villamediana.sound.chords.ChordShifts by lazy {
+        com.villamediana.sound.chords.ChordShifts(appContext.filesDir.resolve("chord-shifts.json"))
     }
 
     /** Every cache on the phone, measured and cleared from Ajustes › Armazenamento. */
@@ -317,6 +330,45 @@ class AppGraph(context: Context) {
                 .forEach { downloads.cancel(it.id) }
         }
         library.trackByVideoId(videoId)?.let { library.deleteTracks(listOf(it.id)) }
+    }
+
+    /** The model that tells the voice from the band: fetched the first time someone sings (39 MB, kept in the app's files). */
+    val karaokeModel: com.villamediana.sound.karaoke.KaraokeModel by lazy {
+        com.villamediana.sound.karaoke.KaraokeModel(http, appContext.filesDir.resolve("karaoke-model"), online = {
+            com.villamediana.sound.playback.stream.hasInternet(appContext)
+        })
+    }
+
+    /** Karaoke: the voice taken out of the song playing (and of the next), on the phone, one song at a time. */
+    val karaoke: com.villamediana.sound.karaoke.KaraokeEngine by lazy {
+        val worker = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "karaoke") }
+        com.villamediana.sound.karaoke.KaraokeEngine(
+            scope = scope,
+            worker = worker.asCoroutineDispatcher(),
+            dir = appContext.cacheDir.resolve("karaoke"),
+            model = { progress ->
+                karaokeModel.fetch(progress)
+                com.villamediana.sound.karaoke.OnnxStems(karaokeModel.voice(), karaokeModel.band())
+            },
+        )
+    }
+
+    /**
+     * The microphone by the lyrics, for this run of the app: on, songs play without their voice
+     * while the lyrics are open. Not kept from one day to the next — the app always opens with the
+     * songs as they are.
+     */
+    val karaokeOn = kotlinx.coroutines.flow.MutableStateFlow(false)
+
+    /** What the lyrics' karaoke button needs. */
+    val karaokeDeps: com.villamediana.sound.ui.karaoke.KaraokeDeps by lazy {
+        com.villamediana.sound.ui.karaoke.KaraokeDeps(
+            on = karaokeOn,
+            setOn = { karaokeOn.value = it },
+            state = { key -> karaoke.state(key) },
+            // The model's runtime ships for 64-bit ARM only (app/build.gradle.kts).
+            supported = android.os.Build.SUPPORTED_ABIS.firstOrNull() == "arm64-v8a",
+        )
     }
 
     val effects: AudioEffectsController by lazy { DeviceAudioEffects(appContext, scope) }

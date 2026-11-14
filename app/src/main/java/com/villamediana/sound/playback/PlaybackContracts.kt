@@ -93,6 +93,13 @@ interface PlayerConnection {
     fun seekTo(positionMs: Long)
     /** A tap on a lyric line: seeks with a quick crossfade from what was playing ([SeekBlend]). */
     fun seekBlended(positionMs: Long) = seekTo(positionMs)
+    /**
+     * The songs sound in the key their chords are transposed to (the lyrics open with the chords
+     * on), or as recorded again.
+     */
+    fun setTransposing(on: Boolean) = Unit
+    /** Karaoke: the songs play without their voice (the lyrics open with the microphone on), or as they are again. */
+    fun setSinging(on: Boolean) = Unit
     fun skipTo(queueIndex: Int)
     fun setShuffle(enabled: Boolean)
     fun cycleRepeat()

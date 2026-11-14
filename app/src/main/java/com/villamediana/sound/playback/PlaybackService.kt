@@ -92,12 +92,22 @@ class PlaybackService : MediaLibraryService() {
     private val soundTap = SoundTap()
     /** The crossfade's volume and bass in the main player's own audio ([Crossfader]). */
     private val fadeShaper = FadeShaper()
+    /** The song in the key picked for it, while its chords show ([transposeOf]); the crossfade's tail has its own. */
+    private val transposer = com.villamediana.sound.playback.pitch.TransposeProcessor(::transposeOf)
+    private var tailTransposer: com.villamediana.sound.playback.pitch.TransposeProcessor? = null
+    /** The lyrics are open with the chords on: songs sound in the key their chords are shown in. */
+    @Volatile private var transposing = false
+    /** Karaoke in the main player's audio ([karaokeOf]); the crossfade's tail has its own. */
+    private val voice = com.villamediana.sound.karaoke.KaraokeProcessor(::karaokeOf)
+    private var tailVoice: com.villamediana.sound.karaoke.KaraokeProcessor? = null
+    /** The lyrics are open with the microphone on: songs play without their voice. */
+    @Volatile private var singing = false
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val listen = ListenTracker { SystemClock.elapsedRealtime() }
 
     // Library mirror (kept fresh by the repository's flow).
     private var allTracks: List<Track> = emptyList()
-    private var tracksById: Map<Long, Track> = emptyMap()
+    @Volatile private var tracksById: Map<Long, Track> = emptyMap()
     private var tracksByVideoId: Map<String, Track> = emptyMap()
     private var libraryLoaded = false
     private var settings = Settings()
@@ -142,7 +152,7 @@ class PlaybackService : MediaLibraryService() {
         strings = PlaybackStrings.from(this)
         streams = OnlineStreams(graph.scope, online = { hasInternet(this) }) { graph.youTube }
         artwork = ArtworkShare(this)
-        player = ExoPlayer.Builder(this, SeekBlend.renderers(this, seekBlend, soundTap.processor(), fadeShaper))
+        player = ExoPlayer.Builder(this, SeekBlend.renderers(this, seekBlend, soundTap.processor(), voice, transposer, fadeShaper))
             // The song playing is kept whole in memory (back buffer): going back in it, or seeking to
             // a part already heard, plays at once instead of downloading that part again.
             .setLoadControl(
@@ -200,7 +210,11 @@ class PlaybackService : MediaLibraryService() {
             shaper = fadeShaper,
             newTail = {
                 val tailShaper = FadeShaper()
-                val tailPlayer = ExoPlayer.Builder(this, FadeShaper.renderers(this, tailShaper))
+                // The song going out keeps the key it was playing in.
+                val tailKey = com.villamediana.sound.playback.pitch.TransposeProcessor(::transposeOf).also { tailTransposer = it }
+                // And goes out as it was playing: without its voice, in a karaoke.
+                val tailSong = com.villamediana.sound.karaoke.KaraokeProcessor(::karaokeOf).also { tailVoice = it }
+                val tailPlayer = ExoPlayer.Builder(this, FadeShaper.renderers(this, tailSong, tailKey, tailShaper))
                     .setMediaSourceFactory(
                         DefaultMediaSourceFactory(StreamDataSources.factory(this, streams, AudioCache.get(this)))
                             .setLoadErrorHandlingPolicy(StreamLoadErrorPolicy()),
@@ -238,6 +252,10 @@ class PlaybackService : MediaLibraryService() {
 
         scope.launch { library.tracks.collect(::onLibrary) }
         scope.launch { graph.settings.settings.collect(::onSettings) }
+        // A song's key changed (the − and + by the chords): it is heard at once.
+        scope.launch { graph.chordShifts.all.collect { retune() } }
+        // A song's masks became readable: the players take its voice out from here.
+        scope.launch { graph.karaoke.changes.collect { revoice() } }
         publishExtras()
     }
 
@@ -256,6 +274,7 @@ class PlaybackService : MediaLibraryService() {
         PlaybackPulse.playing.value = false
         saveNow()
         finishListen()
+        if (singing) graph.karaoke.stop()
         crossfader.release()
         sleep.release()
         output.stop()
@@ -369,6 +388,67 @@ class PlaybackService : MediaLibraryService() {
         if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
         // Equalizer/BassBoost/Virtualizer and the leveler's DynamicsProcessing are separate effects on the same session.
         runCatching { graph.effects.attach(audioSessionId) }
+    }
+
+    /**
+     * How far the song [mediaId] sounds from its own key: as far as its chords are transposed, while
+     * they show (the lyrics open with the chords on); 0 otherwise. Asked from the playback thread.
+     */
+    private fun transposeOf(mediaId: String?): Int {
+        if (!transposing) return 0
+        return graph.chordShifts.current(songKeyOf(mediaId) ?: return 0)
+    }
+
+    /** The recording a queue item is: what its chords, its key and its karaoke go by. Any thread. */
+    private fun songKeyOf(mediaId: String?): String? = when {
+        mediaId == null -> null
+        mediaId.startsWith(com.villamediana.sound.data.ONLINE_MEDIA_PREFIX) ->
+            com.villamediana.sound.chords.ChordSubject.keyOfVideo(mediaId.removePrefix(com.villamediana.sound.data.ONLINE_MEDIA_PREFIX))
+        else -> mediaId.toLongOrNull()?.let { tracksById[it] }?.let { com.villamediana.sound.chords.ChordSubject.of(it)?.key }
+    }
+
+    /**
+     * The masks that take the voice out of the song [mediaId], as far as they are worked out;
+     * null with the karaoke off (or nothing worked out yet). Asked from the playback thread.
+     */
+    private fun karaokeOf(mediaId: String?): com.villamediana.sound.karaoke.MaskSource? {
+        if (!singing) return null
+        return graph.karaoke.masks(songKeyOf(mediaId) ?: return null)
+    }
+
+    /** The karaoke changed (on, off, masks arrived): the players ask again. */
+    private fun revoice() {
+        voice.refresh()
+        tailVoice?.refresh()
+    }
+
+    /**
+     * Karaoke on: the song playing is worked out from the moment it is at, then the one that comes
+     * next — a queue is sung through without waiting. Called whenever either may have changed.
+     */
+    private fun sing() {
+        if (!singing) return
+        val item = player.currentMediaItem ?: return
+        val song = karaokeSong(item) ?: return
+        val next = player.nextMediaItemIndex.takeIf { it != C.INDEX_UNSET }?.let { karaokeSong(player.getMediaItemAt(it)) }
+        graph.karaoke.sing(song, player.currentPosition, next?.takeIf { it.key != song.key })
+    }
+
+    private fun karaokeSong(item: MediaItem): com.villamediana.sound.karaoke.KaraokeSong? {
+        val key = songKeyOf(item.mediaId) ?: return null
+        val uri = item.localConfiguration?.uri ?: return null
+        val sources = StreamDataSources.factory(this, streams, AudioCache.get(this))
+        // Read as the player reads it: a streamed song comes from what is already kept of it.
+        val cachedAs = item.localConfiguration?.customCacheKey
+        return com.villamediana.sound.karaoke.KaraokeSong(key) {
+            com.villamediana.sound.karaoke.DecodedSong(com.villamediana.sound.karaoke.CachedAs(sources.createDataSource(), cachedAs), uri)
+        }
+    }
+
+    /** The key of what is playing may have changed: the players ask again. */
+    private fun retune() {
+        transposer.refresh()
+        tailTransposer?.refresh()
     }
 
     private fun onSettings(s: Settings) {
@@ -953,6 +1033,7 @@ class PlaybackService : MediaLibraryService() {
             maybeExtend()
             prefetchUpcoming()
             scheduleSave()
+            sing()
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -1004,6 +1085,8 @@ class PlaybackService : MediaLibraryService() {
             maybeExtend()
             prefetchUpcoming()
             scheduleSave()
+            // The song that comes next may be another now.
+            sing()
         }
 
         override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
@@ -1021,7 +1104,11 @@ class PlaybackService : MediaLibraryService() {
         }
 
         override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
-            if (reason == Player.DISCONTINUITY_REASON_SEEK) scheduleSave()
+            if (reason == Player.DISCONTINUITY_REASON_SEEK) {
+                scheduleSave()
+                // A karaoke goes on from where the song was taken to.
+                sing()
+            }
         }
 
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
@@ -1232,6 +1319,15 @@ class PlaybackService : MediaLibraryService() {
                     streams.prefetch(com.villamediana.sound.playback.stream.StreamUris.audio(id, settings.audioQuality))
                 }
                 SessionProtocol.RESTORE -> return serialized { restore() }
+                SessionProtocol.TRANSPOSE -> {
+                    transposing = args.getBoolean(SessionProtocol.ARG_ENABLED)
+                    retune()
+                }
+                SessionProtocol.KARAOKE -> {
+                    singing = args.getBoolean(SessionProtocol.ARG_ENABLED)
+                    if (singing) sing() else graph.karaoke.stop()
+                    revoice()
+                }
                 SessionProtocol.SEEK_BLEND -> {
                     if (player.isPlaying) seekBlend.arm(player.currentPosition)
                     player.seekTo(args.getLong(SessionProtocol.ARG_POSITION).coerceAtLeast(0))

@@ -54,7 +54,7 @@ internal sealed interface LyricsState {
     data class Ready(val lyrics: ParsedLyrics) : LyricsState
 }
 
-/** What to look up on LRCLIB for a song that is not on the phone. */
+/** What to look up online (LRCLIB, then Letras) for a song without a lyrics file. */
 internal data class LyricsQuery(val title: String, val artist: String, val album: String?, val durationMs: Long?) {
     /** Cache key: the same song always asks the same question. */
     val key: String get() = listOf(title.trim().lowercase(), artist.trim().lowercase(), album?.trim()?.lowercase().orEmpty(), (durationMs ?: 0) / 1000).joinToString("\u0001")
@@ -69,16 +69,16 @@ internal sealed interface LyricsOrigin {
     companion object {
         /**
          * [playing] is what the player is on (maybe a streamed, transient song); [libraryCopy] its row
-         * in the library, when there is one. A saved lyrics file always wins; a streamed song without
-         * one asks LRCLIB (even right after it got downloaded); a song from the phone without a file
-         * simply has none.
+         * in the library, when there is one. A saved lyrics file always wins; any song without one
+         * is looked up online (a streamed song, and a song on the phone that was saved without
+         * lyrics); a song with no title to ask for has none.
          */
         fun choose(playing: Track, libraryCopy: Track?): LyricsOrigin {
             val path = libraryCopy?.lyricsPath?.takeIf { it.isNotBlank() }
                 ?: playing.lyricsPath?.takeIf { it.isNotBlank() && !playing.isOnline }
             return when {
                 path != null -> File(path)
-                playing.isOnline -> Online(
+                playing.title.isNotBlank() -> Online(
                     LyricsQuery(
                         title = playing.title,
                         artist = playing.artist,
@@ -93,7 +93,7 @@ internal sealed interface LyricsOrigin {
 }
 
 /**
- * Lyrics of streamed songs, fetched on demand and kept in memory for the session (the card and
+ * Lyrics looked up online, fetched on demand and kept in memory for the session (the card and
  * the full-screen view share one lookup; skipping back and forth doesn't ask again). "Not found"
  * is remembered for a while only — LyricsSource can't tell it apart from a failed request.
  */

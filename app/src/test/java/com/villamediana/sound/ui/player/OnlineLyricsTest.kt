@@ -17,13 +17,17 @@ class OnlineLyricsTest {
     private val streamed = remote.asTransientTrack()
     private val query = LyricsQuery("Té para Tres", "Soda Stereo", "Canción Animal", 140_000)
 
-    @Test fun `a song on the phone reads its file or has none`() {
-        val local = Track(id = 3, videoId = "abc", title = "T", artist = "A", filePath = "/a.m4a", lyricsPath = "/lyrics/3.lrc")
+    @Test fun `a song on the phone reads its file, and without one is looked up too`() {
+        val local = Track(id = 3, videoId = "abc", title = "T", artist = "A", filePath = "/a.m4a", durationMs = 90_000, lyricsPath = "/lyrics/3.lrc")
         assertEquals(LyricsOrigin.File("/lyrics/3.lrc"), LyricsOrigin.choose(local, local))
         // Before the live row arrives, the player's own copy has the path too.
         assertEquals(LyricsOrigin.File("/lyrics/3.lrc"), LyricsOrigin.choose(local, null))
-        assertEquals(LyricsOrigin.None, LyricsOrigin.choose(local.copy(lyricsPath = null), local.copy(lyricsPath = null)))
-        assertEquals(LyricsOrigin.None, LyricsOrigin.choose(local.copy(lyricsPath = " "), null))
+        // Saved without lyrics (nobody had them that day): asked for like a streamed song.
+        val asked = LyricsOrigin.Online(LyricsQuery("T", "A", null, 90_000))
+        assertEquals(asked, LyricsOrigin.choose(local.copy(lyricsPath = null), local.copy(lyricsPath = null)))
+        assertEquals(asked, LyricsOrigin.choose(local.copy(lyricsPath = " "), null))
+        // Nothing to ask for.
+        assertEquals(LyricsOrigin.None, LyricsOrigin.choose(local.copy(title = " ", lyricsPath = null), null))
     }
 
     @Test fun `a streamed song asks lrclib with what it knows`() {

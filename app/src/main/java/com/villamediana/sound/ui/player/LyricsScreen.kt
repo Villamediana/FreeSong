@@ -80,7 +80,6 @@ internal fun LyricsCard(
     onSeek: (Long) -> Unit,
     onOpen: () -> Unit,
     modifier: Modifier = Modifier,
-    streamed: Boolean = false,
     /**
      * The song, for its chords: shown here when they are on and were already heard. The card never
      * hears a song itself — that happens only with the lyrics open and the chords button on.
@@ -133,7 +132,7 @@ internal fun LyricsCard(
                 lineGap = 14.dp,
             )
             lyrics == LyricsState.Loading -> LyricsLoading(lineHeight = 20.dp, Modifier.padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 30.dp))
-            lyrics == LyricsState.None || lyrics == LyricsState.Offline -> NoLyrics(lyrics, streamed, Modifier.padding(start = 20.dp, end = 20.dp, bottom = 26.dp))
+            lyrics == LyricsState.None || lyrics == LyricsState.Offline -> NoLyrics(lyrics, Modifier.padding(start = 20.dp, end = 20.dp, bottom = 26.dp))
             lyrics is LyricsState.Ready -> LyricsLines(
                 lyrics = lyrics.lyrics,
                 clock = clock,
@@ -152,11 +151,11 @@ internal fun LyricsCard(
 }
 
 @Composable
-private fun NoLyrics(state: LyricsState, streamed: Boolean, modifier: Modifier = Modifier) {
-    val (title, body) = when {
-        state == LyricsState.Offline -> R.string.player_lyrics_offline_title to R.string.player_lyrics_offline_body
-        streamed -> R.string.player_lyrics_none_title to R.string.player_lyrics_none_online
-        else -> R.string.player_lyrics_none_title to R.string.player_lyrics_none_body
+private fun NoLyrics(state: LyricsState, modifier: Modifier = Modifier) {
+    // Every song without a lyrics file was looked up: none means nobody has its words.
+    val (title, body) = when (state) {
+        LyricsState.Offline -> R.string.player_lyrics_offline_title to R.string.player_lyrics_offline_body
+        else -> R.string.player_lyrics_none_title to R.string.player_lyrics_none_online
     }
     Column(modifier) {
         Text(stringResource(title), style = MaterialTheme.typography.headlineSmall, color = SoundColors.Text)
@@ -192,12 +191,15 @@ internal fun LyricsScreen(
     onTogglePlay: () -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
-    streamed: Boolean = false,
     online: Boolean = true,
     /** A tap on a line (the seek bar uses [onSeek]). */
     onLineSeek: (Long) -> Unit = onSeek,
+    /** "Tentar de novo" under a karaoke that failed. */
+    onKaraokeRetry: () -> Unit = {},
 ) {
     val colors = LyricColors.over(lyricsBackground(washTarget))
+    val karaoke = com.villamediana.sound.ui.karaoke.LocalKaraoke.current?.takeIf { it.supported }
+    val singing = com.villamediana.sound.ui.karaoke.rememberKaraokeOn()
     val chordsDeps = com.villamediana.sound.ui.chords.LocalChords.current
     val chordsOn = com.villamediana.sound.ui.chords.rememberChordsEnabled()
     val chordState = com.villamediana.sound.ui.chords.rememberChordState(track, listen = chordsOn, online = online)
@@ -242,8 +244,27 @@ internal fun LyricsScreen(
                         tint = if (chordsOn) SoundColors.Text else SoundColors.Text.copy(alpha = 0.4f),
                     )
                 }
+                // Karaoke: the song without its voice while the lyrics are open. On and off read as its neighbours'.
+                if (karaoke != null) {
+                    PlayerIconButton(
+                        com.villamediana.sound.ui.karaoke.KaraokeIcon,
+                        stringResource(if (singing) R.string.lyrics_karaoke_off else R.string.lyrics_karaoke_on),
+                        onClick = { karaoke.setOn(!singing) },
+                        size = 44.dp,
+                        iconSize = 22.dp,
+                        tint = if (singing) SoundColors.Text else SoundColors.Text.copy(alpha = 0.4f),
+                    )
+                }
                 // Chords and translation go together: the chords over a line, its translation under it.
                 if (lyrics is LyricsState.Ready) TranslateToggle()
+            }
+            if (singing) {
+                // Only while the voice is on its way out (or it failed): then nothing sits over the words.
+                com.villamediana.sound.ui.karaoke.KaraokeStatus(
+                    state = com.villamediana.sound.ui.karaoke.rememberKaraokeState(track),
+                    onRetry = onKaraokeRetry,
+                    modifier = Modifier.padding(start = 24.dp, end = 28.dp).padding(bottom = 6.dp),
+                )
             }
             if (chordsOn) {
                 // Only while they are on the way (or failed): once shown, nothing sits over the words.
@@ -284,7 +305,7 @@ internal fun LyricsScreen(
                         lineGap = 18.dp,
                     )
                     lyrics == LyricsState.Loading -> LyricsLoading(lineHeight = 28.dp, Modifier.padding(horizontal = 28.dp, vertical = 32.dp))
-                    lyrics == LyricsState.None || lyrics == LyricsState.Offline -> NoLyrics(lyrics, streamed, Modifier.padding(horizontal = 28.dp, vertical = 24.dp))
+                    lyrics == LyricsState.None || lyrics == LyricsState.Offline -> NoLyrics(lyrics, Modifier.padding(horizontal = 28.dp, vertical = 24.dp))
                     lyrics is LyricsState.Ready -> LyricsLines(
                         lyrics = lyrics.lyrics,
                         clock = clock,
@@ -303,16 +324,19 @@ internal fun LyricsScreen(
                 SeekBar(clock = clock, durationMs = durationMs, onSeek = onSeek, timeColor = SoundColors.Text.copy(alpha = 0.7f))
                 // With chords shown, the key sits left of the play button and a sheet's capo right of
                 // it: the transport row holds them, as the player's row holds its controls.
-                Box(Modifier.fillMaxWidth().padding(top = if (found != null) 10.dp else 2.dp).heightIn(min = 60.dp)) {
-                    if (found != null) {
+                // The key moves the chords and the song itself. A song left in another key keeps
+                // its key in reach even while its chords are still being looked for.
+                val keyShown = found != null || (chordsOn && shift != 0)
+                Box(Modifier.fillMaxWidth().padding(top = if (keyShown) 10.dp else 2.dp).heightIn(min = 60.dp)) {
+                    if (keyShown) {
                         com.villamediana.sound.ui.chords.ChordKey(
-                            key = found.key,
+                            key = found?.key,
                             shift = shift,
                             onShift = setShift,
                             // The "−" lines up with the time under the bar's start.
                             modifier = Modifier.align(Alignment.TopStart).offset(x = (-11).dp),
                         )
-                        com.villamediana.sound.ui.chords.ChordSheetNote(found.sheet, Modifier.align(Alignment.TopEnd))
+                        com.villamediana.sound.ui.chords.ChordSheetNote(found?.sheet, Modifier.align(Alignment.TopEnd))
                     }
                     MorphPlayPause(playing = playing, onClick = onTogglePlay, size = 60.dp, modifier = Modifier.align(Alignment.Center))
                 }

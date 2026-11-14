@@ -15,8 +15,9 @@ import kotlinx.serialization.json.Json
 import java.io.File
 
 /**
- * How far each song's chords are transposed (semitones, ±11), by song key, kept in [file]: a song
- * sung lower stays lower the next time. Songs back in their own key aren't kept.
+ * How far each song is transposed (semitones, ±11) — its chords and, with them showing, its
+ * audio — by song key, kept in [file]: a song sung lower stays lower the next time. Songs back in
+ * their own key aren't kept.
  */
 class ChordShifts(private val file: File?, private val maxSongs: Int = 500) {
     private val json = Json { ignoreUnknownKeys = true }
@@ -26,6 +27,9 @@ class ChordShifts(private val file: File?, private val maxSongs: Int = 500) {
     private val shifts = MutableStateFlow(
         file?.takeIf { it.isFile }?.let { f -> runCatching { json.decodeFromString(serializer, f.readText()) }.getOrNull() }.orEmpty(),
     )
+
+    /** Every song away from its own key (for whoever has to follow any change). */
+    val all: kotlinx.coroutines.flow.StateFlow<Map<String, Int>> get() = shifts
 
     fun of(key: String): Flow<Int> = shifts.map { it[key] ?: 0 }.distinctUntilChanged()
 

@@ -138,7 +138,7 @@ internal class PlayerDeps(
     /** Download state of every song: the "Baixar" button that stands in for the heart of streamed songs. */
     val downloads: Flow<DownloadLookup> = flowOf(DownloadLookup.Empty),
     val download: (RemoteTrack) -> Unit = {},
-    /** Lyrics of streamed songs (LRCLIB on demand); null = none. */
+    /** Lyrics looked up online for songs without a lyrics file (LRCLIB, then Letras); null = none. */
     val lyrics: OnlineLyricsCache? = null,
     val online: StateFlow<Boolean> = MutableStateFlow(true),
     /** Video ids in Curtidas: the heart of a streamed song. */
@@ -351,6 +351,18 @@ internal fun PlayerHost(
     }
     val lyricsSubject = streamedAs?.takeIf { shown.videoId != null && it.videoId == shown.videoId } ?: shown
     val lyrics by rememberLyrics(LyricsOrigin.choose(lyricsSubject, libraryCopy), online, deps.lyrics)
+    // The song sounds in the key its chords are shown in: only with the lyrics open and the chords on.
+    val transposing = lyricsOpen && state.hasMedia && com.villamediana.sound.ui.chords.rememberChordsEnabled()
+    LaunchedEffect(player, transposing) { player.setTransposing(transposing) }
+    // Karaoke: the song without its voice, also only with the lyrics open (and the microphone on).
+    val singing = lyricsOpen && state.hasMedia && com.villamediana.sound.ui.karaoke.rememberKaraokeOn()
+    LaunchedEffect(player, singing) { player.setSinging(singing) }
+    DisposableEffect(player) {
+        onDispose {
+            player.setTransposing(false)
+            player.setSinging(false)
+        }
+    }
     val output = rememberOutputRoute()
     val feedback = rememberSheetFeedback()
 
@@ -755,8 +767,8 @@ internal fun PlayerHost(
                 onLineSeek = actions.seekLine,
                 onTogglePlay = actions.togglePlay,
                 onClose = { lyricsOpen = false },
-                streamed = stream.streamed,
                 online = online,
+                onKaraokeRetry = { player.setSinging(true) },
             )
         }
     }

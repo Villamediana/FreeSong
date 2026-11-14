@@ -575,6 +575,7 @@ private fun cacheLabel(kind: CacheKind): Int = when (kind) {
     CacheKind.LYRICS -> R.string.settings_cache_lyrics
     CacheKind.HOME -> R.string.settings_cache_home
     CacheKind.CHORDS -> R.string.settings_cache_chords
+    CacheKind.KARAOKE -> R.string.settings_cache_karaoke
 }
 
 private fun cacheIcon(kind: CacheKind): ImageVector = when (kind) {
@@ -584,6 +585,7 @@ private fun cacheIcon(kind: CacheKind): ImageVector = when (kind) {
     CacheKind.LYRICS -> Icons.Rounded.Lyrics
     CacheKind.HOME -> Icons.Rounded.Home
     CacheKind.CHORDS -> com.villamediana.sound.ui.chords.ChordsIcon
+    CacheKind.KARAOKE -> com.villamediana.sound.ui.karaoke.KaraokeIcon
 }
 
 /** The mark, the name and the version. */

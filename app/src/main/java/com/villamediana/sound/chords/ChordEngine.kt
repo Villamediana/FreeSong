@@ -42,11 +42,14 @@ data class ChordSubject(
             val videoId = track.videoId?.takeIf { it.isNotBlank() }
             val path = track.filePath.takeIf { it.isNotBlank() && !it.startsWith("http") && File(it).isFile }
             return when {
-                videoId != null -> ChordSubject("v_" + videoId.filter { it.isLetterOrDigit() || it == '-' || it == '_' }, videoId, path, track.durationMs, track.title, track.artist, track.album, track.lyricsPath)
+                videoId != null -> ChordSubject(keyOfVideo(videoId), videoId, path, track.durationMs, track.title, track.artist, track.album, track.lyricsPath)
                 path != null -> ChordSubject("f_" + sha1("$path|${track.fileSize}"), null, path, track.durationMs, track.title, track.artist, track.album, track.lyricsPath)
                 else -> null
             }
         }
+
+        /** The key of a video's song, streamed or downloaded. */
+        fun keyOfVideo(videoId: String): String = "v_" + videoId.filter { it.isLetterOrDigit() || it == '-' || it == '_' }
 
         private fun sha1(s: String): String =
             MessageDigest.getInstance("SHA-1").digest(s.toByteArray()).joinToString("") { "%02x".format(it) }.take(20)

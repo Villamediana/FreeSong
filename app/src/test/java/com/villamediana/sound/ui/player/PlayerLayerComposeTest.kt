@@ -14,6 +14,7 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -82,6 +83,14 @@ class PlayerLayerComposeTest {
         var nexts = 0
         var skippedTo = -1
         var timer: SleepTimer? = null
+        val transposing = mutableListOf<Boolean>()
+        override fun setTransposing(on: Boolean) {
+            transposing += on
+        }
+        val singing = mutableListOf<Boolean>()
+        override fun setSinging(on: Boolean) {
+            singing += on
+        }
         override fun play(tracks: List<Track>, startIndex: Int, source: PlaySource, shuffle: Boolean) = Unit
         override fun playSmart(seed: SmartSeed) = Unit
         override fun togglePlayPause() {
@@ -474,6 +483,127 @@ class PlayerLayerComposeTest {
         compose.onNodeWithContentDescription("Fechar letra").assertIsDisplayed()
         compose.waitUntil(5_000) { compose.onAllNodesWithText("Una verdad sin fin").fetchSemanticsNodes().isNotEmpty() }
         assertEquals(listOf(LyricsQuery("Té para Tres", "Soda Stereo", "Canción Animal", 140_000)), lyricsAsked.distinct())
+    }
+
+    @Test
+    fun theSongIsTransposedOnlyWithTheLyricsOpenAndTheChordsOn() {
+        val chordsOn = MutableStateFlow(true)
+        val chords = com.villamediana.sound.ui.chords.ChordsDeps(
+            engine = com.villamediana.sound.chords.ChordEngine(
+                scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Main.immediate),
+                store = com.villamediana.sound.chords.ChordStore(java.nio.file.Files.createTempDirectory("chords").toFile()),
+                worker = kotlinx.coroutines.Dispatchers.Main,
+                analyze = { _, _ -> com.villamediana.sound.chords.ChordChart(emptyList()) },
+                io = kotlinx.coroutines.Dispatchers.Main,
+                find = null,
+            ),
+            fingerings = com.villamediana.sound.chords.Fingerings { null },
+            enabled = chordsOn,
+            instrument = MutableStateFlow(com.villamediana.sound.chords.Instrument.VIOLAO),
+            setEnabled = { chordsOn.value = it },
+            setInstrument = {},
+        )
+        val player = FakePlayer(PlaybackState(current = tracks[0], isPlaying = true, durationMs = 180_000, queue = tracks, queueIndex = 0, source = PlaySource(PlaySource.Type.ALBUM, "Disco")))
+        val deps = PlayerDeps(player, { id -> flowOf(tracks.firstOrNull { it.id == id }) }, { _, _ -> })
+        compose.setContent {
+            SoundTheme {
+                val nav = rememberNavController()
+                CompositionLocalProvider(LocalNavigator provides Navigator(nav), com.villamediana.sound.ui.chords.LocalChords provides chords) {
+                    PlayerHost(deps, bottomBarHeight = 64.dp)
+                }
+            }
+        }
+        compose.waitForIdle()
+        // The chords are on, but the lyrics aren't open: the song as recorded.
+        assertEquals(false, player.transposing.last())
+        expand()
+        assertEquals(false, player.transposing.last())
+        compose.onAllNodesWithContentDescription("Letra em tela cheia").onFirst().performClick()
+        compose.waitForIdle()
+        assertEquals(true, player.transposing.last())
+        // The chords button off and on again.
+        compose.onNodeWithContentDescription("Esconder acordes").performClick()
+        compose.waitForIdle()
+        assertEquals(false, player.transposing.last())
+        compose.onNodeWithContentDescription("Mostrar acordes").performClick()
+        compose.waitForIdle()
+        assertEquals(true, player.transposing.last())
+        compose.onNodeWithContentDescription("Fechar letra").performClick()
+        compose.waitForIdle()
+        assertEquals(false, player.transposing.last())
+    }
+
+    @Test
+    fun theVoiceGoesOnlyWithTheLyricsOpenAndTheMicrophoneOn() {
+        val micOn = MutableStateFlow(false)
+        val karaoke = com.villamediana.sound.ui.karaoke.KaraokeDeps(micOn, { micOn.value = it }, { MutableStateFlow(com.villamediana.sound.karaoke.KaraokeState.Idle) })
+        val player = FakePlayer(PlaybackState(current = tracks[0], isPlaying = true, durationMs = 180_000, queue = tracks, queueIndex = 0, source = PlaySource(PlaySource.Type.ALBUM, "Disco")))
+        val deps = PlayerDeps(player, { id -> flowOf(tracks.firstOrNull { it.id == id }) }, { _, _ -> })
+        compose.setContent {
+            SoundTheme {
+                val nav = rememberNavController()
+                CompositionLocalProvider(LocalNavigator provides Navigator(nav), com.villamediana.sound.ui.karaoke.LocalKaraoke provides karaoke) {
+                    PlayerHost(deps, bottomBarHeight = 64.dp)
+                }
+            }
+        }
+        expand()
+        compose.onAllNodesWithContentDescription("Letra em tela cheia").onFirst().performClick()
+        compose.waitForIdle()
+        assertEquals(false, player.singing.last())
+        compose.onNodeWithContentDescription("Karaokê: tirar a voz").performClick()
+        compose.waitForIdle()
+        assertEquals(true, player.singing.last())
+        // The lyrics closed: the song as it is. Open again, the microphone is still on (for this run of the app).
+        compose.onNodeWithContentDescription("Fechar letra").performClick()
+        compose.waitForIdle()
+        assertEquals(false, player.singing.last())
+        compose.onAllNodesWithContentDescription("Letra em tela cheia").onFirst().performClick()
+        compose.waitForIdle()
+        assertEquals(true, player.singing.last())
+        // The next song comes with the lyrics open: it is sung too, nothing turned off in between.
+        val before = player.singing.size
+        player.state.update { it.copy(current = tracks[1], queueIndex = 1, durationMs = 200_000) }
+        compose.waitForIdle()
+        assertEquals(true, player.singing.last())
+        assertTrue(player.singing.drop(before).none { !it })
+        compose.onNodeWithContentDescription("Karaokê: voltar a voz").performClick()
+        compose.waitForIdle()
+        assertEquals(false, player.singing.last())
+    }
+
+    @Test
+    fun withTheLyricsOpenTheNextSongBringsItsOwn() {
+        val first = remote.asTransientTrack()
+        val second = remote.copy(videoId = "lmnopqrstuv", url = "https://music.youtube.com/watch?v=lmnopqrstuv", title = "Cae el Sol", durationMs = 200_000).asTransientTrack()
+        val queue = listOf(first, second)
+        val player = FakePlayer(PlaybackState(current = first, isPlaying = true, durationMs = 140_000, queue = queue, queueIndex = 0, source = PlaySource(PlaySource.Type.SEARCH, "soda")))
+        val deps = PlayerDeps(
+            player = player,
+            trackFlow = { flowOf(null) },
+            setLiked = { _, _ -> },
+            lyrics = OnlineLyricsCache({ q ->
+                lyricsAsked += q
+                if (q.title == "Cae el Sol") Lyrics("[00:01.00]Cae el sol en la ciudad", synced = true) else Lyrics("[00:01.00]Una verdad sin fin", synced = true)
+            }),
+            online = MutableStateFlow(true),
+        )
+        compose.setContent {
+            SoundTheme {
+                val nav = rememberNavController()
+                CompositionLocalProvider(LocalNavigator provides Navigator(nav)) { PlayerHost(deps, bottomBarHeight = 64.dp) }
+            }
+        }
+        expand()
+        compose.onAllNodesWithContentDescription("Letra em tela cheia").onFirst().performClick()
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("Una verdad sin fin").fetchSemanticsNodes().isNotEmpty() }
+
+        // The song ends and the next one starts: the lyrics stay open, on the new song's words.
+        player.state.update { it.copy(current = second, queueIndex = 1, durationMs = 200_000) }
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("Cae el sol en la ciudad").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithContentDescription("Fechar letra").assertIsDisplayed()
+        compose.onAllNodesWithText("Una verdad sin fin").assertCountEquals(0)
+        assertEquals(listOf("Té para Tres", "Cae el Sol"), lyricsAsked.map { it.title }.distinct())
     }
 
     @Test
