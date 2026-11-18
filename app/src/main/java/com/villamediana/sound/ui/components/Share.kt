@@ -9,23 +9,27 @@ import com.villamediana.sound.R
 import com.villamediana.sound.data.db.Track
 import com.villamediana.sound.data.isOnline
 import com.villamediana.sound.data.shareUrl
+import com.villamediana.sound.online.FreeSongLinks
 import com.villamediana.sound.online.RemoteCollection
 import com.villamediana.sound.online.RemoteTrack
 import java.io.File
 
 /** Android share sheet for songs, files and collections. */
 object Share {
-    /** "Título — Artista" + link (YouTube Music). */
+    /**
+     * "Título — Artista" + link. The link is FreeSong's own ([FreeSongLinks]): whoever has the app
+     * opens the song in it, anyone else gets a page with the app and the song on YouTube Music.
+     */
     fun trackLink(context: Context, track: Track) {
         val url = track.shareUrl ?: return
-        text(context, "${track.title} — ${track.artist}\n$url", context.getString(R.string.share_song))
+        text(context, "${track.title} — ${track.artist}\n${FreeSongLinks.of(url)}", context.getString(R.string.share_song))
     }
 
     fun remoteTrack(context: Context, track: RemoteTrack) =
-        text(context, "${track.title} — ${track.artist}\n${track.url}", context.getString(R.string.share_song))
+        text(context, "${track.title} — ${track.artist}\n${FreeSongLinks.of(track.url)}", context.getString(R.string.share_song))
 
     fun collection(context: Context, c: RemoteCollection) =
-        text(context, listOfNotNull(c.title, c.author).joinToString(" — ") + "\n" + c.url, context.getString(R.string.share_song))
+        text(context, listOfNotNull(c.title, c.author).joinToString(" — ") + "\n" + FreeSongLinks.of(c.url), context.getString(R.string.share_song))
 
     /** Sends the audio file itself (WhatsApp, Bluetooth, Drive…). Only for downloaded songs. */
     fun trackFile(context: Context, track: Track) {

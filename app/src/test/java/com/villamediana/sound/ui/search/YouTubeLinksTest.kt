@@ -43,6 +43,13 @@ class YouTubeLinksTest {
     }
 
     @Test
+    fun aLinkFreeSongSharedIsTheYouTubeLinkItStandsFor() {
+        assertEquals("https://music.youtube.com/watch?v=dQw4w9WgXcQ", YouTubeLinks.find("Song — Artist\nhttps://freesong.simplyonegoal.com/m/dQw4w9WgXcQ"))
+        assertEquals("https://music.youtube.com/playlist?list=PLabcdefghij1234567890", YouTubeLinks.find("freesong.simplyonegoal.com/l/PLabcdefghij1234567890"))
+        assertNull(YouTubeLinks.find("https://freesong.simplyonegoal.com/v1/health"))
+    }
+
+    @Test
     fun schemeLessLinksGetHttps() {
         assertEquals("https://youtu.be/$id", YouTubeLinks.find("youtu.be/$id"))
         assertEquals("https://www.youtube.com/watch?v=$id", YouTubeLinks.find("www.youtube.com/watch?v=$id"))

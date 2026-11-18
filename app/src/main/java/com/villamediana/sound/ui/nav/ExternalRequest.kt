@@ -26,7 +26,8 @@ internal sealed interface ExternalRequest {
                 Intent.ACTION_VIEW -> intent.dataString
                 else -> null
             }
-            return text?.takeIf { it.isNotBlank() }?.let(::OpenLink)
+            // A link FreeSong shared (opened from a chat, the browser) is the YouTube link it stands for.
+            return text?.takeIf { it.isNotBlank() }?.let { OpenLink(com.villamediana.sound.online.FreeSongLinks.unwrap(it)) }
         }
     }
 }

@@ -561,6 +561,11 @@ class MediaPlayerConnection(
         moveNow(from, to)
     }
 
+    override fun queueSettled() {
+        if (shared) return
+        withController { c -> c.sendCustomCommand(SessionProtocol.command(SessionProtocol.QUEUE_SETTLED), Bundle.EMPTY) }
+    }
+
     private fun moveNow(from: Int, to: Int) = withController { c ->
         val f = playIndex(from)
         val t = playIndex(to)

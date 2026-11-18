@@ -131,6 +131,10 @@ class PlaybackService : MediaLibraryService() {
     private var connectionLost = false
     private var network: android.net.ConnectivityManager.NetworkCallback? = null
     private var extendedAtCount = -1
+    /** What the listener did to this queue by hand, read as the mood of this listening ([followMood]). */
+    private var mood = com.villamediana.sound.smart.QueueMood()
+    /** The [mood] the app's picks already follow. */
+    private var moodAnswered = 0
     /** Retries of an extension that found nothing (reset once one lands, or a new queue starts). */
     private var extendRetries = 0
     private var saveJob: Job? = null
@@ -153,6 +157,16 @@ class PlaybackService : MediaLibraryService() {
             .setLoadControl(
                 androidx.media3.exoplayer.DefaultLoadControl.Builder()
                     .setBackBuffer(BACK_BUFFER_MS, /* retainBackBufferFromKeyframe = */ true)
+                    // A weak connection (the metro, a crowd on the same antenna) must not be heard:
+                    // while there is signal the player takes the rest of the song and the next ones,
+                    // minutes ahead instead of seconds, and plays from that when the signal goes.
+                    // And once it did run dry, it comes back with enough not to stop again at once.
+                    .setBufferDurationsMs(
+                        MIN_BUFFER_MS,
+                        MAX_BUFFER_MS,
+                        androidx.media3.exoplayer.DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_MS,
+                        BUFFER_AFTER_STALL_MS,
+                    )
                     .setTargetBufferBytes(TARGET_BUFFER_BYTES)
                     .setPrioritizeTimeOverSizeThresholds(true)
                     .build(),
@@ -520,6 +534,9 @@ class PlaybackService : MediaLibraryService() {
         extendJob?.cancel()
         source = plan.source
         smart = plan.smart
+        // Another queue, another mood.
+        mood = com.villamediana.sound.smart.QueueMood()
+        moodAnswered = 0
         extendedAtCount = -1
         extendRetries = 0
         consecutiveErrors = 0
@@ -671,10 +688,14 @@ class PlaybackService : MediaLibraryService() {
             // every time), in the listener's taste.
             val session = runCatching { com.villamediana.sound.discover.SongRadio.sessionOf(library) }
                 .getOrDefault(com.villamediana.sound.smart.Session())
-            val seeds = QueueContinuation.seeds(list, skipped = session.skipped, anchor = QueueContinuation.anchor(src, list))
-            val radio = runCatching {
-                graph.songRadio.songs(seeds, list.mapNotNullTo(HashSet()) { it.videoId }, QueueContinuation.SIZE + 10, Random(seed), session)
-            }.getOrDefault(emptyList())
+            // And in the mood of this queue: what the listener pulled up in it or took out by hand.
+            val feeling = mood.fresh(System.currentTimeMillis())
+            val seeds = QueueContinuation.seeds(list, skipped = session.skipped + feeling.unwanted, anchor = QueueContinuation.anchor(src, list))
+            val tuned = runCatching {
+                graph.songRadio.inMood(seeds, feeling, list.mapNotNullTo(HashSet()) { it.videoId }, QueueContinuation.SIZE + 10, Random(seed), session)
+            }.getOrNull()
+            val radio = tuned?.songs.orEmpty()
+            val lean = tuned?.lean ?: com.villamediana.sound.smart.MoodLean(feeling)
             val radios = listOf(radio)
             val lib = libraryTracks()
             val taste = taste()
@@ -682,7 +703,7 @@ class PlaybackService : MediaLibraryService() {
             val more = withContext(Dispatchers.Default) {
                 // Your songs come in when they fit the end of the list; with nothing new to add
                 // (offline), whatever of yours is closest keeps it going.
-                val own = SmartPlans.extension(src, list, lib, taste, seed, fill = radio.isEmpty())
+                val own = lean.arrange(SmartPlans.extension(src, list, lib, taste, seed, fill = radio.isEmpty())) { it }
                 QueueContinuation.blend(
                     own = own,
                     radios = radios,
@@ -705,6 +726,127 @@ class PlaybackService : MediaLibraryService() {
             extendRetries = 0
             insert(more, next = false, keepPlaying = true, suggested = true)
             if (!smart) {
+                smart = true
+                publishExtras()
+            }
+            prefetchUpcoming()
+            scheduleSave()
+        }
+    }
+
+    /** The song at play position [playIndex], when it comes after the one playing. */
+    private fun upcomingAt(playIndex: Int): Pair<Track, MediaItem>? {
+        val order = playOrder()
+        if (playIndex <= order.playIndexOf(player.currentMediaItemIndex)) return null
+        val t = order.timelineIndexOf(playIndex)
+        if (t !in 0 until player.mediaItemCount) return null
+        val item = player.getMediaItemAt(t)
+        val track = MediaItems.trackId(item)?.let(tracksById::get) ?: MediaItems.onlineTrack(item) ?: return null
+        return track to item
+    }
+
+    /**
+     * The queue follows what the listener just did to it by hand ([mood]): taking songs out of
+     * what comes next says "not now", pulling one up says "more of this". Only the app's own picks
+     * answer — the songs it added to keep the queue going and, in a radio, the radio's: the ones
+     * the mood rules out leave, the ones like what was pulled up come first, the ones like what was
+     * taken out go last, and new songs in the mood come in (one for each pick that left, a few for a
+     * song pulled up). A song the listener chose or placed stays exactly where it is. Asked when
+     * the queue's sheet closes and at the next song; the same guards as [maybeExtend].
+     */
+    private fun followMood() {
+        mood = mood.fresh(System.currentTimeMillis())
+        val feeling = mood
+        val answered = moodAnswered
+        if (feeling.rev == answered) return
+        if (feeling.isEmpty) {
+            moodAnswered = feeling.rev
+            return
+        }
+        // Busy with the queue right now: it comes back at the next song.
+        if (suppressShuffleReorder || shuffleJob?.isActive == true || extendJob?.isActive == true) return
+        val count = player.mediaItemCount
+        if (count == 0 || player.repeatMode != Player.REPEAT_MODE_OFF) return
+        if (source?.type == PlaySource.Type.JAM && graph.social.jam.active) return
+        if (!settings.autoplaySimilar && !smart) return
+        val current = player.currentMediaItemIndex
+        if (current == C.INDEX_UNSET) return
+        val shuffled = player.shuffleModeEnabled
+        val order = playOrder()
+        val at = order.playIndexOf(current)
+        if (at < 0) return
+        val items = (0 until order.size).map { player.getMediaItemAt(order.timelineIndexOf(it)) }
+        val keys = mediaKeys()
+        val src = source
+        val seed = Random.nextLong()
+        moodAnswered = feeling.rev
+        extendJob = scope.launch {
+            val local = tracksFor(items.mapNotNull(MediaItems::trackId).distinct()).associateBy { it.id }
+            val tracks = items.map { item -> MediaItems.trackId(item)?.let(local::get) ?: MediaItems.onlineTrack(item) }
+            val list = tracks.filterNotNull()
+            // A song the library no longer has is somewhere ahead: the places can't be trusted, the queue stays.
+            if (tracks.drop(at + 1).any { it == null }) return@launch
+            val upcoming = (at + 1 until items.size).map { i ->
+                val t = tracks[i]!!
+                MoodQueue.Entry(items[i], t, MoodQueue.isPick(t, MediaItems.isSuggested(items[i]), src, feeling))
+            }
+            // A list of the listener's own, nothing of the app's in it: the mood waits for the list to end.
+            if (upcoming.none { it.pick } && feeling.picksRemovedSince(answered) == 0) return@launch
+            val session = runCatching { com.villamediana.sound.discover.SongRadio.sessionOf(library) }
+                .getOrDefault(com.villamediana.sound.smart.Session())
+            val heard = tracks.take(at + 1).filterNotNull()
+            val seeds = QueueContinuation.seeds(heard, skipped = session.skipped + feeling.unwanted, anchor = QueueContinuation.anchor(src, list))
+            val tuned = runCatching {
+                graph.songRadio.inMood(seeds, feeling, list.mapNotNullTo(HashSet()) { it.videoId }, MoodQueue.MAX_NEW + 6, Random(seed), session)
+            }.getOrNull()
+            val lean = tuned?.lean ?: com.villamediana.sound.smart.MoodLean(feeling)
+            val radio = tuned?.songs.orEmpty()
+            val want = MoodQueue.wanted(feeling, answered, ruledOut = upcoming.count { it.pick && lean.rulesOut(it.track) })
+            val lib = libraryTracks()
+            val taste = taste()
+            val byVideo = localByVideoId(radio.map { it.videoId })
+            val more = if (want <= 0) emptyList() else withContext(Dispatchers.Default) {
+                val own = lean.arrange(SmartPlans.extension(src, list, lib, taste, seed, fill = false)) { it }
+                QueueContinuation.blend(
+                    own = own,
+                    radios = listOf(radio),
+                    ownShare = QueueContinuation.ownShare(list, src),
+                    queuedIds = list.mapTo(HashSet()) { it.id },
+                    queuedVideoIds = list.mapNotNullTo(HashSet()) { it.videoId },
+                    byVideoId = byVideo,
+                    limit = want,
+                )
+            }
+            // (The queue's items are made here, on the player's thread, like every other one.)
+            val added = more.map { MoodQueue.Entry(mediaItemOf(it), it, true) }
+            // Shuffled, the places belong to the shuffle: the new songs only come in at the end.
+            val after = if (shuffled) upcoming + added else MoodQueue.remake(upcoming, added, lean)
+            if (mediaKeys() != keys || player.currentMediaItemIndex != current || player.shuffleModeEnabled != shuffled) {
+                // The queue changed meanwhile: asked again at the next song, for the queue as it is then.
+                moodAnswered = answered
+                return@launch
+            }
+            val from = MoodQueue.firstChange(upcoming, after)
+            if (from < 0) return@launch
+            // The very next song would change with this one about to end (the crossfade may be
+            // getting it ready): at the next song, then.
+            val left = player.duration.takeIf { it != C.TIME_UNSET }?.let { it - player.currentPosition }
+            if (from == 0 && left != null && left < MOOD_NOT_BEFORE_END_MS) {
+                moodAnswered = answered
+                return@launch
+            }
+            // The app's mark goes with the place: what sat under "sugestões" stays there, a radio's own songs stay unmarked.
+            val split = upcoming.indexOfFirst { MediaItems.isSuggested(it.value) }.let { if (it < 0) upcoming.size else it }
+            val fresh = after.drop(from).mapIndexed { i, e -> if (e.pick) MediaItems.marked(e.value, from + i >= split) else e.value }
+            if (shuffled) {
+                insert(after.drop(upcoming.size).map { it.track }, next = false, keepPlaying = true, suggested = true)
+            } else {
+                // Unshuffled the timeline is the play order: everything from the first place that changes is put again.
+                val start = at + 1 + from
+                if (start >= count) player.addMediaItems(count, fresh) else player.replaceMediaItems(start, count, fresh)
+                extendedAtCount = -1
+            }
+            if (!smart && after.size > upcoming.size) {
                 smart = true
                 publishExtras()
             }
@@ -980,6 +1122,8 @@ class PlaybackService : MediaLibraryService() {
             }
             updateButtons()
             maybeExtend()
+            // Edits to the queue not answered yet (its sheet still open, or the answer came too soon).
+            if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED) followMood()
             prefetchUpcoming()
             scheduleSave()
         }
@@ -1233,7 +1377,10 @@ class PlaybackService : MediaLibraryService() {
                     val next = args.getString(SessionProtocol.ARG_WHERE) == SessionProtocol.WHERE_NEXT
                     val online = SessionProtocol.getOnline(args)
                     return serialized {
-                        insert(resolveIds(ids, online).filterNotNull(), next)
+                        val added = resolveIds(ids, online).filterNotNull()
+                        // Put there by hand: theirs, whatever the queue is.
+                        added.forEach { mood = mood.placed(it) }
+                        insert(added, next)
                         scheduleSave()
                     }
                 }
@@ -1241,6 +1388,11 @@ class PlaybackService : MediaLibraryService() {
                     val from = args.getInt(SessionProtocol.ARG_FROM, -1)
                     val to = args.getInt(SessionProtocol.ARG_TO, -1)
                     return serialized {
+                        // Pulled up to play sooner = more of this; pushed down = not that much.
+                        if (to >= 0) upcomingAt(from)?.let { (track, _) ->
+                            val now = System.currentTimeMillis()
+                            mood = if (to < from && upcomingAt(to) != null) mood.fresh(now).raised(track, now) else mood.lowered(track)
+                        }
                         move(from, to)
                         scheduleSave()
                     }
@@ -1248,9 +1400,18 @@ class PlaybackService : MediaLibraryService() {
                 SessionProtocol.QUEUE_REMOVE -> {
                     val index = args.getInt(SessionProtocol.ARG_INDEX, -1)
                     return serialized {
+                        // Taken out of what comes next = not now.
+                        upcomingAt(index)?.let { (track, item) ->
+                            val now = System.currentTimeMillis()
+                            val pick = MoodQueue.isPick(track, MediaItems.isSuggested(item), source, mood)
+                            mood = mood.fresh(now).removed(track, pick, now)
+                        }
                         removeAt(index)
                         scheduleSave()
                     }
+                }
+                SessionProtocol.QUEUE_SETTLED -> {
+                    return serialized { followMood() }
                 }
                 SessionProtocol.SET_SHUFFLE -> {
                     val enabled = args.getBoolean(SessionProtocol.ARG_ENABLED)
@@ -1469,7 +1630,15 @@ class PlaybackService : MediaLibraryService() {
         /** A long song whole (audio is ~1–2 MB a minute). */
         const val BACK_BUFFER_MS = 20 * 60_000
         const val TARGET_BUFFER_BYTES = 48 * 1024 * 1024
+        /** Loading starts again when less than this is ready ahead… */
+        const val MIN_BUFFER_MS = 2 * 60_000
+        /** …and goes on until this much is: the song playing and, after it, the next ones. */
+        const val MAX_BUFFER_MS = 10 * 60_000
+        /** What must be ready to play again after the music stopped for lack of it. */
+        const val BUFFER_AFTER_STALL_MS = 6_000
         const val TASTE_TTL_MS = 5 * 60_000L
+        /** With less than this left of the song, the next one is not changed under it ([followMood]). */
+        const val MOOD_NOT_BEFORE_END_MS = 25_000L
         const val SAVE_DEBOUNCE_MS = 1_500L
         const val POSITION_SAVE_MS = 15_000L
         const val MAX_SKIPS_ON_ERROR = 5

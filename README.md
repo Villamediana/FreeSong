@@ -52,6 +52,10 @@ quando ela existe ou são reconhecidos no próprio aparelho quando não existe.
   desligar nos Ajustes.
 - **Crossfade** entre as faixas e **equalizador**.
 - **Reconhece a música que está tocando** no ambiente, pelo microfone.
+- **Compartilha com link próprio**: quem tem o FreeSong abre a música direto no app; quem não tem
+  cai numa página com a música no YouTube Music e o app pra baixar.
+- **A fila aprende o momento**: tirar músicas do "a seguir" e puxar outras pra cima diz ao app como
+  devem ser as próximas daquela fila (só dela: não muda o gosto guardado).
 - **Importa playlists e álbuns do Spotify** a partir do link público (ou compartilhando direto
   do app do Spotify).
 - **Amigos**: cada pessoa ganha um perfil sozinha (sem e-mail nem senha), com foto e nome
@@ -102,7 +106,7 @@ O app só acessa a internet para o que precisa, sempre por HTTPS:
 | Traduzir uma letra | Google Tradutor |
 | Ler uma playlist pública que você importou | Spotify |
 | Completar capa e dados do álbum | iTunes Search |
-| Perfil, amigos, músicas trocadas e jam | Servidor do FreeSong (`freesong.simplyonegoal.com`, código em [`relay/`](relay/)) |
+| Perfil, amigos, músicas trocadas e jam; a página dos links compartilhados | Servidor do FreeSong (`freesong.simplyonegoal.com`, código em [`relay/`](relay/)) |
 | Procurar e baixar versão nova do app | GitHub (Releases deste repositório) |
 
 ## Para desenvolvedores

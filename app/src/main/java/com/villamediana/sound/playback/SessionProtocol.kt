@@ -27,6 +27,8 @@ internal object SessionProtocol {
     const val QUEUE_MOVE = "sound.QUEUE_MOVE"
     /** Remove play position [ARG_INDEX]. */
     const val QUEUE_REMOVE = "sound.QUEUE_REMOVE"
+    /** The listener is done editing the queue (its sheet closed): the app's own picks follow what the edits showed. */
+    const val QUEUE_SETTLED = "sound.QUEUE_SETTLED"
     /** Sleep timer: [ARG_SLEEP_KIND], [ARG_SLEEP_ENDS_AT], [ARG_SLEEP_TOTAL]. */
     const val SLEEP = "sound.SLEEP"
     /** Loads the last saved queue, paused, if the player is empty. */
@@ -55,7 +57,7 @@ internal object SessionProtocol {
      */
     const val TRANSPOSE = "sound.TRANSPOSE"
 
-    val appCommands = listOf(PLAY, QUEUE_ADD, QUEUE_MOVE, QUEUE_REMOVE, SLEEP, RESTORE, SET_SHUFFLE, PREFETCH, SEEK_BLEND, TRANSPOSE)
+    val appCommands = listOf(PLAY, QUEUE_ADD, QUEUE_MOVE, QUEUE_REMOVE, QUEUE_SETTLED, SLEEP, RESTORE, SET_SHUFFLE, PREFETCH, SEEK_BLEND, TRANSPOSE)
 
     fun command(action: String) = SessionCommand(action, Bundle.EMPTY)
 

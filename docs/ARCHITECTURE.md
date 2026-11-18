@@ -801,3 +801,81 @@ Miguel saiu da jam: quem criou viu na hora, mas o celular dele seguiu "na jam" p
   depois de cada "Limpar"/"Limpar tudo" (`remeasure` + `collectLatest`).
 - `AppCachesTest` enche cada cache de verdade (SimpleCache, disco do Coil, arquivos) e confere que
   limpar zera e que o total cai exatamente o que saiu.
+
+## Links próprios, fila que segue o momento e música que não corta (1.34.0 + relay 1.7.0, 2026-11-18)
+
+Três pedidos do Miguel (em espanhol).
+
+### O link compartilhado abre no app
+
+Compartilhar mandava o link do YouTube Music, que no celular de quem recebe abre o YouTube (desde o
+Android 12 um link de site só abre num app que o site reconhece como seu). Agora o app compartilha um
+link **do próprio FreeSong** (`online/FreeSongLinks.kt`, puro): `https://freesong.simplyonegoal.com/m/<vídeo>`
+(`/v/` vídeo fora do catálogo, `/l/` playlist, `/a/` álbum). Cada um é exatamente um link do YouTube —
+ida (`of`) e volta (`unwrap`), sem consultar nada.
+
+- **App**: `intent-filter` com `autoVerify` pro host e os quatro caminhos (separado do filtro do
+  YouTube, que não é verificável). `ExternalRequest.of` e `ui/search/YouTubeLinks.find` desfazem o link
+  (`unwrap`) e daí em diante é o caminho de sempre (cartão do link na Busca, tocar/baixar). `Share`
+  usa `FreeSongLinks.of` em música, resultado da busca e coleção (playlist do Spotify e artista seguem
+  com o link que têm).
+- **Servidor** (relay 1.7.0, `relay/src/links.js`): `/.well-known/assetlinks.json` (pacote + SHA-256 do
+  certificado de release, o mesmo do `tools/release.sh`) e a página dos links pra quem não tem o app.
+  **O relay novo tem que estar no ar antes de publicar o app** (o Android confere na instalação).
+- O debug (`.debug`) não é verificado (outra assinatura): nele o link abre a página.
+- Testes: `FreeSongLinksTest`, `ExternalRequestTest`, `YouTubeLinksTest` (ui/search), `relay.test.js`.
+- Pra tirar: o `intent-filter`, `FreeSongLinks` e os três usos; o relay pode seguir respondendo.
+
+### A fila segue o que a pessoa fez nela
+
+"Abri a fila, tirei algumas e subi outras… dá pra aprender o mood dali, pras próximas daquela fila;
+talvez não permanente." Sem tela nova, sem botão.
+
+- **`smart/QueueMood`** (puro): o que foi feito à mão na fila. Tirar do "a seguir" = "agora não"
+  (`removed`); puxar pra tocar antes = "mais disso" (`raised`); empurrar pra baixo desfaz o "mais disso".
+  Vale pra **aquela fila** (fila nova = humor novo, `playPlan`) e por 3 h (`LASTS_MS`). **Nada disso entra
+  no gosto guardado** (`TasteProfile`/DNA): é só do momento.
+  - Artista: +0,6 por música puxada, −0,5 por tirada; **tirado 2× sem nunca ser puxado = fora por
+    enquanto** (`out`, a mesma régua do "pulado 2×" da sessão). Gênero: mais fraco, e gênero que foi
+    puxado e tirado não diz nada (a fila toda pode ser dele).
+- **`smart/MoodLean`**: pra qualquer música, de −1 a 1. Além de artista/gênero, a **vizinhança**: as
+  rádios das músicas puxadas (`toward`) e das tiradas (`away`, até 2 de cada, `SongRadio.MOOD_SEEDS`) —
+  música perto do topo da rádio de uma puxada sobe, da de uma tirada desce; o que as duas conhecem
+  segue a puxada. `arrange` ordena em degraus (0,25): quanto mais parecida com o que subiu, antes.
+- **Rádio no humor** (`SongRadio.inMood`, `RadioMix.rank(mood = …)`): as puxadas viram sementes logo
+  depois da que toca; o humor multiplica a proximidade (`MOOD` 0,6 — como o gosto, só que mais: é
+  sobre agora); tirada à mão e artista "fora" não entram. Sem humor é a rádio de sempre.
+- **Quando age** (`PlaybackService.followMood`): ao **fechar a folha da fila** (`PlayerConnection.
+  queueSettled` → comando `QUEUE_SETTLED`) e na próxima troca de música — nunca enquanto a pessoa
+  mexe. Mesmas travas do `maybeExtend` (repetir desligado, fora de jam, "tocar parecidas" ou fila smart).
+- **Em quem mexe** (`playback/MoodQueue`, puro): **só nas escolhas do app** — as sugeridas (marcadas) e,
+  numa rádio, as músicas da rádio. Música que a pessoa escolheu, adicionou ou moveu (`placed`) fica
+  exatamente onde está. Entre as escolhas do app: as de artista "fora" saem, as parecidas com o que
+  subiu vêm antes, as parecidas com o que saiu vão pro fim, e entram novas no humor — uma pra cada
+  escolha do app tirada ou descartada, mais 3 se algo foi puxado (até 10). Lista só da pessoa (playlist,
+  álbum) não muda: o humor espera a continuação normal, que também passa a segui-lo (`maybeExtend`).
+- Aplicação: sem aleatório, `replaceMediaItems` a partir da primeira posição que muda (a marca de
+  sugerida vai com o lugar); com aleatório, as novas só entram no fim. A menos de 25 s do fim, se a
+  próxima fosse mudar, fica pra troca de música (o crossfade pode estar preparando).
+- Testes: `QueueMoodTest` (inclui a rádio indo pro lado das puxadas), `MoodQueueTest`,
+  `PlaybackServiceTest` (as escolhas do app seguem; lista da pessoa não muda).
+- Ficou de fora: o "som" medido (calma↔intensa) no humor — quase nenhuma candidata nova foi medida
+  ainda; e reordenar enquanto a folha está aberta (decidido não fazer: pularia sob o dedo).
+- Pra tirar: `QueueMood.kt`, `MoodQueue.kt`, `followMood`/`upcomingAt` e o registro nos comandos
+  `QUEUE_*` do serviço, o parâmetro `mood` do `RadioMix.rank` e `queueSettled`.
+
+### Música cortando (fone Bluetooth, muita gente, metrô)
+
+Duas causas possíveis, e o app só manda numa. (1) **Rádio Bluetooth** congestionado (muita gente em
+2,4 GHz, celular no bolso com o corpo no meio): é entre o celular e o fone, nenhum app alcança
+(codec e potência são do sistema). (2) **Rede fraca**: o player guardava só 50 s à frente; em rede que
+vai e vem (antena cheia, túnel) a música parava pra carregar a cada trecho. Isso mudou:
+
+- `DefaultLoadControl.setBufferDurationsMs(MIN_BUFFER_MS 2 min, MAX_BUFFER_MS 10 min, padrão,
+  BUFFER_AFTER_STALL_MS 6 s)`: com sinal, o player pega o resto da música e as próximas (até 10 min à
+  frente, ~12 MB na melhor qualidade) e toca disso quando o sinal some; e depois de secar volta com
+  6 s guardados, não com o mínimo (era o "toca 2 s, para, toca 2 s").
+- Custo: ao pular muitas músicas no 4G baixa-se mais do que se ouve (o que foi baixado fica no
+  `AudioCache`). Ajuste fino = as três constantes no `PlaybackService`.
+- Música baixada não depende de rede: se cortar com ela, é o Bluetooth.
+

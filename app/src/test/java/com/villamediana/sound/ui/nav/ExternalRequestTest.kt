@@ -28,6 +28,15 @@ class ExternalRequestTest {
     }
 
     @Test
+    fun aLinkFreeSongSharedOpensAsTheSongItStandsFor() {
+        // Tapped in a chat on a phone with FreeSong (a verified App Link), or shared to it as text.
+        val view = Intent(Intent.ACTION_VIEW, Uri.parse("https://freesong.simplyonegoal.com/m/dQw4w9WgXcQ"))
+        assertEquals(ExternalRequest.OpenLink("https://music.youtube.com/watch?v=dQw4w9WgXcQ"), ExternalRequest.of(view))
+        val text = share("Song — Artist\nhttps://freesong.simplyonegoal.com/l/PLabcdefghij1234567890")
+        assertEquals(ExternalRequest.OpenLink("Song — Artist\nhttps://music.youtube.com/playlist?list=PLabcdefghij1234567890"), ExternalRequest.of(text))
+    }
+
+    @Test
     fun theLauncherAndEmptySharesAskNothing() {
         assertNull(ExternalRequest.of(null))
         assertNull(ExternalRequest.of(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)))

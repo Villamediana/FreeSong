@@ -46,6 +46,8 @@ data class Session(
  * nudges it (a favourite far from the seed never passes a song right next to it), and so does a
  * little chance ([rnd]), so the same song never starts the same radio twice. A song from a radio of
  * a radio by an artist the seeds' own radios don't have counts less (it may be another style).
+ * The queue's mood ([MoodLean], what the listener pulled up or took out of it by hand) moves the
+ * songs the same way taste does, only more: it is about right now.
  * Songs the listener already knows take at most [KNOWN_SHARE] of it while there are new ones. Never
  * a song queued or played just now, nor one skipped now or again and again; an artist skipped twice
  * now waits. Pure.
@@ -67,6 +69,8 @@ object RadioMix {
     private const val SKIPPED = 1.6
     /** How far a song whose own sound fits this moment (more or less than its artist's) moves. */
     private const val SOUND = 0.6
+    /** How far the mood of the queue (what was pulled up in it, what was taken out) moves a song: a share of how close it is. */
+    private const val MOOD = 0.6
     /** At most this share of a radio is songs the listener already knows, while there are new ones. */
     const val KNOWN_SHARE = 1.0 / 3.0
 
@@ -79,6 +83,7 @@ object RadioMix {
         count: Int,
         rnd: Random,
         perArtist: Int = 3,
+        mood: MoodLean? = null,
     ): List<RemoteTrack> {
         if (count <= 0) return emptyList()
         val near = HashMap<String, Double>()
@@ -87,7 +92,7 @@ object RadioMix {
         fun add(list: List<RemoteTrack>, weight: Double, head: Double) {
             val distinct = list.distinctBy { it.videoId }
             distinct.forEachIndexed { pos, t ->
-                if (t.videoId.isBlank() || !fits(t, profile, session, exclude)) return@forEachIndexed
+                if (t.videoId.isBlank() || !fits(t, profile, session, exclude) || mood?.rulesOut(t.videoId, t.artist) == true) return@forEachIndexed
                 found.putIfAbsent(t.videoId, t)
                 near.merge(t.videoId, weight * (head - pos.toDouble() / distinct.size), Double::plus)
                 radiosOf.merge(t.videoId, 1, Int::plus)
@@ -109,7 +114,9 @@ object RadioMix {
             // Skipped in this moment (for a moment's profile): further down now, not out.
             val skips = SKIPPED * (1.0 - (profile?.songFactor(t.videoId) ?: 1.0))
             val sound = SOUND * ln(profile?.soundFit(t.videoId) ?: 1.0)
-            t.videoId to close * taste + sound - tired - skips + rnd.nextDouble() * CHANCE
+            // The queue's mood, from what the listener did to it by hand: more of what was pulled up, less of what was taken out.
+            val lean = mood?.let { 1.0 + MOOD * it.of(t.videoId, t.artist) } ?: 1.0
+            t.videoId to close * taste * lean + sound - tired - skips + rnd.nextDouble() * CHANCE
         }
         val ranked = found.values.sortedWith(compareByDescending<RemoteTrack> { total.getValue(it.videoId) }.thenBy { it.videoId })
         val known = profile?.known.orEmpty()
