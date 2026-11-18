@@ -770,7 +770,11 @@ internal fun PlayerHost(
             onSkipTo = { player.skipTo(it) },
             onMove = { from, to -> player.move(from, to) },
             onRemove = { player.removeAt(it) },
-            onDismiss = { queueOpen = false },
+            onDismiss = {
+                queueOpen = false
+                // What was taken out or pulled up tells the app what the next songs should be like.
+                player.queueSettled()
+            },
         )
     }
     if (outputOpen && state.hasMedia) {

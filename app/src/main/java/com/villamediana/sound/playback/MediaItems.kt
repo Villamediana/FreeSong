@@ -29,6 +29,14 @@ internal object MediaItems {
         return item.buildUpon().setMediaMetadata(item.mediaMetadata.buildUpon().setExtras(extras).build()).build()
     }
 
+    /** [item] with the app's mark on or off. */
+    fun marked(item: MediaItem, suggested: Boolean): MediaItem {
+        if (isSuggested(item) == suggested) return item
+        if (suggested) return suggested(item)
+        val extras = Bundle(item.mediaMetadata.extras ?: Bundle()).apply { remove(EXTRA_SUGGESTED) }
+        return item.buildUpon().setMediaMetadata(item.mediaMetadata.buildUpon().setExtras(extras).build()).build()
+    }
+
     /** [replacement] (another source or fresh metadata for the same song) keeps [old]'s mark. */
     fun keepingMark(replacement: MediaItem, old: MediaItem): MediaItem = if (isSuggested(old)) suggested(replacement) else replacement
 

@@ -593,6 +593,83 @@ class PlaybackServiceTest {
         assertEquals(suggested, suggestedIds())
     }
 
+    // ------------------------------------------------------------------ the queue follows what was done to it
+
+    private fun insertSongs(artist: String, genre: String, count: Int): List<Track> = runBlocking {
+        val audio = wav(20)
+        (1..count).map { i ->
+            val f = File(tmp.root, "$artist-$i.wav").apply { writeBytes(audio) }
+            val t = Track(title = "$artist $i", artist = artist, genre = genre, filePath = f.absolutePath, durationMs = 20_000)
+            t.copy(id = graph.db.tracks().insert(t))
+        }
+    }
+
+    private fun remove(id: Long) = send(SessionProtocol.QUEUE_REMOVE, Bundle().apply { putInt(SessionProtocol.ARG_INDEX, playOrderIds().indexOf(id)) })
+
+    private fun move(id: Long, to: Int) = send(
+        SessionProtocol.QUEUE_MOVE,
+        Bundle().apply {
+            putInt(SessionProtocol.ARG_FROM, playOrderIds().indexOf(id))
+            putInt(SessionProtocol.ARG_TO, to)
+        },
+    )
+
+    @Test fun whatWasTakenOutAndPulledUpShapesTheAppsPicksAndNothingElse() {
+        val loud = insertSongs("Loud", "Rock", 4).map { it.id }
+        val quiet = insertSongs("Quiet", "MPB", 3).map { it.id }
+        start()
+        val mine = tracks.take(2).map { it.id }
+        play(mine, 0)
+        // Paused: the test's clock runs fast, and this is about the queue, not about songs ending.
+        player.pause()
+        // The app keeps the queue going with the rest of the library, marked as its own picks.
+        idleUntil { player.mediaItemCount == tracks.size + loud.size + quiet.size }
+        assertTrue(suggestedIds().containsAll(loud + quiet))
+
+        // Two songs of one artist taken out of what comes next, one of another pulled up to play next.
+        remove(loud[0])
+        remove(loud[1])
+        move(quiet[1], 1)
+        val before = playOrderIds()
+        assertEquals(listOf(mine[0], quiet[1], mine[1]), before.take(3))
+        assertTrue("nothing moves by itself while the queue is being edited", before.containsAll(listOf(loud[2], loud[3])))
+
+        // The queue's sheet closes: the picks follow.
+        send(SessionProtocol.QUEUE_SETTLED)
+        idleUntil { playOrderIds().none { it in loud } }
+        val after = playOrderIds()
+        // The song playing, the one pulled up and the listener's own are exactly where they were.
+        assertEquals(listOf(mine[0], quiet[1], mine[1]), after.take(3))
+        assertEquals(mine[0], currentId())
+        // More of what was pulled up comes first among the picks; the artist taken out twice is gone.
+        assertEquals(setOf(quiet[0], quiet[2]), after.drop(3).take(2).toSet())
+        assertEquals(tracks.drop(2).map { it.id }.toSet(), after.drop(5).toSet())
+        // What sat under "sugestões" still does, and the song pulled up keeps its place whatever it was.
+        assertEquals(after.drop(3), suggestedIds().filter { it != quiet[1] })
+
+        // Settled again with nothing new: nothing changes.
+        send(SessionProtocol.QUEUE_SETTLED)
+        idle(300)
+        assertEquals(after, playOrderIds())
+    }
+
+    @Test fun aListOfTheListenersOwnIsNeverTouchedByTheMood() {
+        autoplay(false)
+        val loud = insertSongs("Loud", "Rock", 3).map { it.id }
+        start()
+        val list = tracks.map { it.id } + loud
+        play(list, 0)
+        player.pause()
+        remove(loud[0])
+        remove(loud[1])
+        move(tracks[4].id, 1)
+        val before = playOrderIds()
+        send(SessionProtocol.QUEUE_SETTLED)
+        idle(500)
+        assertEquals(before, playOrderIds())
+        assertTrue(loud[2] in playOrderIds())
+    }
+
     // ------------------------------------------------------------------ the song playing stays put
 
     /** "Tocar a seguir" / "Adicionar à fila" never move the song playing (no seek, no other song). */

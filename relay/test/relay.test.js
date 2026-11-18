@@ -102,6 +102,55 @@ test('saúde', async () => {
   assert.equal(r.json.ok, true);
 });
 
+test('links compartilhados: o Android confere o domínio e quem não tem o app ganha uma página', async () => {
+  // O Android (e o Google, por ele) busca este arquivo pra abrir os links direto no app.
+  const links = await api('GET', '/.well-known/assetlinks.json');
+  assert.equal(links.status, 200);
+  assert.equal(links.res.headers.get('content-type'), 'application/json');
+  assert.equal(links.json[0].target.package_name, 'com.villamediana.sound');
+  assert.deepEqual(links.json[0].relation, ['delegate_permission/common.handle_all_urls']);
+  assert.match(links.json[0].target.sha256_cert_fingerprints[0], /^([0-9A-F]{2}:){31}[0-9A-F]{2}$/);
+
+  const page = async (path, headers = {}) => {
+    const res = await fetch(base + path, { headers });
+    return { status: res.status, type: res.headers.get('content-type') ?? '', csp: res.headers.get('content-security-policy'), html: await res.text() };
+  };
+  // No Android: abrir no app (pelo pacote, com a página de download de reserva) e a música no YouTube Music.
+  const song = await page('/m/dQw4w9WgXcQ', { 'user-agent': 'Mozilla/5.0 (Linux; Android 15) Chrome/140', 'accept-language': 'es-VE,es;q=0.9' });
+  assert.equal(song.status, 200);
+  assert.match(song.type, /^text\/html/);
+  assert.match(song.html, /intent:\/\/freesong\.simplyonegoal\.com\/m\/dQw4w9WgXcQ#Intent;scheme=https;package=com\.villamediana\.sound;/);
+  assert.match(song.html, /https:\/\/music\.youtube\.com\/watch\?v=dQw4w9WgXcQ/);
+  assert.match(song.html, /https:\/\/i\.ytimg\.com\/vi\/dQw4w9WgXcQ\/hqdefault\.jpg/);
+  assert.match(song.html, /Abrir en FreeSong/);
+  // Sem script nenhum, e a política da página só deixa a capa e o próprio estilo.
+  assert.doesNotMatch(song.html, /<script/i);
+  assert.match(song.csp, /default-src 'none'/);
+  assert.doesNotMatch(song.csp, /script-src/);
+  // Fora do Android não há app pra abrir: só a música e onde achar o FreeSong.
+  const desktop = await page('/m/dQw4w9WgXcQ', { 'user-agent': 'Mozilla/5.0 (Macintosh)' });
+  assert.doesNotMatch(desktop.html, /intent:\/\//);
+  assert.match(desktop.html, /Ouvir no YouTube Music/);
+  // Vídeo fora do catálogo, playlist e álbum.
+  assert.match((await page('/v/dQw4w9WgXcQ')).html, /https:\/\/www\.youtube\.com\/watch\?v=dQw4w9WgXcQ/);
+  assert.match((await page('/l/PLabcdefghij1234567890')).html, /https:\/\/music\.youtube\.com\/playlist\?list=PLabcdefghij1234567890/);
+  assert.match((await page('/a/MPREb_abcDEF12345')).html, /https:\/\/music\.youtube\.com\/browse\/MPREb_abcDEF12345/);
+  // O que não é um link nosso não vira página (nem nada do pedido vai parar no HTML).
+  for (const bad of ['/m/curto', '/m/dQw4w9WgXcQ/mais', '/m/%3Cscript%3Ealert', '/a/NAOEALBUM1234', '/x/dQw4w9WgXcQ', '/m/']) {
+    const r = await page(bad);
+    assert.equal(r.status, 404, bad);
+    assert.match(r.type, /json/, bad);
+  }
+  const odd = await page('/m/dQw4w9WgXcQ?t=%3Cscript%3Ealert(1)%3C/script%3E', { 'accept-language': '"><script>', 'user-agent': '"><script>android' });
+  assert.equal(odd.status, 200);
+  assert.doesNotMatch(odd.html, /<script/i);
+  // Só GET (e HEAD): o resto é método errado ou não existe.
+  assert.equal((await api('POST', '/m/dQw4w9WgXcQ', { body: {} })).status, 404);
+  const head = await fetch(base + '/m/dQw4w9WgXcQ', { method: 'HEAD' });
+  assert.equal(head.status, 200);
+  assert.equal(await head.text(), '');
+});
+
 test('conta nasce sozinha com @nome, nome, token e código de recuperação', async () => {
   const p = await person();
   assert.match(p.me.username, /^[a-z]+_\d{3,4}$/);

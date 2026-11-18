@@ -19,8 +19,11 @@ import { Jams, cleanState, cleanTrack, MAX_MEMBERS } from './jams.js';
 import { cleanNumbers } from './numbers.js';
 import { cleanJpeg } from './jpeg.js';
 import { cleanDisplayName, cleanMessage, normalizeUsername, randomIdentity } from './names.js';
+import { ASSET_LINKS, PAGE_CSP, page as linkPage, target as linkTarget } from './links.js';
 
-export const VERSION = '1.6.2';
+export const VERSION = '1.7.0';
+/** O nome público do servidor: é pra ele que o "Abrir no FreeSong" da página de um link aponta. */
+const PUBLIC_HOST = process.env.PUBLIC_HOST || 'freesong.simplyonegoal.com';
 const JSON_LIMIT = 64 * 1024;
 const AVATAR_LIMIT = 600 * 1024;
 /** Mensagem de voz: AAC em MP4 (o app grava ~24 kbps, até 5 min ≈ 0,9 MB). */
@@ -826,6 +829,30 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
     try {
       if (!url) throw new HttpError(400, 'bad_url');
       if (plainHttp(req)) throw new HttpError(403, 'https_only');
+      // Os links que o app compartilha (ver links.js): quem tem o FreeSong abre direto nele, e o
+      // Android confere aqui que o domínio é do app; pra todo o resto, uma página pequena.
+      if (req.method === 'GET' || req.method === 'HEAD') {
+        if (url.pathname === '/.well-known/assetlinks.json') {
+          res.writeHead(200, { ...SECURITY_HEADERS, 'content-type': 'application/json', 'content-length': Buffer.byteLength(ASSET_LINKS), 'cache-control': 'public, max-age=3600' });
+          res.end(req.method === 'HEAD' ? undefined : ASSET_LINKS);
+          return;
+        }
+        const link = linkTarget(url.pathname);
+        if (link) {
+          const html = Buffer.from(linkPage(link, url.pathname, { host: PUBLIC_HOST, language: req.headers['accept-language'], agent: req.headers['user-agent'] }));
+          res.writeHead(200, {
+            ...SECURITY_HEADERS,
+            'content-security-policy': PAGE_CSP,
+            'content-type': 'text/html; charset=utf-8',
+            'content-length': html.length,
+            // A página muda com o idioma e com o aparelho de quem abre.
+            vary: 'accept-language, user-agent',
+            'cache-control': 'public, max-age=300',
+          });
+          res.end(req.method === 'HEAD' ? undefined : html);
+          return;
+        }
+      }
       const avatar = req.method === 'GET' && url.pathname.match(/^\/avatars\/([a-z0-9]+)\.jpg$/);
       if (avatar) {
         let img;

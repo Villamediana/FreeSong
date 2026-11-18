@@ -74,6 +74,19 @@
                 <data android:host="youtube.com" />
                 <data android:host="youtu.be" />
             </intent-filter>
+            <!-- Os links que o próprio FreeSong compartilha (música, vídeo, playlist, álbum): abrem direto
+                 no app. Verificados (o servidor responde /.well-known/assetlinks.json com a chave do app). -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:host="freesong.simplyonegoal.com" />
+                <data android:pathPrefix="/m/" />
+                <data android:pathPrefix="/v/" />
+                <data android:pathPrefix="/l/" />
+                <data android:pathPrefix="/a/" />
+            </intent-filter>
             <!-- "Ok Google, tocar … no Sound" → toca da biblioteca (ou busca online se não houver nada) -->
             <intent-filter>
                 <action android:name="android.media.action.MEDIA_PLAY_FROM_SEARCH" />

@@ -1,7 +1,22 @@
-# FreeSong relay: API (v1.6.2)
+# FreeSong relay: API (v1.7.0)
 
 Contrato entre o app e o servidor. Endereço: `https://freesong.simplyonegoal.com`.
 Instalação do servidor: [DEPLOY.md](DEPLOY.md).
+
+## Novidades da 1.7.0
+
+**Links que abrem no app** (`src/links.js`, sem conta e sem banco): o FreeSong 1.34.0 compartilha
+`/m/<vídeo>` (música), `/v/<vídeo>` (vídeo fora do catálogo de música), `/l/<playlist>` e
+`/a/<álbum MPREb_…>`. Cada um representa exatamente um link do YouTube.
+
+- `GET /.well-known/assetlinks.json`: o que o Android confere pra abrir esses links direto no app
+  (pacote `com.villamediana.sound` + SHA-256 do certificado de release). **Tem que estar no ar antes
+  de o app novo ser instalado** (a conferência é feita na instalação).
+- `GET /m/…`, `/v/…`, `/l/…`, `/a/…`: pra quem não tem o app (ou abriu fora do Android), uma página
+  pequena, sem script: a capa, "Abrir no FreeSong" (no Android: `intent://` pelo pacote, com a página
+  de download de reserva), a mesma música no YouTube Music e onde baixar o app. pt-BR, ou espanhol pelo
+  `Accept-Language`. Id fora do padrão = 404; nada do pedido é escrito na página.
+- `PUBLIC_HOST` (opcional): o nome público, se não for `freesong.simplyonegoal.com`.
 
 ## Novidades da 1.6.2
 

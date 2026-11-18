@@ -5,7 +5,8 @@ import java.net.URLDecoder
 
 /**
  * Finds a YouTube / YouTube Music link inside free text (clipboard, a shared message, the search
- * field). Only links that point to something Sound can open are accepted: a video or song, a
+ * field) — or a link FreeSong shared ([com.villamediana.sound.online.FreeSongLinks]), as the YouTube
+ * link it stands for. Only links that point to something Sound can open are accepted: a video or song, a
  * playlist or album, or a channel/artist page. The YouTube home page, feeds, search pages and
  * look-alike domains are not links to music.
  */
@@ -17,8 +18,10 @@ object YouTubeLinks {
     private val trailingJunk = charArrayOf('.', ',', ';', ':', '!', '?', ')', ']', '}', '>', '\'', '"', '»', '”', '’')
 
     /** The first supported link inside [text], normalized to https, or null. */
-    fun find(text: String?): String? {
-        if (text.isNullOrBlank()) return null
+    fun find(shared: String?): String? {
+        if (shared.isNullOrBlank()) return null
+        // A link FreeSong itself shared stands for a YouTube one.
+        val text = com.villamediana.sound.online.FreeSongLinks.unwrap(shared)
         for (match in candidate.findAll(text)) {
             // A candidate glued to something else ("notyoutube.com", "ftp://youtube.com", "site.com/youtube.com") is not a YouTube link.
             val start = match.range.first

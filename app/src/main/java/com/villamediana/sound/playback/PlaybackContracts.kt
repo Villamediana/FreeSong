@@ -105,5 +105,10 @@ interface PlayerConnection {
     fun enqueue(tracks: List<Track>)
     fun removeAt(queueIndex: Int)
     fun move(from: Int, to: Int)
+    /**
+     * The listener closed the queue after editing it by hand: the songs the app picked for it now
+     * follow what the edits showed (what was taken out, what was pulled up).
+     */
+    fun queueSettled() {}
     fun setSleepTimer(timer: SleepTimer)
 }
