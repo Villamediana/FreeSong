@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import com.villamediana.sound.playback.PlayerConnection
 import kotlinx.coroutines.isActive
@@ -21,8 +22,14 @@ internal class PlaybackClock {
 
     private var basePos = 0L
     private var baseNanos = 0L
-    private var playing = false
+    private val playingState = mutableStateOf(false)
+    private var playing: Boolean
+        get() = playingState.value
+        set(value) { playingState.value = value }
     private var durationMs = 0L
+
+    /** Whether the song is playing (snapshot state; changes only on play/pause, safe to read anywhere). */
+    val isPlaying: Boolean get() = playingState.value
 
     // Optimistic seek: until the player reports a position near it, stale ticks are ignored.
     private var pendingSeek: Long? = null

@@ -242,9 +242,35 @@ internal data class LyricColors(val active: Color, val past: Color, val future: 
 }
 
 /**
+ * Whether synced lyrics may follow the song right now. A finger on the list lets the reader look
+ * around: while the song plays, the list comes back to the sung line [FOLLOW_PAUSE_MS] after the
+ * finger lifts; while it is paused, the list stays wherever the reader left it, and play brings it
+ * back at once.
+ */
+@Composable
+internal fun rememberLyricsFollow(listState: LazyListState, clock: PlaybackClock): Boolean {
+    val dragged by listState.interactionSource.collectIsDraggedAsState()
+    val playing = clock.isPlaying
+    var resting by remember { mutableStateOf(true) }
+    LaunchedEffect(dragged) {
+        if (dragged) {
+            resting = false
+        } else if (!resting && clock.isPlaying) {
+            delay(FOLLOW_PAUSE_MS)
+            // Paused in the meantime: the list waits for play.
+            if (clock.isPlaying) resting = true
+        }
+    }
+    LaunchedEffect(playing) {
+        if (playing && !dragged) resting = true
+    }
+    return resting
+}
+
+/**
  * Lyric lines. Synced lyrics follow the song (the sung line stays [linesAbove] rows from the top,
  * others dimmed) and a tap on a line seeks there; plain lyrics just scroll. Touching the list
- * pauses the auto-follow for a few seconds.
+ * stops the auto-follow as [rememberLyricsFollow] says.
  */
 @Composable
 internal fun LyricsLines(
@@ -266,17 +292,8 @@ internal fun LyricsLines(
     val current by remember(lyrics, clock) {
         derivedStateOf { if (lyrics.synced) lyrics.indexAt(clock.positionMs + PlayerMath.LYRICS_LEAD_MS) else -1 }
     }
-    val dragged by listState.interactionSource.collectIsDraggedAsState()
-    var resting by remember { mutableStateOf(true) }
+    val resting = rememberLyricsFollow(listState, clock)
 
-    LaunchedEffect(dragged) {
-        if (dragged) {
-            resting = false
-        } else if (!resting) {
-            delay(FOLLOW_PAUSE_MS)
-            resting = true
-        }
-    }
     LaunchedEffect(lyrics, current, resting) {
         if (!lyrics.synced || !resting) return@LaunchedEffect
         val target = (current - linesAbove).coerceAtLeast(0)

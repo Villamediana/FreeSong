@@ -4,7 +4,6 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -20,10 +19,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -59,9 +56,9 @@ import com.villamediana.sound.data.ParsedLyrics
 import com.villamediana.sound.ui.player.LyricColors
 import com.villamediana.sound.ui.player.PlaybackClock
 import com.villamediana.sound.ui.player.PlayerMath
+import com.villamediana.sound.ui.player.rememberLyricsFollow
 import com.villamediana.sound.ui.player.rememberTranslation
 import com.villamediana.sound.ui.player.translationStyle
-import kotlinx.coroutines.delay
 
 /**
  * How chord names look over a lyric set in [lyric]: a little over half its size, bold, in the same
@@ -80,11 +77,11 @@ internal fun chordStyleFor(lyric: TextStyle): TextStyle = lyric.copy(
  * the lines already sung and light up with the line being sung (the line, never a chord on its
  * own); the lines to come keep them a little firmer than their words, since whoever plays reads
  * ahead. Synced lyrics follow the song as the plain lyrics do (the line being sung lights up, the
- * list keeps it [linesAbove] rows from the top, a touch pauses that for a few seconds, a tap on a
- * line seeks there); so do the rows of chords alone when there are no lyrics. Lyrics without times
- * stay still, as plain lyrics do: their chords sit at a guessed place, and nothing pretends to know
- * which line is being sung. A player's written sheet puts its chords over the same words it wrote
- * them over. A tap on a chord shows how to play it.
+ * list keeps it [linesAbove] rows from the top, a touch lets the reader look around as there —
+ * [rememberLyricsFollow] — and a tap on a line seeks there); so do the rows of chords alone when
+ * there are no lyrics. Lyrics without times stay still, as plain lyrics do: their chords sit at a
+ * guessed place, and nothing pretends to know which line is being sung. A player's written sheet
+ * puts its chords over the same words it wrote them over. A tap on a chord shows how to play it.
  */
 @Composable
 internal fun ChordLyricsLines(
@@ -119,16 +116,7 @@ internal fun ChordLyricsLines(
     // ones, nor a sheet shown as it is written.
     val timed = view.follows
     val current by remember(rows, clock, timed) { derivedStateOf { if (timed) ChordLayout.rowAt(rows, clock.positionMs + PlayerMath.LYRICS_LEAD_MS) else -1 } }
-    val dragged by listState.interactionSource.collectIsDraggedAsState()
-    var resting by remember { mutableStateOf(true) }
-    LaunchedEffect(dragged) {
-        if (dragged) {
-            resting = false
-        } else if (!resting) {
-            delay(FOLLOW_PAUSE_MS)
-            resting = true
-        }
-    }
+    val resting = rememberLyricsFollow(listState, clock)
     // How to play the sheet (capo, whose version), small, before the words: an instruction, not a control.
     val note = sheetNote(chart.sheet)
     val header = if (note != null) 1 else 0
@@ -408,7 +396,6 @@ private val CHIP_PAD = 6.dp
 private val CHORD_TUCK = 3.dp
 /** How much firmer the chords of the lines to come are than their words. */
 private const val AHEAD_LIFT = 0.2f
-private const val FOLLOW_PAUSE_MS = 3_000L
 private const val LINE_FADE_MS = 260
 private const val LIT_FADE_MS = 160
 /** How strong the pill under the ringing chord is, of the page's ink. */

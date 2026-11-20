@@ -10,6 +10,8 @@ import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeDown
 import com.villamediana.sound.data.LyricLine
 import com.villamediana.sound.data.ParsedLyrics
 import com.villamediana.sound.ui.theme.SoundTheme
@@ -69,5 +71,73 @@ class LyricsLinesTest {
         shown = lyrics("Maré", synced = false)
         compose.waitForIdle()
         compose.onNodeWithText("Maré 1").assertExists()
+    }
+
+    /** Synced lyrics with line 50 being sung (lines are 4 s apart): the list keeps it near the top. */
+    private fun showSungAtLine50(clock: PlaybackClock) {
+        clock.onTick(200_000, 0L)
+        compose.setContent {
+            SoundTheme {
+                LyricsLines(
+                    lyrics = lyrics("Aurora", synced = true),
+                    clock = clock,
+                    onSeek = {},
+                    textStyle = MaterialTheme.typography.titleLarge,
+                    colors = LyricColors.over(Color.Black),
+                )
+            }
+        }
+        compose.onNodeWithText("Aurora 50").assertExists()
+    }
+
+    /** The reader drags the list back to the first lines. */
+    private fun dragBackToTheStart() {
+        repeat(6) { compose.onNode(hasScrollToIndexAction()).performTouchInput { swipeDown() } }
+        compose.onNodeWithText("Aurora 1").assertExists()
+        compose.onNodeWithText("Aurora 50").assertDoesNotExist()
+    }
+
+    @Test
+    fun pausedLyricsStayWhereTheReaderLeftThemUntilPlay() {
+        val clock = PlaybackClock()
+        showSungAtLine50(clock)
+
+        // Paused: the reader can look around for as long as they like.
+        dragBackToTheStart()
+        compose.mainClock.advanceTimeBy(10_000)
+        compose.waitForIdle()
+        compose.onNodeWithText("Aurora 1").assertExists()
+        compose.onNodeWithText("Aurora 50").assertDoesNotExist()
+
+        // Play brings the sung line back at once.
+        compose.runOnIdle { clock.onState(playing = true, durationMs = 320_000, nowNanos = 0L) }
+        compose.waitForIdle()
+        compose.onNodeWithText("Aurora 50").assertExists()
+        compose.onNodeWithText("Aurora 1").assertDoesNotExist()
+    }
+
+    @Test
+    fun playingLyricsComeBackToTheSungLineAFewSecondsAfterADrag() {
+        val clock = PlaybackClock().apply { onState(playing = true, durationMs = 320_000, nowNanos = 0L) }
+        showSungAtLine50(clock)
+
+        dragBackToTheStart()
+        compose.mainClock.advanceTimeBy(5_000)
+        compose.waitForIdle()
+        compose.onNodeWithText("Aurora 50").assertExists()
+        compose.onNodeWithText("Aurora 1").assertDoesNotExist()
+    }
+
+    @Test
+    fun pausingRightAfterADragKeepsTheListWhereTheReaderLeftIt() {
+        val clock = PlaybackClock().apply { onState(playing = true, durationMs = 320_000, nowNanos = 0L) }
+        showSungAtLine50(clock)
+
+        dragBackToTheStart()
+        compose.runOnIdle { clock.onState(playing = false, durationMs = 320_000, nowNanos = 0L) }
+        compose.mainClock.advanceTimeBy(10_000)
+        compose.waitForIdle()
+        compose.onNodeWithText("Aurora 1").assertExists()
+        compose.onNodeWithText("Aurora 50").assertDoesNotExist()
     }
 }
