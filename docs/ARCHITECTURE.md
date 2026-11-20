@@ -139,6 +139,11 @@ JSON: usar `kotlinx.serialization` (o `org.json` do Android vira stub nos testes
   `DefaultAudioSink` passa no 2º flush de cada seek (`SeekBlendSinkTest` confere no sink real; o
   Media3 1.11 já faz uma rampa de ~20 ms depois de cada flush). Pra tirar: o renderers factory e o
   comando no `PlaybackService`, `PlayerActions.seekLine` (a letra volta ao `seek`).
+- **Letra livre com a música parada** (1.34.1, pedido do Miguel; `rememberLyricsFollow` em
+  `ui/player/Lyrics.kt`, vale pra letra e pra letra com acordes): tocando, um dedo na letra a solta e
+  ela volta pra linha cantada 3 s depois de soltar (como antes); **pausada, fica onde a pessoa deixou**
+  — dá pra ler à vontade — e só volta ao dar play (na hora). Pausar logo depois de arrastar também
+  segura. Quem diz se toca é o `PlaybackClock.isPlaying`.
 - **Crossfade entre músicas** (1.6.0; suave desde 1.28.0, `playback/Crossfader.kt` +
   `playback/crossfade/`): dura exatamente os segundos do Equalizador, sobre música.
   - **Medida antes** (`CrossfadeMeasure` → `AudioScanner`): ~45 s antes do fim, decodifica só os
