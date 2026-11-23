@@ -241,6 +241,57 @@ test('o cofre: a web grava, o celular aberto fica sabendo na hora; a web espera 
   ws.close();
 });
 
+test('o que toca agora: a web e o celular se veem, a web espera, o relay só guarda', async () => {
+  const p = await person();
+  const b = await linked(p);
+  const blob = (n) => Buffer.alloc(64, n).toString('base64');
+  // Nada tocou ainda.
+  const none = await signed(b, 'GET', '/v1/me/now');
+  assert.equal(none.json.rev, 0);
+  assert.equal(none.json.data, undefined);
+
+  const ws = new WebSocket(base.replace('http', 'ws') + '/v1/ws', { headers: { authorization: `Bearer ${p.token}` } });
+  const got = [];
+  ws.on('message', (d) => got.push(JSON.parse(d.toString())));
+  await new Promise((r) => ws.once('open', r));
+
+  // A web toca: o celular aberto fica sabendo na hora.
+  const put = await signed(b, 'PUT', '/v1/me/now', { data: blob(1) });
+  assert.ok(put.json.rev > 0);
+  await new Promise((r) => setTimeout(r, 100));
+  assert.ok(got.some((e) => e.t === 'now' && e.rev === put.json.rev), JSON.stringify(got));
+  const read = await api('GET', '/v1/me/now', { token: p.token });
+  assert.deepEqual([read.json.rev, read.json.data], [put.json.rev, blob(1)]);
+  assert.ok(read.json.at > 0 && read.json.now >= read.json.at);
+  const same = await signed(b, 'GET', `/v1/me/now?after=${put.json.rev}`);
+  assert.equal(same.json.same, true);
+
+  // A web esperando: o celular toca outra e ela recebe na hora; o celular não recebe o próprio aviso.
+  const waiting = signed(b, 'GET', `/v1/me/now?after=${put.json.rev}&wait=20`);
+  await new Promise((r) => setTimeout(r, 100));
+  const n = got.length;
+  const t0 = Date.now();
+  const phone = await api('PUT', '/v1/me/now', { token: p.token, body: { data: blob(2) } });
+  assert.ok(phone.json.rev > put.json.rev);
+  const woke = await waiting;
+  assert.ok(Date.now() - t0 < 5000);
+  assert.deepEqual([woke.json.rev, woke.json.data], [phone.json.rev, blob(2)]);
+  await new Promise((r) => setTimeout(r, 100));
+  assert.equal(got.slice(n).filter((e) => e.t === 'now').length, 0);
+
+  // Lixo e tamanho; outra pessoa não vê.
+  assert.equal((await api('PUT', '/v1/me/now', { token: p.token, body: { data: 'não é base64!' } })).json.error, 'bad_now');
+  assert.equal((await api('PUT', '/v1/me/now', { token: p.token, body: { data: Buffer.alloc(10).toString('base64') } })).json.error, 'bad_now');
+  assert.equal((await api('PUT', '/v1/me/now', { token: p.token, body: { data: Buffer.alloc(5000).toString('base64') } })).status, 413);
+  const other = await person();
+  assert.equal((await api('GET', '/v1/me/now', { token: other.token })).json.rev, 0);
+  // Apagou o perfil: vai junto.
+  await api('DELETE', '/v1/me', { token: p.token });
+  const again = await person();
+  assert.equal((await api('GET', '/v1/me/now', { token: again.token })).json.rev, 0);
+  ws.close();
+});
+
 test('a lista no celular, desligar de lá ou daqui', async () => {
   const p = await person();
   const b1 = await linked(p);

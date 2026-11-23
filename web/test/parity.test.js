@@ -17,6 +17,15 @@ test('o cofre fechado no celular abre na página', async () => {
   assert.equal(v.likes[0].s.t, 'Do celular');
 });
 
+test('o que toca no celular abre na página, e não passa por cofre', async () => {
+  const key = await globalThis.crypto.subtle.importKey('raw', lock.b64.dec(phone.rawKey), 'AES-GCM', false, ['encrypt', 'decrypt']);
+  const n = await lock.openNow(phone.now, key);
+  assert.deepEqual([n.dev, n.i, n.t, n.a, n.d, n.p, n.s, n.at], ['phonefixture', 'kotlin12345', 'Do celular', 'FreeSong', 200000, 42000, false, 1700000010000]);
+  assert.equal(n.c, undefined);
+  await assert.rejects(lock.openVault(phone.now, key));
+  await assert.rejects(lock.openNow(phone.vault, key));
+});
+
 test('a resposta do celular ao QR code abre com a privada do computador', async () => {
   const priv = await globalThis.crypto.subtle.importKey('jwk', web.link.privateJwk, { name: 'ECDH', namedCurve: 'P-256' }, false, ['deriveBits']);
   const opened = await lock.unwrapLink(priv, web.link.id, web.link.secret, phone.answer);

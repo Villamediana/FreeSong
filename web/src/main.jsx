@@ -7,6 +7,7 @@ import { Api, ApiError } from './core/api.js';
 import { Store, MemoryStore } from './core/store.js';
 import { VaultSync } from './core/sync.js';
 import { Player } from './core/player.js';
+import { NowShare, songOf } from './core/now.js';
 import { Mixes } from './core/mixes.js';
 import { edit, toV } from './core/vault.js';
 import { strings, pickLang } from './ui/i18n.js';
@@ -140,10 +141,12 @@ async function linked({ store, shared, t, lang }) {
   const owner = await store.get('owner');
   let unlinked = false;
   let tabs = null;
+  let nowShare = null;
   const unlink = async (tellServer) => {
     if (unlinked) return;
     unlinked = true;
     sync.stop();
+    nowShare?.stop();
     player.pause();
     if (tellServer) await api.unlink().catch(() => {});
     await store.wipe();
@@ -185,6 +188,41 @@ async function linked({ store, shared, t, lang }) {
     onListen: (song, ms, durationMs) => sync.change((v) => edit.play(v, song, ms, durationMs, Date.now()), { quiet: true }),
     onToast: (what, s) => toast(t(what, s.title)),
   });
+
+  // Este navegador como um aparelho do perfil (o que ele manda tocar, o celular sabe que não foi ele mesmo).
+  let dev = await store.get('dev');
+  if (typeof dev !== 'string' || !dev) {
+    dev = lock.b64u.enc(globalThis.crypto.getRandomValues(new Uint8Array(9)));
+    await store.set('dev', dev);
+  }
+
+  // A fila desta aba, guardada (fechada com a chave do cofre): recarregar a página volta com ela, no
+  // mesmo ponto (tocando, se estava tocando e o navegador deixar).
+  const saveQueue = async () => {
+    if (unlinked) return;
+    try {
+      const snap = player.snapshot();
+      await store.set('queue', snap ? await lock.sealLocal(snap, key) : null);
+    } catch { /* sem espaço, aba fechando: a próxima vez guarda */ }
+  };
+  let queueKey = '';
+  let queueTimer = null;
+  player.subscribe(() => {
+    const k = `${player.index}|${player.items.length}|${player.playing}|${player.current?.videoId ?? ''}|${player.seeks}`;
+    if (k === queueKey) return;
+    queueKey = k;
+    clearTimeout(queueTimer);
+    queueTimer = setTimeout(saveQueue, 500);
+  });
+  setInterval(() => { if (player.playing) saveQueue(); }, 5000);
+  try {
+    const sealedQueue = await store.get('queue');
+    const q = sealedQueue ? await lock.openLocal(sealedQueue, key) : null;
+    if (q?.v === 1 && Array.isArray(q.items) && q.items.length) {
+      const wasPlaying = q.playing === true && Date.now() - (q.saved ?? 0) < 10 * 60_000;
+      player.cue(q.items, q.index ?? 0, q.time ?? 0, q.source ?? null, { at: q.at ?? q.saved ?? 0, play: wasPlaying, order: q.order });
+    }
+  } catch { /* de outra chave ou estragada: começa sem fila */ }
 
   let friendsCache = null;
   const loadFriends = async (fresh = false) => {
@@ -337,7 +375,7 @@ async function linked({ store, shared, t, lang }) {
 
   // O que muda aqui é guardado na hora; ao sair da aba (ou fechar), o que foi ouvido e o resto vão.
   addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') { player.finishListen(); sync.flush(); } });
-  addEventListener('pagehide', () => { player.finishListen(); sync.save().catch(() => {}); });
+  addEventListener('pagehide', () => { player.finishListen(); sync.save().catch(() => {}); saveQueue(); });
   addEventListener('online', () => sync.push());
 
   if (shared) {
@@ -361,6 +399,20 @@ async function linked({ store, shared, t, lang }) {
 
   rerender();
   sync.run();
+
+  // O mini player junto com o do celular: parado aqui, mostra o que o celular tocou por último (pausado
+  // no ponto em que está); tocando aqui, nada muda.
+  nowShare = new NowShare({
+    api,
+    key,
+    player,
+    dev,
+    onRemote: (n, positionMs) => {
+      if (unlinked || player.playing || n.at <= player.lastActive) return;
+      player.cue([songOf(n)], 0, positionMs / 1000, { kind: 'phone', id: null, title: t('fromPhone') }, { at: n.at });
+    },
+  });
+  nowShare.start();
 
   // Um link compartilhado (#/m/<id>) aberto aqui: toca a música e vai pra Início.
   const shared_ = parse(location.hash);

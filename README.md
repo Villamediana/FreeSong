@@ -75,9 +75,10 @@ quando ela existe ou são reconhecidos no próprio aparelho quando não existe.
 ## No computador
 
 O FreeSong também abre no navegador do computador: **https://freesong.simplyonegoal.com**. No
-celular, toque na sua foto (Perfil) › **Computador** › **Ligar um computador** e leia o QR code que a
-página mostra (ou aponte a câmera do celular pra ele). Suas curtidas, playlists e o que você ouve ficam
-iguais nos dois, na hora. A chave do seu cofre vai cifrada só pra aquele navegador; o servidor não lê
+celular, vá em Ajustes › **Computador** › **Ligar um computador** e leia o QR code que a página mostra
+(ou aponte a câmera do celular pra ele). Suas curtidas, playlists e o que você ouve ficam iguais nos
+dois, na hora, e o mini player também: o que toca num aparece no outro, pausado no ponto, pronto pra
+continuar. A chave do seu cofre vai cifrada só pra aquele navegador; o servidor não lê
 nada. Sem o celular por perto, dá pra entrar com o código de recuperação. A música toca pelo player do
 YouTube na própria página. Detalhes: [web/README.md](web/README.md).
 

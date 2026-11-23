@@ -147,6 +147,23 @@ const t0 = Date.now();
 await page.waitForSelector('.side-item:has-text("Feita no celular")', { timeout: 15_000 }).catch(() => {});
 check(await page.locator('.side-item', { hasText: 'Feita no celular' }).count() === 1, `a playlist do celular aparece aqui (${Date.now() - t0} ms)`);
 
+// Recarregar a página: a música volta no mini player (no mesmo ponto)
+await page.waitForTimeout(2000);
+const playingBefore = await page.locator('.bar .row-title').innerText();
+await page.reload();
+await page.waitForSelector('.bar .row-title', { timeout: 30_000 }).catch(() => {});
+const playingAfter = await page.locator('.bar .row-title').innerText().catch(() => '');
+check(playingAfter === playingBefore, `recarregar volta com a música ("${playingAfter}")`);
+
+// O celular toca outra: o mini player daqui (parado) mostra ela, pausada no ponto em que está
+await page.waitForTimeout(12_000);
+const onPhone = djavan.find((s) => s.title !== playingAfter) ?? djavan[0];
+const told = await api('PUT', '/v1/me/now', { token: phone.token, body: { data: await lock.sealNow({ v: 1, dev: 'e2e-phone', i: onPhone.videoId, t: onPhone.title, a: onPhone.artist, d: onPhone.durationMs ?? 0, p: 30_000, s: true, at: Date.now() }, phoneKey) } });
+const t1 = Date.now();
+await page.waitForFunction((t) => document.querySelector('.bar .row-title')?.textContent === t, onPhone.title, { timeout: 15_000 }).catch(() => {});
+check(told.status === 200 && (await page.locator('.bar .row-title').innerText()) === onPhone.title, `o mini player mostra o que toca no celular ("${onPhone.title}", ${Date.now() - t1} ms)`);
+await shot('07b-do-celular');
+
 // Letra e fila
 await page.click('.np-tabs button:has-text("Fila")');
 await page.waitForTimeout(800);

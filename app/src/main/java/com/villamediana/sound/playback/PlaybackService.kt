@@ -1040,6 +1040,27 @@ class PlaybackService : MediaLibraryService() {
         }
         publishExtras()
         updateButtons()
+        // The queue put back: what plays here is what played then (the computer's newer one wins).
+        pulseNow(at = snap.savedAt)
+    }
+
+    /** What plays here, for the computer's mini player ([PlaybackPulse.now], social/NowShare). */
+    private fun pulseNow(seeked: Boolean = false, at: Long = System.currentTimeMillis()) {
+        val t = currentTrack() ?: return
+        val before = PlaybackPulse.now.value
+        PlaybackPulse.now.value = PlaybackPulse.Now(
+            videoId = t.videoId ?: MediaItems.videoId(player.currentMediaItem),
+            title = t.title,
+            artist = t.artist,
+            album = t.album?.takeIf { it.isNotBlank() },
+            durationMs = player.duration.takeIf { it > 0 } ?: t.durationMs,
+            cover = t.coverPath?.takeIf { it.startsWith("https://") },
+            positionMs = player.currentPosition.coerceAtLeast(0),
+            playing = player.isPlaying,
+            at = at,
+            seeks = (before?.seeks ?: 0) + if (seeked) 1 else 0,
+            source = source?.type,
+        )
     }
 
     // ================================================================ session state
@@ -1121,6 +1142,7 @@ class PlaybackService : MediaLibraryService() {
                 syncQueueWithLibrary(includeCurrent = true)
             }
             updateButtons()
+            pulseNow()
             maybeExtend()
             // Edits to the queue not answered yet (its sheet still open, or the answer came too soon).
             if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED) followMood()
@@ -1130,6 +1152,7 @@ class PlaybackService : MediaLibraryService() {
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             PlaybackPulse.playing.value = isPlaying
+            pulseNow()
             // Replaying after the end (or after an error) starts a new listen of the same song.
             if (isPlaying && listen.currentTrackId == null) startListen(player.currentMediaItem)
             listen.setPlaying(isPlaying)
@@ -1194,7 +1217,10 @@ class PlaybackService : MediaLibraryService() {
         }
 
         override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
-            if (reason == Player.DISCONTINUITY_REASON_SEEK) scheduleSave()
+            if (reason == Player.DISCONTINUITY_REASON_SEEK) {
+                scheduleSave()
+                pulseNow(seeked = true)
+            }
         }
 
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {

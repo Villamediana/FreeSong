@@ -214,6 +214,8 @@ class SocialHub(
     setGenres: suspend (Set<String>) -> Unit = {},
     /** Listening time already pruned from the history: the profile's hours still count it. */
     private val listenedBefore: suspend () -> Long = { 0L },
+    /** When the queue saved on this phone last played (0: none): the computer's newer song wins. */
+    private val savedQueueAt: suspend () -> Long = { 0L },
 ) {
     val baseUrl: String = BuildConfig.RELAY_URL
     val account = SocialAccount(context, scope) { token -> RelayApi(http, baseUrl, token) }
@@ -244,6 +246,27 @@ class SocialHub(
         loadKey = { account.vaultKey(it) },
         saveKey = { id, key -> account.setVaultKey(id, key) },
     )
+
+    /** The mini player together with the computer's (what plays here goes there, and back). */
+    internal val nowShare = NowShare(
+        scope = scope,
+        api = { account.api },
+        key = { account.me.value?.id?.let { account.vaultKey(it) } },
+        ready = { account.ready },
+        canFollow = { _foreground.value && !jam.active },
+        savedAt = savedQueueAt,
+        follow = { track, positionMs -> player().cueFromComputer(track, positionMs) },
+        device = deviceId(),
+    )
+
+    /** This phone among the profile's devices (random, made once). */
+    private fun deviceId(): String {
+        val f = File(context.filesDir, "now-device")
+        runCatching { f.readText().trim() }.getOrNull()?.takeIf { it.length in 8..40 }?.let { return it }
+        val id = java.util.UUID.randomUUID().toString().replace("-", "").take(16)
+        runCatching { f.writeText(id) }
+        return id
+    }
 
     private val _friends = MutableStateFlow(readFriends())
     /** Friends and requests as last seen (kept on disk to show at once, offline too). */
@@ -322,6 +345,8 @@ class SocialHub(
         }
         // One event that goes wrong doesn't stop the ones after it.
         scope.launch { link.events.collect { quietly { handle(it) } } }
+        // What plays here goes to the computer's mini player.
+        nowShare.start()
         // A heart or a playlist changed here: the vault follows a moment later (the other phones see it).
         scope.launch {
             combine(library.likedVideoIds, library.playlists.map { lists -> lists.map { it.id to it.playlist.updatedAt } }) { a, b -> a to b }
@@ -367,6 +392,8 @@ class SocialHub(
         // The vault after the mailbox (the songs that just came in go with it) and before the stats.
         quietly { vault.sync() }
         quietly { syncStats() }
+        // What the computer played while the phone was away.
+        quietly { nowShare.pull() }
     }
 
     // ------------------------------------------------------------------ computers (the web)
@@ -442,6 +469,7 @@ class SocialHub(
             is RelayEvent.ProfileChanged -> profileChanged(event.user)
             // A computer (or another phone) of this profile changed hearts, playlists, listening: in now.
             is RelayEvent.VaultChanged -> vault.sync()
+            is RelayEvent.NowChanged -> nowShare.pull()
             is RelayEvent.JamInvited -> if (!_foreground.value) SocialNotifier.jam(context, event.invite.from)
             // The profile was deleted on another phone, or this one was signed out from another:
             // the account check forgets it here (and the jam stops), a passing glitch keeps it.

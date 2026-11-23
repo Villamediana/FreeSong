@@ -48,6 +48,28 @@ class WebParityTest {
     }
 
     @Test
+    fun whatPlaysOnThePageOpensOnThePhoneAndIsNoVault() {
+        val raw = VaultCrypto.unb64(str("rawKey"))
+        val sealed = fixture["now"]!!.jsonObject["sealed"]!!.jsonPrimitive.content
+        val opened = VaultCrypto.openNow(sealed, raw)!!.decodeToString()
+        val blob = NowShare.Codec.decodeFromString(NowBlob.serializer(), opened)
+        assertEquals("webfixture1", blob.dev)
+        assertEquals("dQw4w9WgXcQ", blob.i)
+        assertEquals("Djavan", blob.a)
+        assertEquals(240_000L, blob.d)
+        assertEquals(61_000L, blob.p)
+        assertEquals(true, blob.s)
+        assertNull(blob.c)
+        // Sealed for "now", not for the vault: neither opens as the other.
+        assertNull(VaultCrypto.openData(sealed, raw))
+        assertNull(VaultCrypto.openNow(str("vault"), raw))
+        // Playing for 10 s since it was sent: 10 s further; paused stays put; never past the end.
+        assertEquals(71_000L, NowShare.positionNow(blob, 10_000))
+        assertEquals(61_000L, NowShare.positionNow(blob.copy(s = false), 10_000))
+        assertEquals(237_000L, NowShare.positionNow(blob, 1_000_000))
+    }
+
+    @Test
     fun theComputersCodeIsReadAndTheAnswerGoesToThePage() {
         val link = fixture["link"]!!.jsonObject
         val url = link["url"]!!.jsonPrimitive.content
@@ -68,6 +90,7 @@ class WebParityTest {
             put("rawKey", JsonPrimitive(VaultCrypto.b64(raw)))
             put("vault", JsonPrimitive(sealed))
             put("wrappedKey", JsonPrimitive(wrappedKey))
+            put("now", JsonPrimitive(VaultCrypto.sealNow(NowShare.Codec.encodeToString(NowBlob.serializer(), NowBlob(dev = "phonefixture", i = "kotlin12345", t = "Do celular", a = "FreeSong", d = 200_000, p = 42_000, s = false, at = 1_700_000_010_000)).encodeToByteArray(), raw)))
             put("answer", buildJsonObject {
                 put("pub", JsonPrimitive(answer.pub))
                 put("iv", JsonPrimitive(answer.iv))

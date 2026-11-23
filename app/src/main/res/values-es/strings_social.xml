@@ -157,6 +157,7 @@
     <string name="social_cancel_request">Cancelar solicitud</string>
     <string name="social_sent">Solicitudes enviadas</string>
     <!-- FreeSong no computador (a web): ligar pelo QR code, a lista, desligar. -->
+    <string name="computer_source">De la computadora</string>
     <string name="computers_title">Computadora</string>
     <string name="computers_body">Escucha en la computadora con tus me gusta y playlists: abre freesong.simplyonegoal.com y lee el código con el celular.</string>
     <string name="computers_link">Conectar una computadora</string>

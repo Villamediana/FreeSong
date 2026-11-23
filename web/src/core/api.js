@@ -119,6 +119,16 @@ export class Api {
     return this.call('PUT', '/v1/me/vault', { json: key ? { baseRev, data, key } : { baseRev, data } });
   }
 
+  /** O que toca agora num aparelho do perfil: {rev, data, at, now} (rev 0: nada); com [after], só se mudou (esperando até [wait] s). */
+  now(after = null, wait = 0, signal) {
+    const qs = after == null ? '' : `?after=${after}${wait ? `&wait=${wait}` : ''}`;
+    return this.call('GET', `/v1/me/now${qs}`, { signal });
+  }
+
+  putNow(data) {
+    return this.call('PUT', '/v1/me/now', { json: { data } });
+  }
+
   friends() {
     return this.call('GET', '/v1/friends');
   }

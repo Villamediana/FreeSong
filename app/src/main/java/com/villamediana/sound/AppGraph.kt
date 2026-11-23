@@ -377,6 +377,7 @@ class AppGraph(context: Context) {
             genres = { settings.settings.first().let { it.genresChosen to it.favoriteGenres } },
             setGenres = { settings.setFavoriteGenres(it) },
             listenedBefore = { settings.settings.first().listenedBeforeMs },
+            savedQueueAt = { com.villamediana.sound.playback.QueueSnapshot.decode(settings.settings.first().lastQueueJson)?.savedAt ?: 0L },
         )
     }
 

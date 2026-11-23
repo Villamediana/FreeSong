@@ -129,6 +129,18 @@ class RelayApi(
         RevBox.serializer(),
     ).rev
 
+    // ---------------------------------------------------------------- what plays now (the mini players)
+
+    /** What plays now on a device of this profile, sealed with the vault's key ([NowBox.rev] 0: nothing yet). */
+    internal fun now(): NowBox = call("GET", "/v1/me/now", null, NowBox.serializer())
+
+    internal fun putNow(data: String): Long = call(
+        "PUT",
+        "/v1/me/now",
+        json(buildJsonObject { put("data", data) }),
+        RevBox.serializer(),
+    ).rev
+
     // ---------------------------------------------------------------- computers (the web)
 
     /** This phone read a computer's QR code: the vault's key goes to it, encrypted ([wrapped]). The computer's name. */
@@ -314,6 +326,8 @@ class RelayApi(
     @Serializable internal data class ComputersBox(val computers: List<Computer> = emptyList())
     @Serializable internal data class VaultBox(val rev: Long, val key: String, val data: String, val updatedAt: Long = 0)
     @Serializable internal data class RevBox(val rev: Long)
+    /** [at]: when it was written, [now]: the relay's clock as it answered (how far a playing song went since). */
+    @Serializable internal data class NowBox(val rev: Long = 0, val data: String? = null, val at: Long = 0, val now: Long = 0)
     @Serializable internal data class StatusBox(val status: String)
     @Serializable internal data class AckBox(val removed: Int = 0)
     @Serializable internal data class ShareBox(val share: SentShare)

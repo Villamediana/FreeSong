@@ -3,6 +3,21 @@
 Contrato entre o app e o servidor. Endereço: `https://freesong.simplyonegoal.com`.
 Instalação do servidor: [DEPLOY.md](DEPLOY.md).
 
+## Novidades da 1.9.0
+
+**O que toca agora** (o mini player do celular e o do computador juntos). Cada aparelho manda o que
+começou a tocar, deu play/pausa ou pulou pra outro ponto; quem está parado mostra o do outro, pausado
+no ponto em que está. `data` é cifrado com a chave do cofre (AES-256-GCM, 1 byte de versão + IV de 12,
+AAD = a versão + `freesong-now-v1`, sem gzip): o relay só guarda (na memória) e devolve.
+
+| Rota | Corpo | Resposta |
+| --- | --- | --- |
+| `PUT /v1/me/now` | `{data}` (base64, até 4 KB) | `{rev}`; celulares abertos recebem `{t: "now", rev}` (não o que mandou) |
+| `GET /v1/me/now` | `?after=<rev>&wait=<s até 25>` opcionais | `{rev, data, at, now}`, `{rev, same: true, now}` se não mudou, `{rev: 0, now}` sem nada |
+
+Computador também usa as duas. O conteúdo aberto: `{v: 1, dev, i, t, a, al, d, c, p, s, at}` (aparelho,
+vídeo, título, artista, álbum, duração, capa https, ponto em ms, tocando?, quando).
+
 ## Novidades da 1.8.0
 
 **Computadores** (o FreeSong na web, `https://freesong.simplyonegoal.com`, código em `web/`). Um
@@ -281,6 +296,7 @@ Do servidor pro app:
 | `jam.ended` | `jamId` | a jam acabou, você saiu dela (por este ou outro celular, ou por sumir 15 min) ou não está nela |
 | `typing` | `from, on` | um amigo começou (`on: true`) ou parou de escrever pra você |
 | `vault` | `rev` | o cofre mudou em outro aparelho ou num computador do perfil (sincronize) |
+| `now` | `rev` | o que toca mudou num computador ou outro celular do perfil (`GET /v1/me/now`) |
 | `profile` | `user` | nome ou foto de um amigo (perfil completo), de alguém da sua jam (público) ou seu (outro celular) mudou; também quando os números de um amigo mudam (`PUT /v1/me/stats` com algo novo, só para os amigos) |
 
 Do app pro servidor (até 64 KB por mensagem; toda mensagem conta no limite de 600/min):

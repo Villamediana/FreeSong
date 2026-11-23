@@ -38,6 +38,10 @@ export class Player {
     });
     this.blocked = false;
     this.failures = 0; // músicas seguidas que não tocaram (o YouTube recusando tudo: para de pular)
+    this.lastActive = 0; // a última vez que a pessoa tocou, pausou, pulou ou trocou de música aqui (ms)
+    this.seeks = 0; // quantas vezes pulou pra outro ponto (o celular fica sabendo)
+    // O frame do YouTube já pronto: o primeiro play é um comando, como os outros.
+    this.frame.warm();
   }
 
   subscribe(fn) {
@@ -138,6 +142,7 @@ export class Player {
 
   toggle() {
     if (this.index < 0) return;
+    this.lastActive = Date.now();
     if (this.playing) this.frame.pause();
     else {
       this.set({ blocked: false });
@@ -196,6 +201,8 @@ export class Player {
   seek(seconds) {
     if (this.index < 0) return;
     const s = Math.max(0, Math.min(seconds, this.duration || seconds));
+    this.lastActive = Date.now();
+    this.seeks++;
     this.frame.seek(s);
     this.set({ time: s });
   }
@@ -237,10 +244,55 @@ export class Player {
     const tried = this.tried.get(s.videoId);
     const id = tried?.at(-1) ?? s.videoId;
     this.playingId = id;
+    this.lastActive = Date.now();
     this.set({ time: 0, duration: (s.durationMs ?? 0) / 1000, state: STATE.BUFFERING, blocked: false });
     this.frame.load(id, 0, true);
     this.listen = { song: s, ms: 0, lastTick: null, at: Date.now() };
     this.prefetch();
+  }
+
+  /**
+   * Deixa [list] na fila com a [index] pronta em [startS] segundos, pausada ([play]: tenta já tocar):
+   * o que tocava no celular, ou o que tocava nesta aba antes de recarregar. [at]: quando aquilo tocou.
+   */
+  cue(list, index = 0, startS = 0, source = null, { at = Date.now(), play = false, order = null } = {}) {
+    const songs = list.filter((s) => s?.videoId);
+    if (!songs.length) return;
+    this.finishListen();
+    this.items = songs.map((s) => ({ ...s }));
+    this.source = source;
+    this.index = Math.max(0, Math.min(index, songs.length - 1));
+    const valid = Array.isArray(order) && order.length === songs.length && new Set(order).size === songs.length && order.every((i) => Number.isInteger(i) && i >= 0 && i < songs.length);
+    this.order = this.shuffle ? (valid ? order : shuffled(songs.length, this.index)) : null;
+    this.tried.clear();
+    const s = this.current;
+    const start = Math.max(0, startS);
+    this.playingId = s.videoId;
+    this.lastActive = at;
+    this.set({ time: start, duration: (s.durationMs ?? 0) / 1000, state: play ? STATE.BUFFERING : STATE.CUED, blocked: false });
+    this.frame.load(s.videoId, start, play);
+    this.listen = { song: s, ms: 0, lastTick: null, at: Date.now() };
+    this.prefetch();
+  }
+
+  /** A fila como está (pra voltar igual depois de recarregar a página). */
+  snapshot() {
+    if (this.index < 0 || !this.current) return null;
+    // Uma fila enorme fica com as 300 em volta da que toca.
+    const from = Math.max(0, Math.min(this.index - 100, this.items.length - 300));
+    const items = this.items.slice(from, from + 300);
+    const keep = items.length === this.items.length;
+    return {
+      v: 1,
+      items,
+      index: this.index - from,
+      source: this.source,
+      order: keep ? this.order : null,
+      time: this.time,
+      playing: this.playing,
+      at: this.lastActive || Date.now(),
+      saved: Date.now(),
+    };
   }
 
   /** Quando faltam poucas na fila, já busca o rádio (a próxima não espera a rede). */
