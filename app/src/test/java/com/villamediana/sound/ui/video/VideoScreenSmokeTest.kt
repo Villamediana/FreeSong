@@ -48,7 +48,7 @@ import java.io.File
 
 /** The video screen against a fake [VideoPlayback] (no real player, no service, no database). */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35], application = Application::class)
+@Config(sdk = [35], application = Application::class, qualifiers = "pt-rBR")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class VideoScreenSmokeTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
@@ -289,7 +289,7 @@ class VideoScreenSmokeTest {
     }
 
     @Test
-    @Config(qualifiers = "w720dp-h360dp-land")
+    @Config(qualifiers = "pt-rBR-w720dp-h360dp-land")
     fun landscapePutsTitleAndBackToAudioOverTheVideo() {
         val video = FakeVideo()
         show(video)

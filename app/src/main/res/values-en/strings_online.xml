@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="online_error_no_network">No connection. Check the internet and try again.</string>
+    <string name="online_error_not_found">Not found.</string>
+    <string name="online_error_age_restricted">Age-restricted, so it can\'t be downloaded.</string>
+    <string name="online_error_geo_blocked">Not available in your country.</string>
+    <string name="online_error_unavailable">This isn\'t available.</string>
+    <string name="online_error_rate_limited">Too many requests right now. Try again in a bit.</string>
+    <string name="online_error_unknown">Something went wrong. Try again.</string>
+</resources>

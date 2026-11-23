@@ -24,7 +24,14 @@ class MainActivity : ComponentActivity() {
     /** Shared links (YouTube / YouTube Music) and online voice searches waiting for the Search screen. */
     private val incoming = MutableStateFlow<Inbound?>(null)
 
+    /** Android 8–12: the screen in the app's own language (13+ does it by itself). */
+    override fun attachBaseContext(newBase: android.content.Context) {
+        super.attachBaseContext(com.villamediana.sound.data.AppLanguage.wrap(newBase))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
+        // A new language rebuilds the screen: YouTube Music follows it.
+        runCatching { com.villamediana.sound.online.NewPipeHttp.relocalize(com.villamediana.sound.data.AppLanguage.contentLocale(this)) }
         val splash = installSplashScreen()
         // Only called when the system showed the splash: the logo stays a moment over the ready
         // app (it used to vanish with the first frame), then grows and fades away.

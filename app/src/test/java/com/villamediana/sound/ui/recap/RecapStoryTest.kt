@@ -36,7 +36,7 @@ import java.time.ZoneId
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [35], qualifiers = "w400dp-h860dp-xxhdpi")
+@Config(sdk = [35], qualifiers = "pt-rBR-w400dp-h860dp-xxhdpi")
 class RecapStoryTest {
     @get:Rule val compose = createComposeRule()
     @get:Rule val tmp = TemporaryFolder()
@@ -176,7 +176,7 @@ class RecapStoryTest {
     }
 
     @Test
-    @Config(qualifiers = "w360dp-h780dp-xhdpi")
+    @Config(qualifiers = "pt-rBR-w360dp-h780dp-xhdpi")
     fun theStoryAsAFilm() {
         if (!film) return
         val r = recap()

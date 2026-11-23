@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="recap_title">Your recap</string>
+    <string name="recap_title_year">Your %1$d recap</string>
+    <string name="recap_entry_sub">Your year in music · %1$s</string>
+    <string name="recap_hero_label">Your year in music</string>
+    <string name="recap_story_label">Recap %1$d</string>
+    <plurals name="recap_songs">
+        <item quantity="one">song</item>
+        <item quantity="other">songs</item>
+    </plurals>
+    <plurals name="recap_artists">
+        <item quantity="one">artist</item>
+        <item quantity="other">artists</item>
+    </plurals>
+    <plurals name="recap_plays">
+        <item quantity="one">play</item>
+        <item quantity="other">plays</item>
+    </plurals>
+    <plurals name="recap_times">
+        <item quantity="one">%d×</item>
+        <item quantity="other">%d×</item>
+    </plurals>
+    <plurals name="recap_times_long">
+        <item quantity="one">%d time</item>
+        <item quantity="other">%d times</item>
+    </plurals>
+    <string name="recap_hour">%dh</string>
+    <string name="recap_empty_title">No story yet</string>
+    <string name="recap_empty_body">Play some songs and come back here.</string>
+    <string name="recap_intro_hint">Tap to go on · hold to pause</string>
+    <string name="recap_date_pattern">MMMM d</string>
+    <string name="recap_first_label">It all started on</string>
+    <string name="recap_first_time">at %1$s</string>
+    <string name="recap_first_with">to the sound of</string>
+    <string name="recap_time_label">This year you listened to</string>
+    <string name="recap_time_unit">minutes of music</string>
+    <plurals name="recap_time_days">
+        <item quantity="one">that\'s %d whole day of nonstop music</item>
+        <item quantity="other">that\'s %d whole days of nonstop music</item>
+    </plurals>
+    <plurals name="recap_time_hours">
+        <item quantity="one">that\'s %d hour of nonstop music</item>
+        <item quantity="other">that\'s %d hours of nonstop music</item>
+    </plurals>
+    <string name="recap_months_title">Your year, month by month</string>
+    <string name="recap_months_peak">was your most musical month · %1$s listening</string>
+    <string name="recap_rhythm_label">Your time of day</string>
+    <string name="recap_rhythm_dawn">You\'re a night owl</string>
+    <string name="recap_rhythm_morning">You\'re a morning person</string>
+    <string name="recap_rhythm_afternoon">You\'re an afternoon person</string>
+    <string name="recap_rhythm_night">You\'re an evening person</string>
+    <string name="recap_rhythm_day">%1$s was your busiest day</string>
+    <plurals name="recap_rhythm_streak">
+        <item quantity="one">day in a row</item>
+        <item quantity="other">days in a row</item>
+    </plurals>
+    <string name="recap_rhythm_days">days with music</string>
+    <string name="recap_genre_label">The sound of your year</string>
+    <string name="recap_artist_tease">Someone never left your headphones…</string>
+    <string name="recap_artist_label">Your artist of the year</string>
+    <string name="recap_artist_stats">%1$s together · %2$s</string>
+    <string name="recap_artists_title">Who played most in your year</string>
+    <string name="recap_song_tease">And the song of your year is…</string>
+    <string name="recap_song_label">Your song of the year</string>
+    <plurals name="recap_song_plays">
+        <item quantity="one">You played it %d time</item>
+        <item quantity="other">You played it %d times</item>
+    </plurals>
+    <string name="recap_songs_title">Your most played songs of the year</string>
+    <string name="recap_outro_minutes">Minutes</string>
+    <string name="recap_outro_artist">Artist</string>
+    <string name="recap_outro_song">Song</string>
+    <string name="recap_outro_genre">Genre</string>
+    <string name="recap_outro_hour">Time</string>
+    <string name="recap_again">Watch again</string>
+    <string name="recap_sound_on">Sound on</string>
+    <string name="recap_sound_off">Sound off</string>
+    <string name="recap_close">Close</string>
+</resources>

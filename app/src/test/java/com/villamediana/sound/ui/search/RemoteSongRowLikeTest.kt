@@ -19,7 +19,7 @@ import org.robolectric.annotation.Config
 
 /** The heart next to the download button of an online song. */
 @RunWith(RobolectricTestRunner::class)
-@Config(application = Application::class, sdk = [35])
+@Config(application = Application::class, sdk = [35], qualifiers = "pt-rBR")
 class RemoteSongRowLikeTest {
     @get:Rule val compose = createComposeRule()
 

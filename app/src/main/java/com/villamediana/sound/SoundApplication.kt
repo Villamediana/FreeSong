@@ -17,12 +17,19 @@ class SoundApplication : Application(), SingletonImageLoader.Factory {
     lateinit var graph: AppGraph
         private set
 
+    /** Android 8–12: notifications and the rest of the app in the app's own language too. */
+    override fun attachBaseContext(base: android.content.Context) {
+        super.attachBaseContext(com.villamediana.sound.data.AppLanguage.wrap(base))
+    }
+
     override fun onCreate() {
         super.onCreate()
         // If the app ever closes by a crash, its first lines are kept (the update sheet shows why).
         runCatching { com.villamediana.sound.update.ExitReport.catchCrashes(this) }
         graph = AppGraph(this)
         instance = this
+        // YouTube Music answers in the language the app shows.
+        runCatching { com.villamediana.sound.online.NewPipeHttp.relocalize(com.villamediana.sound.data.AppLanguage.contentLocale(this)) }
         Notifications.createChannels(this)
         graph.downloads.kick()
         // Read now, so Ajustes opens with everything in place (no filling in while it slides in).

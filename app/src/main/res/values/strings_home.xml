@@ -152,4 +152,5 @@
     <string name="home_foryou_untitled">Seu mix</string>
     <string name="home_foryou_subtitle">%1$s e mais</string>
     <string name="home_foryou_subtitle_plain">Suas músicas e novidades</string>
+    <string name="home_settings_language">Idioma</string>
 </resources>

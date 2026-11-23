@@ -44,7 +44,7 @@ import java.io.File
 /** The update sheet in each step and the row in Ajustes. SOUND_SHOTS=1 writes PNGs to app/build/sound-shots/. */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [35], qualifiers = "w400dp-h860dp-xxhdpi")
+@Config(sdk = [35], qualifiers = "pt-rBR-w400dp-h860dp-xxhdpi")
 class UpdateUiTest {
     @get:Rule val compose = createComposeRule()
     @get:Rule val tmp = TemporaryFolder()

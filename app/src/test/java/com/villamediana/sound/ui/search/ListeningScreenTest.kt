@@ -23,7 +23,7 @@ import java.io.File
 
 /** The listening screen: listening, then not found with "try again". */
 @RunWith(RobolectricTestRunner::class)
-@Config(application = Application::class, sdk = [35], qualifiers = "w411dp-h891dp-xxhdpi")
+@Config(application = Application::class, sdk = [35], qualifiers = "pt-rBR-w411dp-h891dp-xxhdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class ListeningScreenTest {
     @get:Rule val compose = createComposeRule()

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">FreeSong</string>
+    <string name="tab_home">Home</string>
+    <string name="tab_search">Search</string>
+    <string name="tab_library">Library</string>
+    <string name="more_options">More options</string>
+    <string name="channel_playback">Playback</string>
+    <string name="channel_downloads">Downloads</string>
+    <string name="channel_downloads_done">Downloads finished</string>
+    <string name="play">Play</string>
+    <string name="pause">Pause</string>
+    <string name="shuffle">Shuffle</string>
+    <string name="back">Back</string>
+    <string name="cancel">Cancel</string>
+    <string name="save">Save</string>
+    <string name="delete">Delete</string>
+    <string name="unknown_artist">Unknown artist</string>
+    <plurals name="n_songs">
+        <item quantity="one">%d song</item>
+        <item quantity="other">%d songs</item>
+    </plurals>
+    <string name="n_songs_none">No songs</string>
+    <string name="share_song">Share song</string>
+    <string name="share_file">Send audio file</string>
+    <!-- The language YouTube Music answers in: the one the app shows. -->
+    <string name="content_language">en</string>
+</resources>

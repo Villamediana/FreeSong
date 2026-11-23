@@ -78,7 +78,7 @@ class RotationTest {
     }
 
     @Test
-    @Config(qualifiers = "w800dp-h800dp")
+    @Config(qualifiers = "pt-rBR-w800dp-h800dp")
     fun theVideoScreenTurnsInPlaceWithoutReopeningTheVideo() {
         val video = FakeVideo()
         val song = Track(id = 7, videoId = "abc123", title = "Aurora", artist = "Lua Nova", durationMs = 231_000, filePath = "/x/7.m4a")

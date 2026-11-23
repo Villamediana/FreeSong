@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Notificação de progresso -->
+    <string name="download_notif_preparing">Getting downloads ready</string>
+    <string name="download_notif_single">Downloading song</string>
+    <string name="download_notif_progress_title">Downloading %1$d of %2$d</string>
+    <string name="download_notif_track">%1$s · %2$s</string>
+    <string name="download_notif_more">%1$s and %2$d more</string>
+    <string name="download_notif_cancel">Cancel</string>
+    <string name="download_separator">" · "</string>
+
+    <!-- Resumo no fim -->
+    <plurals name="download_summary_done">
+        <item quantity="one">%d song downloaded</item>
+        <item quantity="many">%d songs downloaded</item>
+        <item quantity="other">%d songs downloaded</item>
+    </plurals>
+    <plurals name="download_summary_failed">
+        <item quantity="one">%d failed</item>
+        <item quantity="many">%d failed</item>
+        <item quantity="other">%d failed</item>
+    </plurals>
+    <plurals name="download_summary_failed_title">
+        <item quantity="one">%d download failed</item>
+        <item quantity="many">%d downloads failed</item>
+        <item quantity="other">%d downloads failed</item>
+    </plurals>
+
+    <!-- Erros (curtos, aparecem na tela de downloads) -->
+    <string name="download_error_network">No internet connection</string>
+    <string name="download_error_timeout">The connection took too long</string>
+    <string name="download_error_http">The server answered with error %d</string>
+    <string name="download_error_forbidden">Download refused. Try again</string>
+    <string name="download_error_unavailable">Video unavailable</string>
+    <string name="download_error_age">Age-restricted</string>
+    <string name="download_error_geo">Not available in your country</string>
+    <string name="download_error_rate_limited">Too many requests right now. Try later</string>
+    <string name="download_error_storage">No space on the device</string>
+    <string name="download_error_incomplete">The file arrived incomplete</string>
+    <string name="download_error_unknown">Couldn\'t download</string>
+    <string name="search_dl_waiting_network">Queued. Downloads when connected</string>
+    <string name="search_dl_waiting_wifi">Queued. Downloads on Wi-Fi</string>
+    <string name="download_wait_network">Downloads when connected</string>
+    <string name="download_wait_wifi">Downloads when on Wi-Fi</string>
+    <string name="download_wait_banner_network">No internet. Downloads start by themselves when you connect.</string>
+    <string name="download_wait_banner_wifi">Waiting for Wi-Fi. Downloads start by themselves once you\'re on it.</string>
+</resources>

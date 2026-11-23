@@ -27,7 +27,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35], qualifiers = "w400dp-h900dp-xxhdpi")
+@Config(sdk = [35], qualifiers = "pt-rBR-w400dp-h900dp-xxhdpi")
 class SwipeTabsTest {
     @get:Rule val compose = createComposeRule()
 

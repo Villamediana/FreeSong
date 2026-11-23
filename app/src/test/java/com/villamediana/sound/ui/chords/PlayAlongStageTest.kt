@@ -54,7 +54,7 @@ import java.io.File
 
 /** "Tocar junto": the lyrics as a stage, with PNGs in build/screenshots for a look. */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35], application = Application::class, qualifiers = "w411dp-h891dp-xxhdpi")
+@Config(sdk = [35], application = Application::class, qualifiers = "pt-rBR-w411dp-h891dp-xxhdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class PlayAlongStageTest {
     @get:Rule val compose = createComposeRule()
@@ -335,7 +335,7 @@ class PlayAlongStageTest {
     }
 
     @Test
-    @Config(qualifiers = "w891dp-h411dp-xxhdpi")
+    @Config(qualifiers = "pt-rBR-w891dp-h411dp-xxhdpi")
     fun lyingDown() {
         show(deps(heard()))
         compose.onNodeWithTag("playAlong").assertExists()

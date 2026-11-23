@@ -66,7 +66,7 @@ import org.robolectric.annotation.GraphicsMode
 /** Renders the real screens on Robolectric with fake online/download services and pokes at them. */
 @OptIn(ExperimentalTestApi::class)
 @RunWith(RobolectricTestRunner::class)
-@Config(application = Application::class, sdk = [35], qualifiers = "w411dp-h891dp-xxhdpi")
+@Config(application = Application::class, sdk = [35], qualifiers = "pt-rBR-w411dp-h891dp-xxhdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class SearchScreensSmokeTest {
     @get:Rule

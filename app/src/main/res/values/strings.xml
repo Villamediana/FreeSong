@@ -24,4 +24,6 @@
     <string name="n_songs_none">Nenhuma música</string>
     <string name="share_song">Compartilhar música</string>
     <string name="share_file">Enviar arquivo de áudio</string>
+    <!-- The language YouTube Music answers in: the one the app shows. -->
+    <string name="content_language">pt</string>
 </resources>

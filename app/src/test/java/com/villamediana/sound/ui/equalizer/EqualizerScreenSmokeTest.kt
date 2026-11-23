@@ -47,7 +47,7 @@ import androidx.compose.ui.test.onRoot
 import java.io.File
 
 @RunWith(RobolectricTestRunner::class)
-@Config(application = Application::class, sdk = [35], qualifiers = "w411dp-h891dp-xxhdpi")
+@Config(application = Application::class, sdk = [35], qualifiers = "pt-rBR-w411dp-h891dp-xxhdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class EqualizerScreenSmokeTest {
     @get:Rule

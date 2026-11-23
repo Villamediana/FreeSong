@@ -44,7 +44,7 @@ import java.io.File
 
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [35], qualifiers = "w400dp-h900dp-xxhdpi")
+@Config(sdk = [35], qualifiers = "pt-rBR-w400dp-h900dp-xxhdpi")
 class OutputSheetTest {
     @get:Rule val compose = createComposeRule()
 
