@@ -20,6 +20,7 @@ okhttp = "5.5.1"
 coroutines = "1.11.0"
 serialization = "1.12.0"
 newpipe-extractor = "v0.26.5"
+code-scanner = "16.1.0"
 junit = "4.13.2"
 robolectric = "4.17"
 androidx-test-core = "1.7.0"
@@ -65,6 +66,8 @@ coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-androi
 coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
 serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
 newpipe-extractor = { module = "com.github.TeamNewPipe:NewPipeExtractor", version.ref = "newpipe-extractor" }
+# Google's code scanner (the computer's QR code): the camera UI comes from Play services, no camera permission here.
+code-scanner = { module = "com.google.android.gms:play-services-code-scanner", version.ref = "code-scanner" }
 junit = { module = "junit:junit", version.ref = "junit" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
 androidx-test-core = { module = "androidx.test:core-ktx", version.ref = "androidx-test-core" }

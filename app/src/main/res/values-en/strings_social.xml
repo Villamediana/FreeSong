@@ -156,4 +156,22 @@
     <string name="chat_mic_busy">The microphone is busy right now.</string>
     <string name="social_cancel_request">Cancel request</string>
     <string name="social_sent">Sent requests</string>
+    <!-- FreeSong no computador (a web): ligar pelo QR code, a lista, desligar. -->
+    <string name="computers_title">Computer</string>
+    <string name="computers_body">Listen on your computer with your likes and playlists: open freesong.simplyonegoal.com/web and scan the code with your phone.</string>
+    <string name="computers_link">Link a computer</string>
+    <string name="computers_unlink">Unlink</string>
+    <string name="computers_shared">Only while the tab is open</string>
+    <string name="computers_by_code">With the recovery code</string>
+    <string name="computers_since">Linked on %1$s</string>
+    <string name="computer_confirm_title">Link this computer?</string>
+    <string name="computer_confirm_body">It will see and change your likes, playlists and what you listen to. Only link a code you opened yourself on the computer.</string>
+    <string name="computer_confirm">Link</string>
+    <string name="computer_linked">Computer linked: %1$s</string>
+    <string name="computer_not_code">That isn\'t a FreeSong code.</string>
+    <string name="computer_expired">The code expired. Show another one on the computer.</string>
+    <string name="computer_too_many">Too many computers linked. Unlink one.</string>
+    <string name="computer_failed">Couldn\'t link it right now.</string>
+    <string name="computer_unlinked">Computer unlinked</string>
+    <string name="computer_no_scanner">Couldn\'t open the camera. Point your phone\'s camera at the code.</string>
 </resources>

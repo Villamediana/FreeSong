@@ -771,7 +771,11 @@ test('números do perfil: só totais, conferidos, e só a pessoa e os amigos vee
 test('o banco guarda só o básico: nada de histórico legível, IP, último acesso ou versão do app', async () => {
   const db = new DatabaseSync(join(dir, 'freesong.db'), { readOnly: true });
   const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'").all().map((t) => t.name).sort();
-  assert.deepEqual(tables, ['deliveries', 'friend_requests', 'friendships', 'tokens', 'users', 'vaults', 'voice_notes']);
+  assert.deepEqual(tables, ['computers', 'deliveries', 'friend_requests', 'friendships', 'tokens', 'users', 'vaults', 'voice_notes']);
+  // Computadores ligados (a web): o nome que o navegador deu e quando apareceu por último (é o que
+  // desliga sozinho o esquecido ou o emprestado), nunca o IP; o token só em hash, as chaves são públicas.
+  const computerCols = db.prepare('PRAGMA table_info(computers)').all().map((c) => c.name).sort();
+  assert.deepEqual(computerCols, ['approved_at', 'created_at', 'id', 'last_seen', 'name', 'poll_hash', 'proof_key', 'shared', 'token_hash', 'user_id', 'via', 'web_key', 'wrapped']);
   // Áudio de voz: só o que está esperando entrega, preso a ela (sem quem mandou nem quando).
   const voiceCols = db.prepare('PRAGMA table_info(voice_notes)').all().map((c) => c.name).sort();
   assert.deepEqual(voiceCols, ['data', 'delivery_id', 'to_id']);

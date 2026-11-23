@@ -1,0 +1,72 @@
+{
+  "code": "7K2Q-M9XD-4TFA-H3RB",
+  "user": "uparity01",
+  "rawKey": "9onOM3FxfeEe1XqC2c7PYEWZvFBWbgqTDkHJX4BxIw8=",
+  "vault": "AYNxAjxNjiEF9s3a5HZyYn8+qP3Kxw+i3E5ByBGoJ9xhPTniQEKLYVl6Hn6aZsyNuSXDLKUQ3S+Srz9xNRj9C3MUlbvXx4igJ+eCnxRbd8PW8kD0D4JcG3ZOYkpEWrodCIAT40z/74xFBlxTqgh2UsSINUkfTtF83N8kJ4mNiTefbQsME+HIaHKjH0opAQLfznlBw/OgOsMUGhs5T5ITligwANeGRMvKg2tX79naDdzMgp25XS2Q6+Sw+zCzyxNmUqSgnuJPKNn4+bWvY5v1AcKiLitWawq7quI8etLQfRFIhG+6UqrDOWD6wn0ZK6nyDrExk6UMdbL/vfepl5Cle/RVjo4Ri9eoGl9vfSKWjdL0ljDUESiUxIjIvOlyq3Hjroc=",
+  "wrappedKey": "AbF6jk2IjBNtGiF59tA04vuUvmQKlH4sGWXAIcBqcPHfC6z9FaKtF+BIP6UnmCp7MV48cRLrvXNAPTTqFw==",
+  "content": {
+    "likes": [
+      {
+        "s": {
+          "i": "dQw4w9WgXcQ",
+          "t": "Oceano",
+          "a": "Djavan",
+          "al": "Djavan",
+          "d": 240000,
+          "c": "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg"
+        },
+        "at": 1700000000000
+      }
+    ],
+    "plays": [
+      {
+        "i": "dQw4w9WgXcQ",
+        "t": "Oceano",
+        "a": "Djavan",
+        "at": 1700000001000,
+        "l": 230000,
+        "d": 240000,
+        "c": true
+      }
+    ],
+    "lists": [
+      {
+        "k": "1700000002000",
+        "n": "Da web ção",
+        "at": 1700000002000,
+        "up": 1700000003000,
+        "s": [
+          {
+            "i": "abcdefghijk",
+            "t": "Flor de Lis",
+            "a": "Djavan"
+          }
+        ]
+      }
+    ],
+    "gen": {
+      "c": true,
+      "ids": [
+        "mpb"
+      ],
+      "at": 5
+    }
+  },
+  "link": {
+    "url": "https://freesong.simplyonegoal.com/web/link#FfTH2BD28H_ZcL4FCfC6iA.BGJ4M-d-ij0hCGMp9HaTYO-SxA1hsavdtSWKUGo8jv6Y9u0HcPI-JqilntTheZi4L7oCUXPbZ-B6RKp35rX4KDQ.RK3KorEEWnHyFPIEw8j1HQ",
+    "id": "FfTH2BD28H_ZcL4FCfC6iA",
+    "pub": "BGJ4M-d-ij0hCGMp9HaTYO-SxA1hsavdtSWKUGo8jv6Y9u0HcPI-JqilntTheZi4L7oCUXPbZ-B6RKp35rX4KDQ",
+    "secret": "RK3KorEEWnHyFPIEw8j1HQ",
+    "privateJwk": {
+      "key_ops": [
+        "deriveBits"
+      ],
+      "ext": true,
+      "kty": "EC",
+      "x": "Yngz536KPSEIYyn0dpNg75LEDWGxq921JYpQajyO_pg",
+      "y": "9u0HcPI-JqilntTheZi4L7oCUXPbZ-B6RKp35rX4KDQ",
+      "crv": "P-256",
+      "d": "iEzQRHMOs03SXexl5YbBWtW_wlthqYzkDxW0s02xEW4"
+    }
+  }
+}

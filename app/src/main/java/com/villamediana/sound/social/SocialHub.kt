@@ -369,6 +369,43 @@ class SocialHub(
         quietly { syncStats() }
     }
 
+    // ------------------------------------------------------------------ computers (the web)
+
+    private val _computers = MutableStateFlow<List<Computer>>(emptyList())
+    /** The computers linked to this profile (FreeSong on the web), as last seen. */
+    val computers: StateFlow<List<Computer>> = _computers
+
+    suspend fun refreshComputers() {
+        if (!account.ready) return
+        quietly { _computers.value = withContext(Dispatchers.IO) { account.api.computers() } }
+    }
+
+    /**
+     * Links the computer whose QR code was read: the vault's key goes to it, encrypted to its own key
+     * (made first, if this phone never synced). Returns the computer's name.
+     */
+    suspend fun linkComputer(code: ComputerLink.Code): Result<String> = runCatching {
+        val me = account.me.value ?: account.ensure() ?: throw IOException("no profile")
+        var key = account.vaultKey(me.id)
+        if (key == null) {
+            vault.sync()
+            key = account.vaultKey(me.id)
+        }
+        if (key == null) throw RelayException(409, "no_vault")
+        val owner = listOfNotNull(android.os.Build.MANUFACTURER?.replaceFirstChar { it.uppercase() }, android.os.Build.MODEL)
+            .distinct().joinToString(" ").trim().take(60)
+        val wrapped = withContext(Dispatchers.Default) { ComputerLink.wrap(code, me.id, key, owner) }
+        val name = withContext(Dispatchers.IO) { account.api.approveLink(code.linkId, wrapped, owner) }
+        refreshComputers()
+        name
+    }
+
+    suspend fun unlinkComputer(id: String): Result<Unit> = runCatching {
+        withContext(Dispatchers.IO) { account.api.unlinkComputer(id) }
+        _computers.value = _computers.value.filterNot { it.id == id }
+        refreshComputers()
+    }
+
     /** A new recovery code: shown here, and the vault's key wrapped by it (the old code opens nothing). */
     suspend fun newRecoveryCode(): Result<String> = account.newRecoveryCode().onSuccess { code ->
         quietly { vault.rekey(code) }
@@ -403,6 +440,8 @@ class SocialHub(
             }
             is RelayEvent.Typing -> typingFrom(event.from, event.on)
             is RelayEvent.ProfileChanged -> profileChanged(event.user)
+            // A computer (or another phone) of this profile changed hearts, playlists, listening: in now.
+            is RelayEvent.VaultChanged -> vault.sync()
             is RelayEvent.JamInvited -> if (!_foreground.value) SocialNotifier.jam(context, event.invite.from)
             // The profile was deleted on another phone, or this one was signed out from another:
             // the account check forgets it here (and the jam stops), a passing glitch keeps it.

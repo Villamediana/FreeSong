@@ -1,7 +1,45 @@
-# FreeSong relay: API (v1.7.0)
+# FreeSong relay: API (v1.8.0)
 
 Contrato entre o app e o servidor. Endereço: `https://freesong.simplyonegoal.com`.
 Instalação do servidor: [DEPLOY.md](DEPLOY.md).
+
+## Novidades da 1.8.0
+
+**Computadores** (o FreeSong na web, `https://freesong.simplyonegoal.com/web`, código em `web/`). Um
+computador não é um celular: não entra na tabela de tokens (não derruba celular nenhum, teto próprio de
+10 por perfil) e **cada pedido dele vem assinado** por uma chave ECDSA P-256 que só o navegador tem
+(`src/computers.js`):
+
+- `X-FreeSong-Sig: <ms>.<nonce>.<assinatura>` sobre
+  `freesong-web-v1\n<método>\n<caminho com ?…>\n<ms>\n<nonce>\n<SHA-256 do corpo em hex>` (base64url,
+  formato IEEE P1363). Fora de ±2 min, outra chave, outro corpo ou nonce repetido → `401 bad_proof`
+  (com `now`, a hora daqui). Token de computador que não existe mais → `401 unlinked`.
+- Computador só usa: `GET/PATCH /v1/me`, foto, `GET/PUT /v1/me/vault`, `GET /v1/friends`,
+  `GET /v1/users/:id`, `POST /v1/shares`, `POST /v1/messages`, `POST /v1/link/shared`, `DELETE /v1/link`.
+  O resto → `403 phone_only`.
+
+Ligar (o mesmo do Novelo Web):
+
+| Método e rota | Quem | Corpo | Resposta |
+|---|---|---|---|
+| `POST /v1/link` | computador | `{key (ECDH crua, base64url), proof (ECDSA crua), name}` | `201 {id, poll, expires_in}` |
+| `GET /v1/link/:id?wait=25` | computador | cabeçalho `X-FreeSong-Poll` | `{status: "pending"}` ou, uma vez, `{status: "linked", token, wrapped, owner, me}` (`410 expired/delivered`, `404 no_link`) |
+| `POST /v1/link/:id/approve` | celular | `{wrapped: {pub, iv, ct}, owner}` | `{id, name}` (`410 expired`, `409 too_many`) |
+| `POST /v1/link/recover` | computador | `{code, proof, name}` | `{token, me}` (sem o celular: o código de recuperação) |
+| `GET /v1/me/computers` | celular | | `{computers: [{id, name, via, shared, linkedAt, lastSeen}]}` |
+| `DELETE /v1/me/computers/:id` | celular | | `{ok}` |
+| `DELETE /v1/link` | computador | | `{ok}` (ele mesmo se desliga) |
+| `POST /v1/link/shared` | computador | | `{ok}` (não é dele: sem sinal por 30 min, desligado) |
+
+`wrapped` é a chave do cofre cifrada pro computador: AES-256-GCM com HKDF-SHA256(ECDH ‖ segredo do QR
+code, sal = id do código, info `freesong-link-v1`), AAD = id do código; texto `{user, key (base64url,
+32 bytes), owner}`. O segredo só passa pela tela e pela câmera: o relay carrega uma resposta que não
+abre nem consegue forjar. O QR code é `https://freesong.simplyonegoal.com/web/link#<id>.<pública>.<segredo>`
+(App Link do app). "Sair dos outros aparelhos" desliga os computadores também.
+
+**Cofre na hora**: `GET /v1/me/vault?after=<rev>` devolve só `{rev, same: true}` se não mudou; com
+`&wait=<s>` (até 25) espera mudar. E no WebSocket, `{t: "vault", rev}` quando outro aparelho ou um
+computador grava (o celular que gravou não recebe): o app sincroniza na hora.
 
 ## Novidades da 1.7.0
 
@@ -242,6 +280,7 @@ Do servidor pro app:
 | `jam` | `jam, rejected?` | a jam mudou (ou sua mudança foi recusada: `stale`/`invalid`) |
 | `jam.ended` | `jamId` | a jam acabou, você saiu dela (por este ou outro celular, ou por sumir 15 min) ou não está nela |
 | `typing` | `from, on` | um amigo começou (`on: true`) ou parou de escrever pra você |
+| `vault` | `rev` | o cofre mudou em outro aparelho ou num computador do perfil (sincronize) |
 | `profile` | `user` | nome ou foto de um amigo (perfil completo), de alguém da sua jam (público) ou seu (outro celular) mudou; também quando os números de um amigo mudam (`PUT /v1/me/stats` com algo novo, só para os amigos) |
 
 Do app pro servidor (até 64 KB por mensagem; toda mensagem conta no limite de 600/min):

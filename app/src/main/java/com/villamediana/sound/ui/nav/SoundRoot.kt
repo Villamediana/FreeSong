@@ -112,9 +112,16 @@ fun SoundRoot(incoming: MutableStateFlow<Inbound?>) {
 
     // Shared YouTube links and voice requests the library can't play → the Search screen takes them.
     val inbound by incoming.collectAsState()
+    // A computer's QR code read by the phone's camera: "Ligar este computador?" over whatever is open.
+    var computerCode by remember { mutableStateOf<com.villamediana.sound.social.ComputerLink.Code?>(null) }
+    computerCode?.let { com.villamediana.sound.ui.social.LinkComputerDialog(it, onDismiss = { computerCode = null }) }
     LaunchedEffect(inbound) {
         val item = inbound ?: return@LaunchedEffect
         incoming.value = null
+        if (item is Inbound.Computer) {
+            computerCode = item.code
+            return@LaunchedEffect
+        }
         // A Spotify playlist shared to FreeSong: the import, on the Playlists tab.
         if (item is Inbound.Link && com.villamediana.sound.online.SpotifyLinks.mentions(item.text)) {
             com.villamediana.sound.ui.library.SpotifyImportRequest.show(item.text)

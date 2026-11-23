@@ -156,4 +156,22 @@
     <string name="chat_mic_busy">O microfone está ocupado agora.</string>
     <string name="social_cancel_request">Cancelar pedido</string>
     <string name="social_sent">Pedidos enviados</string>
+    <!-- FreeSong no computador (a web): ligar pelo QR code, a lista, desligar. -->
+    <string name="computers_title">Computador</string>
+    <string name="computers_body">Ouça no computador com suas curtidas e playlists: abra freesong.simplyonegoal.com/web e leia o código com o celular.</string>
+    <string name="computers_link">Ligar um computador</string>
+    <string name="computers_unlink">Desligar</string>
+    <string name="computers_shared">Só enquanto a aba estiver aberta</string>
+    <string name="computers_by_code">Pelo código de recuperação</string>
+    <string name="computers_since">Ligado em %1$s</string>
+    <string name="computer_confirm_title">Ligar este computador?</string>
+    <string name="computer_confirm_body">Ele vai ver e mudar suas curtidas, playlists e o que você ouve. Só ligue um código que você mesmo abriu no computador.</string>
+    <string name="computer_confirm">Ligar</string>
+    <string name="computer_linked">Computador ligado: %1$s</string>
+    <string name="computer_not_code">Esse não é um código do FreeSong.</string>
+    <string name="computer_expired">O código expirou. Mostre outro no computador.</string>
+    <string name="computer_too_many">Computadores demais ligados. Desligue um.</string>
+    <string name="computer_failed">Não deu pra ligar agora.</string>
+    <string name="computer_unlinked">Computador desligado</string>
+    <string name="computer_no_scanner">Não deu pra abrir a câmera. Aponte a câmera do celular pro código.</string>
 </resources>

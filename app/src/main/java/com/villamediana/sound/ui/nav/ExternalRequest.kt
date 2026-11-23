@@ -9,6 +9,9 @@ internal sealed interface ExternalRequest {
     /** A YouTube / YouTube Music link (or text with one) for the Search screen to resolve. */
     data class OpenLink(val text: String) : ExternalRequest
 
+    /** A computer's QR code (FreeSong on the web), opened by the phone's camera. */
+    data class LinkComputer(val code: com.villamediana.sound.social.ComputerLink.Code) : ExternalRequest
+
     /** "Ok Google, tocar … no Sound" (MEDIA_PLAY_FROM_SEARCH); an empty query means "play something". */
     data class PlayFromSearch(val query: String) : ExternalRequest
 
@@ -26,6 +29,7 @@ internal sealed interface ExternalRequest {
                 Intent.ACTION_VIEW -> intent.dataString
                 else -> null
             }
+            if (intent.action == Intent.ACTION_VIEW) com.villamediana.sound.social.ComputerLink.code(text)?.let { return LinkComputer(it) }
             // A link FreeSong shared (opened from a chat, the browser) is the YouTube link it stands for.
             return text?.takeIf { it.isNotBlank() }?.let { OpenLink(com.villamediana.sound.online.FreeSongLinks.unwrap(it)) }
         }

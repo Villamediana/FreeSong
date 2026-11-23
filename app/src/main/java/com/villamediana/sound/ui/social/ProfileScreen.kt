@@ -84,7 +84,13 @@ fun ProfileScreen() {
     var menu by rememberSaveable { mutableStateOf(false) }
     var recovering by rememberSaveable { mutableStateOf(false) }
     var deleting by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(Unit) { hub.account.refresh() }
+    // A computer's QR code just read, waiting for "Ligar".
+    var linking by remember { mutableStateOf<com.villamediana.sound.social.ComputerLink.Code?>(null) }
+    val computers by hub.computers.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) {
+        hub.account.refresh()
+        hub.refreshComputers()
+    }
 
     // Picked → framed in the circle → applied.
     val gallery = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
@@ -115,7 +121,17 @@ fun ProfileScreen() {
         },
         onNewCode = { scope.launch { hub.newRecoveryCode() } },
         onUseCode = { recovering = true },
+        computers = computers,
+        onLinkComputer = { scanComputerCode(context) { linking = it } },
+        onUnlinkComputer = { c ->
+            scope.launch {
+                hub.unlinkComputer(c.id)
+                    .onSuccess { snackbar.feedback.show(res.getString(R.string.computer_unlinked)) }
+                    .onFailure { snackbar.feedback.show(res.getString(R.string.profile_error_network)) }
+            }
+        },
         sheets = {
+            linking?.let { LinkComputerDialog(it, onDismiss = { linking = null }) }
             framing?.let { photo ->
                 PhotoCropDialog(
                     photo = remember(photo) { photo.asImageBitmap() },
@@ -185,6 +201,9 @@ internal fun ProfilePage(
     onCopy: () -> Unit,
     onNewCode: () -> Unit,
     onUseCode: () -> Unit,
+    computers: List<com.villamediana.sound.social.Computer> = emptyList(),
+    onLinkComputer: (() -> Unit)? = null,
+    onUnlinkComputer: (com.villamediana.sound.social.Computer) -> Unit = {},
     sheets: @Composable () -> Unit = {},
 ) {
     PersonPage(
@@ -207,6 +226,9 @@ internal fun ProfilePage(
         sheets = sheets,
         more = {
             item(key = "recovery", contentType = "card") { RecoveryCard(code, onCopy = onCopy, onNew = onNewCode, onUseCode = onUseCode) }
+            if (onLinkComputer != null) {
+                item(key = "computers", contentType = "card") { ComputersCard(computers, onLink = onLinkComputer, onUnlink = onUnlinkComputer) }
+            }
         },
     )
 }

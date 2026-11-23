@@ -20,8 +20,9 @@ import { cleanNumbers } from './numbers.js';
 import { cleanJpeg } from './jpeg.js';
 import { cleanDisplayName, cleanMessage, normalizeUsername, randomIdentity } from './names.js';
 import { ASSET_LINKS, PAGE_CSP, page as linkPage, target as linkTarget } from './links.js';
+import { Computers } from './computers.js';
 
-export const VERSION = '1.7.0';
+export const VERSION = '1.8.0';
 /** O nome público do servidor: é pra ele que o "Abrir no FreeSong" da página de um link aponta. */
 const PUBLIC_HOST = process.env.PUBLIC_HOST || 'freesong.simplyonegoal.com';
 const JSON_LIMIT = 64 * 1024;
@@ -149,7 +150,14 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
     jamInvites: new Limiter(20, HOUR, clock), // convites de jam de uma pessoa pra outra
     jamRejects: new Limiter(10, MINUTE, clock), // por pessoa: jam devolvida pelo WebSocket quando passou do teto
     vaultPuts: new Limiter(120, HOUR, clock), // por pessoa: cofre gravado (vários celulares sincronizando)
+    links: new Limiter(30, MINUTE, clock), // por IP: códigos novos pra ligar um computador
+    linkPolls: new Limiter(120, MINUTE, clock), // por IP: o computador perguntando se o celular já leu
   };
+  /** Computadores ligados aos perfis (a web): ver computers.js. */
+  const computers = new Computers(store.db, clock);
+  /** userId → quem espera o cofre mudar (a web, numa espera longa). */
+  const vaultWaits = new Map();
+  let vaultWaiting = 0;
   /** userId → sockets abertos (um por celular com o app aberto) */
   const sockets = new Map();
   let socketCount = 0;
@@ -275,9 +283,44 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
     for (const f of new Set(store.friendIds(userId))) emit(f, full);
   }
 
+  /** Espera o cofre de [userId] mudar (até [ms]); com gente demais esperando, volta na hora. */
+  function vaultChange(userId, ms) {
+    const set = vaultWaits.get(userId);
+    if ((set?.size ?? 0) >= 4 || vaultWaiting >= 2000) return Promise.resolve();
+    vaultWaiting++;
+    return new Promise((resolve) => {
+      let s = vaultWaits.get(userId);
+      if (!s) vaultWaits.set(userId, (s = new Set()));
+      const done = () => {
+        clearTimeout(timer);
+        s.delete(done);
+        if (!s.size) vaultWaits.delete(userId);
+        vaultWaiting--;
+        resolve();
+      };
+      const timer = setTimeout(done, ms);
+      s.add(done);
+    });
+  }
+
+  /**
+   * O cofre mudou: quem esperava (a web) fica sabendo, e os outros celulares abertos da pessoa
+   * sincronizam na hora (`{t: "vault", rev}`; o celular que gravou, [writerHash], não precisa).
+   */
+  function vaultChanged(userId, rev, writerHash) {
+    for (const wake of [...(vaultWaits.get(userId) ?? [])]) wake();
+    const text = JSON.stringify({ t: 'vault', rev });
+    for (const ws of sockets.get(userId) ?? []) if (ws.tokenHash !== writerHash) send(ws, text);
+  }
+
   // ---------------------------------------------------------------- HTTP
 
   async function body(req, limit) {
+    // Pedido de computador: o corpo já foi lido pra conferir a assinatura.
+    if (req.rawBody) {
+      if (req.rawBody.length > limit) throw new HttpError(413, 'too_large');
+      return req.rawBody;
+    }
     const chunks = [];
     let size = 0;
     for await (const chunk of req) {
@@ -321,7 +364,18 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
     return null;
   };
 
-  function auth(req) {
+  /**
+   * Quem pede. Celular: o token. Computador (a web): o token e a assinatura dele, já conferidos em
+   * handle(); só nas rotas que aceitam computador ([computer]), o resto é coisa do celular.
+   */
+  function auth(req, { computer = false } = {}) {
+    if (req.computer) {
+      if (!computer) throw new HttpError(403, 'phone_only');
+      const user = store.user(req.computer.user_id);
+      if (!user) throw new HttpError(401, 'unlinked');
+      if (!limits.requests.take(user.id)) throw new HttpError(429, 'slow_down');
+      return user;
+    }
     const user = store.userByToken(tokenOf(req));
     if (!user) {
       // Chutar tokens também tem limite (por IP).
@@ -365,15 +419,15 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
   // código de recuperação). Junto com um código novo, tira de vez quem tinha o antigo.
   route('DELETE', /^\/v1\/me\/sessions$/, (req) => {
     const me = auth(req);
-    const revoked = store.revokeOtherTokens(me.id, sha256(tokenOf(req)));
+    const revoked = store.revokeOtherTokens(me.id, sha256(tokenOf(req))) + computers.unlinkAll(me.id);
     dropRevokedSockets(me.id);
     return { revoked };
   });
 
-  route('GET', /^\/v1\/me$/, (req) => ({ me: fullProfile(auth(req)) }));
+  route('GET', /^\/v1\/me$/, (req) => ({ me: fullProfile(auth(req, { computer: true })) }));
 
   route('PATCH', /^\/v1\/me$/, async (req) => {
-    const me = auth(req);
+    const me = auth(req, { computer: true });
     const b = await json(req);
     const change = {};
     if (b.name !== undefined) {
@@ -394,15 +448,24 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
 
   // Cofre: curtidas, histórico, playlists e músicas trocadas, cifrados no celular com uma chave que
   // só o código de recuperação abre. Aqui é só guardado e devolvido: o servidor não lê.
-  route('GET', /^\/v1\/me\/vault$/, (req) => {
-    const me = auth(req);
-    const v = store.vault(me.id);
+  // ?after=<rev>: quem já tem essa versão recebe só {rev, same: true}; com &wait=<s> (até 25), espera
+  // ela mudar antes de responder (a web fica sabendo na hora do que o celular gravou).
+  route('GET', /^\/v1\/me\/vault$/, async (req, url) => {
+    const me = auth(req, { computer: true });
+    const after = /^\d{1,12}$/.test(url.searchParams.get('after') ?? '') ? Number(url.searchParams.get('after')) : null;
+    const wait = Math.min(25, Math.max(0, parseInt(url.searchParams.get('wait') ?? '0', 10) || 0)) * 1000;
+    let v = store.vault(me.id);
+    if (after != null && wait > 0 && (v?.rev ?? 0) === after) {
+      await vaultChange(me.id, wait);
+      v = store.vault(me.id);
+    }
     if (!v) throw new HttpError(404, 'no_vault');
+    if (after != null && v.rev === after) return { rev: v.rev, same: true, updatedAt: v.updated_at };
     return { rev: v.rev, key: v.key, data: Buffer.from(v.data).toString('base64'), updatedAt: v.updated_at };
   });
 
   route('PUT', /^\/v1\/me\/vault$/, async (req) => {
-    const me = auth(req);
+    const me = auth(req, { computer: true });
     if (!limits.vaultPuts.take(me.id)) throw new HttpError(429, 'slow_down');
     const raw = await body(req, VAULT_BODY_LIMIT);
     let b;
@@ -425,12 +488,13 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
     const r = store.putVault(me.id, b.baseRev, key, data, clock());
     if (r.stale) throw new HttpError(409, 'stale', { rev: r.rev });
     if (r.nokey) throw new HttpError(400, 'bad_vault');
+    vaultChanged(me.id, r.rev, req.computer ? null : sha256(tokenOf(req)));
     return { rev: r.rev };
   });
 
   // Foto: JPEG já reduzido pelo app (512 px). Sai daqui só a imagem: sem EXIF/GPS nem nada colado.
   route('PUT', /^\/v1\/me\/avatar$/, async (req) => {
-    const me = auth(req);
+    const me = auth(req, { computer: true });
     const img = cleanJpeg(await body(req, AVATAR_LIMIT));
     if (!img) throw new HttpError(400, 'not_jpeg');
     const tmp = avatarPath(me.id) + '.tmp';
@@ -442,7 +506,7 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
   });
 
   route('DELETE', /^\/v1\/me\/avatar$/, (req) => {
-    const me = auth(req);
+    const me = auth(req, { computer: true });
     rmSync(avatarPath(me.id), { force: true });
     store.bumpAvatar(me.id, false);
     profileChanged(me.id);
@@ -489,6 +553,80 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
     return { ok: true };
   });
 
+  // ---------------------------------------------------------------- computadores (a web)
+
+  const LINK_ERRORS = {
+    bad_key: [400, 'bad_key'], bad_proof_key: [400, 'bad_proof_key'], bad_wrapped: [400, 'bad_wrapped'],
+    busy: [503, 'busy'], expired: [410, 'expired'], delivered: [410, 'delivered'], no_link: [404, 'no_link'],
+    too_many: [409, 'too_many'],
+  };
+  const linkError = (code) => new HttpError(...(LINK_ERRORS[code] ?? [400, code]));
+
+  // O computador pede um código pro QR: {key (ECDH), proof (ECDSA), name} → {id, poll, expires_in}.
+  route('POST', /^\/v1\/link$/, async (req) => {
+    if (!limits.links.take(ipOf(req))) throw new HttpError(429, 'slow_down');
+    const b = await json(req);
+    const r = computers.start(b.key, b.proof, b.name);
+    if (r.error) throw linkError(r.error);
+    return { status: 201, body: r };
+  });
+
+  // Sem o celular: o código de recuperação liga o computador (a chave do cofre o próprio código abre).
+  route('POST', /^\/v1\/link\/recover$/, async (req) => {
+    if (!limits.recover.take(ipOf(req))) throw new HttpError(429, 'slow_down');
+    const b = await json(req);
+    const user = store.userByRecovery(b.code);
+    if (!user) throw new HttpError(404, 'unknown_code');
+    const r = computers.recover(user.id, b.proof, b.name);
+    if (r.error) throw linkError(r.error);
+    return { token: r.token, me: fullProfile(user) };
+  });
+
+  // O computador não é da pessoa ("Manter ligado" desmarcado): desliga quando a aba fechar.
+  route('POST', /^\/v1\/link\/shared$/, (req) => {
+    auth(req, { computer: true });
+    if (!req.computer) throw new HttpError(403, 'computer_only');
+    computers.markShared(req.computer.id);
+    return { ok: true };
+  });
+
+  // O próprio computador se desliga ("Desligar este computador", ou a aba de um computador emprestado fechando).
+  route('DELETE', /^\/v1\/link$/, (req) => {
+    const me = auth(req, { computer: true });
+    if (!req.computer) throw new HttpError(403, 'computer_only');
+    computers.unlink(me.id, req.computer.id);
+    return { ok: true };
+  });
+
+  // O computador espera o celular ler o código (o `poll` num cabeçalho, nunca no endereço).
+  route('GET', /^\/v1\/link\/([A-Za-z0-9_-]{22})$/, async (req, url, [id]) => {
+    if (!limits.linkPolls.take(ipOf(req))) throw new HttpError(429, 'slow_down');
+    const wait = Math.min(25, Math.max(0, parseInt(url.searchParams.get('wait') ?? '0', 10) || 0)) * 1000;
+    const r = await computers.poll(id, req.headers['x-freesong-poll'], wait);
+    if (r.error) throw linkError(r.error);
+    if (r.status !== 'linked') return r;
+    const user = store.user(r.userId);
+    if (!user) throw linkError('expired');
+    return { status: 'linked', token: r.token, wrapped: r.wrapped, owner: r.owner, me: fullProfile(user) };
+  });
+
+  // O celular leu o código: manda a chave do cofre cifrada pro computador ({pub, iv, ct}).
+  route('POST', /^\/v1\/link\/([A-Za-z0-9_-]{22})\/approve$/, async (req, url, [id]) => {
+    const me = auth(req);
+    const b = await json(req);
+    const r = computers.approve(me.id, id, b.wrapped, b.owner);
+    if (r.error) throw linkError(r.error);
+    return r;
+  });
+
+  // Os computadores ligados (no celular), e desligar um.
+  route('GET', /^\/v1\/me\/computers$/, (req) => ({ computers: computers.list(auth(req).id) }));
+
+  route('DELETE', /^\/v1\/me\/computers\/([A-Za-z0-9_-]{22})$/, (req, url, [id]) => {
+    const me = auth(req);
+    return { ok: computers.unlink(me.id, id) };
+  });
+
   // Lista global: foto, @nome e nome de todos; horas e top 5 só de amigos.
   route('GET', /^\/v1\/users$/, (req, url) => {
     const me = auth(req);
@@ -505,7 +643,7 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
   });
 
   route('GET', /^\/v1\/users\/([a-z0-9]+)$/, (req, url, [id]) => {
-    const me = auth(req);
+    const me = auth(req, { computer: true });
     const u = store.user(id);
     if (!u) throw new HttpError(404, 'unknown_user');
     const rel = store.relations(me.id, [u.id]).get(u.id);
@@ -513,7 +651,7 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
   });
 
   route('GET', /^\/v1\/friends$/, (req) => {
-    const me = auth(req);
+    const me = auth(req, { computer: true });
     return {
       friends: store.friends(me.id).map((u) => ({ ...fullProfile(u), friendsSince: u.friends_since })),
       incoming: store.incoming(me.id).map((u) => ({ requestId: u.request_id, at: u.requested_at, user: publicProfile(u) })),
@@ -599,7 +737,7 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
   }
 
   route('POST', /^\/v1\/shares$/, async (req) => {
-    const me = auth(req);
+    const me = auth(req, { computer: true });
     const b = await json(req);
     const to = conversationWith(me, b.to);
     const track = cleanTrack(b.track);
@@ -609,7 +747,7 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
   });
 
   route('POST', /^\/v1\/messages$/, async (req) => {
-    const me = auth(req);
+    const me = auth(req, { computer: true });
     const b = await json(req);
     const to = conversationWith(me, b.to);
     const text = cleanMessage(b.text);
@@ -867,6 +1005,21 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
         res.end(img);
         return;
       }
+      // Um computador (a web): o token dele e a assinatura do pedido, conferidos antes de tudo. O corpo é
+      // lido aqui (é parte do que foi assinado) só depois de saber que o token é de um computador.
+      const sig = req.headers['x-freesong-sig'];
+      if (sig !== undefined) {
+        const c = computers.byToken(tokenOf(req));
+        if (!c) {
+          if (!limits.badAuth.take(ipOf(req))) throw new HttpError(429, 'slow_down');
+          throw new HttpError(401, 'unlinked');
+        }
+        const raw = await body(req, VAULT_BODY_LIMIT);
+        const why = computers.check(c, req.method, req.url, sig, raw);
+        if (why) throw new HttpError(401, 'bad_proof', { now: clock(), why });
+        req.rawBody = raw;
+        req.computer = c;
+      }
       let methodMismatch = false;
       for (const r of routes) {
         const m = url.pathname.match(r.pattern);
@@ -1023,6 +1176,7 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
         }
       }
       sweepJams();
+      computers.sweep();
       store.expireDeliveries(clock() - DELIVERY_TTL_MS);
       for (const limiter of Object.values(limits)) limiter.sweep();
     } catch (e) {
@@ -1046,7 +1200,7 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
     });
   }
 
-  return { server, store, jams, sweepJams, close };
+  return { server, store, jams, computers, sweepJams, close };
 }
 
 // node src/server.js
