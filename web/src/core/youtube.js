@@ -29,12 +29,12 @@ export class YouTubeFrame {
     window.addEventListener('message', this.listen);
   }
 
-  src(videoId, start = 0, autoplay = true) {
+  /** O endereço do frame, sem vídeo: os vídeos chegam depois, por comando. */
+  src() {
     const p = new URLSearchParams({
       enablejsapi: '1',
       origin: location.origin,
       widget_referrer: location.origin,
-      autoplay: autoplay ? '1' : '0',
       playsinline: '1',
       rel: '0',
       iv_load_policy: '3',
@@ -45,34 +45,46 @@ export class YouTubeFrame {
       cc_load_policy: '0',
       hl: document.documentElement.lang || 'pt-BR',
     });
-    if (start > 0) p.set('start', String(Math.floor(start)));
-    return `${ORIGIN}/embed/${videoId}?${p}`;
+    return `${ORIGIN}/embed/?${p}`;
   }
 
-  /** Toca [videoId] (de [start] segundos): o primeiro cria o frame, os outros trocam o vídeo nele. */
+  /**
+   * Cria o frame vazio, já pronto pra tocar quando a pessoa pedir. Tocar por comando num frame pronto
+   * funciona sempre; um frame que nasce com autoplay (ainda invisível, no clique) o YouTube às vezes
+   * deixa parado — era a música que só tocava no segundo clique.
+   */
+  warm() {
+    if (this.frame) return;
+    const f = document.createElement('iframe');
+    f.title = 'YouTube';
+    f.allow = 'autoplay; encrypted-media; fullscreen; picture-in-picture';
+    f.allowFullscreen = true;
+    // A página não manda Referer pra ninguém; o player do YouTube precisa saber de onde é (erro 153).
+    f.referrerPolicy = 'strict-origin-when-cross-origin';
+    f.setAttribute('frameborder', '0');
+    f.src = this.src();
+    f.addEventListener('load', () => this.hello());
+    this.frame = f;
+    this.host.append(f);
+  }
+
+  /** Toca [videoId] de [start] segundos ([autoplay] false: deixa pronto, pausado ali). */
   load(videoId, start = 0, autoplay = true) {
     this.videoId = videoId;
     this.time = start;
     this.duration = 0;
-    if (!this.frame) {
-      const f = document.createElement('iframe');
-      f.title = 'YouTube';
-      f.allow = 'autoplay; encrypted-media; fullscreen; picture-in-picture';
-      f.allowFullscreen = true;
-      // A página não manda Referer pra ninguém; o player do YouTube precisa saber de onde é (erro 153).
-      f.referrerPolicy = 'strict-origin-when-cross-origin';
-      f.setAttribute('frameborder', '0');
-      f.src = this.src(videoId, start, autoplay);
-      f.addEventListener('load', () => this.hello());
-      this.frame = f;
-      this.host.append(f);
-      return;
-    }
-    if (!this.ready) {
-      this.frame.src = this.src(videoId, start, autoplay);
-      return;
-    }
+    this.failed = null;
+    this.warm();
     this.command(autoplay ? 'loadVideoById' : 'cueVideoById', [{ videoId, startSeconds: start }]);
+    clearTimeout(this.nudger);
+    // Mandou tocar e não começou nem deu erro: pede mais uma vez.
+    if (autoplay) this.nudger = setTimeout(() => this.nudge(videoId), 2500);
+  }
+
+  nudge(videoId) {
+    if (this.videoId !== videoId || this.failed === videoId) return;
+    if (this.state === STATE.PLAYING || this.state === STATE.BUFFERING || this.state === STATE.ENDED) return;
+    this.command('playVideo');
   }
 
   /** Avisa o frame que estamos ouvindo (até ele responder). */
@@ -119,7 +131,10 @@ export class YouTubeFrame {
       this.onReady();
     }
     if (m.event === 'onStateChange' && Number.isInteger(m.info)) this.setState(m.info);
-    else if (m.event === 'onError') this.onError(Number(m.info));
+    else if (m.event === 'onError') {
+      this.failed = this.videoId;
+      this.onError(Number(m.info));
+    }
     else if (m.event === 'onAutoplayBlocked') this.onBlocked();
     else if ((m.event === 'infoDelivery' || m.event === 'initialDelivery') && m.info && typeof m.info === 'object') {
       const i = m.info;
@@ -140,7 +155,10 @@ export class YouTubeFrame {
     this.onState(s);
   }
 
-  play() { this.command('playVideo'); }
+  play() {
+    this.failed = null;
+    this.command('playVideo');
+  }
   pause() { this.command('pauseVideo'); }
   stop() { this.command('stopVideo'); }
   seek(seconds) {
@@ -154,6 +172,7 @@ export class YouTubeFrame {
 
   destroy() {
     clearInterval(this.knock);
+    clearTimeout(this.nudger);
     window.removeEventListener('message', this.listen);
     this.frame?.remove();
     this.frame = null;

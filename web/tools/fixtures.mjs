@@ -25,6 +25,8 @@ const pair = await subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, tru
 const pub = lock.b64u.enc(new Uint8Array(await subtle.exportKey('raw', pair.publicKey)));
 const secret = lock.b64u.enc(globalThis.crypto.getRandomValues(new Uint8Array(16)));
 const linkId = lock.b64u.enc(globalThis.crypto.getRandomValues(new Uint8Array(16)));
+// O que toca agora, fechado pela página (o celular abre; e o cofre não abre isso).
+const nowPlain = { v: 1, dev: 'webfixture1', i: 'dQw4w9WgXcQ', t: 'Oceano', a: 'Djavan', al: 'Djavan', d: 240000, c: null, p: 61000, s: true, at: 1700000009000 };
 const out = {
   code,
   user,
@@ -32,6 +34,7 @@ const out = {
   vault: data,
   wrappedKey: wrapped,
   content,
+  now: { sealed: await lock.sealNow(nowPlain, key), plain: nowPlain },
   link: { url: lock.linkUrl('https://freesong.simplyonegoal.com', linkId, pub, secret), id: linkId, pub, secret, privateJwk: await subtle.exportKey('jwk', pair.privateKey) },
 };
 writeFileSync(path.join(here, '../../app/src/test/resources/web-fixtures.json'), JSON.stringify(out, null, 2) + '\n');

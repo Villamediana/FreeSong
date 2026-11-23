@@ -22,7 +22,7 @@ import { cleanDisplayName, cleanMessage, normalizeUsername, randomIdentity } fro
 import { ASSET_LINKS, PAGE_CSP, page as linkPage, target as linkTarget } from './links.js';
 import { Computers } from './computers.js';
 
-export const VERSION = '1.8.0';
+export const VERSION = '1.9.0';
 /** O nome público do servidor: é pra ele que o "Abrir no FreeSong" da página de um link aponta. */
 const PUBLIC_HOST = process.env.PUBLIC_HOST || 'freesong.simplyonegoal.com';
 const JSON_LIMIT = 64 * 1024;
@@ -37,6 +37,8 @@ const WAVE = /^[0-9a-f]{1,64}$/;
 /** O cofre (cifrado no celular): corpo do PUT e bytes guardados. */
 const VAULT_BODY_LIMIT = 6 * 1024 * 1024;
 const VAULT_DATA_MAX = 4 * 1024 * 1024;
+// O que toca agora (uma música e o ponto dela, cifrados): pequeno.
+const NOW_DATA_MAX = 4096;
 const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
 /** Entrega que o celular do amigo não buscou nesse tempo é apagada. */
 export const DELIVERY_TTL_MS = 14 * 24 * 3600_000;
@@ -150,6 +152,7 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
     jamInvites: new Limiter(20, HOUR, clock), // convites de jam de uma pessoa pra outra
     jamRejects: new Limiter(10, MINUTE, clock), // por pessoa: jam devolvida pelo WebSocket quando passou do teto
     vaultPuts: new Limiter(120, HOUR, clock), // por pessoa: cofre gravado (vários celulares sincronizando)
+    nowPuts: new Limiter(600, HOUR, clock), // por pessoa: o que toca agora (cada música, pausa ou pulo)
     links: new Limiter(30, MINUTE, clock), // por IP: códigos novos pra ligar um computador
     linkPolls: new Limiter(120, MINUTE, clock), // por IP: o computador perguntando se o celular já leu
   };
@@ -158,6 +161,12 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
   /** userId → quem espera o cofre mudar (a web, numa espera longa). */
   const vaultWaits = new Map();
   let vaultWaiting = 0;
+  /**
+   * userId → o que toca agora num aparelho do perfil, {rev, data, at}: cifrado com a chave do cofre (o
+   * relay não lê) e só na memória (é do momento). O mini player dos outros aparelhos mostra.
+   */
+  const nowPlaying = new Map();
+  const nowWaits = new Map();
   /** userId → sockets abertos (um por celular com o app aberto) */
   const sockets = new Map();
   let socketCount = 0;
@@ -283,24 +292,37 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
     for (const f of new Set(store.friendIds(userId))) emit(f, full);
   }
 
-  /** Espera o cofre de [userId] mudar (até [ms]); com gente demais esperando, volta na hora. */
-  function vaultChange(userId, ms) {
-    const set = vaultWaits.get(userId);
+  /**
+   * Espera algo de [userId] mudar (o cofre: [vaultWaits]; o que toca: [nowWaits]) até [ms]; com gente
+   * demais esperando, volta na hora.
+   */
+  function waitFor(waits, userId, ms) {
+    const set = waits.get(userId);
     if ((set?.size ?? 0) >= 4 || vaultWaiting >= 2000) return Promise.resolve();
     vaultWaiting++;
     return new Promise((resolve) => {
-      let s = vaultWaits.get(userId);
-      if (!s) vaultWaits.set(userId, (s = new Set()));
+      let s = waits.get(userId);
+      if (!s) waits.set(userId, (s = new Set()));
       const done = () => {
         clearTimeout(timer);
         s.delete(done);
-        if (!s.size) vaultWaits.delete(userId);
+        if (!s.size) waits.delete(userId);
         vaultWaiting--;
         resolve();
       };
       const timer = setTimeout(done, ms);
       s.add(done);
     });
+  }
+
+  /**
+   * Mudou o que toca num aparelho de [userId]: quem esperava (a web) fica sabendo, e os celulares
+   * abertos também (`{t: "now", rev}`; o que gravou, [writerHash], não precisa).
+   */
+  function nowChanged(userId, rev, writerHash) {
+    for (const wake of [...(nowWaits.get(userId) ?? [])]) wake();
+    const text = JSON.stringify({ t: 'now', rev });
+    for (const ws of sockets.get(userId) ?? []) if (ws.tokenHash !== writerHash) send(ws, text);
   }
 
   /**
@@ -456,7 +478,7 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
     const wait = Math.min(25, Math.max(0, parseInt(url.searchParams.get('wait') ?? '0', 10) || 0)) * 1000;
     let v = store.vault(me.id);
     if (after != null && wait > 0 && (v?.rev ?? 0) === after) {
-      await vaultChange(me.id, wait);
+      await waitFor(vaultWaits, me.id, wait);
       v = store.vault(me.id);
     }
     if (!v) throw new HttpError(404, 'no_vault');
@@ -490,6 +512,45 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
     if (r.nokey) throw new HttpError(400, 'bad_vault');
     vaultChanged(me.id, r.rev, req.computer ? null : sha256(tokenOf(req)));
     return { rev: r.rev };
+  });
+
+  // O que toca agora num aparelho do perfil (o mini player dos outros mostra, pausado ali): `data` é
+  // cifrado com a chave do cofre, aqui só guardado (na memória) e devolvido. ?after=<rev>&wait=<s> como
+  // no cofre. Sem nada: {rev: 0}.
+  route('GET', /^\/v1\/me\/now$/, async (req, url) => {
+    const me = auth(req, { computer: true });
+    const after = /^\d{1,15}$/.test(url.searchParams.get('after') ?? '') ? Number(url.searchParams.get('after')) : null;
+    const wait = Math.min(25, Math.max(0, parseInt(url.searchParams.get('wait') ?? '0', 10) || 0)) * 1000;
+    let n = nowPlaying.get(me.id);
+    if (after != null && wait > 0 && (n?.rev ?? 0) === after) {
+      await waitFor(nowWaits, me.id, wait);
+      n = nowPlaying.get(me.id);
+    }
+    if (!n) return { rev: 0, now: clock() };
+    if (after != null && n.rev === after) return { rev: n.rev, same: true, now: clock() };
+    return { rev: n.rev, data: n.data, at: n.at, now: clock() };
+  });
+
+  route('PUT', /^\/v1\/me\/now$/, async (req) => {
+    const me = auth(req, { computer: true });
+    if (!limits.nowPuts.take(me.id)) throw new HttpError(429, 'slow_down');
+    const raw = await body(req, NOW_DATA_MAX * 2);
+    let b;
+    try {
+      b = JSON.parse(raw.toString('utf8'));
+    } catch {
+      throw new HttpError(400, 'bad_json');
+    }
+    if (!b || typeof b !== 'object' || Array.isArray(b)) throw new HttpError(400, 'bad_json');
+    if (typeof b.data !== 'string' || !BASE64.test(b.data)) throw new HttpError(400, 'bad_now');
+    const size = Buffer.from(b.data, 'base64').length;
+    if (size > NOW_DATA_MAX) throw new HttpError(413, 'too_large');
+    if (size < 29) throw new HttpError(400, 'bad_now'); // nem um cabeçalho de cifra cabe
+    const at = clock();
+    const rev = Math.max(at, (nowPlaying.get(me.id)?.rev ?? 0) + 1);
+    nowPlaying.set(me.id, { rev, data: b.data, at });
+    nowChanged(me.id, rev, req.computer ? null : sha256(tokenOf(req)));
+    return { rev };
   });
 
   // Foto: JPEG já reduzido pelo app (512 px). Sai daqui só a imagem: sem EXIF/GPS nem nada colado.
@@ -547,6 +608,7 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
     }
     const friends = store.friendIds(me.id);
     store.deleteUser(me.id);
+    nowPlaying.delete(me.id);
     rmSync(avatarPath(me.id), { force: true });
     for (const f of friends) emit(f, { t: 'friend.removed', userId: me.id });
     for (const ws of sockets.get(me.id) ?? []) ws.close(4001, 'deleted');

@@ -41,6 +41,8 @@ sealed interface RelayEvent {
     data class ProfileChanged(val user: Profile) : RelayEvent
     /** The vault changed on another phone or a computer of this profile: sync it now. */
     data class VaultChanged(val rev: Long) : RelayEvent
+    /** What plays changed on a computer (or another phone) of this profile: the mini player may follow. */
+    data class NowChanged(val rev: Long) : RelayEvent
     /** The relay turned this phone away (profile deleted, signed out from another phone): check the account. */
     data object SignedOut : RelayEvent
 }
@@ -203,6 +205,7 @@ class RelayLink(
                 "typing" -> _events.tryEmit(RelayEvent.Typing(o["from"]!!.jsonPrimitive.content, o["on"]?.jsonPrimitive?.content != "false"))
                 "profile" -> _events.tryEmit(RelayEvent.ProfileChanged(RelayJson.decodeFromJsonElement(Profile.serializer(), o["user"]!!)))
                 "vault" -> _events.tryEmit(RelayEvent.VaultChanged(o["rev"]?.jsonPrimitive?.long ?: 0))
+                "now" -> _events.tryEmit(RelayEvent.NowChanged(o["rev"]?.jsonPrimitive?.long ?: 0))
             }
         }
     }

@@ -55,19 +55,26 @@ object VaultCrypto {
     fun b64(bytes: ByteArray): String = Base64.getEncoder().encodeToString(bytes)
     fun unb64(text: String): ByteArray = Base64.getDecoder().decode(text)
 
-    private fun seal(plain: ByteArray, key: ByteArray): ByteArray {
+    /** What plays now on a device (the others' mini player shows it): the vault's key, another AAD. */
+    fun sealNow(plain: ByteArray, dataKey: ByteArray): String = b64(seal(plain, dataKey, NOW_AAD))
+
+    fun openNow(sealed: String, dataKey: ByteArray): ByteArray? = runCatching { open(unb64(sealed), dataKey, NOW_AAD) }.getOrNull()
+
+    private val NOW_AAD = byteArrayOf(VERSION) + "freesong-now-v1".toByteArray()
+
+    private fun seal(plain: ByteArray, key: ByteArray, aad: ByteArray = byteArrayOf(VERSION)): ByteArray {
         val iv = ByteArray(IV_BYTES).also(random::nextBytes)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(TAG_BITS, iv))
-        cipher.updateAAD(byteArrayOf(VERSION))
+        cipher.updateAAD(aad)
         return byteArrayOf(VERSION) + iv + cipher.doFinal(plain)
     }
 
-    private fun open(sealed: ByteArray, key: ByteArray): ByteArray {
+    private fun open(sealed: ByteArray, key: ByteArray, aad: ByteArray = byteArrayOf(VERSION)): ByteArray {
         require(sealed.size > 1 + IV_BYTES && sealed[0] == VERSION)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(TAG_BITS, sealed, 1, IV_BYTES))
-        cipher.updateAAD(byteArrayOf(VERSION))
+        cipher.updateAAD(aad)
         return cipher.doFinal(sealed, 1 + IV_BYTES, sealed.size - 1 - IV_BYTES)
     }
 

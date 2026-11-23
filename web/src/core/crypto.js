@@ -84,15 +84,18 @@ async function codeKey(code, userId) {
   );
 }
 
-async function seal(plain, key) {
+// O que toca agora vai fechado com a mesma chave do cofre, mas com outro AAD: um nunca passa pelo outro.
+const NOW_AAD = concat(new Uint8Array([VERSION]), te.encode('freesong-now-v1'));
+
+async function seal(plain, key, aad = new Uint8Array([VERSION])) {
   const iv = globalThis.crypto.getRandomValues(new Uint8Array(IV));
-  const ct = new Uint8Array(await subtle.encrypt({ name: 'AES-GCM', iv, additionalData: new Uint8Array([VERSION]) }, key, plain));
+  const ct = new Uint8Array(await subtle.encrypt({ name: 'AES-GCM', iv, additionalData: aad }, key, plain));
   return concat(new Uint8Array([VERSION]), iv, ct);
 }
 
-async function open(sealed, key) {
+async function open(sealed, key, aad = new Uint8Array([VERSION])) {
   if (sealed.length <= 1 + IV || sealed[0] !== VERSION) throw new Error('cofre de outra versão');
-  return new Uint8Array(await subtle.decrypt({ name: 'AES-GCM', iv: sealed.subarray(1, 1 + IV), additionalData: new Uint8Array([VERSION]) }, key, sealed.subarray(1 + IV)));
+  return new Uint8Array(await subtle.decrypt({ name: 'AES-GCM', iv: sealed.subarray(1, 1 + IV), additionalData: aad }, key, sealed.subarray(1 + IV)));
 }
 
 /** A chave do cofre (32 bytes) como CryptoKey que não sai do navegador; os bytes são apagados. */
@@ -127,6 +130,15 @@ export async function openVault(sealedB64, key) {
 /** O conteúdo do cofre fechado (base64), pronto pro relay. */
 export async function sealVault(value, key) {
   return b64.enc(await seal(await gzip(te.encode(JSON.stringify(value))), key));
+}
+
+/** O que toca agora num aparelho (o mini player dos outros mostra): fechado pro relay, como o cofre. */
+export async function sealNow(value, key) {
+  return b64.enc(await seal(te.encode(JSON.stringify(value)), key, NOW_AAD));
+}
+
+export async function openNow(sealedB64, key) {
+  return JSON.parse(td.decode(await open(b64.dec(sealedB64), key, NOW_AAD)));
 }
 
 /** O que fica guardado neste navegador (o cofre como estava, o que mudou aqui): fechado com a mesma chave. */

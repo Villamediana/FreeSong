@@ -579,6 +579,27 @@ class MediaPlayerConnection(
         )
     }
 
+    // ================================================================ the computer (FreeSong on the web)
+
+    /**
+     * What the computer played last, set up paused at [positionMs]: the mini player shows it and play
+     * goes on from there (and on with similar songs, like a radio).
+     */
+    fun cueFromComputer(track: Track, positionMs: Long) {
+        val source = PlaySource(PlaySource.Type.COMPUTER, app.getString(R.string.computer_source))
+        main.launch {
+            remember(listOf(track))
+            clearError()
+        }
+        send(
+            SessionProtocol.PLAY,
+            playArgs(listOf(track), 0, source, SessionProtocol.SHUFFLE_OFF, smart = true).apply {
+                putLong(SessionProtocol.ARG_START_POSITION, positionMs.coerceAtLeast(0))
+                putBoolean(SessionProtocol.ARG_AUTOPLAY, false)
+            },
+        )
+    }
+
     // ================================================================ following a jam (no gate)
 
     override fun followLoad(tracks: List<Track>, index: Int, positionMs: Long, play: Boolean) {

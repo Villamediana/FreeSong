@@ -47,6 +47,9 @@ import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.runtime.remember
+import kotlinx.coroutines.launch
+import androidx.compose.material.icons.rounded.QrCodeScanner
+import androidx.compose.material.icons.rounded.Computer
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Translate
 import androidx.compose.material.icons.rounded.LocationOn
@@ -141,6 +144,12 @@ fun SettingsScreen() {
     var spaceOpen by rememberSaveable { mutableStateOf(false) }
     var languageOpen by rememberSaveable { mutableStateOf(false) }
     val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    // "Computador": FreeSong on the web, linked by reading its QR code (and the ones linked).
+    val hub = SoundApplication.graph.social
+    val computers by hub.computers.collectAsStateWithLifecycle()
+    var linking by remember { mutableStateOf<com.villamediana.sound.social.ComputerLink.Code?>(null) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    androidx.compose.runtime.LaunchedEffect(Unit) { hub.refreshComputers() }
 
     LazyColumn(
         Modifier.fillMaxSize().background(SoundColors.Ink),
@@ -161,6 +170,27 @@ fun SettingsScreen() {
         }
 
         val s = settings ?: return@LazyColumn
+
+        item(key = "computer") {
+            Section(stringResource(R.string.computers_title)) {
+                NavRow(
+                    icon = Icons.Rounded.QrCodeScanner, chip = Chip.Blue,
+                    title = stringResource(R.string.computers_link),
+                    value = "freesong.simplyonegoal.com",
+                    onClick = { com.villamediana.sound.ui.social.scanComputerCode(context) { linking = it } },
+                )
+                for (c in computers) {
+                    Hairline()
+                    ComputerRow(c) {
+                        scope.launch {
+                            hub.unlinkComputer(c.id)
+                                .onSuccess { android.widget.Toast.makeText(context, R.string.computer_unlinked, android.widget.Toast.LENGTH_SHORT).show() }
+                                .onFailure { android.widget.Toast.makeText(context, R.string.profile_error_network, android.widget.Toast.LENGTH_SHORT).show() }
+                        }
+                    }
+                }
+            }
+        }
 
         item(key = "sound") {
             Section(stringResource(R.string.settings_group_sound)) {
@@ -275,6 +305,8 @@ fun SettingsScreen() {
         }
     }
 
+    linking?.let { com.villamediana.sound.ui.social.LinkComputerDialog(it, onDismiss = { linking = null }) }
+
     if (qualityOpen) {
         SoundSheet(onDismissRequest = { qualityOpen = false }) {
             QualityPicker(settings?.audioQuality ?: AudioQuality.BEST) {
@@ -346,6 +378,26 @@ private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) 
                 .background(SoundColors.Surface1),
             content = content,
         )
+    }
+}
+
+/** A linked computer: its name, since when (or how), and "Desligar". */
+@Composable
+private fun ComputerRow(c: com.villamediana.sound.social.Computer, onUnlink: () -> Unit) {
+    RowShell(Icons.Rounded.Computer, Chip.Slate) {
+        Column(Modifier.weight(1f)) {
+            Text(c.name, style = MaterialTheme.typography.titleMedium, color = SoundColors.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Spacer(Modifier.height(1.dp))
+            val detail = when {
+                c.shared -> stringResource(R.string.computers_shared)
+                c.via == "code" -> stringResource(R.string.computers_by_code)
+                else -> stringResource(R.string.computers_since, java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM).format(java.util.Date(c.linkedAt)))
+            }
+            Text(detail, style = MaterialTheme.typography.bodySmall, color = SoundColors.TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        TextButton(onClick = onUnlink) {
+            Text(stringResource(R.string.computers_unlink), color = SoundColors.Danger, style = MaterialTheme.typography.labelLarge)
+        }
     }
 }
 
