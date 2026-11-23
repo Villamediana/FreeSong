@@ -53,7 +53,7 @@ import java.io.File
 
 /** The chords on the lyrics screen and the chord sheet, with PNGs in build/screenshots for a look. */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35], application = Application::class, qualifiers = "w411dp-h891dp-xxhdpi")
+@Config(sdk = [35], application = Application::class, qualifiers = "pt-rBR-w411dp-h891dp-xxhdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class ChordScreensTest {
     @get:Rule val compose = createComposeRule()

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="spotify_import_title">Import from Spotify</string>
+    <string name="spotify_import_link">Playlist or album link</string>
+    <string name="spotify_import_not_a_link">That\'s not a Spotify playlist or album link.</string>
+    <string name="spotify_import_not_found">Nothing found at that link. Playlists need to be public.</string>
+    <string name="spotify_import_offline">No connection.</string>
+    <string name="spotify_import_look_up">Look up</string>
+    <string name="spotify_import_go">Import</string>
+    <string name="spotify_import_other">Another link</string>
+    <string name="spotify_import_matching">%1$d of %2$d</string>
+    <plurals name="spotify_import_missing">
+        <item quantity="one">%d song not found</item>
+        <item quantity="other">%d songs not found</item>
+    </plurals>
+    <string name="spotify_import_none_found">No songs found.</string>
+    <string name="spotify_import_retry">Try again</string>
+    <string name="spotify_import_finished">“%1$s” imported</string>
+    <string name="spotify_import_remove">Remove playlist</string>
+    <string name="spotify_import_removed">“%1$s” removed</string>
+</resources>

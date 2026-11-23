@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="channel_updates">Updates</string>
+    <string name="update_title">New version</string>
+    <string name="update_subtitle">%1$s · %2$s</string>
+    <string name="update_action">Update</string>
+    <string name="update_later">Not now</string>
+    <string name="update_downloading">Downloading · %1$s</string>
+    <string name="update_installing">Installing…</string>
+    <string name="update_permission_body">Let FreeSong install its own updates.</string>
+    <string name="update_permission_action">Allow</string>
+    <string name="update_retry">Try again</string>
+    <string name="update_error_network">The connection dropped during the download.</string>
+    <string name="update_error_integrity">The file arrived incomplete.</string>
+    <string name="update_error_storage">Not enough space on the phone.</string>
+    <string name="update_error_package">This file isn\'t a new version of FreeSong.</string>
+    <string name="update_error_conflict">The installed FreeSong was signed with another key. Uninstall it and install the new version.</string>
+    <string name="update_error_install">Android didn\'t finish the installation.</string>
+    <string name="update_notif_available_title">New FreeSong version</string>
+    <string name="update_notif_available_text">Version %1$s is ready to install.</string>
+    <string name="update_notif_done_title">FreeSong updated</string>
+    <string name="update_notif_done_text">Version %1$s. Tap to open.</string>
+    <string name="settings_update_check">Check for updates</string>
+    <string name="settings_update_checking">Checking…</string>
+    <string name="settings_update_latest">You\'re on the latest version</string>
+    <string name="settings_update_failed">Couldn\'t check right now</string>
+    <string name="settings_update_available">Update to %1$s</string>
+    <string name="settings_update_going">Updating to %1$s</string>
+    <string name="update_closed_note">The app closed during the last attempt. The reason Android recorded: %1$s</string>
+    <string name="update_auto_note">Already downloaded: it installs by itself when you\'re not using FreeSong.</string>
+</resources>

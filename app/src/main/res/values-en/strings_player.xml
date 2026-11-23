@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Player: mini player, tela cheia, letra, fila e timer de sono -->
+    <string name="player_play">Play</string>
+    <string name="player_pause">Pause</string>
+    <string name="player_like">Like</string>
+    <string name="player_unlike">Remove from liked</string>
+    <string name="player_next">Next</string>
+    <string name="player_previous">Previous</string>
+    <string name="player_shuffle_enable">Turn shuffle on</string>
+    <string name="player_shuffle_disable">Turn shuffle off</string>
+    <string name="player_repeat_off">Repeat: off</string>
+    <string name="player_repeat_all">Repeat: all</string>
+    <string name="player_repeat_one">Repeat: this song</string>
+    <string name="player_collapse">Minimize player</string>
+    <string name="player_expand">Open player</string>
+    <string name="player_playing_from">Playing from</string>
+    <string name="player_now_playing">Now playing</string>
+    <string name="player_cover">Cover of %1$s</string>
+
+    <string name="player_queue">Queue</string>
+    <string name="player_queue_now">Now playing</string>
+    <string name="player_queue_next">Up next</string>
+    <string name="player_queue_from">Playing from %1$s</string>
+    <string name="player_queue_empty">Nothing up next</string>
+    <string name="player_queue_empty_body">When this one ends, the queue ends.</string>
+    <string name="player_queue_smart">Smart</string>
+    <string name="player_queue_smart_hint">The queue goes on by itself with similar songs.</string>
+    <string name="player_queue_more">Looking for more songs…</string>
+    <string name="player_queue_more_body">Similar to the last ones in the queue.</string>
+    <string name="player_queue_suggested">To keep going</string>
+    <string name="player_queue_suggested_hint">Similar to the last ones in the queue, and a few new ones.</string>
+    <string name="player_queue_reorder">Drag to reorder</string>
+    <string name="player_queue_remove">Remove from queue</string>
+
+    <string name="player_lyrics">Lyrics</string>
+    <string name="player_lyrics_open">Lyrics full screen</string>
+    <string name="player_lyrics_close">Close lyrics</string>
+    <string name="player_lyrics_none_title">No lyrics</string>
+
+    <string name="player_sleep">Sleep timer</string>
+    <string name="player_sleep_hint">The music stops by itself.</string>
+    <string name="player_sleep_ends_in">Stops in %1$s</string>
+    <string name="player_sleep_at_end">Stops when this song ends</string>
+    <plurals name="player_sleep_minutes">
+        <item quantity="one">%d minute</item>
+        <item quantity="many">%d minutes</item>
+        <item quantity="other">%d minutes</item>
+    </plurals>
+    <string name="player_sleep_minutes_short">%d min</string>
+    <string name="player_sleep_end_of_track">End of track</string>
+    <string name="player_sleep_off">Turn timer off</string>
+
+    <string name="player_output_phone">This phone</string>
+    <string name="player_output_wired">Headphones</string>
+    <string name="player_output_bluetooth">Bluetooth</string>
+    <string name="player_output_usb">USB audio</string>
+    <string name="player_output_choose">Choose audio output</string>
+    <string name="player_output_title">Play on</string>
+    <string name="player_output_volume">Volume</string>
+    <string name="player_output_connect">Connect a device</string>
+    <string name="player_output_kind_speaker">Speaker</string>
+    <string name="player_output_kind_wired">Wired</string>
+    <string name="player_output_kind_usb">USB</string>
+
+    <string name="player_error_dismiss">Dismiss</string>
+
+    <!-- Tocar online, vídeo (segunda leva) -->
+    <string name="player_streaming">Playing online</string>
+    <string name="player_download_started">Downloading “%1$s”</string>
+    <string name="player_video">Watch video</string>
+    <string name="player_video_offline">No internet to watch the video.</string>
+    <string name="player_lyrics_loading">Looking for the lyrics</string>
+    <string name="player_lyrics_none_online">We couldn\'t find the lyrics for this song.</string>
+    <string name="player_lyrics_offline_title">No internet</string>
+    <string name="player_lyrics_offline_body">The lyrics show up when the connection is back.</string>
+    <string name="player_equalizer">Equalizer</string>
+
+    <!-- Acordes sobre a letra -->
+    <string name="lyrics_chords_show">Show chords</string>
+    <string name="lyrics_chords_hide">Hide chords</string>
+    <string name="chords_looking">Looking for the chords…</string>
+    <string name="chords_listening">Listening to the chords… %1$d%%</string>
+    <string name="chords_version">Version by %1$s</string>
+    <string name="chords_key_label">Key</string>
+    <string name="chords_capo_note">Capo on fret %1$d</string>
+    <string name="chords_key">Key of %1$s</string>
+    <string name="chords_key_unknown">Key</string>
+    <string name="chords_transpose_down">Half step down</string>
+    <string name="chords_transpose_up">Half step up</string>
+    <string name="chords_transpose_reset">Back to the original key</string>
+    <string name="chords_failed_error">Couldn\'t hear the chords of this song.</string>
+    <string name="chords_failed_offline">No connection to hear the chords.</string>
+    <string name="chords_failed_too_long">Song too long for the chords.</string>
+    <string name="chords_failed_nothing">No chords in this song.</string>
+    <string name="chords_retry">Try again</string>
+    <string name="chords_instrument_violao">Guitar</string>
+    <string name="chords_instrument_ukulele">Ukulele</string>
+    <string name="chords_instrument_cavaquinho">Cavaquinho</string>
+    <string name="chords_instrument_piano">Piano</string>
+    <string name="chords_position">Position %1$d of %2$d</string>
+    <string name="chords_root_position">Root position</string>
+    <string name="chords_inversion">Inversion %3$d</string>
+    <string name="chords_in_song">In this song</string>
+    <string name="chords_no_shape">No shape for this chord on this instrument.</string>
+    <string name="chords_previous_shape">Previous shape</string>
+    <string name="chords_next_shape">Next shape</string>
+
+    <!-- Tocar junto: a letra vira palco pra tocar e cantar -->
+    <string name="chords_play_along_on">Play along</string>
+    <string name="chords_play_along_off">Back to the lyrics</string>
+    <string name="chords_play_along_label">Play</string>
+    <string name="chords_now">Now</string>
+    <string name="chords_up_next">Up next</string>
+</resources>

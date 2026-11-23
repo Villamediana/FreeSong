@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="dna_places_toggle">Remember places</string>
+    <string name="dna_places_hint">Learns where you listen to what. It stays on this phone, no GPS.</string>
+    <string name="dna_places_pocket_action">Allow with the screen off</string>
+    <string name="dna_mix_late">For your late night</string>
+    <string name="dna_mix_morning">For your morning</string>
+    <string name="dna_mix_afternoon">For your afternoon</string>
+    <string name="dna_mix_evening">For your evening</string>
+    <string name="dna_mix_with">To play with %1$s</string>
+    <string name="dna_mix_subtitle_plain">Your vibe right now</string>
+    <string name="settings_group_dna">Music DNA</string>
+    <string name="dna_places_pocket_short">To learn with the screen off</string>
+</resources>

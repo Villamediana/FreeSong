@@ -46,6 +46,9 @@ import androidx.compose.material.icons.rounded.Lyrics
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Palette
+import androidx.compose.runtime.remember
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Translate
 import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material.icons.rounded.Place
 import androidx.compose.material.icons.rounded.Person
@@ -136,6 +139,7 @@ fun SettingsScreen() {
     val askAlways = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { }
     var qualityOpen by rememberSaveable { mutableStateOf(false) }
     var spaceOpen by rememberSaveable { mutableStateOf(false) }
+    var languageOpen by rememberSaveable { mutableStateOf(false) }
     val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
     LazyColumn(
@@ -232,6 +236,16 @@ fun SettingsScreen() {
                 )
                 Hairline()
                 SwitchRow(Icons.Rounded.Home, Chip.Orange, stringResource(R.string.home_settings_show_home), stringResource(R.string.home_settings_show_home_sub), s.showHome, vm::setShowHome)
+                Hairline()
+                // The app's language (YouTube Music answers in it too).
+                val context = androidx.compose.ui.platform.LocalContext.current
+                val language = remember { com.villamediana.sound.data.AppLanguage.current(context) }
+                NavRow(
+                    icon = Icons.Rounded.Translate, chip = Chip.Purple,
+                    title = stringResource(R.string.home_settings_language),
+                    value = languageLabel(language),
+                    onClick = { languageOpen = true },
+                )
             }
         }
 
@@ -267,6 +281,36 @@ fun SettingsScreen() {
                 vm.setQuality(it)
                 qualityOpen = false
             }
+        }
+    }
+    if (languageOpen) {
+        val activity = androidx.activity.compose.LocalActivity.current
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val current = remember { com.villamediana.sound.data.AppLanguage.current(context) }
+        SoundSheet(onDismissRequest = { languageOpen = false }) {
+            Text(
+                stringResource(R.string.home_settings_language),
+                style = MaterialTheme.typography.headlineSmall,
+                color = SoundColors.Text,
+                modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = 8.dp),
+            )
+            com.villamediana.sound.data.AppLanguage.CHOICES.forEach { tag ->
+                val chosen = tag == current
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            languageOpen = false
+                            activity?.let { com.villamediana.sound.data.AppLanguage.set(it, tag) }
+                        }
+                        .padding(horizontal = 24.dp, vertical = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(languageLabel(tag), style = MaterialTheme.typography.titleMedium, color = if (chosen) SoundColors.Accent else SoundColors.Text, modifier = Modifier.weight(1f))
+                    if (chosen) Icon(Icons.Rounded.Check, null, tint = SoundColors.Accent, modifier = Modifier.size(22.dp))
+                }
+            }
+            Spacer(Modifier.height(16.dp))
         }
     }
     if (spaceOpen) {
@@ -601,4 +645,12 @@ private fun About() {
             )
         }
     }
+}
+
+/** "Português", "English"… (each in its own words); the phone's language is "Sistema" / "System". */
+@Composable
+private fun languageLabel(tag: String): String {
+    if (tag.isEmpty()) return stringResource(R.string.home_settings_theme_system)
+    val locale = java.util.Locale.forLanguageTag(tag)
+    return locale.getDisplayLanguage(locale).replaceFirstChar { it.titlecase(locale) }
 }

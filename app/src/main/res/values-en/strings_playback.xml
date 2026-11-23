@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="playback_output_phone">This phone</string>
+    <string name="playback_output_headphones">Headphones</string>
+    <string name="playback_output_bluetooth">Bluetooth</string>
+    <string name="playback_like">Like</string>
+    <string name="playback_unlike">Unlike</string>
+    <string name="playback_shuffle_on">Shuffle on</string>
+    <string name="playback_shuffle_off">Shuffle off</string>
+    <string name="playback_browse_smart">Smart shuffle</string>
+    <string name="playback_browse_smart_subtitle">Your library, your taste</string>
+    <string name="playback_browse_mixes">Mixes</string>
+    <string name="playback_browse_playlists">Playlists</string>
+    <string name="playback_browse_albums">Albums</string>
+    <string name="playback_browse_artists">Artists</string>
+    <string name="playback_browse_liked">Liked</string>
+    <string name="playback_browse_recent">Recent</string>
+    <string name="playback_source_smart">Smart shuffle</string>
+    <string name="playback_source_radio">%s radio</string>
+    <string name="playback_source_liked">Liked</string>
+    <string name="playback_source_recent">Recent</string>
+    <string name="playback_source_search">“%s”</string>
+    <string name="playback_error_missing">File not found</string>
+    <string name="playback_error_unreadable">Couldn\'t read this file</string>
+    <string name="playback_error_generic">Couldn\'t play this</string>
+    <string name="playback_mix_genre">%s mix</string>
+    <string name="playback_mix_genre_subtitle">%s and more</string>
+    <string name="playback_mix_liked">Liked</string>
+    <string name="playback_mix_liked_subtitle">Everything you liked, shuffled</string>
+    <string name="playback_mix_on_repeat">On repeat</string>
+    <string name="playback_mix_on_repeat_subtitle">What you played most last month</string>
+    <string name="playback_mix_rediscover">Rediscover</string>
+    <string name="playback_mix_rediscover_subtitle">Been a while since you played these</string>
+    <string name="playback_mix_fresh">New</string>
+    <string name="playback_mix_fresh_subtitle">Arrived in the last few days</string>
+    <string name="playback_mix_decade">The %ss</string>
+    <string name="playback_mix_decade_subtitle">A trip through the decade</string>
+    <string name="playback_mix_artist">%s mix</string>
+    <string name="playback_mix_daily">Daily mix</string>
+    <string name="playback_mix_daily_subtitle">Favorites and discoveries, new every day</string>
+</resources>

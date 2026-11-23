@@ -31,7 +31,7 @@ import java.io.File
 /** The app's play/pause: soft like the skip arrows beside it, and the round button keeps its label. */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [35], qualifiers = "w400dp-h300dp-xxhdpi")
+@Config(sdk = [35], qualifiers = "pt-rBR-w400dp-h300dp-xxhdpi")
 class PlayGlyphTest {
     @get:Rule val compose = createComposeRule()
 

@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Início -->
+    <string name="home_greeting_morning">Good morning</string>
+    <string name="home_greeting_afternoon">Good afternoon</string>
+    <string name="home_greeting_night">Good evening</string>
+    <string name="home_settings">Settings</string>
+    <string name="home_liked">Liked</string>
+    <string name="home_smart_title">Your music</string>
+    <string name="home_made_for_you">Made for you</string>
+    <string name="home_recently_played">Recently played</string>
+    <string name="home_empty_line">Your music starts here</string>
+    <string name="home_empty_action">Search for music</string>
+    <plurals name="home_downloads_active">
+        <item quantity="one">%d download in progress</item>
+        <item quantity="many">%d downloads in progress</item>
+        <item quantity="other">%d downloads in progress</item>
+    </plurals>
+    <plurals name="home_downloads_failed">
+        <item quantity="one">%d download failed</item>
+        <item quantity="many">%d downloads failed</item>
+        <item quantity="other">%d downloads failed</item>
+    </plurals>
+
+    <!-- Mixes (SmartMixes) -->
+    <string name="home_mix_genre">Your %1$s</string>
+    <string name="home_mix_genre_subtitle">%1$s and more</string>
+    <string name="home_mix_liked">Your likes</string>
+    <string name="home_mix_liked_subtitle">The ones you love most, shuffled</string>
+    <string name="home_mix_on_repeat">On repeat</string>
+    <string name="home_mix_on_repeat_subtitle">What you can\'t stop playing</string>
+    <string name="home_mix_rediscover">Rediscover</string>
+    <string name="home_mix_rediscover_subtitle">Been a while since you played these</string>
+    <string name="home_mix_fresh">Just arrived</string>
+    <string name="home_mix_fresh_subtitle">What you just downloaded</string>
+    <string name="home_mix_decade">The %1$ds</string>
+    <string name="home_mix_decade_short">The \'%1$02ds</string>
+    <string name="home_mix_decade_subtitle">A trip back in time</string>
+    <string name="home_mix_artist">%1$s mix</string>
+    <string name="home_mix_daily">Daily mix</string>
+    <string name="home_mix_daily_subtitle">A bit of everything you like</string>
+
+    <!-- Biblioteca -->
+    <string name="home_lib_title">Your library</string>
+    <string name="home_lib_new_playlist">New playlist</string>
+    <string name="home_lib_playlist_name">Name</string>
+    <string name="home_lib_playlist_description">Description (optional)</string>
+    <string name="home_lib_create">Create</string>
+    <string name="home_lib_clear_filter">Clear filter</string>
+    <string name="home_lib_filter_playlists">Playlists</string>
+    <string name="home_lib_filter_albums">Albums</string>
+    <string name="home_lib_filter_artists">Artists</string>
+    <string name="home_lib_filter_songs">Songs</string>
+    <string name="home_lib_filter_genres">Genres</string>
+    <string name="home_lib_sort_by">Sort by</string>
+    <string name="home_lib_sort_recent">Recent</string>
+    <string name="home_lib_sort_added">Recently added</string>
+    <string name="home_lib_sort_alpha">A–Z</string>
+    <string name="home_lib_sort_artist">Artist</string>
+    <string name="home_lib_sort_plays">Most played</string>
+    <string name="home_lib_view_list">View as list</string>
+    <string name="home_lib_view_grid">View as grid</string>
+    <string name="home_lib_playlist_sub">Playlist · %1$s</string>
+    <string name="home_lib_album_sub">Album · %1$s</string>
+    <string name="home_lib_artist_sub">Artist</string>
+    <string name="home_lib_pinned">Pinned</string>
+    <string name="home_lib_pin">Pin to library</string>
+    <string name="home_lib_unpin">Unpin</string>
+    <string name="home_lib_delete_playlist">Delete playlist</string>
+    <string name="home_lib_downloads">Downloads</string>
+    <plurals name="home_lib_dl_active">
+        <item quantity="one">Downloading %d song</item>
+        <item quantity="many">Downloading %d songs</item>
+        <item quantity="other">Downloading %d songs</item>
+    </plurals>
+    <plurals name="home_lib_dl_failed">
+        <item quantity="one">%d failed</item>
+        <item quantity="many">%d failed</item>
+        <item quantity="other">%d failed</item>
+    </plurals>
+    <string name="home_lib_dl_pair">%1$s · %2$s</string>
+    <string name="home_lib_dl_done">All downloaded</string>
+    <string name="home_lib_empty_title">Your library is empty</string>
+    <string name="home_lib_empty_body">Search for music and save your favorites.</string>
+    <string name="home_lib_empty_playlists_title">No playlists yet</string>
+    <string name="home_lib_empty_playlists_body">Create a playlist or save a whole one from search.</string>
+    <string name="home_lib_empty_albums_title">No albums yet</string>
+    <string name="home_lib_empty_albums_body">Download a whole album from search.</string>
+    <string name="home_lib_empty_artists_title">No artists yet</string>
+    <string name="home_lib_empty_artists_body">Artists show up as you download songs.</string>
+    <string name="home_lib_empty_songs_title">No songs yet</string>
+    <string name="home_lib_empty_songs_body">Like a song and it shows up here.</string>
+    <string name="home_lib_empty_genres_title">No genres yet</string>
+    <string name="home_lib_empty_genres_body">Genres show up when the downloaded songs carry that information.</string>
+
+    <!-- Ajustes -->
+    <string name="home_settings_group_downloads">Downloads</string>
+    <string name="home_settings_group_playback">Playback</string>
+    <string name="home_settings_group_storage">Storage</string>
+    <string name="home_settings_group_about">About</string>
+    <string name="home_settings_quality">Audio quality</string>
+    <string name="home_settings_quality_sub">Applies to the next downloads.</string>
+    <string name="home_settings_quality_best">Best</string>
+    <string name="home_settings_quality_best_sub">Opus ~160 kbps, the best sound available</string>
+    <string name="home_settings_quality_compatible">Compatible</string>
+    <string name="home_settings_quality_compatible_sub">AAC ~128 kbps, plays on any device</string>
+    <string name="home_settings_quality_saver">Saver</string>
+    <string name="home_settings_quality_saver_sub">~64 kbps, takes little space</string>
+    <string name="home_settings_quality_size">≈ %1$s</string>
+    <string name="home_settings_quality_per_song">per song</string>
+    <string name="home_settings_wifi">Download on Wi-Fi only</string>
+    <string name="home_settings_wifi_sub">Downloads wait for a Wi-Fi network.</string>
+    <string name="home_settings_parallel">Downloads at once</string>
+    <string name="home_settings_parallel_sub">How many songs to download at the same time.</string>
+    <string name="home_settings_lyrics">Fetch lyrics</string>
+    <string name="home_settings_lyrics_sub">Downloads the lyrics too, synced when there are.</string>
+    <string name="home_settings_storage_used">used on the phone</string>
+    <string name="home_settings_storage_free">%1$s free on the phone</string>
+    <plurals name="home_settings_stat_songs">
+        <item quantity="one">song</item>
+        <item quantity="many">songs</item>
+        <item quantity="other">songs</item>
+    </plurals>
+    <plurals name="home_settings_stat_albums">
+        <item quantity="one">album</item>
+        <item quantity="many">albums</item>
+        <item quantity="other">albums</item>
+    </plurals>
+    <plurals name="home_settings_stat_artists">
+        <item quantity="one">artist</item>
+        <item quantity="many">artists</item>
+        <item quantity="other">artists</item>
+    </plurals>
+    <string name="home_settings_stat_hours">hours</string>
+    <string name="home_settings_version">Version %1$s</string>
+
+    <!-- Ajustes: tocar online, equalizador; compartilhar playlist (segunda leva) -->
+    <string name="home_settings_like_downloads">Liking downloads</string>
+    <string name="home_settings_like_downloads_sub">Liking a song also downloads it.</string>
+    <string name="home_settings_show_home">Home tab</string>
+    <string name="home_settings_show_home_sub">Off, the app opens straight on your music.</string>
+    <string name="home_settings_equalizer">Equalizer</string>
+    <string name="home_settings_equalizer_sub">Bass, treble and presets for your headphones.</string>
+    <string name="home_settings_equalizer_on">On</string>
+    <string name="home_lib_share">Share</string>
+    <string name="home_settings_group_look">Look</string>
+    <string name="home_settings_theme">Theme</string>
+    <string name="home_settings_theme_light">Light</string>
+    <string name="home_settings_theme_dark">Dark</string>
+    <string name="home_settings_theme_system">System</string>
+    <string name="home_foryou_title">%1$s mix</string>
+    <string name="home_foryou_untitled">Your mix</string>
+    <string name="home_foryou_subtitle">%1$s and more</string>
+    <string name="home_foryou_subtitle_plain">Your music and what\'s new</string>
+    <string name="home_settings_language">Language</string>
+</resources>

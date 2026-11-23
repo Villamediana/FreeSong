@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="theme_title">Theme</string>
+    <string name="main_tab_home">Home</string>
+    <string name="main_tab_songs">Songs</string>
+    <string name="main_tab_playlists">Playlists</string>
+    <string name="main_tab_albums">Albums</string>
+    <string name="main_tab_artists">Artists</string>
+    <string name="main_tab_genres">Genres</string>
+    <string name="settings_smart_downloads">Smart downloads</string>
+    <string name="settings_smart_downloads_sub">On Wi-Fi, downloads the ones you play most online.</string>
+    <string name="eq_crossfade">Crossfade</string>
+    <string name="eq_crossfade_off">Off</string>
+    <string name="eq_crossfade_seconds">%d s</string>
+    <string name="lyrics_translate">Translation</string>
+    <string name="settings_player_video">Video in the player</string>
+    <string name="settings_player_video_sub">Music video behind the cover</string>
+    <string name="settings_cache_title">Kept to save data</string>
+    <string name="settings_cache_sub">Comes back by itself when needed.</string>
+    <string name="settings_cache_songs">Songs played</string>
+    <string name="settings_cache_videos">Background videos</string>
+    <string name="settings_cache_covers">Covers</string>
+    <string name="settings_cache_lyrics">Lyrics and translations</string>
+    <string name="settings_cache_home">Home suggestions</string>
+    <string name="settings_cache_chords">Chords</string>
+    <string name="settings_cache_clear">Clear</string>
+    <string name="settings_cache_clear_all">Clear all</string>
+    <string name="sheet_album_not_found">Album not found.</string>
+    <string name="sheet_artist_not_found">Artist not found.</string>
+    <string name="settings_group_sound">Sound</string>
+    <string name="settings_off">Off</string>
+    <string name="settings_storage_downloads">Downloaded songs</string>
+    <string name="settings_storage_kept">Kept</string>
+    <string name="settings_free_space">Free up space</string>
+    <string name="settings_free_space_value">%1$s kept to save data</string>
+    <string name="settings_parallel_short">How many downloads at once</string>
+    <string name="settings_parallel_title">At the same time</string>
+</resources>

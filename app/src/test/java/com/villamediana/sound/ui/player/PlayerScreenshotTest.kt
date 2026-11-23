@@ -38,7 +38,7 @@ import java.io.File
 
 /** Renders the player on a streamed song (best effort PNGs in build/screenshots, for eyeballing). */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35], application = Application::class, qualifiers = "w411dp-h891dp-xxhdpi")
+@Config(sdk = [35], application = Application::class, qualifiers = "pt-rBR-w411dp-h891dp-xxhdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class PlayerScreenshotTest {
     @get:Rule val compose = createComposeRule()

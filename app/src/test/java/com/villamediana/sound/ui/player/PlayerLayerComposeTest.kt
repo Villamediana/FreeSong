@@ -62,7 +62,7 @@ import org.robolectric.annotation.Config
 
 /** The player layer composes and reacts with a fake player (no service, no database). */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35], application = Application::class)
+@Config(sdk = [35], application = Application::class, qualifiers = "pt-rBR")
 class PlayerLayerComposeTest {
 
     @org.junit.Before

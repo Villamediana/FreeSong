@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Módulo ui-detail: telas de Álbum, Artista, Playlist, Gênero, Mix, Curtidas, Músicas (detail_) e folhas de ações (sheet_). -->
+<resources>
+    <!-- Sobrelinhas (o código põe em maiúsculas) -->
+    <string name="detail_overline_album">Album</string>
+    <string name="detail_overline_artist">Artist</string>
+    <string name="detail_overline_playlist">Playlist</string>
+    <string name="detail_overline_genre">Genre</string>
+    <string name="detail_overline_mix">Mix</string>
+    <string name="detail_overline_library">Library</string>
+
+    <!-- Não encontrado -->
+    <string name="detail_album_missing">Album not found</string>
+    <string name="detail_artist_missing">Artist not found</string>
+    <string name="detail_playlist_missing">Playlist not found</string>
+    <string name="detail_genre_missing">Genre not found</string>
+    <string name="detail_missing_body">It may have been deleted or renamed.</string>
+    <string name="detail_mix_missing">Mix not found</string>
+    <string name="detail_mix_missing_body">Mixes change as you listen. Go back Home to see today\'s.</string>
+
+    <!-- Cabeçalho -->
+    <string name="detail_pin">Pin to Library</string>
+    <string name="detail_unpin">Unpin</string>
+    <string name="detail_pinned">Pinned to Library</string>
+    <string name="detail_unpinned">Removed from pinned</string>
+    <string name="detail_artists_and_more">%s and others</string>
+    <string name="detail_imported_youtube">Imported</string>
+    <string name="detail_done">Done</string>
+    <plurals name="detail_n_albums">
+        <item quantity="one">%d album</item>
+        <item quantity="other">%d albums</item>
+    </plurals>
+
+    <!-- Álbum -->
+    <string name="detail_more_by">More by %s</string>
+    <string name="detail_see_artist">See artist</string>
+    <string name="detail_delete_album_title">Delete album from the phone?</string>
+    <plurals name="detail_delete_album_body">
+        <item quantity="one">The song of “%2$s” leaves the phone and every playlist.</item>
+        <item quantity="other">The %1$d songs of “%2$s” leave the phone and every playlist.</item>
+    </plurals>
+    <string name="detail_album_deleted">“%s” deleted from the phone</string>
+
+    <!-- Artista -->
+    <string name="detail_popular">Popular</string>
+    <string name="detail_show_more">Show more</string>
+    <string name="detail_show_less">Show less</string>
+    <string name="detail_albums">Albums</string>
+    <string name="detail_singles">Singles</string>
+    <string name="detail_single">Single</string>
+    <string name="detail_all_songs">All songs</string>
+    <string name="detail_artist_radio">Artist radio</string>
+    <string name="detail_radio_short">Radio</string>
+    <string name="detail_artist_radio_started">%s radio playing</string>
+
+    <!-- Playlist -->
+    <string name="detail_playlist_empty_title">Empty playlist</string>
+    <string name="detail_playlist_empty_body">Open any song\'s ⋮ and tap Add to playlist.</string>
+    <string name="detail_reorder_hint">Drag by the handle to change the order.</string>
+    <string name="detail_drag_to_reorder">Drag to reorder</string>
+    <string name="detail_remove">Remove</string>
+    <string name="detail_removed_from_playlist">“%s” removed</string>
+    <string name="detail_undo">Undo</string>
+    <string name="detail_field_name">Name</string>
+    <string name="detail_field_description">Description</string>
+    <string name="detail_cover_mosaic">Mosaic</string>
+    <string name="detail_delete_playlist_title">Delete playlist?</string>
+    <string name="detail_delete_playlist_body">“%s” leaves the library. The songs stay on the phone.</string>
+    <string name="detail_playlist_deleted">Playlist “%s” deleted</string>
+
+    <!-- Curtidas e Todas as músicas -->
+    <string name="detail_liked_title">Liked</string>
+    <string name="detail_liked_empty_title">Nothing liked yet</string>
+    <string name="detail_liked_empty_body">Tap a song\'s heart and it shows up here.</string>
+    <string name="detail_songs_title">All songs</string>
+    <string name="detail_songs_empty_title">No songs yet</string>
+    <string name="detail_songs_empty_body">Search for songs to start.</string>
+    <string name="detail_sort_by">Sort by</string>
+    <string name="detail_sort_title">Title</string>
+    <string name="detail_sort_artist">Artist</string>
+    <string name="detail_sort_album">Album</string>
+    <string name="detail_sort_recent">Recent</string>
+    <string name="detail_sort_most_played">Most played</string>
+    <string name="detail_sort_duration">Length</string>
+
+    <!-- Menu ⋮ das coleções -->
+    <string name="detail_menu_play_next">Play next</string>
+    <string name="detail_menu_enqueue">Add to queue</string>
+    <string name="detail_menu_add_to_playlist">Add to playlist</string>
+    <string name="detail_menu_go_artist">Go to artist</string>
+    <string name="detail_menu_delete_album">Delete album from the phone</string>
+    <string name="detail_menu_reorder">Arrange songs</string>
+    <string name="detail_menu_delete_playlist">Delete playlist</string>
+    <plurals name="detail_play_next_done">
+        <item quantity="one">Plays next</item>
+        <item quantity="other">%d songs play next</item>
+    </plurals>
+    <plurals name="detail_enqueue_done">
+        <item quantity="one">Added to queue</item>
+        <item quantity="other">%d songs added to queue</item>
+    </plurals>
+
+    <!-- Mixes (mesmos ids dos cartões do Início) -->
+    <string name="detail_mix_genre">%1$s mix</string>
+    <string name="detail_mix_genre_subtitle">%1$s and more</string>
+    <string name="detail_mix_liked">Your favorites</string>
+    <string name="detail_mix_liked_subtitle">What you like the most</string>
+    <string name="detail_mix_on_repeat">On repeat</string>
+    <string name="detail_mix_on_repeat_subtitle">What you can\'t stop playing</string>
+    <string name="detail_mix_rediscover">Rediscover</string>
+    <string name="detail_mix_rediscover_subtitle">Songs you haven\'t played in a while</string>
+    <string name="detail_mix_fresh">Just arrived</string>
+    <string name="detail_mix_fresh_subtitle">What you downloaded last</string>
+    <string name="detail_mix_decade">The %1$ss</string>
+    <string name="detail_mix_decade_subtitle">A trip back in time</string>
+    <string name="detail_mix_artist">%1$s mix</string>
+    <string name="detail_mix_daily">Daily mix</string>
+    <string name="detail_mix_daily_subtitle">Made for today</string>
+
+    <!-- Folha de ações da música -->
+    <string name="sheet_like">Like</string>
+    <string name="sheet_unlike">Unlike</string>
+    <string name="sheet_liked_done">Added to Liked</string>
+    <string name="sheet_unliked_done">Removed from Liked</string>
+    <string name="sheet_play_next">Play next</string>
+    <string name="sheet_play_next_done">Plays next</string>
+    <string name="sheet_enqueue">Add to queue</string>
+    <string name="sheet_enqueue_done">Added to queue</string>
+    <string name="sheet_add_to_playlist">Add to playlist</string>
+    <string name="sheet_start_radio">Start radio</string>
+    <string name="sheet_radio_done">“%s” radio playing</string>
+    <string name="sheet_go_album">Go to album</string>
+    <string name="sheet_go_artist">Go to artist</string>
+    <string name="sheet_edit">Edit info</string>
+    <string name="sheet_remove_from_playlist">Remove from this playlist</string>
+    <string name="sheet_removed_from_playlist">Removed from the playlist</string>
+    <string name="sheet_undo">Undo</string>
+    <string name="sheet_delete_from_phone">Delete from the phone</string>
+    <string name="sheet_delete_title">Delete from the phone?</string>
+    <string name="sheet_delete_body">“%s” leaves the phone and every playlist. To hear it again, you\'ll have to download it again.</string>
+    <string name="sheet_deleted">Song deleted from the phone</string>
+
+    <!-- Editar informações -->
+    <string name="sheet_edit_title">Edit info</string>
+    <string name="sheet_field_title">Title</string>
+    <string name="sheet_field_artist">Artist</string>
+    <string name="sheet_field_album">Album</string>
+    <string name="sheet_field_album_artist">Album artist</string>
+    <string name="sheet_field_genre">Genre</string>
+    <string name="sheet_field_year">Year</string>
+    <string name="sheet_field_track_number">Track no.</string>
+    <string name="sheet_edit_saved">Info saved</string>
+
+    <!-- Adicionar à playlist -->
+    <string name="sheet_add_title">Add to playlist</string>
+    <string name="sheet_new_playlist">New playlist</string>
+    <string name="sheet_new_playlist_name">Playlist name</string>
+    <string name="sheet_create">Create</string>
+    <string name="sheet_no_playlists">You don\'t have playlists yet. Create the first one above.</string>
+    <string name="sheet_in_playlist">Already in the playlist</string>
+    <string name="sheet_already_in">Already in %s</string>
+    <string name="sheet_playlist_created">Playlist “%s” created</string>
+    <plurals name="sheet_added_to">
+        <item quantity="one">Added to %2$s</item>
+        <item quantity="other">%1$d songs added to %2$s</item>
+    </plurals>
+
+    <!-- Folha da música: online, vídeo, compartilhar (segunda leva) -->
+    <string name="sheet_streamed">online</string>
+    <string name="sheet_download">Download</string>
+    <string name="sheet_downloading">Downloading</string>
+    <string name="sheet_download_started">Downloading “%s”</string>
+    <string name="sheet_when_online">when there\'s internet</string>
+    <string name="sheet_video">Watch video</string>
+    <string name="sheet_share">Share</string>
+    <string name="sheet_send_file">Send file</string>
+    <string name="sheet_equalizer">Equalizer</string>
+    <string name="sheet_offline">No internet right now.</string>
+    <string name="sheet_radio_unavailable">Couldn\'t put the radio together right now.</string>
+    <string name="detail_menu_share">Share</string>
+    <string name="sheet_sleep_timer">Sleep timer</string>
+    <string name="sheet_edit_info_title">Edit info</string>
+    <string name="sheet_cover_label">Cover</string>
+    <string name="sheet_cover_gallery">From the gallery</string>
+    <string name="detail_genre_recommended">Recommended</string>
+</resources>

@@ -36,15 +36,36 @@ class NewPipeHttp(private val client: OkHttpClient) : Downloader() {
 
         @Volatile private var initialized = false
 
-        /** Idempotent. Uses the phone language/country so YouTube Music answers in the right market. */
-        fun init(client: OkHttpClient, locale: Locale = Locale.getDefault()) {
+        /**
+         * The language YouTube answers in (titles, dates, suggestions): the one the app shows, set by
+         * [relocalize]. Null = the phone's.
+         */
+        @Volatile private var preferred: Locale? = null
+
+        /** Idempotent. Uses the app's language (else the phone's) and the phone's country. */
+        fun init(client: OkHttpClient, locale: Locale = preferred ?: Locale.getDefault()) {
             if (initialized) return
             synchronized(this) {
                 if (initialized) return
-                val country = locale.country.takeIf { it.length == 2 } ?: "BR"
-                NewPipe.init(NewPipeHttp(client), Localization(locale.language.ifEmpty { "pt" }, country), ContentCountry(country))
+                NewPipe.init(NewPipeHttp(client), localizationOf(locale), contentCountryOf(locale))
                 initialized = true
             }
         }
+
+        /**
+         * YouTube in [locale] from now on. A phone in English with the app in Portuguese got the titles
+         * translated to English: the request now follows what the person reads on screen.
+         */
+        fun relocalize(locale: Locale) {
+            synchronized(this) {
+                if (preferred == locale) return
+                preferred = locale
+                if (initialized) NewPipe.setupLocalization(localizationOf(locale), contentCountryOf(locale))
+            }
+        }
+
+        private fun countryOf(locale: Locale) = locale.country.takeIf { it.length == 2 } ?: "BR"
+        private fun localizationOf(locale: Locale) = Localization(locale.language.ifEmpty { "pt" }, countryOf(locale))
+        private fun contentCountryOf(locale: Locale) = ContentCountry(countryOf(locale))
     }
 }

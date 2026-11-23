@@ -55,7 +55,7 @@ import java.io.File
 /** The social pieces as they look (SOUND_SHOTS=1 writes PNGs to app/build/sound-shots/). */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [35], qualifiers = "w400dp-h900dp-xxhdpi")
+@Config(sdk = [35], qualifiers = "pt-rBR-w400dp-h900dp-xxhdpi")
 class SocialUiTest {
     @org.junit.Before
     fun blockPlaybackBinding() = com.villamediana.sound.testing.blockMediaSessionBinding()

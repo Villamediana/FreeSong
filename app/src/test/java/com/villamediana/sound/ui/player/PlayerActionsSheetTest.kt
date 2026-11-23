@@ -31,7 +31,7 @@ import org.robolectric.annotation.Config
 
 /** The full player's ⋮ sheet against the real library (the sheet reads it through the app graph); phone-sized screen so the sheet fits. */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35], qualifiers = "w400dp-h860dp-xxhdpi")
+@Config(sdk = [35], qualifiers = "pt-rBR-w400dp-h860dp-xxhdpi")
 class PlayerActionsSheetTest {
     @get:Rule val compose = createComposeRule()
 

@@ -31,7 +31,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.Shadows.shadowOf
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [ROBOLECTRIC_SDK])
+@Config(sdk = [ROBOLECTRIC_SDK], qualifiers = "pt-rBR")
 class DownloadNotifierTest {
     private val context: Context get() = ApplicationProvider.getApplicationContext()
     private val notifier get() = DownloadNotifier(context)

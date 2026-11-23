@@ -47,7 +47,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [ROBOLECTRIC_SDK])
+@Config(sdk = [ROBOLECTRIC_SDK], qualifiers = "pt-rBR")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class DownloadEngineTest {
     private lateinit var h: Harness
