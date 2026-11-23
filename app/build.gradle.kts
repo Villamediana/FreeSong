@@ -33,8 +33,8 @@ android {
         applicationId = "com.villamediana.sound"
         minSdk = 26
         targetSdk = 36
-        versionCode = 116
-        versionName = "1.35.1"
+        versionCode = 117
+        versionName = "1.36.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // The FreeSong relay (relay/): profiles, friends, shared songs and jams.
         buildConfigField("String", "RELAY_URL", "\"https://freesong.simplyonegoal.com\"")
@@ -181,6 +181,7 @@ dependencies {
     implementation(libs.coroutines.android)
     implementation(libs.serialization.json)
     implementation(libs.newpipe.extractor)
+    implementation(libs.code.scanner)
     // LiteRT (TensorFlow Lite) for Basic Pitch, the 200 KB model that hears the notes of a song (chords).
 
     testImplementation(libs.junit)

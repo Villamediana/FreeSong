@@ -87,6 +87,8 @@
                 <data android:pathPrefix="/v/" />
                 <data android:pathPrefix="/l/" />
                 <data android:pathPrefix="/a/" />
+                <!-- O QR code de um computador (o FreeSong na web), lido pela câmera do celular. -->
+                <data android:path="/web/link" />
             </intent-filter>
             <!-- "Ok Google, tocar … no Sound" → toca da biblioteca (ou busca online se não houver nada) -->
             <intent-filter>

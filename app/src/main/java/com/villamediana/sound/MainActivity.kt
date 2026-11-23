@@ -80,6 +80,7 @@ class MainActivity : ComponentActivity() {
         }
         when (val request = ExternalRequest.of(intent)) {
             is ExternalRequest.OpenLink -> incoming.value = Inbound.Link(request.text)
+            is ExternalRequest.LinkComputer -> incoming.value = Inbound.Computer(request.code)
             is ExternalRequest.PlayFromSearch -> playFromSearch(request.query)
             null -> Unit
         }

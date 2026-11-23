@@ -192,6 +192,8 @@ fun SearchScreen() {
         when (val item = if (pending != null) LinkInbox.consume() else null) {
             is Inbound.Link -> vm.resolveLink(item.text)
             is Inbound.Query -> vm.submit(item.text)
+            // A computer's QR code never comes here (the root asks "Ligar este computador?").
+            is Inbound.Computer -> Unit
             null -> Unit
         }
     }

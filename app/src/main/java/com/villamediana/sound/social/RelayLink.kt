@@ -39,6 +39,8 @@ sealed interface RelayEvent {
     data class Typing(val from: String, val on: Boolean) : RelayEvent
     /** Someone's name or photo changed (a friend, someone in your jam, or you on another phone). */
     data class ProfileChanged(val user: Profile) : RelayEvent
+    /** The vault changed on another phone or a computer of this profile: sync it now. */
+    data class VaultChanged(val rev: Long) : RelayEvent
     /** The relay turned this phone away (profile deleted, signed out from another phone): check the account. */
     data object SignedOut : RelayEvent
 }
@@ -200,6 +202,7 @@ class RelayLink(
                 "jam.ended" -> _events.tryEmit(RelayEvent.JamEnded(o["jamId"]!!.jsonPrimitive.content))
                 "typing" -> _events.tryEmit(RelayEvent.Typing(o["from"]!!.jsonPrimitive.content, o["on"]?.jsonPrimitive?.content != "false"))
                 "profile" -> _events.tryEmit(RelayEvent.ProfileChanged(RelayJson.decodeFromJsonElement(Profile.serializer(), o["user"]!!)))
+                "vault" -> _events.tryEmit(RelayEvent.VaultChanged(o["rev"]?.jsonPrimitive?.long ?: 0))
             }
         }
     }
