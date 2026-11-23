@@ -186,7 +186,7 @@ export async function wrapLink(webPub, linkId, secret, { user, key, owner = '' }
 
 /** O endereço no QR code: abre o FreeSong no celular, com o código, a pública e o segredo. */
 export function linkUrl(origin, linkId, pub, secret) {
-  return `${origin}/web/link#${linkId}.${pub}.${secret}`;
+  return `${origin}/link#${linkId}.${pub}.${secret}`;
 }
 
 // ------------------------------------------------------------------ pros testes (o celular, em Kotlin)

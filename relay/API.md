@@ -5,7 +5,7 @@ Instalação do servidor: [DEPLOY.md](DEPLOY.md).
 
 ## Novidades da 1.8.0
 
-**Computadores** (o FreeSong na web, `https://freesong.simplyonegoal.com/web`, código em `web/`). Um
+**Computadores** (o FreeSong na web, `https://freesong.simplyonegoal.com`, código em `web/`). Um
 computador não é um celular: não entra na tabela de tokens (não derruba celular nenhum, teto próprio de
 10 por perfil) e **cada pedido dele vem assinado** por uma chave ECDSA P-256 que só o navegador tem
 (`src/computers.js`):
@@ -34,7 +34,7 @@ Ligar (o mesmo do Novelo Web):
 `wrapped` é a chave do cofre cifrada pro computador: AES-256-GCM com HKDF-SHA256(ECDH ‖ segredo do QR
 code, sal = id do código, info `freesong-link-v1`), AAD = id do código; texto `{user, key (base64url,
 32 bytes), owner}`. O segredo só passa pela tela e pela câmera: o relay carrega uma resposta que não
-abre nem consegue forjar. O QR code é `https://freesong.simplyonegoal.com/web/link#<id>.<pública>.<segredo>`
+abre nem consegue forjar. O QR code é `https://freesong.simplyonegoal.com/link#<id>.<pública>.<segredo>`
 (App Link do app). "Sair dos outros aparelhos" desliga os computadores também.
 
 **Cofre na hora**: `GET /v1/me/vault?after=<rev>` devolve só `{rev, same: true}` se não mudou; com

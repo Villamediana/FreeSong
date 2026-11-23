@@ -50,7 +50,7 @@ import java.text.DateFormat
 import java.util.Date
 
 /**
- * "Computador" on the profile: FreeSong on the web (freesong.simplyonegoal.com/web) with this
+ * "Computador" on the profile: FreeSong on the web (freesong.simplyonegoal.com) with this
  * profile's hearts, playlists and listening. "Ligar um computador" reads the computer's QR code
  * (Google's code scanner: no camera permission here); the linked ones are listed, each can be unlinked.
  */

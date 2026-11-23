@@ -1,4 +1,4 @@
-// As páginas do FreeSong no computador (web/public), servidas em /web/. Nada aqui é feito por
+// As páginas do FreeSong no computador (web/public), servidas na raiz do endereço. Nada aqui é feito por
 // pessoa: a página é a mesma pra todos e faz tudo no navegador (o cofre chega cifrado e é aberto lá).
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -58,14 +58,19 @@ export class Pages {
   }
 
   serve(req, res, p) {
-    if (p === '/web') {
-      res.writeHead(301, { Location: '/web/', 'Cache-Control': 'no-store' });
+    // O endereço de antes (/web/…) leva pro de agora: o app na raiz e o QR code em /link.
+    if (p === '/web' || p.startsWith('/web/')) {
+      res.writeHead(301, { ...HEADERS, Location: p === '/web/link' ? '/link' : '/', 'Cache-Control': 'no-store' });
       return res.end();
     }
-    const rel = decodeURIComponent(p.slice('/web/'.length)) || 'index.html';
+    // O app é a raiz e o /link (o QR code aberto no navegador); fora isso, só os arquivos da pasta.
+    let rel = null;
+    try {
+      rel = p === '/' || p === '/link' ? 'index.html' : decodeURIComponent(p.slice(1));
+    } catch {
+      // %-escape quebrado: não existe.
+    }
     let file = this.file(rel);
-    // Uma tela do app (sem arquivo com esse nome, sem extensão): o próprio app, que lê o endereço.
-    if (!file && !path.extname(rel)) file = this.file('index.html');
     if (file && path.basename(file.path) === 'index.html') file = this.page(file);
     if (!file) {
       const body = Buffer.from('Não existe.');

@@ -1,6 +1,6 @@
 # FreeSong no computador (web)
 
-`https://freesong.simplyonegoal.com/web` — o FreeSong no navegador do computador, com as mesmas
+`https://freesong.simplyonegoal.com` — o FreeSong no navegador do computador, com as mesmas
 curtidas, playlists e o que você ouve do celular, nos dois sentidos. No celular a página só diz pra
 baixar o app.
 
@@ -27,7 +27,7 @@ cd web && npm ci
 npm run build            # src/ → public/app.js (commite o app.js)
 npm test                 # cofre, cifra, sincronização e a paridade com o app
 node test/e2e.mjs /tmp/fotos   # ponta a ponta no Chromium (rede de verdade, ~2 min)
-PORT=3982 npm start      # http://127.0.0.1:3982/web/
+PORT=3982 npm start      # http://127.0.0.1:3982/
 ```
 
 A paridade com o celular: `WebParityTest` (no app) abre o que `tools/fixtures.mjs` gerou e grava
@@ -39,5 +39,5 @@ que o som sai. Num computador de casa ele toca.
 ## No servidor
 
 `/srv/freesong/web` (o mesmo clone do relay), unit `freesong-web.service` em `127.0.0.1:3982`; o túnel
-manda `freesong.simplyonegoal.com/web*` pra ela e o resto pro relay. Atualizar:
+manda pro relay o que é dele (`/v1`, `/avatars`, `/.well-known`, os links `/m|v|l|a/…`) e o resto pra ela. Atualizar:
 `cd /srv/freesong && git pull && cd web && npm ci --omit=dev && systemctl restart freesong-web`.

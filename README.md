@@ -74,7 +74,7 @@ quando ela existe ou são reconhecidos no próprio aparelho quando não existe.
 
 ## No computador
 
-O FreeSong também abre no navegador do computador: **https://freesong.simplyonegoal.com/web**. No
+O FreeSong também abre no navegador do computador: **https://freesong.simplyonegoal.com**. No
 celular, toque na sua foto (Perfil) › **Computador** › **Ligar um computador** e leia o QR code que a
 página mostra (ou aponte a câmera do celular pra ele). Suas curtidas, playlists e o que você ouve ficam
 iguais nos dois, na hora. A chave do seu cofre vai cifrada só pra aquele navegador; o servidor não lê
