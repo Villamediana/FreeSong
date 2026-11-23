@@ -795,6 +795,28 @@ Miguel saiu da jam: quem criou viu na hora, mas o celular dele seguiu "na jam" p
   jam e fica 15 min sem conectar sai sozinho (`Jams.gone`, `sweepJams` no heartbeat).
 
 
+## Curtir com o celular cheio (1.37.1, 2026-11-23)
+
+Pedido do Miguel: revisar o que acontece quando a pessoa curte uma música com o armazenamento estourado —
+não precisa avisar, só não pode salvar, e validar certinho.
+
+- **Antes de baixar** (`download/DiskRoom.kt`): o motor confere se o que falta da música (o tamanho do stream,
+  ou um palpite pela duração a ~160 kbps), mais capa e letra, cabe no celular **sem passar da linha que o
+  Android guarda livre** (`StorageManager.getAllocatableBytes`, que já desconta o "armazenamento acabando";
+  `allocateBytes` pode limpar cache de outros apps pra caber). Não cabe: `NoRoomException` → falha na hora
+  como "Sem espaço no aparelho", sem escrever um byte nem tentar de novo. Sem `StorageManager`: `StatFs`
+  menos 5% do disco (até 500 MB).
+- **Curtir com "Curtir já baixa"** no celular cheio: o coração fica (Curtidas, tocando online), a música não
+  entra na fila e nada avisa (`DownloadController.hasRoom`); o "Baixa quando conectar" só aparece se ela vai
+  mesmo baixar.
+- **Curtir nunca derruba o app**: gravar o coração com o disco cheio (`SQLiteFullException`) era uma exceção
+  sem tratamento no escopo do app (`likeOnline`/`likeTrack` agora guardam o erro e não mudam nada).
+- **Disco que enche no meio**: o pedaço baixado (`.part` e `.sig`) sai **antes** de marcar a falha, pra que
+  até a linha do banco tenha espaço.
+- **Downloads inteligentes**: só os que cabem juntos (`DiskRoom.fitting`).
+- Testes: `DownloadEngineTest` (celular cheio não escreve nada; o espaço pedido é o que falta; disco que enche
+  joga fora o pedaço; palpite de tamanho), `SearchViewModelTest.aHeartOnAFullPhoneDoesNotPromiseADownload`.
+
 ## Armazenamento que fecha a conta (1.27.2, 2026-11-10)
 
 - O número grande ("usados no celular") era só a pasta das baixadas (`Storage.usedBytes`) e só era
