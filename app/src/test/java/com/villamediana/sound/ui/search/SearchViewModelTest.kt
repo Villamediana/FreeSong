@@ -282,6 +282,32 @@ class SearchViewModelTest {
     }
 
     @Test
+    fun aHeartOnAFullPhoneDoesNotPromiseADownload() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val liked = mutableListOf<Pair<String, Boolean>>()
+        val hearts = SearchViewModel(
+            youTube, library, downloads, player, RecentSearchStore(context), online, initiallyOnline = true, playOnlineFlow = playOnline,
+            likeDownloadsFlow = MutableStateFlow(true),
+            onLike = { t, v -> liked += t.videoId to v },
+        )
+        scope.launch { hearts.likeDownloads.collect { } }
+        downloads.waitFlow.value = com.villamediana.sound.download.DownloadWait.NETWORK
+        awaitUntil { hearts.downloadWait.value == com.villamediana.sound.download.DownloadWait.NETWORK && hearts.likeDownloads.value }
+
+        // Room on the phone: the heart is kept and it says when the song comes.
+        hearts.like(remoteTrack("a"), true)
+        assertEquals(SearchEvent.Message(R.string.download_wait_network), runBlocking { withTimeout(5_000) { hearts.events.first() } })
+
+        // A full phone: the heart is kept, and nothing says a download is coming.
+        downloads.room = false
+        hearts.like(remoteTrack("b"), true)
+        assertEquals(listOf("a" to true, "b" to true), liked)
+        val said = runBlocking { kotlinx.coroutines.withTimeoutOrNull(500) { hearts.events.first() } }
+        assertEquals(null, said)
+        hearts.viewModelScope.cancel()
+    }
+
+    @Test
     fun aDownloadAskedOfflineIsQueuedAndSaysItStartsOnTheConnection() {
         downloads.waitFlow.value = com.villamediana.sound.download.DownloadWait.NETWORK
         awaitUntil { vm.downloadWait.value == com.villamediana.sound.download.DownloadWait.NETWORK }

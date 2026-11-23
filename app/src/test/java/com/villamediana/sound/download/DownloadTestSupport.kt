@@ -246,6 +246,8 @@ internal class Harness(
 
     @Volatile var settings = Settings(parallelDownloads = 2, fetchLyrics = true)
     @Volatile var online = true
+    /** Bytes the phone still has room for (a full phone: less than a song). */
+    @Volatile var roomLeft = Long.MAX_VALUE
     val scheduled: MutableList<SchedulePolicy> = CopyOnWriteArrayList()
     val background: MutableList<suspend () -> Unit> = CopyOnWriteArrayList()
 
@@ -260,6 +262,9 @@ internal class Harness(
         http = http,
         messages = AndroidDownloadMessages(context),
         isOnline = { online },
+        room = object : DiskRoom {
+            override fun fits(bytes: Long) = bytes <= roomLeft
+        },
         accentOf = { ACCENT },
         probeDuration = { PROBED_DURATION },
         chunkSize = CHUNK,
