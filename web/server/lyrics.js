@@ -3,7 +3,7 @@
 // O que volta: {synced: [{t: ms, l: linha}] | null, plain: texto | null, instrumental, source}.
 
 const BASE = 'https://lrclib.net';
-const AGENT = 'FreeSong Web/1.0 (https://freesong.simplyonegoal.com/web)';
+const AGENT = 'FreeSong Web/1.0 (https://freesong.simplyonegoal.com)';
 const TOLERANCE_S = 5;
 
 /** O título sem "(Ao Vivo)", "- Remastered 2011", "[Official Video]", "feat. …". */

@@ -21,7 +21,7 @@ import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
 /**
- * Linking a computer (FreeSong on the web, freesong.simplyonegoal.com/web) to this profile, the same
+ * Linking a computer (FreeSong on the web, freesong.simplyonegoal.com) to this profile, the same
  * way the Novelo does: the computer shows a QR code with its link id, its public key (ECDH P-256) and
  * a secret of 16 bytes that is only on its screen; this phone answers with the vault's key encrypted
  * so only that computer opens it — AES-256-GCM with HKDF-SHA256(ECDH ‖ secret, salt = the link id,
@@ -39,7 +39,7 @@ object ComputerLink {
     private const val IV = 12
     private val INFO = "freesong-link-v1".toByteArray()
     private val random = SecureRandom()
-    private val CODE = Regex("""^https://([A-Za-z0-9.-]+)/web/link/?#([A-Za-z0-9_-]{22})\.([A-Za-z0-9_-]{80,100})\.([A-Za-z0-9_-]{22})$""")
+    private val CODE = Regex("""^https://([A-Za-z0-9.-]+)/link/?#([A-Za-z0-9_-]{22})\.([A-Za-z0-9_-]{80,100})\.([A-Za-z0-9_-]{22})$""")
 
     /**
      * The address in a computer's QR code (also what opens the app from the phone's camera): only one

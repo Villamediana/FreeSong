@@ -158,7 +158,7 @@
     <string name="social_sent">Solicitudes enviadas</string>
     <!-- FreeSong no computador (a web): ligar pelo QR code, a lista, desligar. -->
     <string name="computers_title">Computadora</string>
-    <string name="computers_body">Escucha en la computadora con tus me gusta y playlists: abre freesong.simplyonegoal.com/web y lee el código con el celular.</string>
+    <string name="computers_body">Escucha en la computadora con tus me gusta y playlists: abre freesong.simplyonegoal.com y lee el código con el celular.</string>
     <string name="computers_link">Conectar una computadora</string>
     <string name="computers_unlink">Desconectar</string>
     <string name="computers_shared">Solo mientras la pestaña esté abierta</string>

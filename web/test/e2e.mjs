@@ -1,6 +1,6 @@
 // Ponta a ponta no Chromium (não entra no npm test: usa a rede de verdade e leva uns minutos):
 //   node test/e2e.mjs <pasta das capturas>
-// Sobe o relay (relay/) e a web num endereço só (como o túnel: /web → a web, o resto → o relay), faz
+// Sobe o relay (relay/) e a web num endereço só (como o túnel: /v1, /avatars… → o relay, o resto → a web), faz
 // um "celular" (conta + cofre com curtidas, escutas e playlists), liga o computador pelo QR code e
 // confere: a Início com as coisas do celular, busca, artista, álbum, tocar, curtir aqui → chega no
 // celular, o celular muda → aparece aqui na hora, tema claro, desligar.
@@ -26,9 +26,10 @@ const web = createWeb({ publicDir: path.join(here, '..', 'public') });
 const listen = (server) => new Promise((r) => server.listen(0, '127.0.0.1', () => r(server.address().port)));
 const relayPort = await listen(relay.server);
 const webPort = await listen(web.server);
-// O "túnel": /web vai pra web, o resto pro relay.
+// O "túnel" (o mesmo caminho que está no novelo.yml): o que é do relay vai pra ele, o resto pra web.
+const RELAY = /^\/(v1|avatars|\.well-known|[mvla])(\/|$)/;
 const front = http.createServer((req, res) => {
-  const port = req.url === '/web' || req.url.startsWith('/web/') ? webPort : relayPort;
+  const port = RELAY.test(new URL(req.url, 'http://x').pathname) ? relayPort : webPort;
   const up = http.request({ host: '127.0.0.1', port, path: req.url, method: req.method, headers: req.headers }, (r) => {
     res.writeHead(r.statusCode, r.headers);
     r.pipe(res);
@@ -59,8 +60,8 @@ const raw = globalThis.crypto.getRandomValues(new Uint8Array(32));
 const phoneKey = await globalThis.crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['encrypt', 'decrypt']);
 const now = Date.now();
 // Músicas de verdade (as capas carregam), tiradas da própria ponte.
-const coldplay = (await (await fetch(`${base}/web/api/search?q=coldplay&type=songs`)).json()).items;
-const djavan = (await (await fetch(`${base}/web/api/search?q=djavan&type=songs`)).json()).items;
+const coldplay = (await (await fetch(`${base}/api/search?q=coldplay&type=songs`)).json()).items;
+const djavan = (await (await fetch(`${base}/api/search?q=djavan&type=songs`)).json()).items;
 const v = (s) => ({ i: s.videoId, t: s.title, a: s.artist, al: s.album, d: s.durationMs, c: s.cover, u: `https://music.youtube.com/watch?v=${s.videoId}` });
 const content = {
   likes: [...coldplay.slice(0, 4), ...djavan.slice(0, 3)].map((s, i) => ({ s: v(s), at: now - i * 3600_000 })),
@@ -83,13 +84,13 @@ page.on('pageerror', (e) => errors.push(String(e)));
 page.on('console', (m) => { if (m.type() === 'error' && !/youtube|ytimg|googlevideo|doubleclick|google/.test(m.text())) errors.push(m.text()); });
 const shot = async (name) => page.screenshot({ path: path.join(shots, `${name}.png`) });
 
-await page.goto(`${base}/web/`);
+await page.goto(`${base}/`);
 await page.waitForSelector('.qr[data-code]', { timeout: 20_000 });
 await page.waitForTimeout(400);
 await shot('01-ligar');
 const url = await page.getAttribute('.qr', 'data-code');
 const m = /#([A-Za-z0-9_-]{22})\.([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]{22})$/.exec(url);
-check(!!m && url.startsWith(`${base}/web/link#`), 'o QR code tem o endereço, a chave e o segredo');
+check(!!m && url.startsWith(`${base}/link#`), 'o QR code tem o endereço, a chave e o segredo');
 const wrapped = await lock.wrapLink(m[2], m[1], m[3], { user: phone.id, key: raw, owner: 'Pixel 8' });
 check((await api('POST', `/v1/link/${m[1]}/approve`, { token: phone.token, body: { wrapped, owner: 'Pixel 8' } })).status === 200, 'o celular aprova');
 await page.waitForSelector('.hello h1', { timeout: 30_000 });
@@ -187,7 +188,7 @@ check(left === 0, 'e nada fica no navegador');
 
 // Pelo código de recuperação
 const p2 = await ctx.newPage();
-await p2.goto(`${base}/web/`);
+await p2.goto(`${base}/`);
 await p2.waitForTimeout(1500);
 await p2.screenshot({ path: path.join(shots, '17-codigo.png') });
 await p2.click('.text-btn');

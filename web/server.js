@@ -8,7 +8,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const port = parseInt(process.env.PORT ?? '3982', 10);
 const host = process.env.HOST ?? '127.0.0.1';
 const web = createWeb({ publicDir: path.join(here, 'public') });
-web.server.listen(port, host, () => console.log(`[web] FreeSong web em http://${host}:${port}/web/`));
+web.server.listen(port, host, () => console.log(`[web] FreeSong web em http://${host}:${port}/`));
 const stop = () => {
   setTimeout(() => process.exit(0), 3000).unref();
   web.server.close(() => process.exit(0));

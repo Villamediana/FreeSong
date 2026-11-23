@@ -11,7 +11,7 @@ sealed interface Inbound {
     /** A voice request ("tocar … no Sound") with nothing in the library for it, to search online. */
     data class Query(val text: String) : Inbound
 
-    /** A computer's QR code read by the phone's camera (freesong.simplyonegoal.com/web/link#…): link it? */
+    /** A computer's QR code read by the phone's camera (freesong.simplyonegoal.com/link#…): link it? */
     data class Computer(val code: com.villamediana.sound.social.ComputerLink.Code) : Inbound
 }
 
