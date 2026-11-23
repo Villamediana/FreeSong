@@ -1,8 +1,5 @@
 package com.villamediana.sound.ui.social
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -19,14 +16,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.HideImage
-import androidx.compose.material.icons.rounded.Key
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.PhotoCamera
-import androidx.compose.material.icons.rounded.SwapHoriz
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -63,7 +56,7 @@ import kotlinx.coroutines.launch
 /**
  * Your page, as your friends see it (photo, name, @, hours, this month's numbers, five most heard,
  * your artists and rhythm). The name changes; the @ is your identifier on FreeSong and stays. Also: the photo,
- * the recovery code, using another phone's code, deleting the profile.
+ * deleting the profile. The recovery code lives in Ajustes since 1.38 ([RecoverySheet]).
  */
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
@@ -71,7 +64,6 @@ fun ProfileScreen() {
     val hub = SoundApplication.graph.social
     val nav = navigator()
     val me by hub.account.me.collectAsStateWithLifecycle()
-    val code by hub.account.recoveryCode.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val snackbar = rememberDetailSnackbar()
     val context = LocalContext.current
@@ -82,7 +74,6 @@ fun ProfileScreen() {
     var framing by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     var editing by rememberSaveable { mutableStateOf(false) }
     var menu by rememberSaveable { mutableStateOf(false) }
-    var recovering by rememberSaveable { mutableStateOf(false) }
     var deleting by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(Unit) { hub.account.refresh() }
 
@@ -103,18 +94,11 @@ fun ProfileScreen() {
         me = p,
         numbers = now?.month,
         top = now?.top,
-        code = code,
         photoBusy = photoBusy,
         snackbar = snackbar,
         onPhoto = pickPhoto,
         onEdit = { editing = true },
         onMenu = { menu = true },
-        onCopy = {
-            code?.let { copy(context, it) }
-            snackbar.feedback.show(res.getString(R.string.profile_copied))
-        },
-        onNewCode = { scope.launch { hub.newRecoveryCode() } },
-        onUseCode = { recovering = true },
         sheets = {
             framing?.let { photo ->
                 PhotoCropDialog(
@@ -134,7 +118,7 @@ fun ProfileScreen() {
             }
             if (editing && p != null) EditNameSheet(p, onDismiss = { editing = false }, onSaved = { snackbar.feedback.show(res.getString(R.string.profile_saved)) })
             if (menu) {
-                // Only what isn't on the page already: the photo changes from its camera, the code from its card.
+                // Only what isn't on the page already: the photo changes from its camera.
                 SoundSheet(onDismissRequest = { menu = false }) {
                     if (p?.avatar != null) {
                         SheetAction(Icons.Rounded.HideImage, stringResource(R.string.profile_photo_remove), onClick = {
@@ -148,7 +132,6 @@ fun ProfileScreen() {
                     })
                 }
             }
-            if (recovering) RecoverDialog(onDismiss = { recovering = false }, onRecovered = { snackbar.feedback.show(res.getString(R.string.profile_recovered)) })
             if (deleting) {
                 ConfirmDialog(
                     title = stringResource(R.string.profile_delete_title),
@@ -176,15 +159,11 @@ internal fun ProfilePage(
     numbers: com.villamediana.sound.social.NumPeriod?,
     /** "Mais ouvidas" worked out here; until then (null), what the relay last kept. */
     top: List<com.villamediana.sound.social.SongRef>? = null,
-    code: String?,
     photoBusy: Boolean,
     snackbar: com.villamediana.sound.ui.detail.DetailSnackbar,
     onPhoto: () -> Unit,
     onEdit: () -> Unit,
     onMenu: () -> Unit,
-    onCopy: () -> Unit,
-    onNewCode: () -> Unit,
-    onUseCode: () -> Unit,
     sheets: @Composable () -> Unit = {},
 ) {
     PersonPage(
@@ -205,9 +184,6 @@ internal fun ProfilePage(
             HeaderIconButton(Icons.Rounded.MoreVert, stringResource(R.string.more_options), onClick = onMenu)
         },
         sheets = sheets,
-        more = {
-            item(key = "recovery", contentType = "card") { RecoveryCard(code, onCopy = onCopy, onNew = onNewCode, onUseCode = onUseCode) }
-        },
     )
 }
 
@@ -264,10 +240,6 @@ private fun profileError(e: Throwable): Int = when ((e as? RelayException)?.code
     else -> R.string.profile_error_network
 }
 
-private fun copy(context: Context, text: String) {
-    context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText("FreeSong", text))
-}
-
 /** A titled part of a sheet (label in small caps over its content). */
 @Composable
 internal fun Section(title: String, content: @Composable () -> Unit) {
@@ -276,50 +248,4 @@ internal fun Section(title: String, content: @Composable () -> Unit) {
         Spacer(Modifier.height(10.dp))
         content()
     }
-}
-
-@Composable
-private fun RecoverDialog(onDismiss: () -> Unit, onRecovered: () -> Unit) {
-    val hub = SoundApplication.graph.social
-    val scope = rememberCoroutineScope()
-    val res = LocalContext.current.resources
-    var code by remember { mutableStateOf("") }
-    var error by remember { mutableStateOf<String?>(null) }
-    var busy by remember { mutableStateOf(false) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = SoundColors.Surface2,
-        shape = RoundedCornerShape(28.dp),
-        title = { Text(stringResource(R.string.profile_use_code), style = MaterialTheme.typography.headlineSmall, color = SoundColors.Text) },
-        text = {
-            Column {
-                Text(stringResource(R.string.profile_use_code_body), style = MaterialTheme.typography.bodyMedium, color = SoundColors.TextMuted)
-                Spacer(Modifier.height(14.dp))
-                SoundTextField(code, { code = it.uppercase(); error = null }, label = stringResource(R.string.profile_code_label), imeAction = ImeAction.Done)
-                error?.let {
-                    Spacer(Modifier.height(8.dp))
-                    Text(it, style = MaterialTheme.typography.bodyMedium, color = SoundColors.Danger)
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(enabled = !busy && code.isNotBlank(), onClick = {
-                busy = true
-                scope.launch {
-                    hub.account.recover(code)
-                        .onSuccess {
-                            // The profile, its friends, and from its vault the hearts, playlists, listening.
-                            hub.bootstrap()
-                            onRecovered()
-                            onDismiss()
-                        }
-                        .onFailure { e -> error = res.getString(if ((e as? RelayException)?.status == 404) R.string.profile_code_wrong else R.string.profile_error_network) }
-                    busy = false
-                }
-            }) { Text(stringResource(R.string.profile_use), color = SoundColors.Accent, style = MaterialTheme.typography.labelLarge) }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel), color = SoundColors.TextMuted, style = MaterialTheme.typography.labelLarge) }
-        },
-    )
 }

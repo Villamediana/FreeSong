@@ -175,4 +175,8 @@
     <string name="computer_failed">Couldn\'t link it right now.</string>
     <string name="computer_unlinked">Computer unlinked</string>
     <string name="computer_no_scanner">Couldn\'t open the camera. Point your phone\'s camera at the code.</string>
+    <string name="settings_group_account">Account</string>
+    <string name="recovery_new_title">Make another code?</string>
+    <string name="recovery_new_body">The current code stops working. Keep the new one.</string>
+    <string name="recovery_too_many">Too many tries. Try again in a little while.</string>
 </resources>

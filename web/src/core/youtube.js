@@ -10,6 +10,13 @@
 export const ORIGIN = 'https://www.youtube-nocookie.com';
 export const STATE = { UNSTARTED: -1, ENDED: 0, PLAYING: 1, PAUSED: 2, BUFFERING: 3, CUED: 5 };
 
+// Comandos que um vídeo novo torna velhos (esperando o frame ficar pronto, só o último vale).
+const LOADS = new Set(['loadVideoById', 'cueVideoById']);
+const SUPERSEDED = new Set(['loadVideoById', 'cueVideoById', 'playVideo', 'pauseVideo', 'stopVideo', 'seekTo']);
+// Mandou tocar e não começou: pede de novo nestes momentos (ms). O frame que não responde é refeito.
+const NUDGES_MS = [900, 2200, 4500];
+const REBUILD_AFTER_MS = 8000;
+
 export class YouTubeFrame {
   /**
    * [host]: o elemento onde o frame mora (nunca muda de lugar no DOM: mover um iframe recarrega ele).
@@ -25,6 +32,9 @@ export class YouTubeFrame {
     this.duration = 0;
     this.videoId = null;
     this.id = 1;
+    this.nudges = [];
+    this.rebuilds = 0;
+    this.wasBlocked = false; // o navegador já barrou um play sozinho aqui (o próximo vai com um "tocar" junto)
     this.listen = (e) => this.message(e);
     window.addEventListener('message', this.listen);
   }
@@ -74,15 +84,40 @@ export class YouTubeFrame {
     this.time = start;
     this.duration = 0;
     this.failed = null;
+    // O estado do vídeo de antes não diz nada deste (um "tocando" velho seguraria os pedidos de novo).
+    this.state = STATE.UNSTARTED;
     this.warm();
     this.command(autoplay ? 'loadVideoById' : 'cueVideoById', [{ videoId, startSeconds: start }]);
-    clearTimeout(this.nudger);
-    // Mandou tocar e não começou nem deu erro: pede mais uma vez.
-    if (autoplay) this.nudger = setTimeout(() => this.nudge(videoId), 2500);
+    // Depois de um play barrado, o YouTube só deixa o vídeo pronto: vai um "tocar" junto (agora houve clique).
+    if (autoplay && this.wasBlocked) this.command('playVideo');
+    // Mandou tocar e não começou nem deu erro: pede de novo, logo e mais algumas vezes.
+    this.armNudges(autoplay ? videoId : null);
+    this.watchdog();
+  }
+
+  armNudges(videoId) {
+    for (const t of this.nudges) clearTimeout(t);
+    this.nudges = videoId ? NUDGES_MS.map((ms) => setTimeout(() => this.nudge(videoId), ms)) : [];
+  }
+
+  /** O frame que não ficou pronto a tempo (carregou pela metade, a rede piscou) é feito de novo. */
+  watchdog() {
+    if (this.ready) return;
+    clearTimeout(this.rebuildTimer);
+    this.rebuildTimer = setTimeout(() => {
+      if (this.ready || !this.frame || this.rebuilds >= 2) return;
+      this.rebuilds++;
+      clearInterval(this.knock);
+      this.frame.remove();
+      this.frame = null;
+      this.warm(); // os comandos esperando continuam na fila
+      this.watchdog();
+    }, REBUILD_AFTER_MS);
   }
 
   nudge(videoId) {
-    if (this.videoId !== videoId || this.failed === videoId) return;
+    // Sem frame pronto o vídeo ainda está na fila (os pedidos recomeçam quando ele ficar pronto).
+    if (!this.ready || this.videoId !== videoId || this.failed === videoId) return;
     if (this.state === STATE.PLAYING || this.state === STATE.BUFFERING || this.state === STATE.ENDED) return;
     this.command('playVideo');
   }
@@ -92,8 +127,11 @@ export class YouTubeFrame {
     this.ready = false;
     let n = 0;
     clearInterval(this.knock);
+    // A cada 250 ms nos primeiros 10 s; depois a cada segundo, até responder (antes parava aos 10 s e o
+    // frame lento nunca mais tocava nada).
     this.knock = setInterval(() => {
-      if (this.ready || ++n > 40) return clearInterval(this.knock);
+      if (this.ready || !this.frame) return clearInterval(this.knock);
+      if (++n > 40 && n % 4) return;
       this.post({ event: 'listening', id: this.id, channel: 'widget' });
     }, 250);
     this.post({ event: 'listening', id: this.id, channel: 'widget' });
@@ -105,6 +143,7 @@ export class YouTubeFrame {
 
   command(func, args = []) {
     if (!this.ready) {
+      if (LOADS.has(func)) this.queue = this.queue.filter(([f]) => !SUPERSEDED.has(f));
       this.queue.push([func, args]);
       return;
     }
@@ -122,12 +161,15 @@ export class YouTubeFrame {
     if (!m || typeof m !== 'object') return;
     if (!this.ready && (m.event === 'onReady' || m.event === 'initialDelivery' || m.event === 'infoDelivery')) {
       this.ready = true;
+      this.rebuilds = 0;
       clearInterval(this.knock);
+      clearTimeout(this.rebuildTimer);
       for (const ev of ['onReady', 'onStateChange', 'onError', 'onPlaybackRateChange', 'onAutoplayBlocked']) {
         this.post({ event: 'command', func: 'addEventListener', args: [ev], id: this.id, channel: 'widget' });
       }
       const waiting = this.queue.splice(0);
       for (const [func, args] of waiting) this.command(func, args);
+      if (waiting.some(([func]) => func === 'loadVideoById')) this.armNudges(this.videoId);
       this.onReady();
     }
     if (m.event === 'onStateChange' && Number.isInteger(m.info)) this.setState(m.info);
@@ -135,7 +177,10 @@ export class YouTubeFrame {
       this.failed = this.videoId;
       this.onError(Number(m.info));
     }
-    else if (m.event === 'onAutoplayBlocked') this.onBlocked();
+    else if (m.event === 'onAutoplayBlocked') {
+      this.wasBlocked = true;
+      this.onBlocked();
+    }
     else if ((m.event === 'infoDelivery' || m.event === 'initialDelivery') && m.info && typeof m.info === 'object') {
       const i = m.info;
       if (Number.isFinite(i.duration) && i.duration > 0) this.duration = i.duration;
@@ -150,6 +195,7 @@ export class YouTubeFrame {
   }
 
   setState(s) {
+    if (s === STATE.PLAYING) this.wasBlocked = false;
     if (s === this.state) return;
     this.state = s;
     this.onState(s);
@@ -172,7 +218,8 @@ export class YouTubeFrame {
 
   destroy() {
     clearInterval(this.knock);
-    clearTimeout(this.nudger);
+    clearTimeout(this.rebuildTimer);
+    for (const t of this.nudges) clearTimeout(t);
     window.removeEventListener('message', this.listen);
     this.frame?.remove();
     this.frame = null;

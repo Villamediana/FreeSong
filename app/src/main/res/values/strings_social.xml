@@ -175,4 +175,8 @@
     <string name="computer_failed">Não deu pra ligar agora.</string>
     <string name="computer_unlinked">Computador desligado</string>
     <string name="computer_no_scanner">Não deu pra abrir a câmera. Aponte a câmera do celular pro código.</string>
+    <string name="settings_group_account">Conta</string>
+    <string name="recovery_new_title">Gerar outro código?</string>
+    <string name="recovery_new_body">O código de agora deixa de funcionar. Guarde o novo.</string>
+    <string name="recovery_too_many">Muitas tentativas. Tente de novo daqui a pouco.</string>
 </resources>

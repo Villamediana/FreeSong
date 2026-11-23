@@ -175,4 +175,8 @@
     <string name="computer_failed">No se pudo conectar ahora.</string>
     <string name="computer_unlinked">Computadora desconectada</string>
     <string name="computer_no_scanner">No se pudo abrir la cámara. Apunta la cámara del celular al código.</string>
+    <string name="settings_group_account">Cuenta</string>
+    <string name="recovery_new_title">¿Generar otro código?</string>
+    <string name="recovery_new_body">El código actual deja de funcionar. Guarda el nuevo.</string>
+    <string name="recovery_too_many">Demasiados intentos. Prueba de nuevo en un rato.</string>
 </resources>

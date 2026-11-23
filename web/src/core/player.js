@@ -5,6 +5,8 @@
 import { STATE, YouTubeFrame } from './youtube.js';
 
 const RESTART_AFTER_S = 4;
+// Pediu pra tocar e nada em tanto tempo: aparece "Clique para tocar" (em vez de girar pra sempre).
+const STUCK_AFTER_MS = 12_000;
 
 export class Player {
   constructor({ host, api, onListen = () => {}, onToast = () => {}, prefs = {}, savePrefs = () => {} }) {
@@ -37,6 +39,7 @@ export class Player {
       onBlocked: () => this.set({ blocked: true }),
     });
     this.blocked = false;
+    this.wanted = false; // a pessoa pediu pra tocar (até pausar ou acabar)
     this.failures = 0; // músicas seguidas que não tocaram (o YouTube recusando tudo: para de pular)
     this.lastActive = 0; // a última vez que a pessoa tocou, pausou, pulou ou trocou de música aqui (ms)
     this.seeks = 0; // quantas vezes pulou pra outro ponto (o celular fica sabendo)
@@ -61,6 +64,11 @@ export class Player {
 
   get playing() {
     return this.state === STATE.PLAYING || this.state === STATE.BUFFERING;
+  }
+
+  /** Pediu pra tocar e ainda não começou (o botão gira em vez de parecer parado). */
+  get loading() {
+    return !!this.current && !this.blocked && (this.state === STATE.BUFFERING || (this.state === STATE.UNSTARTED && this.wanted));
   }
 
   /** As próximas, na ordem em que vão tocar. */
@@ -145,9 +153,10 @@ export class Player {
     this.lastActive = Date.now();
     if (this.playing) this.frame.pause();
     else {
-      this.set({ blocked: false });
+      this.set({ blocked: false, wanted: true });
       if (this.state === STATE.ENDED) this.frame.seek(0);
       this.frame.play();
+      this.watchStart(this.current);
     }
   }
 
@@ -245,10 +254,19 @@ export class Player {
     const id = tried?.at(-1) ?? s.videoId;
     this.playingId = id;
     this.lastActive = Date.now();
-    this.set({ time: 0, duration: (s.durationMs ?? 0) / 1000, state: STATE.BUFFERING, blocked: false });
+    this.set({ time: 0, duration: (s.durationMs ?? 0) / 1000, state: STATE.BUFFERING, blocked: false, wanted: true });
     this.frame.load(id, 0, true);
     this.listen = { song: s, ms: 0, lastTick: null, at: Date.now() };
+    this.watchStart(s);
     this.prefetch();
+  }
+
+  /** Se [s] não começar a tocar a tempo, a pessoa vê "Clique para tocar" (um play dela sempre vale). */
+  watchStart(s) {
+    clearTimeout(this.stuckTimer);
+    this.stuckTimer = setTimeout(() => {
+      if (this.current === s && this.state !== STATE.PLAYING && this.state !== STATE.PAUSED && this.state !== STATE.ENDED) this.set({ blocked: true });
+    }, STUCK_AFTER_MS);
   }
 
   /**
@@ -269,8 +287,9 @@ export class Player {
     const start = Math.max(0, startS);
     this.playingId = s.videoId;
     this.lastActive = at;
-    this.set({ time: start, duration: (s.durationMs ?? 0) / 1000, state: play ? STATE.BUFFERING : STATE.CUED, blocked: false });
+    this.set({ time: start, duration: (s.durationMs ?? 0) / 1000, state: play ? STATE.BUFFERING : STATE.CUED, blocked: false, wanted: play });
     this.frame.load(s.videoId, start, play);
+    if (play) this.watchStart(s);
     this.listen = { song: s, ms: 0, lastTick: null, at: Date.now() };
     this.prefetch();
   }
@@ -324,7 +343,9 @@ export class Player {
     if (s === STATE.PLAYING) {
       this.blocked = false;
       this.failures = 0;
+      clearTimeout(this.stuckTimer);
     }
+    if (s === STATE.PAUSED || s === STATE.ENDED) this.wanted = false;
     if (s !== STATE.PLAYING && this.listen) this.listen.lastTick = null;
     if (s === STATE.ENDED) this.next(true);
   }

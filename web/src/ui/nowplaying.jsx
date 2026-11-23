@@ -3,6 +3,8 @@
 // que nunca sai do lugar no DOM (mover um iframe recarrega ele): só muda de posição e tamanho.
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Cover, Icon, IconBtn, Loading, sized, time, useApp, useWatch } from './kit.jsx';
+import { recent } from '../core/taste.js';
+import { fromV } from '../core/vault.js';
 
 /** O lugar do vídeo: segue o "buraco" do painel quando ele está aberto; senão, fica pequeno no canto. */
 export function VideoDock({ slot, host, open }) {
@@ -121,6 +123,47 @@ function QueueRow({ song, current = false, onPlay, onRemove }) {
   );
 }
 
+/**
+ * Nada tocando: em vez de um painel vazio, por onde começar — a última que tocou (continua com o rádio
+ * dela), as curtidas embaralhadas e as outras que tocaram há pouco. Um clique e já toca.
+ */
+function Start() {
+  const app = useApp();
+  const sync = useWatch(app.sync);
+  const v = sync.data;
+  const last = recent(v, 6);
+  const liked = [...v.likes].sort((a, b) => b.at - a.at).map((l) => fromV(l.s));
+  if (!last.length && !liked.length) return <div className="lyrics-none"><Icon name="lyrics" size={28} /><p>{app.t('queueEmpty')}</p></div>;
+  const [first, ...more] = last;
+  return (
+    <div className="np-start">
+      {first ? (
+        <button type="button" className="np-resume" onClick={() => app.playRadio(first)} aria-label={`${app.t('play')}: ${first.title}`}>
+          <Cover src={sized(first.cover, 240)} size={64} />
+          <span className="row-main"><span className="np-resume-title">{first.title}</span><span className="artists">{first.artist}</span></span>
+          <span className="np-resume-play"><Icon name="play" fill size={20} /></span>
+        </button>
+      ) : null}
+      {liked.length ? (
+        <button type="button" className="pill np-shuffle" onClick={() => app.playFrom(liked, -1, { kind: 'liked', id: 'liked', title: app.t('likedSongs') })}>
+          <Icon name="shuffle" size={16} /> {app.t('likedSongs')}
+        </button>
+      ) : null}
+      {more.length ? (
+        <>
+          <h3 className="np-start-title">{app.t('recentlyPlayed')}</h3>
+          {more.map((x) => (
+            <button key={x.videoId} type="button" className="np-start-row" onClick={() => app.playRadio(x)}>
+              <Cover src={sized(x.cover, 120)} size={40} />
+              <span className="row-main"><span className="row-title">{x.title}</span><span className="artists">{x.artist}</span></span>
+            </button>
+          ))}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 /** O painel do lado: o vídeo em cima, e embaixo a letra ou a fila. */
 export function NowPlaying({ slot, tab, setTab, onClose }) {
   const app = useApp();
@@ -134,7 +177,7 @@ export function NowPlaying({ slot, tab, setTab, onClose }) {
         <IconBtn icon="close" label={app.t('close')} size={18} onClick={onClose} />
       </div>
       <div className="np-scroll">
-        <div className="np-video" ref={slot}>{!s ? <Icon name="video" size={34} /> : null}</div>
+        {s ? <div className="np-video" ref={slot} /> : null}
         {s ? (
           <div className="np-info">
             <div className="row-main">
@@ -144,12 +187,14 @@ export function NowPlaying({ slot, tab, setTab, onClose }) {
             <IconBtn icon="heart" fill={app.isLiked(s.videoId)} kind={`like${app.isLiked(s.videoId) ? ' liked' : ''}`} label={app.t('like')} onClick={() => app.toggleLike(s)} />
           </div>
         ) : null}
-        <div className="np-tabs">
-          <button type="button" className={tab === 'lyrics' ? 'on' : ''} onClick={() => setTab('lyrics')}>{app.t('lyrics')}</button>
-          <button type="button" className={tab === 'queue' ? 'on' : ''} onClick={() => setTab('queue')}>{app.t('queue')}</button>
-        </div>
+        {s ? (
+          <div className="np-tabs">
+            <button type="button" className={tab === 'lyrics' ? 'on' : ''} onClick={() => setTab('lyrics')}>{app.t('lyrics')}</button>
+            <button type="button" className={tab === 'queue' ? 'on' : ''} onClick={() => setTab('queue')}>{app.t('queue')}</button>
+          </div>
+        ) : null}
         <div className="np-body">
-          {tab === 'lyrics' ? (s ? <Lyrics key={s.videoId} song={s} /> : <div className="lyrics-none"><Icon name="lyrics" size={28} /><p>{app.t('queueEmpty')}</p></div>) : <Queue />}
+          {!s ? <Start /> : tab === 'lyrics' ? <Lyrics key={s.videoId} song={s} /> : <Queue />}
         </div>
       </div>
     </aside>
@@ -208,8 +253,8 @@ export function PlayerBar({ panel, togglePanel, tab, setTab }) {
         <div className="bar-controls">
           <IconBtn icon="shuffle" label={app.t('shuffle')} active={p.shuffle} size={18} onClick={() => p.toggleShuffle()} />
           <IconBtn icon="prev" label={app.t('previous')} size={20} fill onClick={() => p.prev()} disabled={!s} />
-          <button type="button" className="bar-play" aria-label={p.playing ? app.t('pause') : app.t('play')} onClick={() => p.toggle()} disabled={!s}>
-            <Icon name={p.playing ? 'pause' : 'play'} fill size={20} />
+          <button type="button" className="bar-play" aria-label={p.playing ? app.t('pause') : app.t('play')} aria-busy={p.loading} onClick={() => p.toggle()} disabled={!s}>
+            {p.loading ? <span className="spinner bar-spin" aria-hidden="true" /> : <Icon name={p.playing ? 'pause' : 'play'} fill size={20} />}
           </button>
           <IconBtn icon="next" label={app.t('next')} size={20} fill onClick={() => p.next()} disabled={!s} />
           <IconBtn icon="repeat" label={app.t(p.repeat === 'one' ? 'repeatOne' : p.repeat === 'all' ? 'repeatAll' : 'repeat')} active={p.repeat !== 'off'} kind={p.repeat === 'one' ? 'one' : ''} size={18} onClick={() => p.cycleRepeat()} />

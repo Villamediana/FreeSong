@@ -139,10 +139,32 @@ export class Api {
 
   // ------------------------------------------------------------------ o YouTube Music (pela ponte)
 
+  /**
+   * O passe da ponte: o relay dá pra este computador (pedido assinado), vale umas horas. A ponte só
+   * atende com ele (ninguém de fora usa o servidor como API do YouTube).
+   */
+  async bridgePass(fresh = false) {
+    const now = Date.now() + this.skew;
+    if (!fresh && this.pass && this.pass.exp - now > 5 * 60_000) return this.pass.pass;
+    if (!fresh && this.passing) return this.passing;
+    this.passing = this.call('GET', '/v1/pass').then((r) => {
+      this.pass = r;
+      return r.pass;
+    }).finally(() => { this.passing = null; });
+    return this.passing;
+  }
+
   async music(path, params = {}, signal) {
     const qs = new URLSearchParams({ ...params, lang: this.lang });
     for (const [k, v] of [...qs]) if (v === '' || v === 'undefined' || v === 'null') qs.delete(k);
-    return this.call('GET', `/api/${path}?${qs}`, { signed: false, signal });
+    const go = async (fresh) => this.call('GET', `/api/${path}?${qs}`, { signed: false, signal, headers: { 'X-FreeSong-Pass': await this.bridgePass(fresh) } });
+    try {
+      return await go(false);
+    } catch (e) {
+      // O passe venceu ou o relay reiniciou (chave nova): pede outro, uma vez.
+      if (e instanceof ApiError && e.status === 401 && e.code === 'pass') return go(true);
+      throw e;
+    }
   }
 
   search(q, type = '', signal) { return this.music('search', { q, type }, signal); }

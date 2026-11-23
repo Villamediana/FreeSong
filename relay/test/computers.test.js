@@ -349,3 +349,37 @@ test('computador emprestado: sem sinal por meia hora, desligado; perfil apagado 
   assert.equal((await api('DELETE', '/v1/me', { token: p.token })).json.ok, true);
   assert.equal((await signed(kept, 'GET', '/v1/me')).json.error, 'unlinked');
 });
+
+test('o passe da ponte: só computador ligado ganha; a web confere com a chave do relay', async () => {
+  const { PassCheck } = await import('../../web/server/pass.js');
+  const p = await person();
+  // O celular não precisa (nem ganha): a ponte é da web.
+  assert.equal((await api('GET', '/v1/pass', { token: p.token })).status, 403);
+  assert.equal((await api('GET', '/v1/pass')).status, 401);
+  const b = await linked(p);
+  const r = await signed(b, 'GET', '/v1/pass');
+  assert.equal(r.status, 200);
+  assert.ok(r.json.exp > now);
+  const keyUrl = `${base}/v1/pass-key`;
+  let clock = now;
+  const check = new PassCheck({ keyUrl, clock: () => clock });
+  assert.equal(await check.check(r.json.pass), b.id);
+  // Mexido, sem passe, de outro jeito: não.
+  const [sub, exp, s] = r.json.pass.split('.');
+  assert.equal(await check.check(`${sub}.${Number(exp) + 3_600_000}.${s}`), null);
+  assert.equal(await check.check(`${'A'.repeat(22)}.${exp}.${s}`), null);
+  assert.equal(await check.check(''), null);
+  assert.equal(await check.check(undefined), null);
+  // Vencido.
+  clock = Number(exp) + 1;
+  assert.equal(await check.check(r.json.pass), null);
+  // Um relay que reiniciou tem outra chave: o passe velho não vale nele, o novo vale (a web pede a chave de novo).
+  const restarted = createRelay({ dataDir: dir, clock: () => now, log: { error() {} } });
+  await new Promise((ok) => restarted.server.listen(0, '127.0.0.1', ok));
+  try {
+    const other = new PassCheck({ keyUrl: `http://127.0.0.1:${restarted.server.address().port}/v1/pass-key`, clock: () => now });
+    assert.equal(await other.check(r.json.pass), null);
+  } finally {
+    await restarted.close();
+  }
+});
