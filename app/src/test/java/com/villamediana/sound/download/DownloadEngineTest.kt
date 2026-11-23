@@ -434,6 +434,84 @@ class DownloadEngineTest {
         assertArrayEquals(h.audio("net").bytes, File(h.library.trackByVideoId("net")!!.filePath).readBytes())
     }
 
+    // ------------------------------------------------------------------ a full phone
+
+    @Test fun aFullPhoneSavesNothingAndWritesNothing() = runBlocking {
+        h.roomLeft = 900_000 // less than the song with its cover and lyrics
+        h.queue.download(listOf(h.song("full", size = 200_000)))
+        h.engine.runQueue()
+        val task = h.task("full")
+        assertEquals(DownloadState.FAILED, task.state)
+        assertEquals("Sem espaço no aparelho", task.error)
+        assertNull(h.library.trackByVideoId("full"))
+        // Not a byte asked for nor written, and no try after try.
+        assertTrue(audioHits("full").isEmpty())
+        assertFalse(part("full").exists())
+        assertFalse(DownloadEngine.signatureFile(part("full")).exists())
+        assertEquals(1, h.youTube.calls("full"))
+
+        // Room again: trying again brings it.
+        h.roomLeft = Long.MAX_VALUE
+        h.engine.retry(listOf(task.id))
+        h.engine.runQueue()
+        assertEquals(DownloadState.DONE, h.task("full").state)
+        assertNotNull(h.library.trackByVideoId("full"))
+    }
+
+    @Test fun theRoomAskedForIsWhatIsStillToCome() = runBlocking {
+        // Half the song already in the .part: only the rest (and its cover and lyrics) must fit.
+        h.queue.download(listOf(h.song("half", size = 400_000)))
+        h.audio("half").writeDelayMs = 30
+        val run = async(Dispatchers.IO) { h.engine.runQueue() }
+        val id = h.task("half").id
+        h.awaitBytes(id, 200_000)
+        run.cancel()
+        runCatching { run.await() }
+        val kept = part("half").length()
+        assertTrue(kept >= 196_608)
+
+        h.audio("half").writeDelayMs = 0
+        h.roomLeft = 400_000L - kept + DiskRoom.EXTRAS_BYTES
+        h.engine.runQueue()
+        assertEquals(DownloadState.DONE, h.task("half").state)
+    }
+
+    @Test fun theDiskFillingUpThrowsAwayWhatItHadWritten() = runBlocking {
+        h.queue.download(listOf(h.song("mid", size = 400_000)))
+        h.audio("mid").writeDelayMs = 30
+        val run = async(Dispatchers.IO) { h.engine.runQueue() }
+        val id = h.task("mid").id
+        h.awaitBytes(id, 70_000)
+        run.cancel()
+        runCatching { run.await() }
+        assertTrue(part("mid").length() > 0)
+
+        // The next try finds the phone full: the half song goes (its room is given back), the song isn't saved.
+        h.youTube.failure = { java.io.IOException("write failed: ENOSPC (No space left on device)") }
+        h.engine.runQueue()
+        assertEquals(DownloadState.FAILED, h.task("mid").state)
+        assertEquals("Sem espaço no aparelho", h.task("mid").error)
+        assertFalse(part("mid").exists())
+        assertFalse(DownloadEngine.signatureFile(part("mid")).exists())
+        assertNull(h.library.trackByVideoId("mid"))
+    }
+
+    @Test fun aSongIsGuessedFromItsLengthAndAFewFitTogether() {
+        val four = DiskRoom.estimate(240_000L)
+        assertEquals(240 * 20_000L + DiskRoom.EXTRAS_BYTES, four)
+        assertEquals(DiskRoom.estimate(null), DiskRoom.estimate(0L))
+        val room = object : DiskRoom {
+            override fun fits(bytes: Long) = bytes <= four * 2
+        }
+        val songs = (1..4).map { h.song("s$it", durationMs = 240_000L) }
+        assertEquals(listOf("s1", "s2"), room.fitting(songs).map { it.videoId })
+        assertEquals(emptyList<RemoteTrack>(), DiskRoomNone.fitting(songs))
+    }
+
+    private object DiskRoomNone : DiskRoom {
+        override fun fits(bytes: Long) = false
+    }
+
     @Test fun deadProcessIsResumedFromThePartFile() = runBlocking {
         h.queue.download(listOf(h.song("dead", size = 400_000)))
         h.audio("dead").writeDelayMs = 30

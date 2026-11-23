@@ -156,7 +156,11 @@ class RemoteCollectionViewModel(
     fun like(track: RemoteTrack, liked: Boolean) {
         onLike(track, liked)
         // With "Curtir já baixa" the like is a download too: offline, say when it will happen.
-        if (liked && likeDownloads.value) waitMessage()?.let { _events.trySend(RemoteEvent.Message(it)) }
+        // ("Baixa quando conectar" only for a song that will come: a full phone doesn't download it.)
+        if (liked && likeDownloads.value) {
+            val wait = waitMessage() ?: return
+            viewModelScope.launch { if (downloads.hasRoom(track)) _events.trySend(RemoteEvent.Message(wait)) }
+        }
     }
 
     /** "Baixa quando conectar" / "Baixa quando estiver no Wi-Fi", or null when downloads run now. */

@@ -46,6 +46,9 @@ class WorkDownloadController(
 
     private val liveProgress = MutableStateFlow<Map<Long, TaskProgress>>(emptyMap())
 
+    /** Room on the phone for songs (the volume of the downloads). */
+    internal val room: DiskRoom = AndroidDiskRoom(appContext) { storage.audioDir }
+
     override val wait: Flow<DownloadWait> =
         combine(com.villamediana.sound.ui.search.Connectivity.nets(appContext), settings.settings.map { it.wifiOnly }.distinctUntilChanged()) { net, wifiOnly ->
             DownloadWait.of(net.online, net.unmetered, wifiOnly)
@@ -65,6 +68,7 @@ class WorkDownloadController(
             http = graph.http,
             messages = AndroidDownloadMessages(appContext),
             isOnline = { isOnline(appContext) },
+            room = room,
             liveProgress = liveProgress,
         )
     }
@@ -97,6 +101,10 @@ class WorkDownloadController(
     init {
         scope.launch { followWifiOnly(settings.settings, hasPending = { dao.pending().isNotEmpty() }, scheduler) }
     }
+
+    override suspend fun hasRoom(track: RemoteTrack): Boolean = withContext(Dispatchers.IO) { room.fits(DiskRoom.estimate(track)) }
+
+    override suspend fun fitting(tracks: List<RemoteTrack>): List<RemoteTrack> = withContext(Dispatchers.IO) { room.fitting(tracks) }
 
     override suspend fun download(tracks: List<RemoteTrack>) {
         withContext(Dispatchers.IO) { queue.download(tracks) }

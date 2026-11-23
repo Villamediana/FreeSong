@@ -27,6 +27,12 @@ interface DownloadController {
     /** What queued downloads are waiting for (nothing, a connection, the Wi-Fi). */
     val wait: Flow<DownloadWait> get() = flowOf(DownloadWait.NONE)
 
+    /** The phone has room for [track] (without eating into the space Android keeps free). */
+    suspend fun hasRoom(track: RemoteTrack): Boolean = true
+
+    /** [tracks] from the first, as many as fit on the phone together. */
+    suspend fun fitting(tracks: List<RemoteTrack>): List<RemoteTrack> = tracks
+
     /** Downloads loose songs (search results / shared link). Already-downloaded ones are skipped. */
     suspend fun download(tracks: List<RemoteTrack>)
 

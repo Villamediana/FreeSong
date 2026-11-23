@@ -66,6 +66,8 @@ internal class DownloadEngine(
     private val messages: DownloadMessages,
     private val clock: () -> Long = System::currentTimeMillis,
     private val isOnline: () -> Boolean = { true },
+    /** Room on the phone: a song that doesn't fit fails at once, before a byte is written. */
+    private val room: DiskRoom = DiskRoom.ANY,
     val covers: CoverArt = CoverArt(http, storage),
     private val accentOf: suspend (String) -> Int? = { CoverColors.extract(it) },
     private val probeDuration: (File) -> Long? = ::probeDurationMs,
@@ -287,7 +289,11 @@ internal class DownloadEngine(
                     writeProgress(entry)
                     return Outcome.NetworkLost
                 }
-                is Failure.Permanent -> return fail(entry, failure.error, permanent = true)
+                is Failure.Permanent -> {
+                    // The phone is full: what this song took goes first, so even the row's update has room.
+                    if (failure.error == DownloadError.Storage) dropPart(task.videoId)
+                    return fail(entry, failure.error, permanent = true)
+                }
                 is Failure.Transient -> {
                     val attempts = stateLock.withLock {
                         val cur = dao.get(task.id)
@@ -306,6 +312,11 @@ internal class DownloadEngine(
         var stream = youTube.audioStream(task.videoId, s.audioQuality)
         val part = storage.tempFile(task.videoId)
         val sig = signatureFile(part)
+        // What is still to come (the stream's length, or a guess from the song's duration) and its cover
+        // and lyrics must fit on the phone; else nothing is written and the song isn't saved.
+        val have = if (readText(sig) == stream.signature()) part.length() else 0L
+        val need = ((stream.contentLength ?: DiskRoom.estimate(task.durationMs)) - have).coerceAtLeast(0L) + DiskRoom.EXTRAS_BYTES
+        if (!room.take(need)) throw NoRoomException(need)
         // A .part only resumes into the very same stream (format/bitrate/length) it was started with.
         if (readText(sig) != stream.signature()) {
             part.delete()
@@ -567,6 +578,13 @@ internal class DownloadEngine(
             move(file, storage.tempFile(entry.task.videoId))
         }
         entry.finalFile = null
+    }
+
+    /** Out of room: the partial file goes, whoever else would resume it (they start over when there is room). */
+    private suspend fun dropPart(videoId: String) = stateLock.withLock {
+        val part = storage.tempFile(videoId)
+        part.delete()
+        signatureFile(part).delete()
     }
 
     /** Must hold [stateLock]. Keeps the .part while another task of the same video still needs it. */

@@ -308,21 +308,28 @@ class AppGraph(context: Context) {
      */
     fun likeOnline(remote: com.villamediana.sound.online.RemoteTrack, liked: Boolean) {
         scope.launch {
-            val art = if (remote.fromMusicCatalog) null else covers.coverFor(remote.videoId)
-            library.setLiked(if (art != null) remote.copy(thumbnailUrl = art) else remote, liked)
+            // A phone with no room left can't even keep the heart: nothing changes (and nothing crashes).
+            val saved = runCatching {
+                val art = if (remote.fromMusicCatalog) null else covers.coverFor(remote.videoId)
+                library.setLiked(if (art != null) remote.copy(thumbnailUrl = art) else remote, liked)
+            }.onFailure { android.util.Log.w("SoundLikes", "like not saved: $it") }.isSuccess
+            if (!saved) return@launch
             val auto = settings.current().likeDownloads
-            if (auto && liked) runCatching { downloads.download(listOf(remote)) }
-            if (auto && !liked) removeFromPhone(remote.videoId)
+            // Liked on a full phone: it stays in Curtidas, streamed — not downloaded, and no need to say so.
+            if (auto && liked) runCatching { if (downloads.hasRoom(remote)) downloads.download(listOf(remote)) }
+            if (auto && !liked) runCatching { removeFromPhone(remote.videoId) }
         }
     }
 
     /** The heart of a library song (player, song sheet): same rule for unliking with "Curtir já baixa". */
     fun likeTrack(trackId: Long, liked: Boolean) {
         scope.launch {
-            val track = library.getTrack(trackId) ?: return@launch
-            library.setLiked(trackId, liked)
-            val videoId = track.videoId
-            if (!liked && videoId != null && settings.current().likeDownloads) removeFromPhone(videoId)
+            runCatching {
+                val track = library.getTrack(trackId) ?: return@launch
+                library.setLiked(trackId, liked)
+                val videoId = track.videoId
+                if (!liked && videoId != null && settings.current().likeDownloads) removeFromPhone(videoId)
+            }.onFailure { android.util.Log.w("SoundLikes", "like not saved: $it") }
         }
     }
 

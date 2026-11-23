@@ -84,7 +84,9 @@ class SmartDownloadWorker(appContext: Context, params: WorkerParameters) : Corou
             onPhone = graph.library.downloadedVideoIds.first(),
             tasks = graph.downloads.tasks.first(),
         )
-        if (picks.isNotEmpty()) runCatching { graph.downloads.download(picks) }
+        // Only what fits on the phone (a full phone gets nothing, quietly).
+        val fit = runCatching { graph.downloads.fitting(picks) }.getOrDefault(emptyList())
+        if (fit.isNotEmpty()) runCatching { graph.downloads.download(fit) }
         return Result.success()
     }
 }

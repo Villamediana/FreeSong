@@ -67,7 +67,7 @@ internal fun classify(t: Throwable, online: Boolean): Failure = when (t) {
         OnlineException.Kind.RATE_LIMITED -> Failure.Transient(DownloadError.RateLimited)
         OnlineException.Kind.UNKNOWN -> if (online) Failure.Transient(DownloadError.Unknown) else Failure.NetworkLost
     }
-    is SQLiteFullException -> Failure.Permanent(DownloadError.Storage)
+    is SQLiteFullException, is NoRoomException -> Failure.Permanent(DownloadError.Storage)
     is HttpStatusException -> when (t.code) {
         403, 410 -> Failure.Transient(DownloadError.Forbidden)
         429 -> Failure.Transient(DownloadError.RateLimited)

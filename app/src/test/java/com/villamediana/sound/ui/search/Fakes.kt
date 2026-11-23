@@ -73,6 +73,13 @@ class FakeDownloads : DownloadController {
     val waitFlow = MutableStateFlow(com.villamediana.sound.download.DownloadWait.NONE)
     override val wait: Flow<com.villamediana.sound.download.DownloadWait> = waitFlow
 
+    /** The phone has room for songs (false: a full phone). */
+    @Volatile var room = true
+
+    override suspend fun hasRoom(track: RemoteTrack): Boolean = room
+
+    override suspend fun fitting(tracks: List<RemoteTrack>): List<RemoteTrack> = if (room) tracks else emptyList()
+
     val downloadCalls: MutableList<List<RemoteTrack>> = Collections.synchronizedList(mutableListOf())
     val collectionCalls: MutableList<CollectionDetail> = Collections.synchronizedList(mutableListOf())
     val retried: MutableList<Long> = Collections.synchronizedList(mutableListOf())
