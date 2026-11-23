@@ -129,11 +129,12 @@ class SocialUiTest {
     @Test
     fun thePeopleList() {
         var added = 0
+        var canceled = 0
         compose.setContent {
             Page(dark = false) {
                 SearchField("", {})
                 PersonRow(carla, onAdd = { added++ }, onOpen = {})
-                PersonRow(carla.copy(id = "u2", name = "Diego Alves", username = "diego", relation = "outgoing"), onAdd = {}, onOpen = {})
+                PersonRow(carla.copy(id = "u2", name = "Diego Alves", username = "diego", relation = "outgoing"), onAdd = {}, onOpen = {}, onCancel = { canceled++ })
                 PersonRow(carla.copy(id = "u3", name = "Elisa Rocha", username = "elisa", relation = "incoming", requestId = 4), onAdd = {}, onOpen = {})
                 PersonRow(ana, onAdd = {}, onOpen = {})
             }
@@ -143,6 +144,37 @@ class SocialUiTest {
         shot("social-people")
         compose.onNodeWithText("Adicionar").performClick()
         assertEquals(1, added)
+        // Sent by mistake: a tap on "Pedido enviado" takes it back.
+        compose.onNodeWithText("Pedido enviado").performClick()
+        assertEquals(1, canceled)
+    }
+
+    @Test
+    fun aRequestSentByMistakeCanBeTakenBack() {
+        var fromList = 0
+        compose.setContent {
+            Page(dark = false) {
+                SentRow(FriendRequest(7, 0, carla.copy(relation = "outgoing")), onCancel = { fromList++ }, onOpen = {})
+            }
+        }
+        compose.onNodeWithContentDescription("Cancelar pedido").performClick()
+        assertEquals(1, fromList)
+    }
+
+    @Test
+    fun theirPageTakesTheRequestBackToo() {
+        var fromPage = 0
+        compose.setContent {
+            PageHost(dark = false) {
+                FriendPage(
+                    person = carla, isFriend = false, unread = 0, relation = "outgoing", jam = PersonJam.NONE,
+                    snackbar = com.villamediana.sound.ui.detail.rememberDetailSnackbar(),
+                    onChat = {}, onJam = {}, onMenu = {}, onAdd = {}, onCancel = { fromPage++ },
+                )
+            }
+        }
+        compose.onNodeWithText("Cancelar pedido").performClick()
+        assertEquals(1, fromPage)
     }
 
     @Test
