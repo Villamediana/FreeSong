@@ -31,6 +31,7 @@ import androidx.compose.material.icons.rounded.ChatBubble
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.PersonAdd
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.PersonRemove
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -143,6 +144,12 @@ fun FriendScreen(id: String) {
                 if (incoming != null) hub.accept(incoming.requestId) else hub.requestFriend(id)
             }
         },
+        onCancel = {
+            scope.launch {
+                val requestId = friends.outgoing.firstOrNull { it.user.id == id }?.requestId ?: profile?.requestId
+                if (requestId != null) hub.decline(requestId)
+            }
+        },
         sheets = {
             if (jamOpen) JamSheet(onDismiss = { jamOpen = false })
             if (menu) {
@@ -183,6 +190,7 @@ internal fun FriendPage(
     onOpenJam: () -> Unit = {},
     onMenu: () -> Unit,
     onAdd: () -> Unit,
+    onCancel: () -> Unit = {},
     sheets: @Composable () -> Unit = {},
 ) {
     val since = person?.let {
@@ -216,7 +224,8 @@ internal fun FriendPage(
             } else if (person != null) {
                 when (relation) {
                     "incoming" -> PersonButton(stringResource(R.string.social_accept), onClick = onAdd, filled = true, modifier = Modifier.weight(1f))
-                    "outgoing" -> PersonButton(stringResource(R.string.social_requested), onClick = {}, enabled = false, modifier = Modifier.weight(1f))
+                    // Sent by mistake? A tap takes it back.
+                    "outgoing" -> PersonButton(stringResource(R.string.social_cancel_request), onClick = onCancel, icon = Icons.Rounded.Close, modifier = Modifier.weight(1f))
                     else -> PersonButton(stringResource(R.string.social_add), onClick = onAdd, filled = true, icon = Icons.Rounded.PersonAdd, modifier = Modifier.weight(1f))
                 }
                 // Someone in your jam through a friend: the jam is there too.

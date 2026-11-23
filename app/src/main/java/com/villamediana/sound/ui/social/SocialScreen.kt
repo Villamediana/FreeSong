@@ -184,6 +184,13 @@ class SocialViewModel(app: Application) : AndroidViewModel(app) {
 
     fun accept(r: FriendRequest) = viewModelScope.launch { hub.accept(r.requestId) }
     fun decline(r: FriendRequest) = viewModelScope.launch { hub.decline(r.requestId) }
+
+    /** A request sent by mistake: it's taken back (the row turns into "Adicionar" again at once). */
+    fun cancel(userId: String, requestId: Long?) = viewModelScope.launch {
+        val id = requestId ?: hub.friends.value.outgoing.firstOrNull { it.user.id == userId }?.requestId ?: return@launch
+        hub.decline(id).getOrNull() ?: return@launch
+        _people.value = _people.value.copy(users = _people.value.users.map { if (it.id == userId) it.copy(relation = "none", requestId = null) else it })
+    }
     fun createProfile() = viewModelScope.launch {
         runCatching { hub.account.ensure(force = true) }
         hub.bootstrap()
@@ -323,7 +330,14 @@ fun SocialScreen() {
                 val lines = friends.friends
                     .map { f -> FriendLine(f, swapped[f.id]?.first, unread[f.id] ?: 0, typing = f.id in typing) }
                     .sortedWith(compareByDescending<FriendLine> { it.last?.at ?: 0L }.thenBy { it.friend.name.lowercase() })
-                if (lines.isEmpty() && friends.incoming.isEmpty()) {
+                if (friends.outgoing.isNotEmpty()) {
+                    item(key = "sent-label") { Label(stringResource(R.string.social_sent)) }
+                    items(friends.outgoing, key = { "sent-" + it.requestId }) { r ->
+                        SentRow(r, onCancel = { vm.cancel(r.user.id, r.requestId) }, onOpen = { nav.openFriend(r.user.id) })
+                    }
+                    item(key = "sent-gap") { Spacer(Modifier.height(10.dp)) }
+                }
+                if (lines.isEmpty() && friends.incoming.isEmpty() && friends.outgoing.isEmpty()) {
                     item(key = "empty") {
                         EmptyState(
                             icon = Icons.Rounded.Groups,
@@ -343,7 +357,7 @@ fun SocialScreen() {
                 val friendIds = friends.friends.mapTo(HashSet()) { it.id }
                 val strangers = people.users.filter { it.relation != "friends" && it.id !in friendIds }
                 items(strangers, key = { "p-" + it.id }) { p ->
-                    PersonRow(p, onAdd = { vm.add(p) }, onOpen = { nav.openFriend(p.id) })
+                    PersonRow(p, onAdd = { vm.add(p) }, onOpen = { nav.openFriend(p.id) }, onCancel = { vm.cancel(p.id, p.requestId) })
                 }
                 item(key = "people-end") {
                     LaunchedEffect(people.users.size, people.next) { if (people.next != null && people.users.isNotEmpty()) vm.loadMore() }
@@ -433,6 +447,23 @@ internal fun RequestRow(r: FriendRequest, onAccept: () -> Unit, onDecline: () ->
     }
 }
 
+/** A request I sent and they haven't answered: photo, name and × to take it back. */
+@Composable
+internal fun SentRow(r: FriendRequest, onCancel: () -> Unit, onOpen: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onOpen).height(72.dp).padding(horizontal = Dimens.Gutter),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        ProfileAvatar(r.user, 50.dp)
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(r.user.name, style = MaterialTheme.typography.titleMedium, color = SoundColors.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("@${r.user.username} · ${stringResource(R.string.social_requested)}", style = MaterialTheme.typography.bodySmall, color = SoundColors.TextFaint, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        RoundAction(Icons.Rounded.Close, stringResource(R.string.social_cancel_request), filled = false, onClick = onCancel)
+    }
+}
+
 /**
  * A friend: photo, name and the last message (or "escrevendo…"). A tap opens the conversation, a tap
  * on the photo their page; on the side, their page and the conversation with how many messages wait.
@@ -515,7 +546,7 @@ private fun RowButton(icon: androidx.compose.ui.graphics.vector.ImageVector, lab
 }
 
 @Composable
-internal fun PersonRow(p: Profile, onAdd: () -> Unit, onOpen: () -> Unit) {
+internal fun PersonRow(p: Profile, onAdd: () -> Unit, onOpen: () -> Unit, onCancel: () -> Unit = {}) {
     Row(
         Modifier.fillMaxWidth().clickable(onClick = onOpen).height(72.dp).padding(horizontal = Dimens.Gutter),
         verticalAlignment = Alignment.CenterVertically,
@@ -535,7 +566,8 @@ internal fun PersonRow(p: Profile, onAdd: () -> Unit, onOpen: () -> Unit) {
         Spacer(Modifier.width(10.dp))
         when (p.relation) {
             "friends" -> Text(stringResource(R.string.social_is_friend), style = MaterialTheme.typography.labelLarge, color = SoundColors.TextMuted)
-            "outgoing" -> Text(stringResource(R.string.social_requested), style = MaterialTheme.typography.labelLarge, color = SoundColors.TextFaint)
+            // Sent: a tap on it takes the request back.
+            "outgoing" -> PillButton(stringResource(R.string.social_requested), onClick = onCancel, icon = Icons.Rounded.Close)
             "incoming" -> PillButton(stringResource(R.string.social_accept), onClick = onAdd, filled = true)
             else -> PillButton(stringResource(R.string.social_add), onClick = onAdd)
         }

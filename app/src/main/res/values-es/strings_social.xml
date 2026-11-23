@@ -154,4 +154,6 @@
     <string name="friend_in_jam">En la jam</string>
     <string name="photo_close">Cerrar</string>
     <string name="chat_mic_busy">El micrófono está ocupado ahora.</string>
+    <string name="social_cancel_request">Cancelar solicitud</string>
+    <string name="social_sent">Solicitudes enviadas</string>
 </resources>
