@@ -287,7 +287,9 @@ class Updates internal constructor(
      */
     fun update(fresh: Boolean = true) {
         val release = _state.value.release ?: return
-        if (work?.isActive == true) return
+        // Busy, unless it already said it failed (the job may still be finishing then: "Tentar de novo"
+        // tapped at once was ignored).
+        if (work?.isActive == true && _state.value !is UpdateState.Failed) return
         manual = true
         work = scope.launch {
             // An automatic install waiting with Android would go in the moment Android's screen covers

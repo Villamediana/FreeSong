@@ -50,6 +50,7 @@ import androidx.compose.runtime.remember
 import kotlinx.coroutines.launch
 import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material.icons.rounded.Computer
+import androidx.compose.material.icons.rounded.Key
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Translate
 import androidx.compose.material.icons.rounded.LocationOn
@@ -150,6 +151,9 @@ fun SettingsScreen() {
     var linking by remember { mutableStateOf<com.villamediana.sound.social.ComputerLink.Code?>(null) }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     androidx.compose.runtime.LaunchedEffect(Unit) { hub.refreshComputers() }
+    // "Código de recuperação" (1.38: here, not on the profile page).
+    val code by hub.account.recoveryCode.collectAsStateWithLifecycle()
+    var recoveryOpen by rememberSaveable { mutableStateOf(false) }
 
     LazyColumn(
         Modifier.fillMaxSize().background(SoundColors.Ink),
@@ -189,6 +193,17 @@ fun SettingsScreen() {
                         }
                     }
                 }
+            }
+        }
+
+        item(key = "account") {
+            Section(stringResource(R.string.settings_group_account)) {
+                NavRow(
+                    icon = Icons.Rounded.Key, chip = Chip.Amber,
+                    title = stringResource(R.string.profile_recovery_title),
+                    value = code?.let { masked(it) } ?: stringResource(R.string.profile_use_code),
+                    onClick = { recoveryOpen = true },
+                )
             }
         }
 
@@ -306,6 +321,12 @@ fun SettingsScreen() {
     }
 
     linking?.let { com.villamediana.sound.ui.social.LinkComputerDialog(it, onDismiss = { linking = null }) }
+    if (recoveryOpen) {
+        com.villamediana.sound.ui.social.RecoverySheet(
+            onDismiss = { recoveryOpen = false },
+            onMessage = { android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_SHORT).show() },
+        )
+    }
 
     if (qualityOpen) {
         SoundSheet(onDismissRequest = { qualityOpen = false }) {
@@ -400,6 +421,10 @@ private fun ComputerRow(c: com.villamediana.sound.social.Computer, onUnlink: () 
         }
     }
 }
+
+/** The code as the row says it: only its first group, the rest dotted (it is a key to the whole profile). */
+internal fun masked(code: String): String =
+    code.split('-').mapIndexed { i, part -> if (i == 0) part else "•".repeat(part.length) }.joinToString("-")
 
 /** A line between rows, starting after the icons. */
 @Composable

@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
 import { createRelay } from '../../relay/src/server.js';
 import { createWeb } from '../server/app.js';
+import { PassCheck } from '../server/pass.js';
 import * as lock from '../src/core/crypto.js';
 import { normalize } from '../src/core/vault.js';
 
@@ -22,9 +23,14 @@ const CHROME = process.env.CHROME ?? `${process.env.HOME}/.cache/ms-playwright/c
 
 const dataDir = mkdtempSync(path.join(tmpdir(), 'freesong-e2e-'));
 const relay = createRelay({ dataDir, log: { error() {} } });
-const web = createWeb({ publicDir: path.join(here, '..', 'public') });
 const listen = (server) => new Promise((r) => server.listen(0, '127.0.0.1', () => r(server.address().port)));
 const relayPort = await listen(relay.server);
+// A ponte confere o passe com a chave deste relay.
+// Os dados de teste vêm da ponte com um passe só do teste; a página usa o passe de verdade do relay.
+const SEED = 'e2e-seed';
+const realPasses = new PassCheck({ keyUrl: `http://127.0.0.1:${relayPort}/v1/pass-key` });
+const web = createWeb({ publicDir: path.join(here, '..', 'public'), passes: { check: async (h) => (h === SEED ? 'S'.repeat(22) : realPasses.check(h)) } });
+const seedHeaders = { 'x-freesong-pass': SEED };
 const webPort = await listen(web.server);
 // O "túnel" (o mesmo caminho que está no novelo.yml): o que é do relay vai pra ele, o resto pra web.
 const RELAY = /^\/(v1|avatars|\.well-known|[mvla])(\/|$)/;
@@ -60,8 +66,8 @@ const raw = globalThis.crypto.getRandomValues(new Uint8Array(32));
 const phoneKey = await globalThis.crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['encrypt', 'decrypt']);
 const now = Date.now();
 // Músicas de verdade (as capas carregam), tiradas da própria ponte.
-const coldplay = (await (await fetch(`${base}/api/search?q=coldplay&type=songs`)).json()).items;
-const djavan = (await (await fetch(`${base}/api/search?q=djavan&type=songs`)).json()).items;
+const coldplay = (await (await fetch(`${base}/api/search?q=coldplay&type=songs`, { headers: seedHeaders })).json()).items;
+const djavan = (await (await fetch(`${base}/api/search?q=djavan&type=songs`, { headers: seedHeaders })).json()).items;
 const v = (s) => ({ i: s.videoId, t: s.title, a: s.artist, al: s.album, d: s.durationMs, c: s.cover, u: `https://music.youtube.com/watch?v=${s.videoId}` });
 const content = {
   likes: [...coldplay.slice(0, 4), ...djavan.slice(0, 3)].map((s, i) => ({ s: v(s), at: now - i * 3600_000 })),

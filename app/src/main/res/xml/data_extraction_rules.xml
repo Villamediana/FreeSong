@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Android 12+: nuvem e troca de aparelho levam só a biblioteca (banco) e os ajustes. -->
 <data-extraction-rules>
-    <cloud-backup>
+    <!-- Só com a cópia cifrada de ponta a ponta pela trava de tela (Android 12+): o perfil, as chaves e o
+         conteúdo nunca vão pra nuvem abertos. -->
+    <cloud-backup disableIfNoEncryptionCapabilities="true">
         <include domain="database" path="." />
         <include domain="file" path="datastore/" />
     </cloud-backup>

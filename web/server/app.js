@@ -9,6 +9,7 @@ import { Cache } from './cache.js';
 import { Lyrics } from './lyrics.js';
 import { ALBUM, CHANNEL, Music, PLAYLIST, VIDEO } from './music.js';
 import { HEADERS, Pages } from './pages.js';
+import { PassCheck } from './pass.js';
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -27,14 +28,14 @@ class Limiter {
   constructor(max, windowMs, clock) {
     Object.assign(this, { max, windowMs, clock, hits: new Map() });
   }
-  take(key) {
+  take(key, cost = 1) {
     const now = this.clock();
     const h = this.hits.get(key);
-    if (h && now - h.start < this.windowMs) return ++h.n <= this.max;
+    if (h && now - h.start < this.windowMs) return (h.n += cost) <= this.max;
     if (this.hits.size > 50_000) for (const [k, v] of this.hits) if (now - v.start >= this.windowMs) this.hits.delete(k);
     if (this.hits.size > 50_000) return false;
-    this.hits.set(key, { start: now, n: 1 });
-    return true;
+    this.hits.set(key, { start: now, n: cost });
+    return cost <= this.max;
   }
 }
 
@@ -74,48 +75,74 @@ class Gate {
 const LANG = (v) => (v === 'es' || v === 'en' ? v : 'pt');
 const q = (url, name, max = 200) => (url.searchParams.get(name) ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, max);
 
-export function createWeb({ publicDir, music = new Music(), lyrics = new Lyrics(), clock = Date.now, log = console } = {}) {
+// Por computador ligado: pedidos por minuto, pedidos que vão mesmo ao YouTube (fora do cache) por minuto,
+// e pedidos ao mesmo tempo. Um só computador não enche a fila de todos.
+const PER_COMPUTER = 300;
+const UPSTREAM_PER_COMPUTER = 120;
+const IN_FLIGHT_PER_COMPUTER = 6;
+
+export function createWeb({
+  publicDir,
+  music = new Music(),
+  lyrics = new Lyrics(),
+  clock = Date.now,
+  log = console,
+  relay = process.env.RELAY_URL || 'http://127.0.0.1:3980',
+  passes = new PassCheck({ keyUrl: `${relay}/v1/pass-key`, clock }),
+} = {}) {
   const pages = new Pages({ dir: publicDir });
   const cache = new Cache({ max: 3000, clock });
   const gate = new Gate(8, 200);
   const perIp = new Limiter(300, MINUTE, clock);
+  const perComputer = new Limiter(PER_COMPUTER, MINUTE, clock);
+  const upstream = new Limiter(UPSTREAM_PER_COMPUTER, MINUTE, clock);
+  const inFlight = new Map();
+
+  /** Vai ao YouTube (ou ao LRCLIB) por [who]: conta no limite dele. */
+  const spend = (who, cost = 1) => {
+    if (!upstream.take(who, cost)) throw new HttpError(429, 'slow_down');
+  };
 
   /** Uma resposta do YouTube (do cache, ou pedida agora; um erro tenta de novo uma vez com uma sessão nova). */
-  const yt = (key, ttl, lang, fn) => cache.get(`${lang}|${key}`, ttl, () => gate.run(async () => {
-    try {
-      return await fn();
-    } catch (e) {
-      if (e instanceof HttpError) throw e;
-      music.reset(lang);
-      return fn();
-    }
-  }));
+  const yt = (key, ttl, lang, fn, who) => cache.get(`${lang}|${key}`, ttl, () => {
+    spend(who);
+    return gate.run(async () => {
+      try {
+        return await fn();
+      } catch (e) {
+        if (e instanceof HttpError) throw e;
+        music.reset(lang);
+        return fn();
+      }
+    });
+  });
 
   const api = {
-    search: (url, lang) => {
+    search: (url, lang, who) => {
       const text = q(url, 'q', 150);
       if (!text) throw new HttpError(400, 'no_query');
       const type = q(url, 'type', 20);
-      return yt(`search|${type}|${text.toLowerCase()}`, 30 * MINUTE, lang, () => music.search(text, type, lang));
+      return yt(`search|${type}|${text.toLowerCase()}`, 30 * MINUTE, lang, () => music.search(text, type, lang), who);
     },
-    more: async (url) => {
+    more: async (url, lang, who) => {
       const token = q(url, 'token', 80);
+      spend(who);
       const out = await gate.run(() => music.more(token));
       if (!out) throw new HttpError(404, 'no_page');
       return out;
     },
-    suggest: (url, lang) => {
+    suggest: (url, lang, who) => {
       const text = q(url, 'q', 100);
       if (!text) return { queries: [], items: [] };
-      return yt(`suggest|${text.toLowerCase()}`, HOUR, lang, () => music.suggest(text, lang));
+      return yt(`suggest|${text.toLowerCase()}`, HOUR, lang, () => music.suggest(text, lang), who);
     },
-    explore: (url, lang) => yt('explore', HOUR, lang, () => music.explore(lang)),
-    alt: (url, lang) => {
+    explore: (url, lang, who) => yt('explore', HOUR, lang, () => music.explore(lang), who),
+    alt: (url, lang, who) => {
       const title = q(url, 'title', 200);
       const artist = q(url, 'artist', 200);
       const not = q(url, 'not', 11);
       if (!title) throw new HttpError(400, 'no_query');
-      return yt(`alt|${title}|${artist}|${not}`, 24 * HOUR, lang, () => music.alternatives(title, artist, not, lang));
+      return yt(`alt|${title}|${artist}|${not}`, 24 * HOUR, lang, () => music.alternatives(title, artist, not, lang), who);
     },
   };
 
@@ -127,9 +154,10 @@ export function createWeb({ publicDir, music = new Music(), lyrics = new Lyrics(
     song: [VIDEO, 24 * HOUR, (id, lang) => music.song(id, lang)],
   };
 
-  async function lyricsOf(id, url, lang) {
+  async function lyricsOf(id, url, lang, who) {
     const want = { title: q(url, 'title', 200), artist: q(url, 'artist', 200), album: q(url, 'album', 200), durationMs: Number(q(url, 'duration', 9)) || null };
     return cache.get(`lyrics|${id}|${want.title}|${want.artist}`, 7 * 24 * HOUR, async () => {
+      spend(who);
       let found = null;
       try {
         found = await lyrics.find(want);
@@ -176,17 +204,25 @@ export function createWeb({ publicDir, music = new Music(), lyrics = new Lyrics(
     if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, { error: 'method' });
     if (p === '/api/health') return send(res, 200, { ok: true });
     if (!p.startsWith('/api/')) return pages.serve(req, res, p);
+    let who = null;
     try {
       if (!perIp.take(ipOf(req))) throw new HttpError(429, 'slow_down');
+      // Só computador ligado (o passe que o relay dá a ele): de fora, a ponte não atende.
+      const sub = await passes.check(req.headers['x-freesong-pass']);
+      if (!sub) throw new HttpError(401, 'pass');
+      if (!perComputer.take(sub)) throw new HttpError(429, 'slow_down');
+      if ((inFlight.get(sub) ?? 0) >= IN_FLIGHT_PER_COMPUTER) throw new HttpError(429, 'slow_down');
+      who = sub;
+      inFlight.set(who, (inFlight.get(who) ?? 0) + 1);
       const lang = LANG(url.searchParams.get('lang'));
       const [, , what, id] = p.split('/');
       let out;
-      if (Object.hasOwn(api, what) && id === undefined) out = await api[what](url, lang);
-      else if (what === 'lyrics' && VIDEO.test(id ?? '')) out = await lyricsOf(id, url, lang);
+      if (Object.hasOwn(api, what) && id === undefined) out = await api[what](url, lang, who);
+      else if (what === 'lyrics' && VIDEO.test(id ?? '')) out = await lyricsOf(id, url, lang, who);
       else if (Object.hasOwn(byId, what) && id !== undefined) {
         const [pattern, ttl, fn] = byId[what];
         if (!pattern.test(id)) throw new HttpError(400, 'bad_id');
-        out = await yt(`${what}|${id}`, ttl, lang, () => fn(id, lang));
+        out = await yt(`${what}|${id}`, ttl, lang, () => fn(id, lang), who);
       } else throw new HttpError(404, 'not_found');
       return send(res, 200, out);
     } catch (e) {
@@ -194,6 +230,12 @@ export function createWeb({ publicDir, music = new Music(), lyrics = new Lyrics(
       // Nunca a busca da pessoa no log: só o tipo de pedido.
       log.error?.(`[web] ${p.split('/').slice(0, 3).join('/')}: ${e?.message ?? e}`);
       return send(res, 502, { error: 'upstream' });
+    } finally {
+      if (who) {
+        const n = (inFlight.get(who) ?? 1) - 1;
+        if (n > 0) inFlight.set(who, n);
+        else inFlight.delete(who);
+      }
     }
   }
 

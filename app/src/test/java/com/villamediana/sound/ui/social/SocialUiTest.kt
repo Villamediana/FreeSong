@@ -218,10 +218,9 @@ class SocialUiTest {
                 ProfilePage(
                     me = me.copy(top = top5),
                     numbers = null,
-                    code = "7K2Q-M9XD-4TFA-H3RB",
                     photoBusy = false,
                     snackbar = com.villamediana.sound.ui.detail.rememberDetailSnackbar(),
-                    onPhoto = {}, onEdit = { edit++ }, onMenu = {}, onCopy = {}, onNewCode = {}, onUseCode = {},
+                    onPhoto = {}, onEdit = { edit++ }, onMenu = {},
                 )
             }
         }
@@ -234,8 +233,30 @@ class SocialUiTest {
         shot("social-profile")
         compose.onNodeWithText("Editar nome").performClick()
         assertEquals(1, edit)
-        compose.onAllNodes(androidx.compose.ui.test.hasScrollAction()).onFirst().performScrollToNode(androidx.compose.ui.test.hasText("7K2Q-M9XD-4TFA-H3RB"))
-        shot("social-profile-code")
+        // The recovery code is not on the page (it lives in Ajustes since 1.38).
+        assertEquals(0, compose.onAllNodesWithText("Código de recuperação", substring = true, ignoreCase = true).fetchSemanticsNodes().size)
+    }
+
+    @Test
+    fun theRecoveryCodeInAjustesIsATicketWithItsButtons() {
+        var copied = 0
+        var renewed = 0
+        compose.setContent {
+            PageHost {
+                androidx.compose.foundation.layout.Column {
+                    RecoveryCard("7K2Q-M9XD-4TFA-H3RB", onCopy = { copied++ }, onNew = { renewed++ }, onUseCode = {})
+                }
+            }
+        }
+        compose.onNodeWithText("7K2Q-M9XD-4TFA-H3RB").assertExists()
+        compose.onNodeWithText("Copiar").performClick()
+        compose.onNodeWithText("Gerar outro").performClick()
+        compose.onNodeWithText("Usar o código de outro celular").assertExists()
+        assertEquals(1, copied)
+        assertEquals(1, renewed)
+        shot("settings-recovery-code")
+        // The row in Ajustes only shows its first group.
+        assertEquals("7K2Q-••••-••••-••••", com.villamediana.sound.ui.settings.masked("7K2Q-M9XD-4TFA-H3RB"))
     }
 
     @Test
@@ -409,10 +430,9 @@ class SocialUiTest {
                 ProfilePage(
                     me = me.copy(top = top5),
                     numbers = numbers,
-                    code = "7K2Q-M9XD-4TFA-H3RB",
                     photoBusy = false,
                     snackbar = com.villamediana.sound.ui.detail.rememberDetailSnackbar(),
-                    onPhoto = {}, onEdit = {}, onMenu = {}, onCopy = {}, onNewCode = {}, onUseCode = {},
+                    onPhoto = {}, onEdit = {}, onMenu = {},
                 )
             }
         }
@@ -439,10 +459,9 @@ class SocialUiTest {
                 ProfilePage(
                     me = me,
                     numbers = com.villamediana.sound.social.NumPeriod(),
-                    code = null,
                     photoBusy = false,
                     snackbar = com.villamediana.sound.ui.detail.rememberDetailSnackbar(),
-                    onPhoto = {}, onEdit = {}, onMenu = {}, onCopy = {}, onNewCode = {}, onUseCode = {},
+                    onPhoto = {}, onEdit = {}, onMenu = {},
                 )
             }
         }

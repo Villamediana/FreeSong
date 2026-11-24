@@ -906,3 +906,17 @@ vai e vem (antena cheia, túnel) a música parava pra carregar a cada trecho. Is
   `AudioCache`). Ajuste fino = as três constantes no `PlaybackService`.
 - Música baixada não depende de rede: se cortar com ela, é o Bluetooth.
 
+
+## Código de recuperação em Ajustes, a ponte com passe e o primeiro play na web (1.38.0)
+
+- **Ajustes › Conta › Código de recuperação** (`ui/social/Recovery.kt`): saiu do perfil (o perfil é o
+  que os amigos veem; o código é do aparelho). A linha mostra só o primeiro grupo (`masked`); a folha
+  tem o código, "Copiar" (marcado sensível: o Android 13+ não mostra na prévia), "Gerar outro" (pergunta
+  antes: o código de agora para de abrir o cofre) e "Usar o código de outro celular".
+- **Backup do Android** (`data_extraction_rules.xml`): `disableIfNoEncryptionCapabilities` — o perfil, a
+  chave do cofre e o código só vão pra nuvem com a cópia cifrada pela trava de tela.
+- **Atualizador**: "Tentar de novo" tocado logo depois de uma falha era ignorado (o trabalho que falhou
+  ainda terminava). Agora uma falha libera na hora (`Updates.update`).
+- **Web**: a ponte só atende computador ligado (passe do relay, `relay/src/pass.js` + `web/server/pass.js`),
+  com limites por computador; o frame do YouTube não perde o primeiro play depois de recarregar.
+  Detalhes em `web/README.md`. **Deploy: relay (1.10.0) antes da web.**

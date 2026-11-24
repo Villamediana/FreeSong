@@ -21,8 +21,9 @@ import { cleanJpeg } from './jpeg.js';
 import { cleanDisplayName, cleanMessage, normalizeUsername, randomIdentity } from './names.js';
 import { ASSET_LINKS, PAGE_CSP, page as linkPage, target as linkTarget } from './links.js';
 import { Computers } from './computers.js';
+import { Passes } from './pass.js';
 
-export const VERSION = '1.9.0';
+export const VERSION = '1.10.0';
 /** O nome público do servidor: é pra ele que o "Abrir no FreeSong" da página de um link aponta. */
 const PUBLIC_HOST = process.env.PUBLIC_HOST || 'freesong.simplyonegoal.com';
 const JSON_LIMIT = 64 * 1024;
@@ -158,6 +159,7 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
   };
   /** Computadores ligados aos perfis (a web): ver computers.js. */
   const computers = new Computers(store.db, clock);
+  const passes = new Passes({ clock });
   /** userId → quem espera o cofre mudar (a web, numa espera longa). */
   const vaultWaits = new Map();
   let vaultWaiting = 0;
@@ -412,6 +414,14 @@ export function createRelay({ dataDir = resolve('data'), clock = Date.now, log =
   const route = (method, pattern, handler) => routes.push({ method, pattern, handler });
 
   route('GET', /^\/v1\/health$/, () => ({ ok: true, version: VERSION, time: clock() }));
+
+  // A ponte do servidor web (o /api): só com passe, e o passe só pra computador ligado (ver pass.js).
+  route('GET', /^\/v1\/pass-key$/, () => ({ key: passes.publicKey }));
+  route('GET', /^\/v1\/pass$/, (req) => {
+    auth(req, { computer: true });
+    if (!req.computer) throw new HttpError(403, 'computer_only');
+    return passes.issue(req.computer.id);
+  });
 
   // Conta nova (o app chama sozinho na primeira vez): @nome e nome sorteados, token e código de recuperação.
   route('POST', /^\/v1\/accounts$/, async (req) => {
